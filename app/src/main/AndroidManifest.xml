@@ -35,6 +35,19 @@
             android:taskAffinity=""
             android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen" />
 
+        <!-- Device admin: makes the app resist uninstall while enabled. -->
+        <receiver
+            android:name=".admin.AppBlockerAdminReceiver"
+            android:exported="true"
+            android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/device_admin" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+        </receiver>
+
         <!-- The watcher: detects the foreground app and blocks it. -->
         <service
             android:name=".service.BlockerAccessibilityService"

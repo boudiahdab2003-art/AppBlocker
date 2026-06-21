@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.SelfImprovement
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -42,13 +43,20 @@ fun AppRoot() {
                     icon = { Icon(Icons.Filled.SelfImprovement, contentDescription = null) },
                     label = { Text("Focus") },
                 )
+                NavigationBarItem(
+                    selected = tab == 2,
+                    onClick = { tab = 2 },
+                    icon = { Icon(Icons.Filled.Settings, contentDescription = null) },
+                    label = { Text("Settings") },
+                )
             }
         }
     ) { padding ->
         Box(Modifier.padding(padding)) {
             when (tab) {
                 0 -> AppPickerScreen(blockingLocked = focusActive)
-                else -> FocusScreen(focusVm)
+                1 -> FocusScreen(focusVm)
+                else -> SettingsScreen()
             }
         }
     }
