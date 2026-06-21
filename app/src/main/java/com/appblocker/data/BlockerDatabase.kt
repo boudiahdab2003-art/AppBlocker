@@ -12,10 +12,11 @@ class Converters {
     @TypeConverter fun toMode(value: String): BlockMode = BlockMode.valueOf(value)
 }
 
-@Database(entities = [AppRule::class], version = 1, exportSchema = false)
+@Database(entities = [AppRule::class, FocusState::class], version = 2, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class BlockerDatabase : RoomDatabase() {
     abstract fun appRuleDao(): AppRuleDao
+    abstract fun focusDao(): FocusDao
 
     companion object {
         @Volatile private var INSTANCE: BlockerDatabase? = null
@@ -26,7 +27,7 @@ abstract class BlockerDatabase : RoomDatabase() {
                     context.applicationContext,
                     BlockerDatabase::class.java,
                     "appblocker.db"
-                ).build().also { INSTANCE = it }
+                ).fallbackToDestructiveMigration().build().also { INSTANCE = it }
             }
     }
 }

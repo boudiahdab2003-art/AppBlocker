@@ -3,7 +3,7 @@ package com.appblocker
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import com.appblocker.ui.AppPickerScreen
+import com.appblocker.ui.AppRoot
 import com.appblocker.ui.theme.AppBlockerTheme
 
 class MainActivity : ComponentActivity() {
@@ -11,7 +11,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             AppBlockerTheme {
-                AppPickerScreen()
+                AppRoot()
             }
         }
     }
