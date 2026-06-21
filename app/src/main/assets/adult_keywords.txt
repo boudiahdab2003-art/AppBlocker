@@ -1,0 +1,35 @@
+# Adult keyword heuristics (one per line, lowercase). If any appears in a URL or
+# search text while "Block adult sites" is on, the page is blocked. Catches the
+# long tail of adult sites/searches beyond the curated domain list.
+porn
+porno
+pornography
+xxx
+xvideos
+xnxx
+hentai
+nsfw
+camgirl
+camsex
+sexcam
+nudes
+nude girls
+escort
+milf
+gangbang
+blowjob
+handjob
+deepthroat
+cumshot
+creampie
+hardcore sex
+anal sex
+oral sex
+fetish porn
+bdsm porn
+onlyfans leak
+sex video
+sex videos
+free sex
+adult video
+adult videos

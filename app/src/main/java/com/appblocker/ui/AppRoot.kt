@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.SelfImprovement
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
@@ -19,7 +21,18 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.viewmodel.compose.viewModel
+
+private data class Tab(val label: String, val icon: ImageVector)
+
+private val TABS = listOf(
+    Tab("Home", Icons.Filled.Home),
+    Tab("Apps", Icons.Filled.Apps),
+    Tab("Web", Icons.Filled.Language),
+    Tab("Focus", Icons.Filled.SelfImprovement),
+    Tab("Settings", Icons.Filled.Settings),
+)
 
 @Composable
 fun AppRoot() {
@@ -31,31 +44,23 @@ fun AppRoot() {
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
             NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                NavigationBarItem(
-                    selected = tab == 0,
-                    onClick = { tab = 0 },
-                    icon = { Icon(Icons.Filled.Apps, contentDescription = null) },
-                    label = { Text("Apps") },
-                )
-                NavigationBarItem(
-                    selected = tab == 1,
-                    onClick = { tab = 1 },
-                    icon = { Icon(Icons.Filled.SelfImprovement, contentDescription = null) },
-                    label = { Text("Focus") },
-                )
-                NavigationBarItem(
-                    selected = tab == 2,
-                    onClick = { tab = 2 },
-                    icon = { Icon(Icons.Filled.Settings, contentDescription = null) },
-                    label = { Text("Settings") },
-                )
+                TABS.forEachIndexed { i, t ->
+                    NavigationBarItem(
+                        selected = tab == i,
+                        onClick = { tab = i },
+                        icon = { Icon(t.icon, contentDescription = null) },
+                        label = { Text(t.label) },
+                    )
+                }
             }
         }
     ) { padding ->
         Box(Modifier.padding(padding)) {
             when (tab) {
-                0 -> AppPickerScreen(blockingLocked = focusActive)
-                1 -> FocusScreen(focusVm)
+                0 -> HomeScreen(onStartFocus = { tab = 3 })
+                1 -> AppPickerScreen(blockingLocked = focusActive)
+                2 -> WebFilterScreen()
+                3 -> FocusScreen(focusVm)
                 else -> SettingsScreen()
             }
         }

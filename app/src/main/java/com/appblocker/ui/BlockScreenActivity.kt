@@ -25,6 +25,9 @@ import com.appblocker.ui.theme.AppBlockerTheme
 class BlockScreenActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val title = intent.getStringExtra(EXTRA_TITLE) ?: "Blocked"
+        val message = intent.getStringExtra(EXTRA_MESSAGE)
+            ?: "You chose to stay away from this right now.\nTake a breath — you've got this."
 
         // Leaving the block screen should go to the home screen, never back to
         // the blocked app sitting behind us.
@@ -34,7 +37,7 @@ class BlockScreenActivity : ComponentActivity() {
 
         setContent {
             AppBlockerTheme {
-                BlockScreen(onClose = ::goHome)
+                BlockScreen(title, message, onClose = ::goHome)
             }
         }
     }
@@ -51,11 +54,13 @@ class BlockScreenActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_PACKAGE = "package"
+        const val EXTRA_TITLE = "title"
+        const val EXTRA_MESSAGE = "message"
     }
 }
 
 @Composable
-private fun BlockScreen(onClose: () -> Unit) {
+private fun BlockScreen(title: String, message: String, onClose: () -> Unit) {
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
             Modifier.fillMaxSize().padding(32.dp),
@@ -64,13 +69,13 @@ private fun BlockScreen(onClose: () -> Unit) {
         ) {
             Text("🌿", fontSize = 64.sp)
             Text(
-                "Blocked",
+                title,
                 style = MaterialTheme.typography.headlineLarge,
                 color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.padding(top = 16.dp)
             )
             Text(
-                "You chose to stay away from this app right now.\nTake a breath — you've got this.",
+                message,
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onBackground,
                 textAlign = TextAlign.Center,

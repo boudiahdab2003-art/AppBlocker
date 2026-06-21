@@ -12,11 +12,16 @@ class Converters {
     @TypeConverter fun toMode(value: String): BlockMode = BlockMode.valueOf(value)
 }
 
-@Database(entities = [AppRule::class, FocusState::class], version = 2, exportSchema = false)
+@Database(
+    entities = [AppRule::class, FocusState::class, BlockedKeyword::class],
+    version = 3,
+    exportSchema = false,
+)
 @TypeConverters(Converters::class)
 abstract class BlockerDatabase : RoomDatabase() {
     abstract fun appRuleDao(): AppRuleDao
     abstract fun focusDao(): FocusDao
+    abstract fun blockedKeywordDao(): BlockedKeywordDao
 
     companion object {
         @Volatile private var INSTANCE: BlockerDatabase? = null
