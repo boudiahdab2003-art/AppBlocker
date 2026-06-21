@@ -49,10 +49,15 @@ class BlockerAccessibilityService : AccessibilityService() {
         lastBlockedPkg = pkg
         lastBlockAt = now
 
-        performGlobalAction(GLOBAL_ACTION_HOME)
+        // Show the full-screen block page over the blocked app. (Don't also call
+        // GLOBAL_ACTION_HOME — it races and overrides this screen.)
         startActivity(
             Intent(this, BlockScreenActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_CLEAR_TASK or
+                        Intent.FLAG_ACTIVITY_NO_ANIMATION
+                )
                 putExtra(BlockScreenActivity.EXTRA_PACKAGE, pkg)
             }
         )
