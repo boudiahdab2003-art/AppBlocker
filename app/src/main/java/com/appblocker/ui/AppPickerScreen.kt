@@ -27,15 +27,11 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -53,11 +49,16 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.appblocker.data.BlockMode
 
+/**
+ * Reusable list of installed apps with per-app block toggles + mode dialog. Embedded in
+ * BlockEditorScreen (Quick Block / schedule editors). No Scaffold of its own.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AppPickerScreen(
+fun AppListSection(
     vm: AppListViewModel = viewModel(),
     blockingLocked: Boolean = false,
+    modifier: Modifier = Modifier,
 ) {
     val apps by vm.apps.collectAsState()
     val loading by vm.loading.collectAsState()
@@ -65,53 +66,29 @@ fun AppPickerScreen(
     val blockedCount = apps.count { it.isBlocked }
     var dialogApp by remember { mutableStateOf<AppItem?>(null) }
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            TopAppBar(
-                title = { Text("AppBlocker", fontWeight = FontWeight.SemiBold) },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                ),
-                actions = {
-                    IconButton(onClick = {
-                        context.startActivity(
-                            Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        )
-                    }) {
-                        Icon(Icons.Filled.Shield, contentDescription = "Turn on blocking",
-                            tint = MaterialTheme.colorScheme.primary)
-                    }
-                }
+    Column(modifier.fillMaxSize()) {
+        SummaryCard(blockedCount)
+        if (blockingLocked) {
+            Text(
+                "🔒 Strict Mode is on — your blocks are locked until the timer ends.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
             )
         }
-    ) { padding ->
-        Column(Modifier.padding(padding).fillMaxSize()) {
-            SummaryCard(blockedCount)
-            if (blockingLocked) {
-                Text(
-                    "🔒 Focus mode is on — your blocks are locked until the timer ends.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
-                )
+        if (loading) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
             }
-            if (loading) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                }
-            } else {
-                LazyColumn(Modifier.fillMaxSize()) {
-                    items(apps, key = { it.packageName }) { app ->
-                        AppRow(
-                            app = app,
-                            enabled = !blockingLocked,
-                            onToggle = { vm.toggle(app) },
-                            onClick = { if (app.isBlocked && !blockingLocked) dialogApp = app },
-                        )
-                    }
+        } else {
+            LazyColumn(Modifier.fillMaxSize()) {
+                items(apps, key = { it.packageName }) { app ->
+                    AppRow(
+                        app = app,
+                        enabled = !blockingLocked,
+                        onToggle = { vm.toggle(app) },
+                        onClick = { if (app.isBlocked && !blockingLocked) dialogApp = app },
+                    )
                 }
             }
         }
@@ -136,6 +113,7 @@ fun AppPickerScreen(
 private fun SummaryCard(blockedCount: Int) {
     Card(
         Modifier.fillMaxWidth().padding(16.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {

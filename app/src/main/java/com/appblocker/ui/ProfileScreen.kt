@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -28,20 +29,38 @@ import com.appblocker.admin.AppBlockerAdminReceiver
 import com.appblocker.data.PinStore
 
 @Composable
-fun SettingsScreen() {
+fun ProfileScreen(strictActive: Boolean = false) {
     val context = LocalContext.current
     var pinSet by remember { mutableStateOf(PinStore.isSet(context)) }
     var showSetPin by remember { mutableStateOf(false) }
+    val locked = strictActive
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)
     ) {
+        Text(
+            "Profile",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 4.dp),
+        )
+        if (locked) {
+            Text(
+                "🔒 Strict Mode is on — settings are locked until the timer ends.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
+            )
+        }
+
         SectionTitle("Protection")
         SettingCard {
             SettingRow(
                 title = if (pinSet) "Change PIN" else "Set a PIN",
                 subtitle = if (pinSet) "A PIN is set. It's needed to change your blocks."
                 else "Lock your settings so blocks can't be removed on a whim.",
+                enabled = !locked,
                 onClick = { showSetPin = true },
             )
             if (pinSet) {
@@ -49,6 +68,7 @@ fun SettingsScreen() {
                 SettingRow(
                     title = "Remove PIN",
                     subtitle = "Stop requiring a PIN to open settings.",
+                    enabled = !locked,
                     onClick = { PinStore.clear(context); pinSet = false },
                 )
             }
@@ -56,6 +76,7 @@ fun SettingsScreen() {
             SettingRow(
                 title = "Prevent uninstall",
                 subtitle = "Turn on device admin so AppBlocker can't be uninstalled until you turn this off.",
+                enabled = !locked,
                 onClick = { requestDeviceAdmin(context) },
             )
         }
@@ -65,6 +86,7 @@ fun SettingsScreen() {
             SettingRow(
                 title = "Accessibility (the blocker)",
                 subtitle = "Required. Lets AppBlocker see which app is open and block it.",
+                enabled = !locked,
                 onClick = {
                     context.startActivity(
                         Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
@@ -75,13 +97,24 @@ fun SettingsScreen() {
             Divider()
             SettingRow(
                 title = "Usage access (daily limits)",
-                subtitle = "Needed only for daily time limits.",
+                subtitle = "Needed for daily limits and Insights.",
+                enabled = !locked,
                 onClick = {
                     context.startActivity(
                         Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
                             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     )
                 },
+            )
+        }
+
+        SectionTitle("About")
+        SettingCard {
+            SettingRow(
+                title = "AppBlocker",
+                subtitle = "Version ${appVersion(context)}",
+                enabled = false,
+                onClick = {},
             )
         }
     }
@@ -94,11 +127,14 @@ fun SettingsScreen() {
     }
 }
 
+private fun appVersion(context: Context): String = runCatching {
+    context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.0"
+}.getOrDefault("1.0")
+
 private fun requestDeviceAdmin(context: Context) {
     val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
     val admin = AppBlockerAdminReceiver.componentName(context)
     if (dpm.isAdminActive(admin)) {
-        // Already on — send the user to the device-admin list to turn it off if they want.
         context.startActivity(
             Intent(Settings.ACTION_SECURITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         )
@@ -131,14 +167,15 @@ private fun SectionTitle(text: String) {
 private fun SettingCard(content: @Composable () -> Unit) {
     Card(
         Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) { Column { content() } }
 }
 
 @Composable
-private fun SettingRow(title: String, subtitle: String, onClick: () -> Unit) {
+private fun SettingRow(title: String, subtitle: String, enabled: Boolean, onClick: () -> Unit) {
     Column(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(16.dp)
+        Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onClick).padding(16.dp)
     ) {
         Text(title, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
         Text(

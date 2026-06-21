@@ -10,11 +10,19 @@ import androidx.room.TypeConverters
 class Converters {
     @TypeConverter fun fromMode(mode: BlockMode): String = mode.name
     @TypeConverter fun toMode(value: String): BlockMode = BlockMode.valueOf(value)
+
+    @TypeConverter fun fromScheduleType(type: ScheduleType): String = type.name
+    @TypeConverter fun toScheduleType(value: String): ScheduleType = ScheduleType.valueOf(value)
+
+    // Package lists are stored as a newline-joined string (package names never contain \n).
+    @TypeConverter fun fromPackages(list: List<String>): String = list.joinToString("\n")
+    @TypeConverter fun toPackages(value: String): List<String> =
+        if (value.isEmpty()) emptyList() else value.split("\n")
 }
 
 @Database(
-    entities = [AppRule::class, FocusState::class, BlockedKeyword::class],
-    version = 3,
+    entities = [AppRule::class, FocusState::class, BlockedKeyword::class, Schedule::class],
+    version = 4,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -22,6 +30,7 @@ abstract class BlockerDatabase : RoomDatabase() {
     abstract fun appRuleDao(): AppRuleDao
     abstract fun focusDao(): FocusDao
     abstract fun blockedKeywordDao(): BlockedKeywordDao
+    abstract fun scheduleDao(): ScheduleDao
 
     companion object {
         @Volatile private var INSTANCE: BlockerDatabase? = null

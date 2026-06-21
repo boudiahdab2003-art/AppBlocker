@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
@@ -21,11 +22,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -38,29 +36,35 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 
+/**
+ * Reusable websites/keywords filter UI (adult toggle + keyword add/remove). Embedded in
+ * BlockEditorScreen. No Scaffold of its own.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WebFilterScreen(vm: WebFilterViewModel = viewModel()) {
+fun WebFilterSection(
+    vm: WebFilterViewModel = viewModel(),
+    locked: Boolean = false,
+    showAdult: Boolean = true,
+    modifier: Modifier = Modifier,
+) {
     val blockAdult by vm.blockAdult.collectAsState()
     val keywords by vm.keywords.collectAsState()
     var input by remember { mutableStateOf("") }
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            TopAppBar(
-                title = { Text("Web filter", fontWeight = FontWeight.SemiBold) },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                ),
+    Column(modifier.fillMaxSize().padding(16.dp)) {
+        if (locked) {
+            Text(
+                "🔒 Strict Mode is on — the web filter is locked until the timer ends.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 8.dp),
             )
         }
-    ) { padding ->
-        Column(Modifier.padding(padding).fillMaxSize().padding(16.dp)) {
-
+        if (showAdult) {
             Card(
                 Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             ) {
                 Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -77,11 +81,11 @@ fun WebFilterScreen(vm: WebFilterViewModel = viewModel()) {
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                         )
                     }
-                    Switch(checked = blockAdult, onCheckedChange = { vm.setBlockAdult(it) })
+                    Switch(checked = blockAdult, enabled = !locked, onCheckedChange = { vm.setBlockAdult(it) })
                 }
             }
-
             Spacer(Modifier.height(20.dp))
+        }
             Text(
                 "Blocked words",
                 style = MaterialTheme.typography.titleSmall,
@@ -102,10 +106,11 @@ fun WebFilterScreen(vm: WebFilterViewModel = viewModel()) {
                     onValueChange = { input = it },
                     label = { Text("Add a word to block") },
                     singleLine = true,
+                    enabled = !locked,
                     modifier = Modifier.weight(1f),
                 )
                 Spacer(Modifier.width(8.dp))
-                IconButton(onClick = { vm.addKeyword(input); input = "" }) {
+                IconButton(onClick = { vm.addKeyword(input); input = "" }, enabled = !locked) {
                     Icon(Icons.Filled.Add, contentDescription = "Add", tint = MaterialTheme.colorScheme.primary)
                 }
             }
@@ -115,6 +120,7 @@ fun WebFilterScreen(vm: WebFilterViewModel = viewModel()) {
                 items(keywords, key = { it }) { word ->
                     Card(
                         Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     ) {
                         Row(
@@ -126,7 +132,7 @@ fun WebFilterScreen(vm: WebFilterViewModel = viewModel()) {
                                 Modifier.weight(1f),
                                 color = MaterialTheme.colorScheme.onSurface,
                             )
-                            IconButton(onClick = { vm.removeKeyword(word) }) {
+                            IconButton(onClick = { vm.removeKeyword(word) }, enabled = !locked) {
                                 Icon(Icons.Filled.Delete, contentDescription = "Remove",
                                     tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                             }
@@ -134,6 +140,5 @@ fun WebFilterScreen(vm: WebFilterViewModel = viewModel()) {
                     }
                 }
             }
-        }
     }
 }

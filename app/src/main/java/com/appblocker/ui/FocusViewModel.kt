@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.appblocker.data.BlockerDatabase
 import com.appblocker.data.FocusState
+import com.appblocker.data.StatsStore
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -35,8 +36,9 @@ class FocusViewModel(app: Application) : AndroidViewModel(app) {
         remainingMillis.map { it > 0L }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
-    /** Start an un-stoppable focus session. There is intentionally no "stop". */
+    /** Start an un-stoppable Strict Mode session. There is intentionally no "stop". */
     fun start(minutes: Int) {
+        StatsStore.addStrictMinutes(getApplication(), minutes)
         viewModelScope.launch {
             dao.set(FocusState(0, System.currentTimeMillis() + minutes * 60_000L))
         }

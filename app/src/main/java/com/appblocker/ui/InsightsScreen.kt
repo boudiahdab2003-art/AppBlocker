@@ -1,0 +1,260 @@
+package com.appblocker.ui
+
+import android.content.Intent
+import android.provider.Settings
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.appblocker.ui.theme.AppGradients
+import kotlin.math.ceil
+
+@Composable
+fun InsightsScreen(vm: InsightsViewModel = viewModel()) {
+    val state by vm.state.collectAsState()
+    val context = LocalContext.current
+    var tab by remember { mutableIntStateOf(0) } // 0 Day, 1 Week, 2 Trend
+
+    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
+        item {
+            Spacer(Modifier.padding(top = 14.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier.size(36.dp).clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surface)
+                        .clickable {
+                            context.startActivity(
+                                Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            )
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Filled.Settings, contentDescription = "Settings",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                }
+                Spacer(Modifier.weight(1f))
+                Text("Insights", style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                Spacer(Modifier.weight(1f))
+                Spacer(Modifier.size(36.dp))
+            }
+            Spacer(Modifier.padding(top = 16.dp))
+            SegmentedTabs(tab) { tab = it }
+            Spacer(Modifier.padding(top = 8.dp))
+        }
+
+        if (!state.usageAccess) {
+            item { UsageAccessCard(context); Spacer(Modifier.padding(top = 8.dp)) }
+        }
+
+        // Big number + chart
+        item {
+            val minutes = if (tab == 0) state.screenMinutes else state.weekMinutes
+            Spacer(Modifier.padding(top = 8.dp))
+            Text(fmtBig(minutes), fontSize = 52.sp, fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+            Text("SCREEN TIME", style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+            Spacer(Modifier.padding(top = 20.dp))
+            if (tab == 0) {
+                BarChart(values = state.hourly, maxMinutes = 60,
+                    bottomLabels = listOf("12", "6", "12", "6"), yLabels = listOf("1h", "30m", "0s"))
+            } else {
+                val maxDay = (state.weekly.maxOrNull() ?: 0).coerceAtLeast(60)
+                val cap = (ceil(maxDay / 60.0) * 60).toInt()
+                BarChart(values = state.weekly, maxMinutes = cap,
+                    bottomLabels = listOf("S", "M", "T", "W", "T", "F", "S"),
+                    yLabels = listOf("${cap / 60}h", "${cap / 120}h", "0s"))
+            }
+            Spacer(Modifier.padding(top = 24.dp))
+        }
+
+        // Most used apps
+        item {
+            Text("Most used apps", style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+            Spacer(Modifier.padding(top = 8.dp))
+        }
+        if (state.topApps.isEmpty()) {
+            item {
+                Text(if (state.usageAccess) "No usage recorded yet." else "Needs Usage Access.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        } else {
+            items(state.topApps) { row -> StatListRow(row) }
+        }
+
+        // Blocked-app attempts
+        item {
+            Spacer(Modifier.padding(top = 20.dp))
+            Text("Times you opened blocked apps", style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground)
+            Spacer(Modifier.padding(top = 8.dp))
+        }
+        if (state.attempts.isEmpty()) {
+            item {
+                Text("No blocks yet today.", style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        } else {
+            items(state.attempts) { row -> StatListRow(row) }
+        }
+        item { Spacer(Modifier.padding(top = 24.dp)) }
+    }
+}
+
+@Composable
+private fun SegmentedTabs(selected: Int, onSelect: (Int) -> Unit) {
+    val labels = listOf("Day", "Week", "Trend")
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(50))
+            .background(MaterialTheme.colorScheme.surface).padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        labels.forEachIndexed { i, label ->
+            val on = i == selected
+            Box(
+                Modifier.weight(1f).clip(RoundedCornerShape(50))
+                    .then(if (on) Modifier.background(AppGradients.accent) else Modifier)
+                    .clickable { onSelect(i) }.padding(vertical = 10.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(label, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold,
+                    color = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+@Composable
+private fun BarChart(values: IntArray, maxMinutes: Int, bottomLabels: List<String>, yLabels: List<String>) {
+    val barBrush = AppGradients.chartBar
+    val trackColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
+    val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+    Row(Modifier.fillMaxWidth()) {
+        Canvas(Modifier.weight(1f).height(180.dp)) {
+            val h = size.height
+            val w = size.width
+            // gridlines (0, 0.5, 1.0)
+            listOf(0f, 0.5f, 1f).forEach { f ->
+                val y = h * f
+                drawLine(gridColor, Offset(0f, y), Offset(w, y), strokeWidth = 1f)
+            }
+            val n = values.size
+            val slot = w / n
+            val barW = slot * 0.5f
+            val radius = androidx.compose.ui.geometry.CornerRadius(barW / 2, barW / 2)
+            values.forEachIndexed { i, v ->
+                val x = i * slot + (slot - barW) / 2
+                // faint full-height track behind each bar for a polished look
+                drawRoundRect(trackColor, Offset(x, 0f), Size(barW, h), radius)
+                val frac = (v.toFloat() / maxMinutes).coerceIn(0f, 1f)
+                val barH = h * frac
+                if (barH > 1f) {
+                    drawRoundRect(barBrush, Offset(x, h - barH), Size(barW, barH), radius)
+                }
+            }
+        }
+        Column(Modifier.height(180.dp).padding(start = 6.dp), verticalArrangement = Arrangement.SpaceBetween) {
+            yLabels.forEach {
+                Text(it, style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+    Row(Modifier.fillMaxWidth().padding(end = 28.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+        bottomLabels.forEach {
+            Text(it, style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun UsageAccessCard(context: android.content.Context) {
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.surface).padding(20.dp),
+    ) {
+        Text("Turn on Usage Access", style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+        Text("Insights needs Usage Access to show your screen time and most-used apps.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        TextButton(onClick = {
+            context.startActivity(
+                Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        }) { Text("Grant access") }
+    }
+}
+
+@Composable
+private fun StatListRow(row: StatRow) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (row.icon != null) {
+            Image(row.icon.asImageBitmap(), null, Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)))
+        } else {
+            Box(Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.Block, null, tint = Color.White, modifier = Modifier.size(20.dp))
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Text(row.label, Modifier.weight(1f), color = MaterialTheme.colorScheme.onBackground,
+            style = MaterialTheme.typography.bodyLarge, maxLines = 1)
+        Text(row.value, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+private fun fmtBig(minutes: Int): String {
+    val h = minutes / 60
+    val m = minutes % 60
+    return if (h > 0) "${h}h ${m}m" else "${m}m"
+}
