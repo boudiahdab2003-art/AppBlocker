@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AppBlocker</string>
+    <string name="accessibility_description">AppBlocker uses this to detect when a blocked app opens so it can stop it. It does not read or collect your content.</string>
+</resources>
