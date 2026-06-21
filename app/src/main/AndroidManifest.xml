@@ -7,6 +7,9 @@
         tools:ignore="QueryAllPackagesPermission" />
     <!-- Lets the block screen appear over the blocked app. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- Lets us measure how long an app is used (for daily limits). -->
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
 
     <application
         android:allowBackup="true"

@@ -7,6 +7,7 @@ import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.appblocker.data.AppRule
+import com.appblocker.data.BlockMode
 import com.appblocker.data.BlockerDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,12 +18,14 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** One row in the picker: an installed app + whether it's blocked. */
+/** One row in the picker: an installed app + whether/how it's blocked. */
 data class AppItem(
     val packageName: String,
     val label: String,
     val icon: Bitmap?,
     val isBlocked: Boolean,
+    val mode: BlockMode = BlockMode.HARD,
+    val dailyLimitMinutes: Int = -1,
 )
 
 private data class InstalledApp(val packageName: String, val label: String, val icon: Bitmap?)
@@ -38,9 +41,18 @@ class AppListViewModel(app: Application) : AndroidViewModel(app) {
     /** Installed launchable apps merged with saved block state, sorted by name. */
     val apps: StateFlow<List<AppItem>> =
         combine(installed, dao.getAll()) { list, rules ->
-            val blocked = rules.filter { it.isBlocked }.map { it.packageName }.toSet()
-            list.map { AppItem(it.packageName, it.label, it.icon, it.packageName in blocked) }
-                .sortedBy { it.label.lowercase() }
+            val byPkg = rules.associateBy { it.packageName }
+            list.map { app ->
+                val r = byPkg[app.packageName]
+                AppItem(
+                    packageName = app.packageName,
+                    label = app.label,
+                    icon = app.icon,
+                    isBlocked = r?.isBlocked == true,
+                    mode = r?.mode ?: BlockMode.HARD,
+                    dailyLimitMinutes = r?.dailyLimitMinutes ?: -1,
+                )
+            }.sortedBy { it.label.lowercase() }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     init {
@@ -70,6 +82,23 @@ class AppListViewModel(app: Application) : AndroidViewModel(app) {
                     packageName = item.packageName,
                     appLabel = item.label,
                     isBlocked = !item.isBlocked,
+                    mode = item.mode,
+                    dailyLimitMinutes = item.dailyLimitMinutes,
+                )
+            )
+        }
+    }
+
+    /** Set how a (blocked) app is enforced: always, or a daily time limit. */
+    fun setMode(item: AppItem, mode: BlockMode, dailyLimitMinutes: Int = -1) {
+        viewModelScope.launch {
+            dao.upsert(
+                AppRule(
+                    packageName = item.packageName,
+                    appLabel = item.label,
+                    isBlocked = true,
+                    mode = mode,
+                    dailyLimitMinutes = dailyLimitMinutes,
                 )
             )
         }
