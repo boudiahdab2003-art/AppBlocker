@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -111,6 +112,10 @@ fun InsightsScreen(vm: InsightsViewModel = viewModel()) {
                     bottomLabels = listOf("S", "M", "T", "W", "T", "F", "S"),
                     yLabels = listOf("${cap / 60}h", "${cap / 120}h", "0s"))
             }
+            if (state.categories.isNotEmpty()) {
+                Spacer(Modifier.padding(top = 20.dp))
+                CategoryBreakdown(state.categories)
+            }
             Spacer(Modifier.padding(top = 24.dp))
         }
 
@@ -210,8 +215,35 @@ private fun BarChart(values: IntArray, maxMinutes: Int, bottomLabels: List<Strin
     }
     Row(Modifier.fillMaxWidth().padding(end = 28.dp), horizontalArrangement = Arrangement.SpaceBetween) {
         bottomLabels.forEach {
-            Text(it, style = MaterialTheme.typography.labelSmall,
+            Text(it, style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun CategoryBreakdown(cats: List<CatSlice>) {
+    Row(
+        Modifier.fillMaxWidth().height(14.dp).clip(RoundedCornerShape(50)),
+    ) {
+        cats.forEach { c ->
+            Box(Modifier.weight(c.minutes.toFloat().coerceAtLeast(0.01f)).fillMaxHeight().background(c.color))
+        }
+    }
+    Spacer(Modifier.padding(top = 12.dp))
+    // legend: wrap into rows of up to 3
+    cats.chunked(3).forEach { rowCats ->
+        Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            rowCats.forEach { c ->
+                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(10.dp).clip(CircleShape).background(c.color))
+                    Spacer(Modifier.width(6.dp))
+                    Text("${c.label} ${InsightsViewModel.fmt(c.minutes)}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                }
+            }
+            repeat(3 - rowCats.size) { Spacer(Modifier.weight(1f)) }
         }
     }
 }
@@ -246,6 +278,10 @@ private fun StatListRow(row: StatRow) {
             }
         }
         Spacer(Modifier.width(12.dp))
+        if (row.dotColor != null) {
+            Box(Modifier.size(9.dp).clip(CircleShape).background(row.dotColor))
+            Spacer(Modifier.width(8.dp))
+        }
         Text(row.label, Modifier.weight(1f), color = MaterialTheme.colorScheme.onBackground,
             style = MaterialTheme.typography.bodyLarge, maxLines = 1)
         Text(row.value, color = MaterialTheme.colorScheme.onSurfaceVariant,

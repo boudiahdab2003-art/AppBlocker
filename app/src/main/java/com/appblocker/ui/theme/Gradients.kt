@@ -1,7 +1,11 @@
 package com.appblocker.ui.theme
 
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.unit.dp
 
 /**
  * Shared gradients/brushes that give the app a richer, more premium feel than flat
@@ -35,3 +39,16 @@ object AppGradients {
         listOf(AccentStart.copy(alpha = alpha), Color.Transparent),
     )
 }
+
+/** Lifts a card/button off the flat backdrop with a soft colored shadow (API 28+). */
+fun Modifier.softGlow(
+    shape: Shape,
+    glow: Color = AppGradients.AccentStart,
+    elevation: androidx.compose.ui.unit.Dp = 10.dp,
+): Modifier = this.shadow(
+    elevation = elevation,
+    shape = shape,
+    clip = false,
+    ambientColor = glow,
+    spotColor = glow,
+)

@@ -24,7 +24,29 @@ data class Template(
     val packages: List<Pair<String, String>> = emptyList(), // package to label
     val keywords: List<String> = emptyList(),
     val enableAdult: Boolean = false,
-)
+    // Time window applied when this template's apps are scheduled (0/0 = none).
+    val startMinutes: Int = 0,
+    val endMinutes: Int = 0,
+    val daysMask: Int = 0b1111111,
+) {
+    /** True when this template creates a time-window app schedule. */
+    val hasSchedule: Boolean get() = packages.isNotEmpty() && (startMinutes != endMinutes)
+
+    /** "Mon–Fri · 09:00–17:00" / "Every day · 22:00–07:00" / "" for adult-only. */
+    val timeLabel: String
+        get() = if (!hasSchedule) "" else "${daysText(daysMask)} · " +
+            "%02d:%02d–%02d:%02d".format(
+                startMinutes / 60, startMinutes % 60, endMinutes / 60, endMinutes % 60,
+            )
+}
+
+private fun daysText(mask: Int): String {
+    if (mask and 0b1111111 == 0b1111111) return "Every day"
+    if (mask == 0b0111110) return "Mon–Fri"
+    val labels = listOf("Su", "Mo", "Tu", "We", "Th", "Fr", "Sa")
+    return (0..6).filter { (mask shr it) and 1 == 1 }.joinToString(" ") { labels[it] }
+        .ifEmpty { "No days" }
+}
 
 private val SOCIAL = listOf(
     "com.instagram.android" to "Instagram",
@@ -45,18 +67,22 @@ private val GAMES = listOf(
     "com.roblox.client" to "Roblox",
 )
 
+private const val WEEKDAYS = 0b0111110 // Mon–Fri
+
 val appTemplates: List<Template> = listOf(
     Template(
         "social", "Social Detox", "Block the social feeds",
         Icons.Filled.Groups, listOf(Color(0xFFF0598A), Color(0xFFB5179E)),
         packages = SOCIAL,
         keywords = listOf("instagram", "tiktok", "facebook", "twitter", "reddit", "snapchat"),
+        startMinutes = 9 * 60, endMinutes = 17 * 60, daysMask = WEEKDAYS,
     ),
     Template(
         "focus", "Deep Focus", "Social + video, gone",
         Icons.Filled.Bolt, listOf(Color(0xFF2E7BFF), Color(0xFF7C5CFF)),
         packages = SOCIAL + VIDEO,
         keywords = listOf("youtube", "netflix", "instagram", "tiktok", "reddit", "twitch"),
+        startMinutes = 9 * 60, endMinutes = 12 * 60,
     ),
     Template(
         "clean", "Stay Clean", "Adult content filter on",
@@ -68,16 +94,19 @@ val appTemplates: List<Template> = listOf(
         Icons.Filled.Bedtime, listOf(Color(0xFF6366F1), Color(0xFF8B5CF6)),
         packages = VIDEO + SOCIAL.take(2),
         keywords = listOf("youtube", "tiktok", "instagram", "netflix"),
+        startMinutes = 22 * 60, endMinutes = 7 * 60,
     ),
     Template(
         "study", "Study Mode", "Block fun, keep tools",
         Icons.Filled.School, listOf(Color(0xFF14B8A6), Color(0xFF22C55E)),
         packages = SOCIAL + VIDEO + GAMES,
         keywords = listOf("youtube", "tiktok", "instagram", "reddit"),
+        startMinutes = 8 * 60, endMinutes = 16 * 60, daysMask = WEEKDAYS,
     ),
     Template(
         "gaming", "Gaming Break", "Step away from games",
         Icons.Filled.SportsEsports, listOf(Color(0xFFFB923C), Color(0xFFF97316)),
         packages = GAMES,
+        startMinutes = 9 * 60, endMinutes = 18 * 60,
     ),
 )

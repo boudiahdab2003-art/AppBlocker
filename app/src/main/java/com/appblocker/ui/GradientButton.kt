@@ -17,6 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.appblocker.ui.theme.AppGradients
+import com.appblocker.ui.theme.softGlow
 
 /** Full-width pill button with the blue→violet accent gradient. */
 @Composable
@@ -30,6 +31,7 @@ fun GradientButton(
         modifier
             .fillMaxWidth()
             .height(54.dp)
+            .then(if (enabled) Modifier.softGlow(RoundedCornerShape(27.dp), elevation = 12.dp) else Modifier)
             .clip(RoundedCornerShape(27.dp))
             .then(
                 if (enabled) Modifier.background(AppGradients.accent)

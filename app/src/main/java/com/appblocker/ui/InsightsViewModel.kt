@@ -6,9 +6,12 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.os.Process
+import androidx.compose.ui.graphics.Color
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.appblocker.data.AppCategories
+import com.appblocker.data.AppCategory
 import com.appblocker.data.AttemptCounter
 import com.appblocker.data.StatsStore
 import com.appblocker.service.UsageTracker
@@ -18,8 +21,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** One row in an Insights list: a labelled app/site with an icon and a value string. */
-data class StatRow(val label: String, val icon: Bitmap?, val value: String)
+/** One row in an Insights list: a labelled app/site with an icon, value, and category dot. */
+data class StatRow(val label: String, val icon: Bitmap?, val value: String, val dotColor: Color? = null)
+
+/** A colored slice of the category-breakdown bar. */
+data class CatSlice(val label: String, val color: Color, val minutes: Int)
 
 data class InsightsState(
     val loaded: Boolean = false,
@@ -31,6 +37,7 @@ data class InsightsState(
     val weekly: IntArray = IntArray(7),
     val attempts: List<StatRow> = emptyList(),
     val topApps: List<StatRow> = emptyList(),
+    val categories: List<CatSlice> = emptyList(),
 )
 
 class InsightsViewModel(app: Application) : AndroidViewModel(app) {
@@ -53,11 +60,16 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
             if (a.key == "web") {
                 StatRow("Websites", null, "${a.today}× today · ${a.total}× total")
             } else {
-                StatRow(label(a.key), icon(a.key), "${a.today}× today · ${a.total}× total")
+                StatRow(label(a.key), icon(a.key), "${a.today}× today · ${a.total}× total", dotColor(a.key))
             }
         }
         val topApps = UsageTracker.topAppsToday(ctx, 6).map { u ->
-            StatRow(label(u.packageName), icon(u.packageName), fmt(u.minutes))
+            StatRow(label(u.packageName), icon(u.packageName), fmt(u.minutes), dotColor(u.packageName))
+        }
+        val categories = UsageTracker.categoryMinutesToday(ctx).mapNotNull { (name, mins) ->
+            runCatching { AppCategory.valueOf(name) }.getOrNull()?.let {
+                CatSlice(it.label, Color(it.color), mins)
+            }
         }
         val weekly = UsageTracker.weeklyMinutes(ctx)
         return InsightsState(
@@ -70,6 +82,7 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
             weekly = weekly,
             attempts = attempts,
             topApps = topApps,
+            categories = categories,
         )
     }
 
@@ -80,6 +93,8 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
     private fun icon(pkg: String): Bitmap? = runCatching {
         pm.getApplicationIcon(pkg).toBitmap(96, 96)
     }.getOrNull()
+
+    private fun dotColor(pkg: String): Color = Color(AppCategories.categoryOf(pkg).color)
 
     companion object {
         fun fmt(minutes: Int): String =

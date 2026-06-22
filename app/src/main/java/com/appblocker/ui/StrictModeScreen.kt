@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.appblocker.admin.AppBlockerAdminReceiver
+import com.appblocker.ui.theme.AppGradients
 
 @Composable
 fun StrictModeScreen(vm: FocusViewModel = viewModel()) {
@@ -108,26 +109,42 @@ fun StrictModeScreen(vm: FocusViewModel = viewModel()) {
 
 @Composable
 private fun LockOrb(locked: Boolean) {
+    // Outer halo
     Box(
-        Modifier.size(140.dp).clip(CircleShape)
-            .background(
-                Brush.radialGradient(
-                    listOf(
-                        if (locked) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
-                        else MaterialTheme.colorScheme.surfaceVariant,
-                        MaterialTheme.colorScheme.surface,
-                    )
-                )
-            )
-            .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape),
+        Modifier.size(190.dp)
+            .background(AppGradients.glow(if (locked) 0.45f else 0.12f), CircleShape),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            if (locked) Icons.Filled.Lock else Icons.Filled.LockOpen,
-            contentDescription = null,
-            tint = if (locked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(52.dp),
-        )
+        // Gradient ring
+        Box(
+            Modifier.size(140.dp).clip(CircleShape)
+                .then(
+                    if (locked) Modifier.border(3.dp, AppGradients.accent, CircleShape)
+                    else Modifier.border(2.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            // Inner disc
+            Box(
+                Modifier.size(124.dp).clip(CircleShape)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                MaterialTheme.colorScheme.surfaceVariant,
+                                MaterialTheme.colorScheme.surface,
+                            )
+                        )
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    if (locked) Icons.Filled.Lock else Icons.Filled.LockOpen,
+                    contentDescription = null,
+                    tint = if (locked) AppGradients.AccentStart else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(58.dp),
+                )
+            }
+        }
     }
 }
 

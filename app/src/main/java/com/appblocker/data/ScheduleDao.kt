@@ -11,6 +11,9 @@ interface ScheduleDao {
     @Query("SELECT * FROM schedules ORDER BY id")
     fun getAll(): Flow<List<Schedule>>
 
+    @Query("SELECT * FROM schedules WHERE name = :name LIMIT 1")
+    suspend fun findByName(name: String): Schedule?
+
     @Upsert
     suspend fun upsert(schedule: Schedule): Long
 

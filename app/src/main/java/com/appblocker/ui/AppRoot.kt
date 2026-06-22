@@ -103,7 +103,7 @@ private fun MainScaffold(
                         selected = tab == i,
                         onClick = { onTab(i) },
                         icon = { Icon(t.icon, contentDescription = null) },
-                        label = { Text(t.label) },
+                        label = { Text(t.label, style = MaterialTheme.typography.labelLarge) },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = MaterialTheme.colorScheme.primary,
                             selectedTextColor = MaterialTheme.colorScheme.primary,

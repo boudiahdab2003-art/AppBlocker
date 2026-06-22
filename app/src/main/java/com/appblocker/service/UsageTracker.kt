@@ -101,6 +101,23 @@ object UsageTracker {
         return result
     }
 
+    /** Minutes per app category today (keyed by AppCategory.name), biggest first. */
+    fun categoryMinutesToday(context: Context): Map<String, Int> {
+        val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
+            ?: return emptyMap()
+        val stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, startOfToday(), System.currentTimeMillis())
+            ?: return emptyMap()
+        val byCat = HashMap<String, Long>()
+        stats.forEach { s ->
+            if (s.packageName == "com.appblocker") return@forEach
+            val cat = com.appblocker.data.AppCategories.categoryOf(s.packageName).name
+            byCat[cat] = (byCat[cat] ?: 0L) + s.totalTimeInForeground
+        }
+        return byCat.mapValues { (it.value / 60_000L).toInt() }
+            .filter { it.value > 0 }
+            .toList().sortedByDescending { it.second }.toMap()
+    }
+
     /** Total foreground time across all apps today, in minutes. */
     fun totalMinutesToday(context: Context): Int {
         val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager

@@ -1,5 +1,7 @@
 package com.appblocker.ui
 
+import android.content.Intent
+import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -22,6 +24,7 @@ import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -43,9 +46,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.appblocker.service.AccessibilityUtil
 
 private const val ROOT = 0
 private const val APPS = 1
@@ -133,6 +138,34 @@ private fun Root(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.padding(top = 20.dp))
+
+            val context = LocalContext.current
+            if (!AccessibilityUtil.isEnabled(context)) {
+                Column(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
+                        .background(MaterialTheme.colorScheme.surface).padding(16.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.Warning, contentDescription = null,
+                            tint = Color(0xFFFFB020), modifier = Modifier.size(24.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Text("Protection is off", style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    }
+                    Spacer(Modifier.padding(top = 6.dp))
+                    Text("Turn on the blocker so your choices actually block.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.padding(top = 12.dp))
+                    GradientButton(text = "Turn on protection", onClick = {
+                        context.startActivity(
+                            Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                    })
+                }
+                Spacer(Modifier.padding(top = 20.dp))
+            }
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Blocking", style = MaterialTheme.typography.titleLarge,

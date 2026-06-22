@@ -23,12 +23,16 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.ShoppingBasket
+import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -49,11 +53,18 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.Check
 import com.appblocker.data.Schedule
 import com.appblocker.data.ScheduleType
 import com.appblocker.data.SettingsStore
 import com.appblocker.service.AccessibilityUtil
 import com.appblocker.ui.theme.AppGradients
+import com.appblocker.ui.theme.softGlow
 
 @Composable
 fun BlockingScreen(
@@ -72,6 +83,7 @@ fun BlockingScreen(
     val remaining by focusVm.remainingMillis.collectAsState()
     val protectionOn = AccessibilityUtil.isEnabled(context)
     val adultOn = SettingsStore.blockAdult(context)
+    var pending by remember { mutableStateOf<Template?>(null) }
 
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
         item {
@@ -93,62 +105,60 @@ fun BlockingScreen(
 
         // Quick Block card
         item {
+            val firstRun = appsBlocked == 0 && keywords == 0 && !protectionOn
             Card(
-                Modifier.fillMaxWidth().clickable { onEditQuickBlock() },
+                Modifier.fillMaxWidth()
+                    .softGlow(RoundedCornerShape(22.dp), elevation = if (protectionOn) 14.dp else 4.dp)
+                    .then(if (firstRun) Modifier else Modifier.clickable { onEditQuickBlock() }),
                 shape = RoundedCornerShape(22.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = if (protectionOn) BorderStroke(1.5.dp, AppGradients.accent) else null,
             ) {
-                Column(Modifier.padding(20.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            if (protectionOn) Icons.Filled.CheckCircle else Icons.Filled.Warning,
-                            contentDescription = null,
-                            tint = if (protectionOn) MaterialTheme.colorScheme.primary else Color(0xFFFFB020),
-                            modifier = Modifier.size(28.dp),
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Text(
-                            "Quick Block",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
-                    Spacer(Modifier.padding(top = 12.dp))
-                    SummaryPill(apps = appsBlocked, words = keywords, adultOn = adultOn)
-                    Spacer(Modifier.padding(top = 12.dp))
-                    if (protectionOn) {
+                Column(Modifier.padding(22.dp)) {
+                    if (firstRun) {
+                        Text("Quick Block", style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                        Spacer(Modifier.padding(top = 14.dp))
+                        QuickBlockPill()
+                        Spacer(Modifier.padding(top = 18.dp))
+                        GradientButton(text = "Start", onClick = onEditQuickBlock)
+                    } else {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Filled.CheckCircle, contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text("Active", style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                            Spacer(Modifier.weight(1f))
-                            Text("Tap to edit", style = MaterialTheme.typography.bodySmall,
+                            Icon(
+                                if (protectionOn) Icons.Filled.CheckCircle else Icons.Filled.Warning,
+                                contentDescription = null,
+                                tint = if (protectionOn) MaterialTheme.colorScheme.primary else Color(0xFFFFB020),
+                                modifier = Modifier.size(30.dp),
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Text("Quick Block", style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                        }
+                        Spacer(Modifier.padding(top = 16.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            StatChip(Modifier.weight(1f), Icons.Filled.PhoneAndroid, "$appsBlocked", "Apps")
+                            StatChip(Modifier.weight(1f), Icons.Filled.Language, "$keywords", "Words")
+                            StatChip(Modifier.weight(1f), Icons.Filled.Block, if (adultOn) "On" else "Off", "18+")
+                        }
+                        Spacer(Modifier.padding(top = 16.dp))
+                        if (protectionOn) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Filled.CheckCircle, contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("Active", style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                Spacer(Modifier.weight(1f))
+                                Text("Tap to edit", style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        } else {
+                            Text("Tap to turn on the blocker, then choose what to block.",
+                                style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                    } else {
-                        Text("Tap to turn on the blocker, then choose what to block.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-            }
-            if (!protectionOn) {
-                Spacer(Modifier.padding(top = 8.dp))
-                Text(
-                    "Turn on protection ▸",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.clickable {
-                        context.startActivity(
-                            Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        )
-                    },
-                )
             }
             Spacer(Modifier.padding(top = 24.dp))
         }
@@ -162,7 +172,8 @@ fun BlockingScreen(
                 color = MaterialTheme.colorScheme.onBackground,
             )
             Text(
-                "Block apps on a timetable or after too much use.",
+                if (schedules.isEmpty()) "Let's do this — schedule your first blocking!"
+                else "Block apps on a timetable or after too much use.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -215,10 +226,10 @@ fun BlockingScreen(
         items(appTemplates.chunked(2)) { rowItems ->
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 rowItems.forEach { t ->
-                    TemplateCard(Modifier.weight(1f), t) {
-                        vm.applyTemplate(t)
-                        Toast.makeText(context, "Applied “${t.title}”", Toast.LENGTH_SHORT).show()
-                    }
+                    TemplateCard(
+                        Modifier.weight(1f), t,
+                        active = isTemplateActive(t, schedules, adultOn),
+                    ) { pending = t }
                 }
                 if (rowItems.size == 1) Spacer(Modifier.weight(1f))
             }
@@ -227,60 +238,126 @@ fun BlockingScreen(
 
         item { Spacer(Modifier.padding(top = 16.dp)) }
     }
+
+    pending?.let { t ->
+        AlertDialog(
+            onDismissRequest = { pending = null },
+            confirmButton = {
+                TextButton(onClick = {
+                    vm.applyTemplate(t)
+                    Toast.makeText(context, "Applied “${t.title}”", Toast.LENGTH_SHORT).show()
+                    pending = null
+                }) { Text("Apply") }
+            },
+            dismissButton = { TextButton(onClick = { pending = null }) { Text("Cancel") } },
+            title = { Text("Apply “${t.title}”?") },
+            text = { Text(templateSummary(t)) },
+        )
+    }
+}
+
+private fun isTemplateActive(t: Template, schedules: List<Schedule>, adultOn: Boolean): Boolean {
+    if (t.packages.isNotEmpty()) return schedules.any { it.name == t.title && it.enabled }
+    if (t.enableAdult) return adultOn
+    return false
+}
+
+private fun templateSummary(t: Template): String {
+    val parts = mutableListOf<String>()
+    if (t.packages.isNotEmpty()) {
+        parts += "${t.packages.size} apps" + if (t.timeLabel.isNotEmpty()) " (${t.timeLabel})" else ""
+    }
+    if (t.keywords.isNotEmpty()) parts += "${t.keywords.size} words"
+    if (t.enableAdult) parts += "the adult filter"
+    return "This will block " + parts.joinToString(", ") + "."
 }
 
 @Composable
-private fun TemplateCard(modifier: Modifier, t: Template, onClick: () -> Unit) {
+private fun TemplateCard(modifier: Modifier, t: Template, active: Boolean, onClick: () -> Unit) {
+    Box(modifier.softGlow(RoundedCornerShape(20.dp), glow = t.colors.first(), elevation = 10.dp)) {
     Column(
-        modifier
+        Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
             .background(Brush.linearGradient(t.colors))
             .clickable(onClick = onClick)
             .padding(16.dp)
-            .height(140.dp),
+            .height(162.dp),
     ) {
-        Box(
-            Modifier.size(44.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.22f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(t.icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(44.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.22f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(t.icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
+            }
+            Spacer(Modifier.weight(1f))
+            if (active) {
+                Row(
+                    Modifier.clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.28f))
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Filled.Check, contentDescription = null, tint = Color.White,
+                        modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(3.dp))
+                    Text("Active", style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold, color = Color.White)
+                }
+            }
         }
         Spacer(Modifier.weight(1f))
         Text(t.title, style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold, color = Color.White)
         Text(t.subtitle, style = MaterialTheme.typography.bodySmall,
             color = Color.White.copy(alpha = 0.9f))
+        if (t.timeLabel.isNotEmpty()) {
+            Spacer(Modifier.padding(top = 4.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.Schedule, contentDescription = null, tint = Color.White,
+                    modifier = Modifier.size(13.dp))
+                Spacer(Modifier.width(4.dp))
+                Text(t.timeLabel, style = MaterialTheme.typography.labelMedium,
+                    color = Color.White, maxLines = 1)
+            }
+        }
+    }
     }
 }
 
+/** AppBlock-style muted category-icon pill shown on the empty/first-run Quick Block card. */
 @Composable
-private fun SummaryPill(apps: Int, words: Int, adultOn: Boolean) {
+private fun QuickBlockPill() {
     Row(
-        Modifier.clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.background.copy(alpha = 0.6f))
-            .padding(horizontal = 14.dp, vertical = 8.dp),
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(50))
+            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.55f))
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        PillItem(Icons.Filled.Block, null)
-        PillItem(Icons.Filled.PhoneAndroid, "$apps")
-        PillItem(Icons.Filled.Language, "$words")
-        PillItem(Icons.Filled.HourglassEmpty, null) // schedules placeholder glyph
-        Text("18+", style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
-            color = if (adultOn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+        val tint = MaterialTheme.colorScheme.onSurfaceVariant
+        listOf(
+            Icons.Filled.Block, Icons.Filled.PhoneAndroid, Icons.Filled.Language,
+            Icons.Filled.Tag, Icons.Filled.PlayArrow, Icons.Filled.CalendarMonth,
+        ).forEach { Icon(it, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp)) }
+        Text("18+", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = tint)
+        Icon(Icons.Filled.ShoppingBasket, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
     }
 }
 
 @Composable
-private fun PillItem(icon: androidx.compose.ui.graphics.vector.ImageVector, value: String?) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(16.dp))
-        if (value != null) {
-            Spacer(Modifier.width(3.dp))
-            Text(value, style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-        }
+private fun StatChip(modifier: Modifier, icon: ImageVector, value: String, label: String) {
+    Column(
+        modifier.clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.background.copy(alpha = 0.55f))
+            .padding(vertical = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(22.dp))
+        Spacer(Modifier.padding(top = 6.dp))
+        Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface)
+        Text(label, style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -293,23 +370,23 @@ private fun ScheduleTile(
     onClick: () -> Unit,
 ) {
     Card(
-        modifier.clickable(enabled = enabled, onClick = onClick),
+        modifier.softGlow(RoundedCornerShape(20.dp), elevation = 6.dp).clickable(enabled = enabled, onClick = onClick),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(
-            Modifier.fillMaxWidth().padding(vertical = 20.dp),
+            Modifier.fillMaxWidth().padding(vertical = 22.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Box(
-                Modifier.size(44.dp).clip(RoundedCornerShape(12.dp))
+                Modifier.size(46.dp).clip(RoundedCornerShape(13.dp))
                     .background(AppGradients.accentVertical),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(icon, contentDescription = null, tint = Color.White)
+                Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
             }
-            Spacer(Modifier.padding(top = 8.dp))
-            Text(label, style = MaterialTheme.typography.titleSmall,
+            Spacer(Modifier.padding(top = 10.dp))
+            Text(label, style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
         }
     }
