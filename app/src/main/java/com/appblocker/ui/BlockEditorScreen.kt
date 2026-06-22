@@ -2,7 +2,6 @@ package com.appblocker.ui
 
 import android.content.Intent
 import android.provider.Settings
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -19,7 +18,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Block
@@ -31,7 +29,6 @@ import androidx.compose.material.icons.filled.ShoppingBasket
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Web
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -39,8 +36,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -53,7 +48,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -116,21 +110,7 @@ fun BlockEditorScreen(
 
     Scaffold(
         containerColor = Color.Transparent,
-        topBar = {
-            TopAppBar(
-                title = { Text("Quick Block", fontWeight = FontWeight.SemiBold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
-                ),
-            )
-        },
+        topBar = { EditorTopBar("Quick Block", onBack) },
         bottomBar = {
             GradientButton(text = "Save", onClick = ::save, enabled = ed,
                 modifier = Modifier.padding(16.dp))
@@ -167,32 +147,9 @@ fun BlockEditorScreen(
                     modifier = Modifier.padding(8.dp)) }
             } else {
                 items(shownApps, key = { it.packageName }) { app ->
-                    val isSel = selected.contains(app.packageName)
-                    Row(
-                        Modifier.fillMaxWidth().clickable(enabled = ed) {
-                            editedApps = true
-                            if (isSel) selected.remove(app.packageName) else selected.add(app.packageName)
-                        }.padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        if (app.icon != null) {
-                            Image(app.icon.asImageBitmap(), null,
-                                Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)))
-                        } else {
-                            Box(Modifier.size(40.dp).clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surfaceVariant),
-                                contentAlignment = Alignment.Center) {
-                                Icon(Icons.Filled.Apps, null, Modifier.size(22.dp))
-                            }
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Text(app.label, Modifier.weight(1f),
-                            color = MaterialTheme.colorScheme.onBackground,
-                            style = MaterialTheme.typography.bodyLarge)
-                        Checkbox(checked = isSel, enabled = ed, onCheckedChange = {
-                            editedApps = true
-                            if (it) selected.add(app.packageName) else selected.remove(app.packageName)
-                        })
+                    AppCheckRow(app, checked = selected.contains(app.packageName), enabled = ed) { on ->
+                        editedApps = true
+                        if (on) selected.add(app.packageName) else selected.remove(app.packageName)
                     }
                 }
             }

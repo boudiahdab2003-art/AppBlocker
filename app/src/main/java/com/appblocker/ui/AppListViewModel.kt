@@ -75,20 +75,6 @@ class AppListViewModel(app: Application) : AndroidViewModel(app) {
             }
             .toList()
 
-    fun toggle(item: AppItem) {
-        viewModelScope.launch {
-            dao.upsert(
-                AppRule(
-                    packageName = item.packageName,
-                    appLabel = item.label,
-                    isBlocked = !item.isBlocked,
-                    mode = item.mode,
-                    dailyLimitMinutes = item.dailyLimitMinutes,
-                )
-            )
-        }
-    }
-
     /** Commit a staged Quick Block selection: block apps in [selected], unblock the rest. */
     fun commitBlocked(selected: Set<String>) {
         viewModelScope.launch {
@@ -106,21 +92,6 @@ class AppListViewModel(app: Application) : AndroidViewModel(app) {
                     )
                 }
             }
-        }
-    }
-
-    /** Set how a (blocked) app is enforced: always, or a daily time limit. */
-    fun setMode(item: AppItem, mode: BlockMode, dailyLimitMinutes: Int = -1) {
-        viewModelScope.launch {
-            dao.upsert(
-                AppRule(
-                    packageName = item.packageName,
-                    appLabel = item.label,
-                    isBlocked = true,
-                    mode = mode,
-                    dailyLimitMinutes = dailyLimitMinutes,
-                )
-            )
         }
     }
 }

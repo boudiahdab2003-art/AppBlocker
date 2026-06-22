@@ -1,7 +1,6 @@
 package com.appblocker.ui
 
 import android.annotation.SuppressLint
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -16,14 +15,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -36,8 +30,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.runtime.Composable
@@ -52,7 +44,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -93,28 +84,14 @@ fun ScheduleEditorScreen(
     Scaffold(
         containerColor = androidx.compose.ui.graphics.Color.Transparent,
         topBar = {
-            TopAppBar(
-                title = { Text(typeTitle(type), fontWeight = FontWeight.SemiBold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+            EditorTopBar(typeTitle(type), onBack) {
+                if (existing != null && !strictActive) {
+                    IconButton(onClick = { vm.delete(existing); onBack() }) {
+                        Icon(Icons.Filled.Delete, contentDescription = "Delete",
+                            tint = MaterialTheme.colorScheme.error)
                     }
-                },
-                actions = {
-                    if (existing != null && !strictActive) {
-                        IconButton(onClick = { vm.delete(existing); onBack() }) {
-                            Icon(Icons.Filled.Delete, contentDescription = "Delete",
-                                tint = MaterialTheme.colorScheme.error)
-                        }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = androidx.compose.ui.graphics.Color.Transparent,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
-                    actionIconContentColor = MaterialTheme.colorScheme.onSurface,
-                ),
-            )
+                }
+            }
         },
     ) { padding ->
         LazyColumn(Modifier.padding(padding).fillMaxSize().padding(horizontal = 16.dp)) {
@@ -216,30 +193,8 @@ fun ScheduleEditorScreen(
                 Spacer(Modifier.padding(top = 4.dp))
             }
             items(apps, key = { it.packageName }) { app ->
-                val isSel = selected.contains(app.packageName)
-                Row(
-                    Modifier.fillMaxWidth()
-                        .clickable(enabled = !strictActive) {
-                            if (isSel) selected.remove(app.packageName) else selected.add(app.packageName)
-                        }
-                        .padding(vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (app.icon != null) {
-                        Image(app.icon.asImageBitmap(), null,
-                            Modifier.size(36.dp).clip(RoundedCornerShape(9.dp)))
-                    } else {
-                        Box(Modifier.size(36.dp).clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                            contentAlignment = Alignment.Center) {
-                            Icon(Icons.Filled.Apps, null, Modifier.size(20.dp))
-                        }
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    Text(app.label, Modifier.weight(1f), color = MaterialTheme.colorScheme.onBackground)
-                    Checkbox(checked = isSel, enabled = !strictActive, onCheckedChange = {
-                        if (it) selected.add(app.packageName) else selected.remove(app.packageName)
-                    })
+                AppCheckRow(app, checked = selected.contains(app.packageName), enabled = !strictActive) { on ->
+                    if (on) selected.add(app.packageName) else selected.remove(app.packageName)
                 }
             }
 
