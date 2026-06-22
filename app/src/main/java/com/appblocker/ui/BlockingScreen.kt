@@ -28,7 +28,6 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.HourglassEmpty
@@ -39,7 +38,6 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.ShoppingBasket
-import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Spa
 import androidx.compose.material.icons.filled.Timer
@@ -99,7 +97,6 @@ fun BlockingScreen(
     val remaining by focusVm.remainingMillis.collectAsState()
     // Re-checked on every resume so granting in Settings updates the UI immediately.
     val perms = rememberPermissions()
-    val protectionOn = perms.firstOrNull { it.key == "accessibility" }?.granted == true
     val essentialMissing = perms.count { !it.granted && it.essential }
     val adultOn = SettingsStore.blockAdult(context)
     var pending by remember { mutableStateOf<Template?>(null) }
@@ -169,7 +166,9 @@ fun BlockingScreen(
                                     color = MaterialTheme.colorScheme.primary)
                             }
                             Spacer(Modifier.padding(top = 14.dp))
-                            StopButton(enabled = true) { QuickSession.stop(context); tick = System.currentTimeMillis() }
+                            NeutralButton(Modifier.fillMaxWidth(), Icons.Filled.Stop, "Stop") {
+                                QuickSession.stop(context); tick = System.currentTimeMillis()
+                            }
                         }
                         paused -> {
                             GradientButton(text = "Start", enabled = !focusActive, onClick = {
@@ -183,7 +182,7 @@ fun BlockingScreen(
                             TimerPomoRow(enabled = !focusActive, onTimer = { showTimer = true }, onPomo = { showPomo = true })
                         }
                         else -> {
-                            StopButton(enabled = !focusActive) {
+                            NeutralButton(Modifier.fillMaxWidth(), Icons.Filled.Stop, "Stop", enabled = !focusActive) {
                                 SettingsStore.setQuickBlockPaused(context, true); paused = true
                             }
                             Spacer(Modifier.padding(top = 14.dp))
@@ -379,28 +378,8 @@ private fun <T> ChoiceDialog(
 @Composable
 private fun TimerPomoRow(enabled: Boolean, onTimer: () -> Unit, onPomo: () -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        SmallNeutralButton(Modifier.weight(1f), Icons.Filled.Timer, "Timer", enabled, onTimer)
-        SmallNeutralButton(Modifier.weight(1f), Icons.Filled.Spa, "Pomodoro", enabled, onPomo)
-    }
-}
-
-@Composable
-private fun SmallNeutralButton(
-    modifier: Modifier, icon: ImageVector, label: String, enabled: Boolean, onClick: () -> Unit,
-) {
-    Box(
-        modifier.height(46.dp).clip(RoundedCornerShape(23.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .clickable(enabled = enabled, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(6.dp))
-            Text(label, style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-        }
+        NeutralButton(Modifier.weight(1f), Icons.Filled.Timer, "Timer", enabled, compact = true, onClick = onTimer)
+        NeutralButton(Modifier.weight(1f), Icons.Filled.Spa, "Pomodoro", enabled, compact = true, onClick = onPomo)
     }
 }
 
@@ -532,38 +511,30 @@ private fun PillCount(icon: ImageVector, count: Int, tint: Color) {
     }
 }
 
+/** Neutral pill button (surfaceVariant). `compact` = the smaller Timer/Pomodoro size. */
 @Composable
-private fun StopButton(enabled: Boolean, onClick: () -> Unit) {
+private fun NeutralButton(
+    modifier: Modifier = Modifier,
+    icon: ImageVector,
+    label: String,
+    enabled: Boolean = true,
+    compact: Boolean = false,
+    onClick: () -> Unit,
+) {
     Box(
-        Modifier.fillMaxWidth().height(54.dp).clip(RoundedCornerShape(27.dp))
+        modifier.height(if (compact) 46.dp else 54.dp).clip(RoundedCornerShape(27.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Filled.Stop, contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(22.dp))
-            Spacer(Modifier.width(8.dp))
-            Text("Stop", style = MaterialTheme.typography.titleMedium,
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.size(if (compact) 18.dp else 22.dp))
+            Spacer(Modifier.width(if (compact) 6.dp else 8.dp))
+            Text(label,
+                style = if (compact) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
         }
-    }
-}
-
-@Composable
-private fun StatChip(modifier: Modifier, icon: ImageVector, value: String, label: String) {
-    Column(
-        modifier.clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.background.copy(alpha = 0.55f))
-            .padding(vertical = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(22.dp))
-        Spacer(Modifier.padding(top = 6.dp))
-        Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface)
-        Text(label, style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

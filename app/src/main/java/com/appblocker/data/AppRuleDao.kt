@@ -12,10 +12,6 @@ interface AppRuleDao {
     @Query("SELECT * FROM app_rules")
     fun getAll(): Flow<List<AppRule>>
 
-    /** Packages currently blocked — used by the M2 accessibility watcher. */
-    @Query("SELECT packageName FROM app_rules WHERE isBlocked = 1")
-    fun getBlockedPackages(): Flow<List<String>>
-
     @Upsert
     suspend fun upsert(rule: AppRule)
 

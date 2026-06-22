@@ -1,11 +1,9 @@
 package com.appblocker.ui
 
-import android.app.AppOpsManager
 import android.app.Application
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
-import android.os.Process
 import androidx.compose.ui.graphics.Color
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.AndroidViewModel
@@ -99,14 +97,5 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
     companion object {
         fun fmt(minutes: Int): String =
             if (minutes >= 60) "${minutes / 60}h ${minutes % 60}m" else "${minutes}m"
-
-        @Suppress("DEPRECATION")
-        fun hasUsageAccess(ctx: Context): Boolean {
-            val appOps = ctx.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
-            val mode = appOps.checkOpNoThrow(
-                AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), ctx.packageName
-            )
-            return mode == AppOpsManager.MODE_ALLOWED
-        }
     }
 }

@@ -27,17 +27,6 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             .map { it.size }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
 
-    /** Sets used to tell whether a template is already fully applied. */
-    val blockedPackages: StateFlow<Set<String>> =
-        db.appRuleDao().getBlockedPackages()
-            .map { it.toSet() }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
-
-    val keywordSet: StateFlow<Set<String>> =
-        db.blockedKeywordDao().getAll()
-            .map { list -> list.map { it.keyword }.toSet() }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
-
     /**
      * Apply a one-tap preset: create a Time schedule for its apps (so they block within the
      * template's window), add its keywords globally, and set the adult filter if asked.
