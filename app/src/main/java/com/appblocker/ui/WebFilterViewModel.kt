@@ -39,4 +39,14 @@ class WebFilterViewModel(app: Application) : AndroidViewModel(app) {
     fun removeKeyword(keyword: String) {
         viewModelScope.launch { dao.delete(BlockedKeyword(keyword)) }
     }
+
+    /** Commit a staged keyword list: insert new ones, delete removed ones. */
+    fun setKeywords(newList: List<String>) {
+        val target = newList.map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet()
+        viewModelScope.launch {
+            val current = keywords.value.toSet()
+            (target - current).forEach { dao.insert(BlockedKeyword(it)) }
+            (current - target).forEach { dao.delete(BlockedKeyword(it)) }
+        }
+    }
 }

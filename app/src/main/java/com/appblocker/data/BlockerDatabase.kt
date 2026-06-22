@@ -22,7 +22,7 @@ class Converters {
 
 @Database(
     entities = [AppRule::class, FocusState::class, BlockedKeyword::class, Schedule::class],
-    version = 4,
+    version = 5,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)

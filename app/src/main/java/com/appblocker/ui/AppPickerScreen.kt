@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -28,6 +29,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -65,6 +67,10 @@ fun AppListSection(
     val context = LocalContext.current
     val blockedCount = apps.count { it.isBlocked }
     var dialogApp by remember { mutableStateOf<AppItem?>(null) }
+    var query by remember { mutableStateOf("") }
+    val shown = remember(apps, query) {
+        if (query.isBlank()) apps else apps.filter { it.label.contains(query.trim(), ignoreCase = true) }
+    }
 
     Column(modifier.fillMaxSize()) {
         SummaryCard(blockedCount)
@@ -76,13 +82,21 @@ fun AppListSection(
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
             )
         }
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            placeholder = { Text("Search apps") },
+            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        )
         if (loading) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
             }
         } else {
             LazyColumn(Modifier.fillMaxSize()) {
-                items(apps, key = { it.packageName }) { app ->
+                items(shown, key = { it.packageName }) { app ->
                     AppRow(
                         app = app,
                         enabled = !blockingLocked,

@@ -18,6 +18,7 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -28,9 +29,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.appblocker.data.Schedule
 import com.appblocker.data.ScheduleType
+import com.appblocker.data.SettingsStore
+import com.appblocker.service.AccessibilityUtil
 import com.appblocker.ui.theme.AppGradients
 
 private data class Tab(val label: String, val icon: ImageVector)
@@ -45,6 +49,7 @@ private val TABS = listOf(
 /** Editor sub-screens shown full-screen over the current tab. */
 private sealed interface Overlay {
     data object QuickBlock : Overlay
+    data object Permissions : Overlay
     data class NewSchedule(val type: ScheduleType) : Overlay
     data class EditSchedule(val schedule: Schedule) : Overlay
 }
@@ -55,6 +60,15 @@ fun AppRoot() {
     var overlay by remember { mutableStateOf<Overlay?>(null) }
     val focusVm: FocusViewModel = viewModel()
     val strictActive by focusVm.isActive.collectAsState()
+    val context = LocalContext.current
+
+    // First launch: if the blocker isn't on yet, guide the user through setup once.
+    LaunchedEffect(Unit) {
+        if (!SettingsStore.setupSeen(context) && !AccessibilityUtil.isEnabled(context)) {
+            overlay = Overlay.Permissions
+        }
+        SettingsStore.setSetupSeen(context)
+    }
 
     // System back closes an open editor overlay instead of exiting the app.
     BackHandler(enabled = overlay != null) { overlay = null }
@@ -63,6 +77,8 @@ fun AppRoot() {
     when (val o = overlay) {
         is Overlay.QuickBlock ->
             BlockEditorScreen(strictActive = strictActive, onBack = { overlay = null })
+        is Overlay.Permissions ->
+            PermissionsScreen(onBack = { overlay = null })
         is Overlay.NewSchedule ->
             ScheduleEditorScreen(
                 type = o.type, existing = null, strictActive = strictActive,
@@ -80,6 +96,7 @@ fun AppRoot() {
             onEditQuickBlock = { overlay = Overlay.QuickBlock },
             onNewSchedule = { overlay = Overlay.NewSchedule(it) },
             onEditSchedule = { overlay = Overlay.EditSchedule(it) },
+            onOpenPermissions = { overlay = Overlay.Permissions },
         )
     }
     }
@@ -93,6 +110,7 @@ private fun MainScaffold(
     onEditQuickBlock: () -> Unit,
     onNewSchedule: (ScheduleType) -> Unit,
     onEditSchedule: (Schedule) -> Unit,
+    onOpenPermissions: () -> Unit,
 ) {
     Scaffold(
         containerColor = Color.Transparent,
@@ -122,10 +140,11 @@ private fun MainScaffold(
                     onEditQuickBlock = onEditQuickBlock,
                     onNewSchedule = onNewSchedule,
                     onEditSchedule = onEditSchedule,
+                    onOpenPermissions = onOpenPermissions,
                 )
                 1 -> StrictModeScreen()
                 2 -> InsightsScreen()
-                else -> ProfileScreen(strictActive = strictActive)
+                else -> ProfileScreen(strictActive = strictActive, onOpenPermissions = onOpenPermissions)
             }
         }
     }

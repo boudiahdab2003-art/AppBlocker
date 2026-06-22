@@ -2,15 +2,27 @@ package com.appblocker.service
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
+import android.graphics.PixelFormat
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.view.LayoutInflater
+import android.view.View
+import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.widget.Button
+import android.widget.ImageView
+import android.widget.TextView
+import androidx.core.graphics.drawable.toBitmap
+import com.appblocker.R
 import com.appblocker.data.AppRule
 import com.appblocker.data.AttemptCounter
 import com.appblocker.data.BlockMode
 import com.appblocker.data.BlockerDatabase
+import com.appblocker.data.LaunchCounter
+import com.appblocker.data.QuickSession
 import com.appblocker.data.Schedule
 import com.appblocker.data.ScheduleType
 import com.appblocker.data.SettingsStore
@@ -43,6 +55,14 @@ class BlockerAccessibilityService : AccessibilityService() {
     private var lastBlockAt: Long = 0L
     private var lastWebText: String? = null
 
+    // Instant block screen drawn as an overlay window (no Activity-launch lag).
+    private val windowManager by lazy { getSystemService(WINDOW_SERVICE) as WindowManager }
+    private var overlayView: View? = null
+
+    private var lastForegroundPkg: String? = null
+    @Volatile private var lastLocation: android.location.Location? = null
+    private var locationRequested = false
+
     // Debounced web scan: collapse the page-load event burst into one scan that runs
     // after events stop, so the *settled* page (when its text finally exists) is scanned.
     private val handler = Handler(Looper.getMainLooper())
@@ -61,6 +81,7 @@ class BlockerAccessibilityService : AccessibilityService() {
             focusEndMillis = focus?.endTimeMillis ?: 0L
             userKeywords = keywords.map { it.keyword }
             schedules = scheduleList
+            if (scheduleList.any { it.type == ScheduleType.LOCATION }) ensureLocationUpdates()
         }.launchIn(scope)
     }
 
@@ -71,6 +92,10 @@ class BlockerAccessibilityService : AccessibilityService() {
 
         when (event.eventType) {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
+                if (pkg != null && pkg != lastForegroundPkg) {
+                    lastForegroundPkg = pkg
+                    LaunchCounter.recordOpen(applicationContext, pkg) // for LAUNCH_COUNT
+                }
                 if (pkg != null) handleAppBlock(pkg)
                 lastWebText = null // new page/app: force a fresh re-check
                 scheduleWebScan()
@@ -91,6 +116,7 @@ class BlockerAccessibilityService : AccessibilityService() {
     private fun handleAppBlock(pkg: String) {
         if (!shouldBlock(pkg)) {
             lastBlockedPkg = null
+            removeBlockOverlay() // left the blocked app — take the cover down
             return
         }
         val now = System.currentTimeMillis()
@@ -104,11 +130,14 @@ class BlockerAccessibilityService : AccessibilityService() {
         val now = System.currentTimeMillis()
         val strict = now < focusEndMillis
 
-        // Quick Block — always-on app rules.
+        // Quick Block — enforced when Strict, or a running Timer/Pomodoro says "block now",
+        // or (no session) when not paused.
         val rule = rules[pkg]
         if (rule != null && rule.isBlocked) {
             if (strict) return true // Strict Mode blocks every chosen app outright.
-            when (rule.mode) {
+            val session = QuickSession.state(this)
+            val quickOn = if (session.active) session.blockingNow else !SettingsStore.quickBlockPaused(this)
+            if (quickOn) when (rule.mode) {
                 BlockMode.HARD, BlockMode.SCHEDULE -> return true
                 BlockMode.LIMIT ->
                     if (rule.dailyLimitMinutes >= 0 &&
@@ -118,16 +147,57 @@ class BlockerAccessibilityService : AccessibilityService() {
         }
 
         // Schedules — block when the schedule's condition is currently met.
+        if (DEBUG) Log.d(TAG, "shouldBlock $pkg schedules=${schedules.size} opens=${LaunchCounter.opensToday(this, pkg)}")
         for (s in schedules) {
             if (!s.enabled || pkg !in s.packages) continue
             val hit = when (s.type) {
                 ScheduleType.TIME -> inTimeWindow(s, now)
                 ScheduleType.USAGE_LIMIT ->
                     UsageTracker.usedMinutesToday(this, pkg) >= s.limitMinutes
+                ScheduleType.LAUNCH_COUNT ->
+                    LaunchCounter.opensToday(this, pkg) >= s.limitCount
+                ScheduleType.WIFI -> onMatchingWifi(s.wifiSsid)
+                ScheduleType.LOCATION -> inLocation(s)
             }
             if (hit) return true
         }
         return false
+    }
+
+    /** True if connected to Wi-Fi and (target empty = any, else SSID matches). */
+    private fun onMatchingWifi(target: String): Boolean {
+        val cm = getSystemService(CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager ?: return false
+        val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
+        if (!caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI)) return false
+        if (target.isBlank()) return true
+        val wm = applicationContext.getSystemService(WIFI_SERVICE) as? android.net.wifi.WifiManager ?: return false
+        @Suppress("DEPRECATION")
+        val ssid = wm.connectionInfo?.ssid?.trim('"') ?: return false
+        return ssid.equals(target, ignoreCase = true)
+    }
+
+    /** True if the last known location is within the schedule's radius. */
+    private fun inLocation(s: Schedule): Boolean {
+        val loc = lastLocation ?: return false
+        val out = FloatArray(1)
+        android.location.Location.distanceBetween(loc.latitude, loc.longitude, s.latitude, s.longitude, out)
+        return out[0] <= s.radiusMeters
+    }
+
+    private fun ensureLocationUpdates() {
+        if (locationRequested) return
+        if (checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) return
+        val lm = getSystemService(LOCATION_SERVICE) as? android.location.LocationManager ?: return
+        locationRequested = true
+        runCatching {
+            lastLocation = lm.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER)
+                ?: lm.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER)
+            val listener = android.location.LocationListener { lastLocation = it }
+            lm.requestLocationUpdates(android.location.LocationManager.NETWORK_PROVIDER, 60_000L, 50f, listener)
+            lm.requestLocationUpdates(android.location.LocationManager.GPS_PROVIDER, 60_000L, 50f, listener)
+        }
     }
 
     /** Whether [now] falls inside a TIME schedule's active day + hour window. */
@@ -201,27 +271,84 @@ class BlockerAccessibilityService : AccessibilityService() {
         counterKey: String,
     ) {
         val (today, total) = AttemptCounter.record(applicationContext, counterKey)
-        startActivity(
-            Intent(this, BlockScreenActivity::class.java).apply {
-                addFlags(
-                    Intent.FLAG_ACTIVITY_NEW_TASK or
-                        Intent.FLAG_ACTIVITY_CLEAR_TASK or
-                        Intent.FLAG_ACTIVITY_NO_ANIMATION
-                )
-                putExtra(BlockScreenActivity.EXTRA_TITLE, title)
-                if (message != null) putExtra(BlockScreenActivity.EXTRA_MESSAGE, message)
-                if (packageName != null) putExtra(BlockScreenActivity.EXTRA_PACKAGE, packageName)
-                putExtra(BlockScreenActivity.EXTRA_TODAY, today)
-                putExtra(BlockScreenActivity.EXTRA_TOTAL, total)
-            }
-        )
+        val label = packageName?.let { loadLabel(it) }
+        val msg = message ?: label?.let { "$it is blocked" } ?: "This is blocked right now."
+        // Instant overlay; fall back to the Activity only if the overlay can't be drawn.
+        if (!showBlockOverlay(packageName, title, msg, today, total)) {
+            startActivity(
+                Intent(this, BlockScreenActivity::class.java).apply {
+                    addFlags(
+                        Intent.FLAG_ACTIVITY_NEW_TASK or
+                            Intent.FLAG_ACTIVITY_CLEAR_TASK or
+                            Intent.FLAG_ACTIVITY_NO_ANIMATION
+                    )
+                    putExtra(BlockScreenActivity.EXTRA_TITLE, title)
+                    if (message != null) putExtra(BlockScreenActivity.EXTRA_MESSAGE, message)
+                    if (packageName != null) putExtra(BlockScreenActivity.EXTRA_PACKAGE, packageName)
+                    putExtra(BlockScreenActivity.EXTRA_TODAY, today)
+                    putExtra(BlockScreenActivity.EXTRA_TOTAL, total)
+                }
+            )
+        }
     }
+
+    /** Draws/updates the full-screen block overlay instantly. Returns false if it can't. */
+    private fun showBlockOverlay(
+        packageName: String?, title: String, message: String, today: Int, total: Int,
+    ): Boolean = try {
+        val v = overlayView ?: LayoutInflater.from(this).inflate(R.layout.overlay_block, null).also {
+            it.findViewById<Button>(R.id.overlay_close).setOnClickListener {
+                lastBlockedPkg = null
+                removeBlockOverlay()
+                performGlobalAction(GLOBAL_ACTION_HOME)
+            }
+            val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            else @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE
+            val params = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT,
+                type,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                PixelFormat.TRANSLUCENT,
+            )
+            windowManager.addView(it, params)
+            overlayView = it
+        }
+        v.findViewById<TextView>(R.id.overlay_title).text = title
+        v.findViewById<TextView>(R.id.overlay_subtitle).text = message
+        v.findViewById<TextView>(R.id.overlay_counts).text = "$today× today  ·  $total× total"
+        val iconView = v.findViewById<ImageView>(R.id.overlay_icon)
+        val bmp = packageName?.let { loadIcon(it) }
+        if (bmp != null) iconView.setImageBitmap(bmp)
+        else iconView.setImageResource(R.mipmap.ic_launcher)
+        true
+    } catch (e: Exception) {
+        Log.w(TAG, "overlay failed, falling back to activity", e)
+        false
+    }
+
+    private fun removeBlockOverlay() {
+        overlayView?.let { runCatching { windowManager.removeView(it) } }
+        overlayView = null
+    }
+
+    private fun loadLabel(pkg: String): String? = runCatching {
+        packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
+    }.getOrNull()
+
+    private fun loadIcon(pkg: String) = runCatching {
+        packageManager.getApplicationIcon(pkg).toBitmap(144, 144)
+    }.getOrNull()
 
     override fun onInterrupt() {}
 
     override fun onDestroy() {
         super.onDestroy()
         handler.removeCallbacks(webScanRunnable)
+        removeBlockOverlay()
         scope.cancel()
     }
 

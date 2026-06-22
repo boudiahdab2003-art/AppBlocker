@@ -6,6 +6,8 @@ import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,11 +24,16 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
@@ -34,6 +41,9 @@ import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.ShoppingBasket
 import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Spa
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -41,6 +51,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -51,17 +62,21 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.material.icons.filled.Check
+import com.appblocker.data.QuickSession
 import com.appblocker.data.Schedule
 import com.appblocker.data.ScheduleType
 import com.appblocker.data.SettingsStore
+import kotlinx.coroutines.delay
 import com.appblocker.service.AccessibilityUtil
 import com.appblocker.ui.theme.AppGradients
 import com.appblocker.ui.theme.softGlow
@@ -71,6 +86,7 @@ fun BlockingScreen(
     onEditQuickBlock: () -> Unit,
     onNewSchedule: (ScheduleType) -> Unit,
     onEditSchedule: (Schedule) -> Unit,
+    onOpenPermissions: () -> Unit,
     vm: HomeViewModel = viewModel(),
     scheduleVm: ScheduleViewModel = viewModel(),
     focusVm: FocusViewModel = viewModel(),
@@ -81,9 +97,18 @@ fun BlockingScreen(
     val schedules by scheduleVm.schedules.collectAsState()
     val focusActive by focusVm.isActive.collectAsState()
     val remaining by focusVm.remainingMillis.collectAsState()
-    val protectionOn = AccessibilityUtil.isEnabled(context)
+    // Re-checked on every resume so granting in Settings updates the UI immediately.
+    val perms = rememberPermissions()
+    val protectionOn = perms.firstOrNull { it.key == "accessibility" }?.granted == true
+    val essentialMissing = perms.count { !it.granted && it.essential }
     val adultOn = SettingsStore.blockAdult(context)
     var pending by remember { mutableStateOf<Template?>(null) }
+    var showTimer by remember { mutableStateOf(false) }
+    var showPomo by remember { mutableStateOf(false) }
+    // 1s ticker drives the Timer/Pomodoro countdown.
+    var tick by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(Unit) { while (true) { tick = System.currentTimeMillis(); delay(1000) } }
+    val session = remember(tick) { QuickSession.state(context) }
 
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
         item {
@@ -99,63 +124,85 @@ fun BlockingScreen(
                 )
                 Spacer(Modifier.weight(1f))
                 if (focusActive) TimerPill(remaining)
+                else if (session.active) TimerPill(session.remainingMillis)
             }
             Spacer(Modifier.padding(top = 16.dp))
+            if (essentialMissing > 0) {
+                SetupBanner(essentialMissing, onOpenPermissions)
+                Spacer(Modifier.padding(top = 16.dp))
+            }
         }
 
         // Quick Block card
         item {
-            val firstRun = appsBlocked == 0 && keywords == 0 && !protectionOn
+            val configured = appsBlocked > 0 || keywords > 0
+            var paused by remember { mutableStateOf(SettingsStore.quickBlockPaused(context)) }
+            LaunchedEffect(perms) { paused = SettingsStore.quickBlockPaused(context) }
+            val active = configured && !paused
             Card(
                 Modifier.fillMaxWidth()
-                    .softGlow(RoundedCornerShape(22.dp), elevation = if (protectionOn) 14.dp else 4.dp)
-                    .then(if (firstRun) Modifier else Modifier.clickable { onEditQuickBlock() }),
+                    .softGlow(RoundedCornerShape(22.dp), elevation = if (active) 14.dp else 4.dp)
+                    .clickable { onEditQuickBlock() },
                 shape = RoundedCornerShape(22.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = if (protectionOn) BorderStroke(1.5.dp, AppGradients.accent) else null,
+                border = if (active) BorderStroke(1.5.dp, AppGradients.accent) else null,
             ) {
                 Column(Modifier.padding(22.dp)) {
-                    if (firstRun) {
-                        Text("Quick Block", style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                        Spacer(Modifier.padding(top = 14.dp))
-                        QuickBlockPill()
-                        Spacer(Modifier.padding(top = 18.dp))
-                        GradientButton(text = "Start", onClick = onEditQuickBlock)
-                    } else {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                if (protectionOn) Icons.Filled.CheckCircle else Icons.Filled.Warning,
-                                contentDescription = null,
-                                tint = if (protectionOn) MaterialTheme.colorScheme.primary else Color(0xFFFFB020),
-                                modifier = Modifier.size(30.dp),
-                            )
-                            Spacer(Modifier.width(12.dp))
-                            Text("Quick Block", style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                        }
-                        Spacer(Modifier.padding(top = 16.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            StatChip(Modifier.weight(1f), Icons.Filled.PhoneAndroid, "$appsBlocked", "Apps")
-                            StatChip(Modifier.weight(1f), Icons.Filled.Language, "$keywords", "Words")
-                            StatChip(Modifier.weight(1f), Icons.Filled.Block, if (adultOn) "On" else "Off", "18+")
-                        }
-                        Spacer(Modifier.padding(top = 16.dp))
-                        if (protectionOn) {
+                    Text("Quick Block", style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    Spacer(Modifier.padding(top = 14.dp))
+                    QuickBlockPill(apps = appsBlocked, words = keywords, adultOn = adultOn, dimmed = !active)
+                    Spacer(Modifier.padding(top = 18.dp))
+                    when {
+                        !configured -> GradientButton(text = "Start", onClick = onEditQuickBlock)
+                        session.active -> {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Filled.CheckCircle, contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
-                                Spacer(Modifier.width(8.dp))
+                                Box(Modifier.size(26.dp).clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary),
+                                    contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Filled.Schedule, contentDescription = null,
+                                        tint = Color.White, modifier = Modifier.size(16.dp))
+                                }
+                                Spacer(Modifier.width(10.dp))
+                                Text("${session.label} ${fmtClock(session.remainingMillis)}",
+                                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary)
+                            }
+                            Spacer(Modifier.padding(top = 14.dp))
+                            StopButton(enabled = true) { QuickSession.stop(context); tick = System.currentTimeMillis() }
+                        }
+                        paused -> {
+                            GradientButton(text = "Start", enabled = !focusActive, onClick = {
+                                SettingsStore.setQuickBlockPaused(context, false); paused = false
+                            })
+                            Spacer(Modifier.padding(top = 10.dp))
+                            Text("Paused — tap the card to edit your list.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(Modifier.padding(top = 12.dp))
+                            TimerPomoRow(enabled = !focusActive, onTimer = { showTimer = true }, onPomo = { showPomo = true })
+                        }
+                        else -> {
+                            StopButton(enabled = !focusActive) {
+                                SettingsStore.setQuickBlockPaused(context, true); paused = true
+                            }
+                            Spacer(Modifier.padding(top = 14.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(Modifier.size(26.dp).clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary),
+                                    contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Filled.Check, contentDescription = null,
+                                        tint = Color.White, modifier = Modifier.size(16.dp))
+                                }
+                                Spacer(Modifier.width(10.dp))
                                 Text("Active", style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                                 Spacer(Modifier.weight(1f))
                                 Text("Tap to edit", style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
-                        } else {
-                            Text("Tap to turn on the blocker, then choose what to block.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(Modifier.padding(top = 12.dp))
+                            TimerPomoRow(enabled = !focusActive, onTimer = { showTimer = true }, onPomo = { showPomo = true })
                         }
                     }
                 }
@@ -178,15 +225,25 @@ fun BlockingScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.padding(top = 12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                ScheduleTile(
-                    Modifier.weight(1f), "Time", Icons.Filled.Schedule,
-                    enabled = !focusActive,
-                ) { onNewSchedule(ScheduleType.TIME) }
-                ScheduleTile(
-                    Modifier.weight(1f), "Usage limit", Icons.Filled.HourglassEmpty,
-                    enabled = !focusActive,
-                ) { onNewSchedule(ScheduleType.USAGE_LIMIT) }
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                ScheduleTile("Time", Icons.Filled.Schedule, enabled = !focusActive) {
+                    onNewSchedule(ScheduleType.TIME)
+                }
+                ScheduleTile("Usage limit", Icons.Filled.HourglassEmpty, enabled = !focusActive) {
+                    onNewSchedule(ScheduleType.USAGE_LIMIT)
+                }
+                ScheduleTile("Launch count", Icons.AutoMirrored.Filled.OpenInNew, enabled = !focusActive) {
+                    onNewSchedule(ScheduleType.LAUNCH_COUNT)
+                }
+                ScheduleTile("Wi-Fi", Icons.Filled.Wifi, enabled = !focusActive) {
+                    onNewSchedule(ScheduleType.WIFI)
+                }
+                ScheduleTile("Location", Icons.Filled.LocationOn, enabled = !focusActive) {
+                    onNewSchedule(ScheduleType.LOCATION)
+                }
             }
             Spacer(Modifier.padding(top = 24.dp))
         }
@@ -254,6 +311,104 @@ fun BlockingScreen(
             text = { Text(templateSummary(t)) },
         )
     }
+
+    if (showTimer) {
+        ChoiceDialog(
+            title = "Block with a timer",
+            subtitle = "Block your Quick Block apps for:",
+            options = listOf("15 min" to 15, "25 min" to 25, "50 min" to 50, "90 min" to 90),
+            onPick = { QuickSession.startTimer(context, it); tick = System.currentTimeMillis(); showTimer = false },
+            onDismiss = { showTimer = false },
+        )
+    }
+    if (showPomo) {
+        // (work, break, rounds) presets
+        ChoiceDialog(
+            title = "Pomodoro",
+            subtitle = "Block during work, free during breaks:",
+            options = listOf(
+                "25 / 5 × 4" to Triple(25, 5, 4),
+                "50 / 10 × 3" to Triple(50, 10, 3),
+                "15 / 3 × 6" to Triple(15, 3, 6),
+            ),
+            onPick = {
+                QuickSession.startPomodoro(context, it.first, it.second, it.third)
+                tick = System.currentTimeMillis(); showPomo = false
+            },
+            onDismiss = { showPomo = false },
+        )
+    }
+}
+
+/** A simple list-of-choices dialog (used for Timer durations and Pomodoro presets). */
+@Composable
+private fun <T> ChoiceDialog(
+    title: String,
+    subtitle: String,
+    options: List<Pair<String, T>>,
+    onPick: (T) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        title = { Text(title) },
+        text = {
+            Column {
+                Text(subtitle, style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.padding(top = 8.dp))
+                options.forEach { (label, value) ->
+                    Text(
+                        label,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.fillMaxWidth()
+                            .clickable { onPick(value) }
+                            .padding(vertical = 12.dp),
+                    )
+                }
+            }
+        },
+    )
+}
+
+/** Two neutral side-by-side buttons (Timer / Pomodoro) under the Start/Stop control. */
+@Composable
+private fun TimerPomoRow(enabled: Boolean, onTimer: () -> Unit, onPomo: () -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        SmallNeutralButton(Modifier.weight(1f), Icons.Filled.Timer, "Timer", enabled, onTimer)
+        SmallNeutralButton(Modifier.weight(1f), Icons.Filled.Spa, "Pomodoro", enabled, onPomo)
+    }
+}
+
+@Composable
+private fun SmallNeutralButton(
+    modifier: Modifier, icon: ImageVector, label: String, enabled: Boolean, onClick: () -> Unit,
+) {
+    Box(
+        modifier.height(46.dp).clip(RoundedCornerShape(23.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(label, style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+        }
+    }
+}
+
+/** Formats remaining millis as H:MM:SS or M:SS. */
+private fun fmtClock(ms: Long): String {
+    val total = (ms / 1000).toInt()
+    val h = total / 3600; val m = (total % 3600) / 60; val s = total % 60
+    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
 }
 
 private fun isTemplateActive(t: Template, schedules: List<Schedule>, adultOn: Boolean): Boolean {
@@ -273,6 +428,27 @@ private fun templateSummary(t: Template): String {
 }
 
 @Composable
+private fun SetupBanner(missing: Int, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+            .background(Color(0xFF3A2A12)).clickable(onClick = onClick).padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Filled.Warning, contentDescription = null, tint = Color(0xFFFFB020),
+            modifier = Modifier.size(26.dp))
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text("Finish setup", style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+            Text("$missing required ${if (missing == 1) "step" else "steps"} left — tap to fix",
+                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
 private fun TemplateCard(modifier: Modifier, t: Template, active: Boolean, onClick: () -> Unit) {
     Box(modifier.softGlow(RoundedCornerShape(20.dp), glow = t.colors.first(), elevation = 10.dp)) {
     Column(
@@ -280,8 +456,8 @@ private fun TemplateCard(modifier: Modifier, t: Template, active: Boolean, onCli
             .clip(RoundedCornerShape(20.dp))
             .background(Brush.linearGradient(t.colors))
             .clickable(onClick = onClick)
-            .padding(16.dp)
-            .height(162.dp),
+            .padding(14.dp)
+            .height(178.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
@@ -306,18 +482,18 @@ private fun TemplateCard(modifier: Modifier, t: Template, active: Boolean, onCli
             }
         }
         Spacer(Modifier.weight(1f))
-        Text(t.title, style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold, color = Color.White)
+        Text(t.title, style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold, color = Color.White, maxLines = 2)
         Text(t.subtitle, style = MaterialTheme.typography.bodySmall,
-            color = Color.White.copy(alpha = 0.9f))
+            color = Color.White.copy(alpha = 0.92f), maxLines = 2)
         if (t.timeLabel.isNotEmpty()) {
             Spacer(Modifier.padding(top = 4.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.Top) {
                 Icon(Icons.Filled.Schedule, contentDescription = null, tint = Color.White,
-                    modifier = Modifier.size(13.dp))
+                    modifier = Modifier.size(12.dp).padding(top = 2.dp))
                 Spacer(Modifier.width(4.dp))
-                Text(t.timeLabel, style = MaterialTheme.typography.labelMedium,
-                    color = Color.White, maxLines = 1)
+                Text(t.timeLabel, style = MaterialTheme.typography.labelSmall,
+                    color = Color.White, maxLines = 2)
             }
         }
     }
@@ -326,21 +502,51 @@ private fun TemplateCard(modifier: Modifier, t: Template, active: Boolean, onCli
 
 /** AppBlock-style muted category-icon pill shown on the empty/first-run Quick Block card. */
 @Composable
-private fun QuickBlockPill() {
+private fun QuickBlockPill(apps: Int = 0, words: Int = 0, adultOn: Boolean = false, dimmed: Boolean = false) {
+    val baseTint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (dimmed) 0.45f else 1f)
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(50))
             .background(MaterialTheme.colorScheme.background.copy(alpha = 0.55f))
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        val tint = MaterialTheme.colorScheme.onSurfaceVariant
-        listOf(
-            Icons.Filled.Block, Icons.Filled.PhoneAndroid, Icons.Filled.Language,
-            Icons.Filled.Tag, Icons.Filled.PlayArrow, Icons.Filled.CalendarMonth,
-        ).forEach { Icon(it, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp)) }
-        Text("18+", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = tint)
-        Icon(Icons.Filled.ShoppingBasket, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
+        Icon(Icons.Filled.Block, null, tint = baseTint, modifier = Modifier.size(18.dp))
+        PillCount(Icons.Filled.PhoneAndroid, apps, baseTint)
+        PillCount(Icons.Filled.Language, words, baseTint)
+        Icon(Icons.Filled.PlayArrow, null, tint = baseTint, modifier = Modifier.size(18.dp))
+        Icon(Icons.Filled.CalendarMonth, null, tint = baseTint, modifier = Modifier.size(18.dp))
+        Text("18+", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold,
+            color = if (adultOn && !dimmed) MaterialTheme.colorScheme.primary else baseTint)
+        Icon(Icons.Filled.ShoppingBasket, null, tint = baseTint, modifier = Modifier.size(18.dp))
+    }
+}
+
+@Composable
+private fun PillCount(icon: ImageVector, count: Int, tint: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, null, tint = tint, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(3.dp))
+        Text("$count", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold,
+            color = tint)
+    }
+}
+
+@Composable
+private fun StopButton(enabled: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier.fillMaxWidth().height(54.dp).clip(RoundedCornerShape(27.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.Stop, contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Stop", style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+        }
     }
 }
 
@@ -363,32 +569,34 @@ private fun StatChip(modifier: Modifier, icon: ImageVector, value: String, label
 
 @Composable
 private fun ScheduleTile(
-    modifier: Modifier,
     label: String,
     icon: ImageVector,
     enabled: Boolean,
     onClick: () -> Unit,
 ) {
-    Card(
-        modifier.softGlow(RoundedCornerShape(20.dp), elevation = 6.dp).clickable(enabled = enabled, onClick = onClick),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    Column(
+        Modifier
+            .width(116.dp).height(120.dp)
+            .softGlow(RoundedCornerShape(20.dp), elevation = 6.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
     ) {
-        Column(
-            Modifier.fillMaxWidth().padding(vertical = 22.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+        Box(
+            Modifier.size(46.dp).clip(CircleShape)
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)),
+            contentAlignment = Alignment.Center,
         ) {
-            Box(
-                Modifier.size(46.dp).clip(RoundedCornerShape(13.dp))
-                    .background(AppGradients.accentVertical),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
-            }
-            Spacer(Modifier.padding(top = 10.dp))
-            Text(label, style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(24.dp))
         }
+        Spacer(Modifier.padding(top = 10.dp))
+        Text(label, style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center, maxLines = 2)
     }
 }
 
@@ -410,11 +618,7 @@ private fun ScheduleCard(
                     .background(AppGradients.accentVertical),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(
-                    if (schedule.type == ScheduleType.TIME) Icons.Filled.Schedule
-                    else Icons.Filled.HourglassEmpty,
-                    contentDescription = null, tint = Color.White,
-                )
+                Icon(scheduleIcon(schedule.type), contentDescription = null, tint = Color.White)
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
@@ -428,6 +632,14 @@ private fun ScheduleCard(
     }
 }
 
+private fun scheduleIcon(type: ScheduleType): ImageVector = when (type) {
+    ScheduleType.TIME -> Icons.Filled.Schedule
+    ScheduleType.USAGE_LIMIT -> Icons.Filled.HourglassEmpty
+    ScheduleType.LAUNCH_COUNT -> Icons.AutoMirrored.Filled.OpenInNew
+    ScheduleType.WIFI -> Icons.Filled.Wifi
+    ScheduleType.LOCATION -> Icons.Filled.LocationOn
+}
+
 private fun scheduleSummary(s: Schedule): String {
     val apps = "${s.packages.size} app${if (s.packages.size == 1) "" else "s"}"
     return when (s.type) {
@@ -438,6 +650,9 @@ private fun scheduleSummary(s: Schedule): String {
                 daysText(s.daysMask), apps,
             )
         ScheduleType.USAGE_LIMIT -> "${s.limitMinutes} min/day · $apps"
+        ScheduleType.LAUNCH_COUNT -> "${s.limitCount} opens/day · $apps"
+        ScheduleType.WIFI -> (if (s.wifiSsid.isBlank()) "Any Wi-Fi" else "Wi-Fi: ${s.wifiSsid}") + " · $apps"
+        ScheduleType.LOCATION -> "Within ${s.radiusMeters} m · $apps"
     }
 }
 

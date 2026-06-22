@@ -89,6 +89,26 @@ class AppListViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Commit a staged Quick Block selection: block apps in [selected], unblock the rest. */
+    fun commitBlocked(selected: Set<String>) {
+        viewModelScope.launch {
+            apps.value.forEach { a ->
+                val shouldBlock = a.packageName in selected
+                if (a.isBlocked != shouldBlock) {
+                    dao.upsert(
+                        AppRule(
+                            packageName = a.packageName,
+                            appLabel = a.label,
+                            isBlocked = shouldBlock,
+                            mode = a.mode,
+                            dailyLimitMinutes = a.dailyLimitMinutes,
+                        )
+                    )
+                }
+            }
+        }
+    }
+
     /** Set how a (blocked) app is enforced: always, or a daily time limit. */
     fun setMode(item: AppItem, mode: BlockMode, dailyLimitMinutes: Int = -1) {
         viewModelScope.launch {

@@ -2,9 +2,10 @@ package com.appblocker.ui
 
 import android.content.Intent
 import android.provider.Settings
-import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,54 +14,57 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Block
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.GetApp
+import androidx.compose.material.icons.filled.NoAdultContent
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.ShoppingBasket
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.foundation.layout.height
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.filled.Web
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.appblocker.data.SettingsStore
 import com.appblocker.service.AccessibilityUtil
 
-private const val ROOT = 0
-private const val APPS = 1
-private const val WEB = 2
-private const val EXTRA = 3
-
 /**
- * Quick Block editor — the always-on block set. A root list of categories
- * (Apps / Websites & words / Extra options); each opens its own sub-screen.
- * Read-only while Strict Mode is active.
+ * Quick Block editor — everything (apps, websites & words, extra options) edits a LOCAL
+ * staged copy; nothing is written until Save. Back discards. Read-only in Strict Mode.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,44 +74,46 @@ fun BlockEditorScreen(
     appsVm: AppListViewModel = viewModel(),
     webVm: WebFilterViewModel = viewModel(),
 ) {
-    var section by remember { mutableIntStateOf(ROOT) }
-    BackHandler(enabled = section != ROOT) { section = ROOT }
-
+    val context = LocalContext.current
     val apps by appsVm.apps.collectAsState()
-    val keywords by webVm.keywords.collectAsState()
-    val appCount = apps.count { it.isBlocked }
+    val loading by appsVm.loading.collectAsState()
+    val savedKeywords by webVm.keywords.collectAsState()
 
-    when (section) {
-        APPS -> SubScreen("Apps", onBack = { section = ROOT }) {
-            AppListSection(blockingLocked = strictActive)
+    // --- staged state (seeded from current data, mirrors until the user edits) ---
+    val selected = remember { mutableStateListOf<String>() }
+    var editedApps by remember { mutableStateOf(false) }
+    LaunchedEffect(apps) {
+        if (!editedApps && apps.isNotEmpty()) {
+            selected.clear(); selected.addAll(apps.filter { it.isBlocked }.map { it.packageName })
         }
-        WEB -> SubScreen("Websites & words", onBack = { section = ROOT }) {
-            WebFilterSection(locked = strictActive, showAdult = false)
-        }
-        EXTRA -> ExtraOptionsScreen(locked = strictActive, onBack = { section = ROOT })
-        else -> Root(
-            strictActive = strictActive,
-            appCount = appCount,
-            keywordCount = keywords.size,
-            onBack = onBack,
-            onApps = { section = APPS },
-            onWeb = { section = WEB },
-            onExtra = { section = EXTRA },
-        )
     }
-}
+    val keywords = remember { mutableStateListOf<String>() }
+    var editedKw by remember { mutableStateOf(false) }
+    LaunchedEffect(savedKeywords) {
+        if (!editedKw) { keywords.clear(); keywords.addAll(savedKeywords) }
+    }
+    var newWord by remember { mutableStateOf("") }
+    var query by remember { mutableStateOf("") }
+    var adult by remember { mutableStateOf(SettingsStore.blockAdult(context)) }
+    var addNew by remember { mutableStateOf(SettingsStore.addNewApps(context)) }
+    var purchases by remember { mutableStateOf(SettingsStore.blockPurchases(context)) }
+    var unsupported by remember { mutableStateOf(SettingsStore.blockUnsupportedBrowsers(context)) }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun Root(
-    strictActive: Boolean,
-    appCount: Int,
-    keywordCount: Int,
-    onBack: () -> Unit,
-    onApps: () -> Unit,
-    onWeb: () -> Unit,
-    onExtra: () -> Unit,
-) {
+    val ed = !strictActive
+    val shownApps = remember(apps, query) {
+        if (query.isBlank()) apps else apps.filter { it.label.contains(query.trim(), ignoreCase = true) }
+    }
+
+    fun save() {
+        appsVm.commitBlocked(selected.toSet())
+        webVm.setKeywords(keywords.toList())
+        SettingsStore.setBlockAdult(context, adult)
+        SettingsStore.setAddNewApps(context, addNew)
+        SettingsStore.setBlockPurchases(context, purchases)
+        SettingsStore.setBlockUnsupportedBrowsers(context, unsupported)
+        onBack()
+    }
+
     Scaffold(
         containerColor = Color.Transparent,
         topBar = {
@@ -126,138 +132,187 @@ private fun Root(
             )
         },
         bottomBar = {
-            GradientButton(text = "Save", onClick = onBack, modifier = Modifier.padding(16.dp))
+            GradientButton(text = "Save", onClick = ::save, enabled = ed,
+                modifier = Modifier.padding(16.dp))
         },
     ) { padding ->
-        Column(
-            Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
-        ) {
-            Text(
-                "These settings apply whenever you start a Quick Block or Strict Mode.",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.padding(top = 20.dp))
-
-            val context = LocalContext.current
-            if (!AccessibilityUtil.isEnabled(context)) {
-                Column(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
-                        .background(MaterialTheme.colorScheme.surface).padding(16.dp),
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.Warning, contentDescription = null,
-                            tint = Color(0xFFFFB020), modifier = Modifier.size(24.dp))
-                        Spacer(Modifier.width(10.dp))
-                        Text("Protection is off", style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                    }
-                    Spacer(Modifier.padding(top = 6.dp))
-                    Text("Turn on the blocker so your choices actually block.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.padding(top = 12.dp))
-                    GradientButton(text = "Turn on protection", onClick = {
-                        context.startActivity(
-                            Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        )
-                    })
+        LazyColumn(Modifier.padding(padding).fillMaxSize().padding(horizontal = 16.dp)) {
+            item {
+                Spacer(Modifier.padding(top = 4.dp))
+                Text("Choose what to block. Nothing is applied until you tap Save.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.padding(top = 12.dp))
+                if (!AccessibilityUtil.isEnabled(context)) {
+                    ProtectionBanner(context); Spacer(Modifier.padding(top = 12.dp))
                 }
+                if (strictActive) {
+                    Text("🔒 Strict Mode is on — locked until the timer ends.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.padding(top = 12.dp))
+                }
+                SectionHeader(Icons.Filled.Apps, "Apps", selected.size)
+                OutlinedTextField(
+                    value = query, onValueChange = { query = it },
+                    placeholder = { Text("Search apps") },
+                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                    singleLine = true, enabled = ed,
+                    shape = RoundedCornerShape(28.dp),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                )
+            }
+            if (loading) {
+                item { Text("Loading apps…", color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(8.dp)) }
+            } else {
+                items(shownApps, key = { it.packageName }) { app ->
+                    val isSel = selected.contains(app.packageName)
+                    Row(
+                        Modifier.fillMaxWidth().clickable(enabled = ed) {
+                            editedApps = true
+                            if (isSel) selected.remove(app.packageName) else selected.add(app.packageName)
+                        }.padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (app.icon != null) {
+                            Image(app.icon.asImageBitmap(), null,
+                                Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)))
+                        } else {
+                            Box(Modifier.size(40.dp).clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                                contentAlignment = Alignment.Center) {
+                                Icon(Icons.Filled.Apps, null, Modifier.size(22.dp))
+                            }
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Text(app.label, Modifier.weight(1f),
+                            color = MaterialTheme.colorScheme.onBackground,
+                            style = MaterialTheme.typography.bodyLarge)
+                        Checkbox(checked = isSel, enabled = ed, onCheckedChange = {
+                            editedApps = true
+                            if (it) selected.add(app.packageName) else selected.remove(app.packageName)
+                        })
+                    }
+                }
+            }
+
+            item {
+                Spacer(Modifier.padding(top = 16.dp))
+                SectionHeader(Icons.Filled.Web, "Websites & words", keywords.size)
+                Text("Any web address or search containing one of these is blocked.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = newWord, onValueChange = { newWord = it },
+                        placeholder = { Text("Add a word or site") },
+                        singleLine = true, enabled = ed,
+                        shape = RoundedCornerShape(28.dp),
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    IconButton(enabled = ed && newWord.isNotBlank(), onClick = {
+                        editedKw = true
+                        val w = newWord.trim().lowercase()
+                        if (w.isNotEmpty() && w !in keywords) keywords.add(w)
+                        newWord = ""
+                    }) { Icon(Icons.Filled.Add, contentDescription = "Add",
+                        tint = MaterialTheme.colorScheme.primary) }
+                }
+            }
+            items(keywords, key = { it }) { word ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text(word, Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurface,
+                        style = MaterialTheme.typography.bodyLarge)
+                    IconButton(enabled = ed, onClick = { editedKw = true; keywords.remove(word) }) {
+                        Icon(Icons.Filled.Delete, contentDescription = "Remove",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+
+            item {
                 Spacer(Modifier.padding(top = 20.dp))
-            }
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Blocking", style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-                Spacer(Modifier.weight(1f))
-                Icon(Icons.Filled.Block, contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("Blocklist", style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
-            }
-            Text("Select apps or words you want to block.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.padding(top = 12.dp))
-
-            // Grouped category card.
-            Column(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
-                    .background(MaterialTheme.colorScheme.surface),
-            ) {
-                CategoryRow(Icons.Filled.Apps, "Apps", appCount, onApps)
-                Divider()
-                CategoryRow(Icons.Filled.Language, "Websites & words", keywordCount, onWeb)
-            }
-
-            Spacer(Modifier.padding(top = 16.dp))
-            Column(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
-                    .background(MaterialTheme.colorScheme.surface),
-            ) {
-                CategoryRow(Icons.Filled.Tune, "Extra options", null, onExtra)
+                SectionHeader(Icons.Filled.Block, "Extra options", null)
+                Spacer(Modifier.padding(top = 4.dp))
+                ToggleRow(Icons.Filled.NoAdultContent, "Porn sites blocking",
+                    "Detects and blocks adult sites in your browsers.", adult, ed) { adult = it }
+                ToggleRow(Icons.Filled.GetApp, "Add newly installed apps",
+                    "Newly installed apps are automatically blocked.", addNew, ed) { addNew = it }
+                ToggleRow(Icons.Filled.ShoppingBasket, "In-app purchases blocking",
+                    "Blocks the purchase prompt in games and apps.", purchases, ed) { purchases = it }
+                ToggleRow(Icons.Filled.Web, "Block unsupported browsers",
+                    "Block browsers that can't be filtered.", unsupported, ed) { unsupported = it }
+                Spacer(Modifier.padding(top = 16.dp))
             }
         }
     }
 }
 
 @Composable
-private fun CategoryRow(icon: ImageVector, label: String, count: Int?, onClick: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(18.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        androidx.compose.foundation.layout.Box(
-            Modifier.size(38.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp))
-        }
-        Spacer(Modifier.width(14.dp))
-        Text(label, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-        if (count != null) {
+private fun SectionHeader(icon: ImageVector, title: String, count: Int?) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
+        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+        if (count != null && count > 0) {
             Text("$count", style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.width(6.dp))
         }
-        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
 @Composable
-private fun Divider() {
-    androidx.compose.material3.HorizontalDivider(
-        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
-        modifier = Modifier.padding(start = 70.dp),
-    )
+private fun ToggleRow(
+    icon: ImageVector, title: String, desc: String,
+    checked: Boolean, enabled: Boolean, onChange: (Boolean) -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surface).padding(14.dp).padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(38.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
+            contentAlignment = Alignment.Center) {
+            Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+            Text(desc, style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Switch(checked = checked, enabled = enabled, onCheckedChange = onChange)
+    }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SubScreen(title: String, onBack: () -> Unit, content: @Composable () -> Unit) {
-    Scaffold(
-        containerColor = Color.Transparent,
-        topBar = {
-            TopAppBar(
-                title = { Text(title, fontWeight = FontWeight.SemiBold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
-                ),
+private fun ProtectionBanner(context: android.content.Context) {
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surface).padding(16.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.Warning, contentDescription = null, tint = Color(0xFFFFB020),
+                modifier = Modifier.size(24.dp))
+            Spacer(Modifier.width(10.dp))
+            Text("Protection is off", style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+        }
+        Spacer(Modifier.padding(top = 6.dp))
+        Text("Turn on the blocker so your choices actually block.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.padding(top = 12.dp))
+        GradientButton(text = "Turn on protection", onClick = {
+            context.startActivity(
+                Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
-        },
-    ) { padding ->
-        Column(Modifier.padding(padding).fillMaxSize()) { content() }
+        })
     }
 }

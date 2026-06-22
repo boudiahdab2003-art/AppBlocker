@@ -36,4 +36,18 @@ object SettingsStore {
 
     fun setBlockUnsupportedBrowsers(context: Context, value: Boolean) =
         prefs(context).edit().putBoolean(KEY_BLOCK_UNSUPPORTED, value).apply()
+
+    /** Whether the first-run setup screen has been shown once. */
+    fun setupSeen(context: Context): Boolean =
+        prefs(context).getBoolean("setup_seen", false)
+
+    fun setSetupSeen(context: Context) =
+        prefs(context).edit().putBoolean("setup_seen", true).apply()
+
+    /** Quick Block paused = its apps aren't enforced (selection kept). Schedules unaffected. */
+    fun quickBlockPaused(context: Context): Boolean =
+        prefs(context).getBoolean("quick_block_paused", false)
+
+    fun setQuickBlockPaused(context: Context, value: Boolean) =
+        prefs(context).edit().putBoolean("quick_block_paused", value).apply()
 }

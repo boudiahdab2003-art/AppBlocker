@@ -29,7 +29,7 @@ import com.appblocker.admin.AppBlockerAdminReceiver
 import com.appblocker.data.PinStore
 
 @Composable
-fun ProfileScreen(strictActive: Boolean = false) {
+fun ProfileScreen(strictActive: Boolean = false, onOpenPermissions: () -> Unit = {}) {
     val context = LocalContext.current
     var pinSet by remember { mutableStateOf(PinStore.isSet(context)) }
     var showSetPin by remember { mutableStateOf(false) }
@@ -84,27 +84,10 @@ fun ProfileScreen(strictActive: Boolean = false) {
         SectionTitle("Permissions")
         SettingCard {
             SettingRow(
-                title = "Accessibility (the blocker)",
-                subtitle = "Required. Lets AppBlocker see which app is open and block it.",
+                title = "Setup & permissions",
+                subtitle = "Accessibility, overlay, usage access, battery & auto-start — all in one place.",
                 enabled = !locked,
-                onClick = {
-                    context.startActivity(
-                        Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    )
-                },
-            )
-            Divider()
-            SettingRow(
-                title = "Usage access (daily limits)",
-                subtitle = "Needed for daily limits and Insights.",
-                enabled = !locked,
-                onClick = {
-                    context.startActivity(
-                        Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    )
-                },
+                onClick = onOpenPermissions,
             )
         }
 

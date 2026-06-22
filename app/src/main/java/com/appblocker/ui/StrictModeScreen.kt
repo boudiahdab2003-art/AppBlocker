@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Schedule
@@ -172,7 +173,7 @@ private fun LockedRow(text: String) {
 private fun UnlockMethod(onActivate: (Int) -> Unit) {
     var minutes by remember { mutableIntStateOf(60) }
     var expanded by remember { mutableStateOf(false) }
-    val options = listOf(30, 60, 120, 240, 420)
+    val options = listOf(5, 10, 30, 60, 120, 240, 480, 720, 1440, 2880, 4320)
 
     Text("UNLOCK METHOD", style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.fillMaxWidth())
@@ -201,10 +202,27 @@ private fun UnlockMethod(onActivate: (Int) -> Unit) {
                 Icon(Icons.Filled.ArrowDropDown, contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+                modifier = Modifier.background(MaterialTheme.colorScheme.surface).width(140.dp),
+            ) {
                 options.forEach { opt ->
+                    val sel = opt == minutes
                     DropdownMenuItem(
-                        text = { Text(durationLabel(opt)) },
+                        text = {
+                            Text(
+                                durationLabel(opt),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal,
+                                color = if (sel) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurface,
+                            )
+                        },
+                        trailingIcon = {
+                            if (sel) Icon(Icons.Filled.Check, contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                        },
                         onClick = { minutes = opt; expanded = false },
                     )
                 }
@@ -216,8 +234,11 @@ private fun UnlockMethod(onActivate: (Int) -> Unit) {
     GradientButton(text = "Activate lock", onClick = { onActivate(minutes) })
 }
 
-private fun durationLabel(minutes: Int): String =
-    if (minutes >= 60) "${minutes / 60}h" else "${minutes}m"
+private fun durationLabel(minutes: Int): String = when {
+    minutes >= 1440 -> "${minutes / 1440}d"
+    minutes >= 60 -> "${minutes / 60}h"
+    else -> "${minutes}m"
+}
 
 private fun ensureDeviceAdmin(context: Context) {
     val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
