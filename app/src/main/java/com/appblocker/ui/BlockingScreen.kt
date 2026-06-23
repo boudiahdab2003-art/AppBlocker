@@ -31,6 +31,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.GetApp
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.HourglassEmpty
@@ -91,7 +92,9 @@ fun BlockingScreen(
     vm: HomeViewModel = viewModel(),
     scheduleVm: ScheduleViewModel = viewModel(),
     focusVm: FocusViewModel = viewModel(),
+    updateVm: UpdateViewModel = viewModel(),
 ) {
+    val updateState by updateVm.state.collectAsState()
     val context = LocalContext.current
     val appsBlocked by vm.appsBlocked.collectAsState()
     val keywords by vm.keywordCount.collectAsState()
@@ -129,6 +132,10 @@ fun BlockingScreen(
             Spacer(Modifier.padding(top = 16.dp))
             if (essentialMissing > 0) {
                 SetupBanner(essentialMissing, onOpenPermissions)
+                Spacer(Modifier.padding(top = 16.dp))
+            }
+            (updateState as? UpdateState.Available)?.let { avail ->
+                UpdateBanner(avail.release.version) { updateVm.downloadAndInstall(avail.release) }
                 Spacer(Modifier.padding(top = 16.dp))
             }
         }
@@ -453,6 +460,26 @@ private fun SetupBanner(missing: Int, onClick: () -> Unit) {
         }
         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun UpdateBanner(version: String, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+            .background(AppGradients.accent).clickable(onClick = onClick).padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Filled.GetApp, contentDescription = null, tint = Color.White,
+            modifier = Modifier.size(26.dp))
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text("Update available — v$version", style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold, color = Color.White)
+            Text("Tap to download & install the latest version",
+                style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.9f))
+        }
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = Color.White)
     }
 }
 

@@ -12,6 +12,9 @@
         tools:ignore="ProtectedPermissions" />
     <!-- Lets us ask to be exempt from battery optimization so blocking keeps running. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- In-app updater: fetch the latest release and install it. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Wi-Fi & Location schedules. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
@@ -64,6 +67,17 @@
                 <data android:scheme="package" />
             </intent-filter>
         </receiver>
+
+        <!-- Serves the downloaded update APK to the system installer. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
         <!-- The watcher: detects the foreground app and blocks it. -->
         <service

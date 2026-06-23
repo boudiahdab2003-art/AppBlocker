@@ -60,6 +60,8 @@ fun AppRoot() {
     var overlay by remember { mutableStateOf<Overlay?>(null) }
     val focusVm: FocusViewModel = viewModel()
     val strictActive by focusVm.isActive.collectAsState()
+    val updateVm: UpdateViewModel = viewModel()
+    val updateState by updateVm.state.collectAsState()
     val context = LocalContext.current
 
     // First launch: if the blocker isn't on yet, guide the user through setup once.
@@ -68,6 +70,7 @@ fun AppRoot() {
             overlay = Overlay.Permissions
         }
         SettingsStore.setSetupSeen(context)
+        updateVm.checkOnLaunch()
     }
 
     // System back closes an open editor overlay instead of exiting the app.
@@ -93,10 +96,21 @@ fun AppRoot() {
             tab = tab,
             onTab = { tab = it },
             strictActive = strictActive,
+            updateVm = updateVm,
             onEditQuickBlock = { overlay = Overlay.QuickBlock },
             onNewSchedule = { overlay = Overlay.NewSchedule(it) },
             onEditSchedule = { overlay = Overlay.EditSchedule(it) },
             onOpenPermissions = { overlay = Overlay.Permissions },
+        )
+    }
+
+    // Global download progress while an update is being fetched.
+    (updateState as? UpdateState.Downloading)?.let { dl ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = {},
+            confirmButton = {},
+            title = { androidx.compose.material3.Text("Downloading update") },
+            text = { androidx.compose.material3.Text("${dl.percent}%") },
         )
     }
     }
@@ -107,6 +121,7 @@ private fun MainScaffold(
     tab: Int,
     onTab: (Int) -> Unit,
     strictActive: Boolean,
+    updateVm: UpdateViewModel,
     onEditQuickBlock: () -> Unit,
     onNewSchedule: (ScheduleType) -> Unit,
     onEditSchedule: (Schedule) -> Unit,
@@ -148,10 +163,15 @@ private fun MainScaffold(
                     onNewSchedule = onNewSchedule,
                     onEditSchedule = onEditSchedule,
                     onOpenPermissions = onOpenPermissions,
+                    updateVm = updateVm,
                 )
                 1 -> StrictModeScreen()
                 2 -> InsightsScreen()
-                else -> ProfileScreen(strictActive = strictActive, onOpenPermissions = onOpenPermissions)
+                else -> ProfileScreen(
+                    strictActive = strictActive,
+                    onOpenPermissions = onOpenPermissions,
+                    updateVm = updateVm,
+                )
             }
         }
     }

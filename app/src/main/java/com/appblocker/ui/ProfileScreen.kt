@@ -17,6 +17,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -25,12 +26,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.appblocker.admin.AppBlockerAdminReceiver
 import com.appblocker.data.PinStore
 
 @Composable
-fun ProfileScreen(strictActive: Boolean = false, onOpenPermissions: () -> Unit = {}) {
+fun ProfileScreen(
+    strictActive: Boolean = false,
+    onOpenPermissions: () -> Unit = {},
+    updateVm: UpdateViewModel = viewModel(),
+) {
     val context = LocalContext.current
+    val updateState by updateVm.state.collectAsState()
     var pinSet by remember { mutableStateOf(PinStore.isSet(context)) }
     var showSetPin by remember { mutableStateOf(false) }
     val locked = strictActive
@@ -93,11 +100,24 @@ fun ProfileScreen(strictActive: Boolean = false, onOpenPermissions: () -> Unit =
 
         SectionTitle("About")
         SettingCard {
+            val sub = when (val s = updateState) {
+                is UpdateState.Checking -> "Checking for updates…"
+                is UpdateState.UpToDate -> "You're on the latest version."
+                is UpdateState.Available -> "Update available: v${s.release.version} — tap to install"
+                is UpdateState.Downloading -> "Downloading… ${s.percent}%"
+                is UpdateState.Error -> s.message + " Tap to retry."
+                else -> "Version ${appVersion(context)} · tap to check for updates"
+            }
             SettingRow(
                 title = "AppBlocker",
-                subtitle = "Version ${appVersion(context)}",
-                enabled = false,
-                onClick = {},
+                subtitle = sub,
+                enabled = updateState !is UpdateState.Downloading,
+                onClick = {
+                    when (val s = updateState) {
+                        is UpdateState.Available -> updateVm.downloadAndInstall(s.release)
+                        else -> updateVm.check()
+                    }
+                },
             )
         }
     }
