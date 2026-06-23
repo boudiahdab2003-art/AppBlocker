@@ -5,6 +5,7 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -312,66 +313,85 @@ fun BlockingScreen(
     }
 
     if (showTimer) {
-        ChoiceDialog(
-            title = "Block with a timer",
-            subtitle = "Block your Quick Block apps for:",
-            options = listOf("15 min" to 15, "25 min" to 25, "50 min" to 50, "90 min" to 90),
-            onPick = { QuickSession.startTimer(context, it); tick = System.currentTimeMillis(); showTimer = false },
+        DurationPickerDialog(
+            title = "Set the timer",
+            initialMinutes = 25,
+            onSave = { QuickSession.startTimer(context, it); tick = System.currentTimeMillis() },
             onDismiss = { showTimer = false },
         )
     }
     if (showPomo) {
-        // (work, break, rounds) presets
-        ChoiceDialog(
-            title = "Pomodoro",
-            subtitle = "Block during work, free during breaks:",
-            options = listOf(
-                "25 / 5 × 4" to Triple(25, 5, 4),
-                "50 / 10 × 3" to Triple(50, 10, 3),
-                "15 / 3 × 6" to Triple(15, 3, 6),
-            ),
-            onPick = {
-                QuickSession.startPomodoro(context, it.first, it.second, it.third)
-                tick = System.currentTimeMillis(); showPomo = false
+        PomodoroPickerDialog(
+            onStart = { work, brk, rounds ->
+                QuickSession.startPomodoro(context, work, brk, rounds)
+                tick = System.currentTimeMillis()
             },
             onDismiss = { showPomo = false },
         )
     }
 }
 
-/** A simple list-of-choices dialog (used for Timer durations and Pomodoro presets). */
+/** Premium Pomodoro picker: rich selectable preset cards + Start. */
 @Composable
-private fun <T> ChoiceDialog(
-    title: String,
-    subtitle: String,
-    options: List<Pair<String, T>>,
-    onPick: (T) -> Unit,
-    onDismiss: () -> Unit,
-) {
+private fun PomodoroPickerDialog(onStart: (Int, Int, Int) -> Unit, onDismiss: () -> Unit) {
+    // (work, break, rounds)
+    val presets = listOf(Triple(25, 5, 4), Triple(50, 10, 3), Triple(15, 3, 6))
+    var selected by remember { mutableStateOf(presets.first()) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        confirmButton = {},
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-        title = { Text(title) },
+        confirmButton = {
+            TextButton(onClick = { onStart(selected.first, selected.second, selected.third); onDismiss() }) {
+                Text("Start")
+            }
+        },
+        title = { Text("Pomodoro") },
         text = {
             Column {
-                Text(subtitle, style = MaterialTheme.typography.bodyMedium,
+                Text("Block during work, free during breaks.",
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.padding(top = 8.dp))
-                options.forEach { (label, value) ->
-                    Text(
-                        label,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.fillMaxWidth()
-                            .clickable { onPick(value) }
-                            .padding(vertical = 12.dp),
-                    )
+                Spacer(Modifier.padding(top = 12.dp))
+                presets.forEach { p ->
+                    PomodoroOption(p, selected == p) { selected = p }
+                    Spacer(Modifier.padding(top = 10.dp))
                 }
             }
         },
     )
+}
+
+@Composable
+private fun PomodoroOption(p: Triple<Int, Int, Int>, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .then(if (selected) Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary,
+                RoundedCornerShape(16.dp)) else Modifier)
+            .clickable(onClick = onClick).padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(38.dp).clip(CircleShape)
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+            contentAlignment = Alignment.Center) {
+            Icon(Icons.Filled.Spa, null, tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp))
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text("${p.first} min work · ${p.second} min break",
+                style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface)
+            Text("× ${p.third} rounds", style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (selected) {
+            Box(Modifier.size(22.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.Check, null, tint = Color.White, modifier = Modifier.size(14.dp))
+            }
+        }
+    }
 }
 
 /** Two neutral side-by-side buttons (Timer / Pomodoro) under the Start/Stop control. */

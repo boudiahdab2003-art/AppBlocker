@@ -22,15 +22,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.outlined.Lock
-import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -172,17 +168,17 @@ private fun LockedRow(text: String) {
 @Composable
 private fun UnlockMethod(onActivate: (Int) -> Unit) {
     var minutes by remember { mutableIntStateOf(60) }
-    var expanded by remember { mutableStateOf(false) }
-    val options = listOf(5, 10, 30, 60, 120, 240, 480, 720, 1440, 2880, 4320)
+    var showPicker by remember { mutableStateOf(false) }
 
     Text("UNLOCK METHOD", style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.fillMaxWidth())
     Spacer(Modifier.height(10.dp))
 
-    // Method (Timer) + duration selector row.
+    // Method (Timer) + duration selector row — tapping opens the full "Set the timer" wheel.
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surface).padding(16.dp),
+            .background(MaterialTheme.colorScheme.surface)
+            .clickable { showPicker = true }.padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(Icons.Filled.Schedule, contentDescription = null,
@@ -191,47 +187,23 @@ private fun UnlockMethod(onActivate: (Int) -> Unit) {
         Text("Timer", style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurface)
         Spacer(Modifier.weight(1f))
-        Box {
-            Row(
-                Modifier.clip(RoundedCornerShape(10.dp))
-                    .clickable { expanded = true }.padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(durationLabel(minutes), style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-                Icon(Icons.Filled.ArrowDropDown, contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            DropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false },
-                modifier = Modifier.background(MaterialTheme.colorScheme.surface).width(140.dp),
-            ) {
-                options.forEach { opt ->
-                    val sel = opt == minutes
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                durationLabel(opt),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal,
-                                color = if (sel) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurface,
-                            )
-                        },
-                        trailingIcon = {
-                            if (sel) Icon(Icons.Filled.Check, contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                        },
-                        onClick = { minutes = opt; expanded = false },
-                    )
-                }
-            }
-        }
+        Text(durationLabel(minutes), style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 
     Spacer(Modifier.height(24.dp))
     GradientButton(text = "Activate lock", onClick = { onActivate(minutes) })
+
+    if (showPicker) {
+        DurationPickerDialog(
+            title = "Set the timer",
+            initialMinutes = minutes,
+            onSave = { minutes = it },
+            onDismiss = { showPicker = false },
+        )
+    }
 }
 
 private fun durationLabel(minutes: Int): String = when {
