@@ -260,6 +260,10 @@ class BlockerAccessibilityService : AccessibilityService() {
     // --- Web / keyword filtering ---
 
     private fun scanWebContent() {
+        // Web-address/word filtering only makes sense inside a browser. Without this, typing a
+        // blocked word in ANY app (messages, notes, even AppBlocker's own keyword field) would
+        // trip a block — which is wrong.
+        if (lastForegroundPkg !in browserPackages) return
         val text = extractVisibleText()
         if (DEBUG) Log.d(TAG, "scan: ${text.length} chars: ${text.take(120)}")
         if (text.isBlank()) return
