@@ -99,7 +99,10 @@ class BlockerAccessibilityService : AccessibilityService() {
                     lastForegroundPkg = pkg
                     LaunchCounter.recordOpen(applicationContext, pkg) // for LAUNCH_COUNT
                 }
-                if (pkg != null) handleAppBlock(pkg)
+                if (pkg != null) {
+                    // In-app purchase sheet takes priority; otherwise normal app blocking.
+                    if (!handlePurchaseBlock(pkg, event.className?.toString())) handleAppBlock(pkg)
+                }
                 lastWebText = null // new page/app: force a fresh re-check
                 scheduleWebScan()
             }
@@ -127,6 +130,26 @@ class BlockerAccessibilityService : AccessibilityService() {
         lastBlockedPkg = pkg
         lastBlockAt = now
         showBlockScreen(title = "Blocked", message = null, packageName = pkg, counterKey = pkg)
+    }
+
+    /**
+     * Blocks the Google Play in-app purchase / billing sheet when that option is on. The buy flow
+     * runs inside com.android.vending in an "acquire/billing" activity, so we match on that to avoid
+     * blocking normal Play Store browsing. Returns true if it blocked.
+     */
+    private fun handlePurchaseBlock(pkg: String, className: String?): Boolean {
+        if (!SettingsStore.blockPurchases(this)) return false
+        if (pkg != "com.android.vending") return false
+        val cn = className?.lowercase() ?: return false
+        val isPurchase = PURCHASE_HINTS.any { cn.contains(it) }
+        if (!isPurchase) return false
+        showBlockScreen(
+            title = "Purchase blocked",
+            message = "In-app purchases are blocked.",
+            packageName = null,
+            counterKey = "purchase",
+        )
+        return true
     }
 
     private fun shouldBlock(pkg: String): Boolean {
@@ -379,5 +402,8 @@ class BlockerAccessibilityService : AccessibilityService() {
 
         // Browsers whose on-screen content the web filter can read; others are "unsupported".
         private val SUPPORTED_BROWSERS = setOf("com.android.chrome")
+
+        // Activity-name fragments that identify the Google Play purchase/billing sheet.
+        private val PURCHASE_HINTS = listOf("acquire", "purchase", "billing")
     }
 }

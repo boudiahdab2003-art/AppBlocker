@@ -55,6 +55,16 @@
             </intent-filter>
         </receiver>
 
+        <!-- Auto-blocks newly installed apps when that option is on. -->
+        <receiver
+            android:name=".service.PackageInstallReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.PACKAGE_ADDED" />
+                <data android:scheme="package" />
+            </intent-filter>
+        </receiver>
+
         <!-- The watcher: detects the foreground app and blocks it. -->
         <service
             android:name=".service.BlockerAccessibilityService"

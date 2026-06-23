@@ -202,7 +202,7 @@ fun BlockEditorScreen(
                 ToggleRow(Icons.Filled.GetApp, "Add newly installed apps",
                     "Newly installed apps are automatically blocked.", addNew, ed) { addNew = it }
                 ToggleRow(Icons.Filled.ShoppingBasket, "In-app purchases blocking",
-                    "Blocks the purchase prompt in games and apps.", purchases, ed) { purchases = it }
+                    "Blocks the Google Play purchase prompt in games and apps.", purchases, ed) { purchases = it }
                 ToggleRow(Icons.Filled.Web, "Block unsupported browsers",
                     "Blocks browsers we can't filter (e.g. Brave) so they can't bypass website blocking.",
                     unsupported, ed) { unsupported = it }
