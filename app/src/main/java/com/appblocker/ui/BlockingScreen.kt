@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -465,8 +464,7 @@ private fun TemplateCard(modifier: Modifier, t: Template, active: Boolean, onCli
             .clip(RoundedCornerShape(20.dp))
             .background(Brush.linearGradient(t.colors))
             .clickable(onClick = onClick)
-            .padding(14.dp)
-            .heightIn(min = 178.dp),
+            .padding(14.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
@@ -490,7 +488,7 @@ private fun TemplateCard(modifier: Modifier, t: Template, active: Boolean, onCli
                 }
             }
         }
-        Spacer(Modifier.weight(1f))
+        Spacer(Modifier.height(12.dp))
         Text(t.title, style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Bold, color = Color.White, maxLines = 2)
         Text(t.subtitle, style = MaterialTheme.typography.bodySmall,
