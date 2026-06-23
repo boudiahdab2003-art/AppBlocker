@@ -27,9 +27,11 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -186,6 +188,7 @@ private fun LockedRow(text: String) {
 private fun UnlockMethod(canActivate: Boolean, summary: String, onActivate: (Int) -> Unit) {
     var minutes by remember { mutableIntStateOf(60) }
     var showPicker by remember { mutableStateOf(false) }
+    var confirm by remember { mutableStateOf(false) }
 
     Text("UNLOCK METHOD", style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.fillMaxWidth())
@@ -220,7 +223,7 @@ private fun UnlockMethod(canActivate: Boolean, summary: String, onActivate: (Int
         modifier = Modifier.fillMaxWidth(),
     )
     Spacer(Modifier.height(12.dp))
-    GradientButton(text = "Activate lock", enabled = canActivate, onClick = { onActivate(minutes) })
+    GradientButton(text = "Activate lock", enabled = canActivate, onClick = { confirm = true })
 
     if (showPicker) {
         DurationPickerDialog(
@@ -230,6 +233,39 @@ private fun UnlockMethod(canActivate: Boolean, summary: String, onActivate: (Int
             onDismiss = { showPicker = false },
         )
     }
+
+    if (confirm) {
+        AlertDialog(
+            onDismissRequest = { confirm = false },
+            confirmButton = {
+                TextButton(onClick = { confirm = false; onActivate(minutes) }) { Text("Start lock") }
+            },
+            dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel") } },
+            title = { Text("Start Strict Mode?") },
+            text = {
+                Text(
+                    "Your blocks will be locked for ${humanDuration(minutes)} — until " +
+                        "${endsAt(minutes)}.\n\nYou can't stop early.",
+                )
+            },
+        )
+    }
+}
+
+/** Human duration like "45 min", "1 h 30 min", "2 d 3 h". */
+private fun humanDuration(minutes: Int): String {
+    val d = minutes / 1440; val h = (minutes % 1440) / 60; val m = minutes % 60
+    val parts = mutableListOf<String>()
+    if (d > 0) parts += "$d d"
+    if (h > 0) parts += "$h h"
+    if (m > 0 || parts.isEmpty()) parts += "$m min"
+    return parts.joinToString(" ")
+}
+
+/** When a lock of [minutes] would end, e.g. "Mon, Jun 23 at 3:45 PM". */
+private fun endsAt(minutes: Int): String {
+    val end = java.util.Date(System.currentTimeMillis() + minutes * 60_000L)
+    return java.text.SimpleDateFormat("EEE, MMM d 'at' h:mm a", java.util.Locale.getDefault()).format(end)
 }
 
 /** Countdown as H:MM:SS once an hour or longer, else MM:SS. */

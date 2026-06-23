@@ -93,7 +93,7 @@ fun BlockEditorScreen(
     var purchases by remember { mutableStateOf(SettingsStore.blockPurchases(context)) }
     var unsupported by remember { mutableStateOf(SettingsStore.blockUnsupportedBrowsers(context)) }
 
-    val ed = !strictActive
+    val ed = !strictActive // false locks "weakening" edits during Strict Mode
     val shownApps = remember(apps, query) {
         if (query.isBlank()) apps else apps.filter { it.label.contains(query.trim(), ignoreCase = true) }
     }
@@ -112,8 +112,8 @@ fun BlockEditorScreen(
         containerColor = Color.Transparent,
         topBar = { EditorTopBar("Quick Block", onBack) },
         bottomBar = {
-            GradientButton(text = "Save", onClick = ::save, enabled = ed,
-                modifier = Modifier.padding(16.dp))
+            // Save is allowed during Strict — you can add blocks, just not remove them.
+            GradientButton(text = "Save", onClick = ::save, modifier = Modifier.padding(16.dp))
         },
     ) { padding ->
         LazyColumn(Modifier.padding(padding).fillMaxSize().padding(horizontal = 16.dp)) {
@@ -127,7 +127,7 @@ fun BlockEditorScreen(
                     ProtectionBanner(context); Spacer(Modifier.padding(top = 12.dp))
                 }
                 if (strictActive) {
-                    Text("🔒 Strict Mode is on — locked until the timer ends.",
+                    Text("🔒 Strict Mode — you can add blocks, but not remove them.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.padding(top = 12.dp))
@@ -147,7 +147,10 @@ fun BlockEditorScreen(
                     modifier = Modifier.padding(8.dp)) }
             } else {
                 items(shownApps, key = { it.packageName }) { app ->
-                    AppCheckRow(app, checked = selected.contains(app.packageName), enabled = ed) { on ->
+                    val isChecked = selected.contains(app.packageName)
+                    // During Strict you can check (add) an app, but not uncheck (remove) one.
+                    AppCheckRow(app, checked = isChecked, enabled = ed || !isChecked) { on ->
+                        if (strictActive && !on) return@AppCheckRow
                         editedApps = true
                         if (on) selected.add(app.packageName) else selected.remove(app.packageName)
                     }
@@ -164,12 +167,12 @@ fun BlockEditorScreen(
                     OutlinedTextField(
                         value = newWord, onValueChange = { newWord = it },
                         placeholder = { Text("Add a word or site") },
-                        singleLine = true, enabled = ed,
+                        singleLine = true, enabled = true, // adding is allowed during Strict
                         shape = RoundedCornerShape(28.dp),
                         modifier = Modifier.weight(1f),
                     )
                     Spacer(Modifier.width(8.dp))
-                    IconButton(enabled = ed && newWord.isNotBlank(), onClick = {
+                    IconButton(enabled = newWord.isNotBlank(), onClick = {
                         editedKw = true
                         val w = newWord.trim().lowercase()
                         if (w.isNotEmpty() && w !in keywords) keywords.add(w)
@@ -201,7 +204,8 @@ fun BlockEditorScreen(
                 ToggleRow(Icons.Filled.ShoppingBasket, "In-app purchases blocking",
                     "Blocks the purchase prompt in games and apps.", purchases, ed) { purchases = it }
                 ToggleRow(Icons.Filled.Web, "Block unsupported browsers",
-                    "Block browsers that can't be filtered.", unsupported, ed) { unsupported = it }
+                    "Blocks browsers we can't filter (e.g. Brave) so they can't bypass website blocking.",
+                    unsupported, ed) { unsupported = it }
                 Spacer(Modifier.padding(top = 16.dp))
             }
         }

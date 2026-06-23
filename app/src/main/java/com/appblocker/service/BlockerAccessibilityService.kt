@@ -50,6 +50,8 @@ class BlockerAccessibilityService : AccessibilityService() {
     @Volatile private var focusEndMillis: Long = 0L
     @Volatile private var userKeywords: List<String> = emptyList()
     @Volatile private var schedules: List<Schedule> = emptyList()
+    // Browser packages installed on the device (for "Block unsupported browsers").
+    @Volatile private var browserPackages: Set<String> = emptySet()
 
     private var lastBlockedPkg: String? = null
     private var lastBlockAt: Long = 0L
@@ -70,6 +72,7 @@ class BlockerAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        browserPackages = findBrowserPackages()
         val db = BlockerDatabase.get(applicationContext)
         combine(
             db.appRuleDao().getAll(),
@@ -161,8 +164,26 @@ class BlockerAccessibilityService : AccessibilityService() {
             }
             if (hit) return true
         }
+
+        // Unsupported browsers — if web filtering is on, block browsers we can't read so they
+        // can't be used to bypass website/keyword filtering (e.g. Brave). Chrome is filterable.
+        if (SettingsStore.blockUnsupportedBrowsers(this) &&
+            (userKeywords.isNotEmpty() || SettingsStore.blockAdult(this)) &&
+            pkg in browserPackages && pkg !in SUPPORTED_BROWSERS
+        ) return true
+
         return false
     }
+
+    /** All packages that can handle an https:// link — i.e. the device's browsers. */
+    private fun findBrowserPackages(): Set<String> = runCatching {
+        val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://example.com"))
+            .addCategory(Intent.CATEGORY_BROWSABLE)
+        packageManager.queryIntentActivities(intent, 0)
+            .mapNotNull { it.activityInfo?.packageName }
+            .filter { it != packageName }
+            .toSet()
+    }.getOrDefault(emptySet())
 
     /** True if connected to Wi-Fi and (target empty = any, else SSID matches). */
     private fun onMatchingWifi(target: String): Boolean {
@@ -355,5 +376,8 @@ class BlockerAccessibilityService : AccessibilityService() {
     companion object {
         private const val TAG = "AppBlocker"
         private const val DEBUG = false // flip to true to log scans/blocks for debugging
+
+        // Browsers whose on-screen content the web filter can read; others are "unsupported".
+        private val SUPPORTED_BROWSERS = setOf("com.android.chrome")
     }
 }

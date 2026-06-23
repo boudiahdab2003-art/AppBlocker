@@ -175,7 +175,8 @@ fun BlockingScreen(
                             }
                         }
                         paused -> {
-                            GradientButton(text = "Start", enabled = !focusActive, onClick = {
+                            // Starting/strengthening is always allowed — even during Strict Mode.
+                            GradientButton(text = "Start", enabled = true, onClick = {
                                 SettingsStore.setQuickBlockPaused(context, false); paused = false
                             })
                             Spacer(Modifier.padding(top = 10.dp))
@@ -183,7 +184,7 @@ fun BlockingScreen(
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Spacer(Modifier.padding(top = 12.dp))
-                            TimerPomoRow(enabled = !focusActive, onTimer = { showTimer = true }, onPomo = { showPomo = true })
+                            TimerPomoRow(enabled = true, onTimer = { showTimer = true }, onPomo = { showPomo = true })
                         }
                         else -> {
                             NeutralButton(Modifier.fillMaxWidth(), Icons.Filled.Stop, "Stop", enabled = !focusActive) {
@@ -205,7 +206,7 @@ fun BlockingScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             Spacer(Modifier.padding(top = 12.dp))
-                            TimerPomoRow(enabled = !focusActive, onTimer = { showTimer = true }, onPomo = { showPomo = true })
+                            TimerPomoRow(enabled = true, onTimer = { showTimer = true }, onPomo = { showPomo = true })
                         }
                     }
                 }
@@ -266,7 +267,7 @@ fun BlockingScreen(
             items(schedules, key = { it.id }) { s ->
                 ScheduleCard(
                     schedule = s,
-                    enabled = !focusActive,
+                    strictActive = focusActive,
                     onToggle = { scheduleVm.setEnabled(s, it) },
                     onClick = { onEditSchedule(s) },
                 )
@@ -603,12 +604,15 @@ private fun ScheduleTile(
 @Composable
 private fun ScheduleCard(
     schedule: Schedule,
-    enabled: Boolean,
+    strictActive: Boolean,
     onToggle: (Boolean) -> Unit,
     onClick: () -> Unit,
 ) {
+    // During Strict you may turn a schedule ON (strengthen) but not OFF; the card still opens
+    // (the editor itself stays read-only for an existing schedule during Strict).
+    val toggleEnabled = !strictActive || !schedule.enabled
     Card(
-        Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onClick),
+        Modifier.fillMaxWidth().clickable(onClick = onClick),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
@@ -627,7 +631,7 @@ private fun ScheduleCard(
                 Text(scheduleSummary(schedule), style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Switch(checked = schedule.enabled, enabled = enabled, onCheckedChange = onToggle)
+            Switch(checked = schedule.enabled, enabled = toggleEnabled, onCheckedChange = onToggle)
         }
     }
 }
