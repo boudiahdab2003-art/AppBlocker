@@ -81,11 +81,15 @@ fun ScheduleEditorScreen(
     var locCaptured by remember { mutableStateOf((existing?.latitude ?: 0.0) != 0.0) }
     val selected = remember { (existing?.packages ?: emptyList()).toMutableStateList() }
 
+    // A NEW schedule can always be created (adding protection is allowed during Strict Mode);
+    // an EXISTING one stays locked while Strict is active so it can't be weakened.
+    val editable = existing == null || !strictActive
+
     Scaffold(
         containerColor = androidx.compose.ui.graphics.Color.Transparent,
         topBar = {
             EditorTopBar(typeTitle(type), onBack) {
-                if (existing != null && !strictActive) {
+                if (existing != null && editable) {
                     IconButton(onClick = { vm.delete(existing); onBack() }) {
                         Icon(Icons.Filled.Delete, contentDescription = "Delete",
                             tint = MaterialTheme.colorScheme.error)
@@ -102,7 +106,7 @@ fun ScheduleEditorScreen(
                     onValueChange = { name = it },
                     label = { Text("Name") },
                     singleLine = true,
-                    enabled = !strictActive,
+                    enabled = editable,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.padding(top = 8.dp))
@@ -111,8 +115,8 @@ fun ScheduleEditorScreen(
             when (type) {
                 ScheduleType.TIME -> item {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        TimeField("Start", start, enabled = !strictActive, modifier = Modifier.weight(1f)) { start = it }
-                        TimeField("End", end, enabled = !strictActive, modifier = Modifier.weight(1f)) { end = it }
+                        TimeField("Start", start, enabled = editable, modifier = Modifier.weight(1f)) { start = it }
+                        TimeField("End", end, enabled = editable, modifier = Modifier.weight(1f)) { end = it }
                     }
                     Spacer(Modifier.padding(top = 12.dp))
                     SectionLabel("Days")
@@ -120,7 +124,7 @@ fun ScheduleEditorScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         DAY_LABELS.forEachIndexed { i, label ->
                             val on = (daysMask shr i) and 1 == 1
-                            ChipBtn(label, on, !strictActive) { daysMask = daysMask xor (1 shl i) }
+                            ChipBtn(label, on, editable) { daysMask = daysMask xor (1 shl i) }
                         }
                     }
                     Spacer(Modifier.padding(top = 12.dp))
@@ -130,7 +134,7 @@ fun ScheduleEditorScreen(
                     Spacer(Modifier.padding(top = 6.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf(15, 30, 60, 120).forEach { p ->
-                            ChipBtn("$p m", limit == p, !strictActive) { limit = p }
+                            ChipBtn("$p m", limit == p, editable) { limit = p }
                         }
                     }
                     Spacer(Modifier.padding(top = 12.dp))
@@ -140,7 +144,7 @@ fun ScheduleEditorScreen(
                     Spacer(Modifier.padding(top = 6.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf(3, 5, 10, 20).forEach { c ->
-                            ChipBtn("$c", limitCount == c, !strictActive) { limitCount = c }
+                            ChipBtn("$c", limitCount == c, editable) { limitCount = c }
                         }
                     }
                     Spacer(Modifier.padding(top = 12.dp))
@@ -149,13 +153,13 @@ fun ScheduleEditorScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Any Wi-Fi network", Modifier.weight(1f),
                             style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground)
-                        Switch(checked = anyWifi, enabled = !strictActive, onCheckedChange = { anyWifi = it })
+                        Switch(checked = anyWifi, enabled = editable, onCheckedChange = { anyWifi = it })
                     }
                     if (!anyWifi) {
                         Spacer(Modifier.padding(top = 6.dp))
                         OutlinedTextField(
                             value = wifiSsid, onValueChange = { wifiSsid = it },
-                            label = { Text("Wi-Fi name (SSID)") }, singleLine = true, enabled = !strictActive,
+                            label = { Text("Wi-Fi name (SSID)") }, singleLine = true, enabled = editable,
                             shape = RoundedCornerShape(28.dp), modifier = Modifier.fillMaxWidth(),
                         )
                         Text("Reading a specific network's name needs the Location permission.",
@@ -172,7 +176,7 @@ fun ScheduleEditorScreen(
                         if (locCaptured) "Captured: %.4f, %.4f".format(lat, lng) else "No location captured yet.",
                         style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.padding(top = 8.dp))
-                    GradientButton(text = "Use my current location", enabled = !strictActive, onClick = {
+                    GradientButton(text = "Use my current location", enabled = editable, onClick = {
                         captureLocation(context)?.let { lat = it.first; lng = it.second; locCaptured = true }
                     })
                     Spacer(Modifier.padding(top = 12.dp))
@@ -180,7 +184,7 @@ fun ScheduleEditorScreen(
                     Spacer(Modifier.padding(top = 6.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf(100, 250, 500).forEach { r ->
-                            ChipBtn("$r m", radius == r, !strictActive) { radius = r }
+                            ChipBtn("$r m", radius == r, editable) { radius = r }
                         }
                     }
                     Spacer(Modifier.padding(top = 12.dp))
@@ -193,7 +197,7 @@ fun ScheduleEditorScreen(
                 Spacer(Modifier.padding(top = 4.dp))
             }
             items(apps, key = { it.packageName }) { app ->
-                AppCheckRow(app, checked = selected.contains(app.packageName), enabled = !strictActive) { on ->
+                AppCheckRow(app, checked = selected.contains(app.packageName), enabled = editable) { on ->
                     if (on) selected.add(app.packageName) else selected.remove(app.packageName)
                 }
             }
@@ -221,7 +225,7 @@ fun ScheduleEditorScreen(
                         )
                         onBack()
                     },
-                    enabled = !strictActive && selected.isNotEmpty() &&
+                    enabled = editable && selected.isNotEmpty() &&
                         (type != ScheduleType.LOCATION || locCaptured),
                     modifier = Modifier.padding(bottom = 24.dp),
                 )

@@ -14,9 +14,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -229,19 +232,20 @@ fun BlockingScreen(
                 Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                ScheduleTile("Time", Icons.Filled.Schedule, enabled = !focusActive) {
+                // Adding new protection is always allowed — even during Strict Mode.
+                ScheduleTile("Time", Icons.Filled.Schedule, enabled = true) {
                     onNewSchedule(ScheduleType.TIME)
                 }
-                ScheduleTile("Usage limit", Icons.Filled.HourglassEmpty, enabled = !focusActive) {
+                ScheduleTile("Usage limit", Icons.Filled.HourglassEmpty, enabled = true) {
                     onNewSchedule(ScheduleType.USAGE_LIMIT)
                 }
-                ScheduleTile("Launch count", Icons.AutoMirrored.Filled.OpenInNew, enabled = !focusActive) {
+                ScheduleTile("Launch count", Icons.AutoMirrored.Filled.OpenInNew, enabled = true) {
                     onNewSchedule(ScheduleType.LAUNCH_COUNT)
                 }
-                ScheduleTile("Wi-Fi", Icons.Filled.Wifi, enabled = !focusActive) {
+                ScheduleTile("Wi-Fi", Icons.Filled.Wifi, enabled = true) {
                     onNewSchedule(ScheduleType.WIFI)
                 }
-                ScheduleTile("Location", Icons.Filled.LocationOn, enabled = !focusActive) {
+                ScheduleTile("Location", Icons.Filled.LocationOn, enabled = true) {
                     onNewSchedule(ScheduleType.LOCATION)
                 }
             }
@@ -281,7 +285,12 @@ fun BlockingScreen(
             Spacer(Modifier.padding(top = 12.dp))
         }
         items(appTemplates.chunked(2)) { rowItems ->
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            // IntrinsicSize.Min lets both cards grow to the taller one's content instead of
+            // clipping a fixed height (time labels were getting cut off on some font scales).
+            Row(
+                Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
                 rowItems.forEach { t ->
                     TemplateCard(
                         Modifier.weight(1f), t,
@@ -449,14 +458,14 @@ private fun SetupBanner(missing: Int, onClick: () -> Unit) {
 
 @Composable
 private fun TemplateCard(modifier: Modifier, t: Template, active: Boolean, onClick: () -> Unit) {
-    Box(modifier.softGlow(RoundedCornerShape(20.dp), glow = t.colors.first(), elevation = 10.dp)) {
+    Box(modifier.fillMaxHeight().softGlow(RoundedCornerShape(20.dp), glow = t.colors.first(), elevation = 10.dp)) {
     Column(
-        Modifier.fillMaxWidth()
+        Modifier.fillMaxWidth().fillMaxHeight()
             .clip(RoundedCornerShape(20.dp))
             .background(Brush.linearGradient(t.colors))
             .clickable(onClick = onClick)
             .padding(14.dp)
-            .height(178.dp),
+            .heightIn(min = 178.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(

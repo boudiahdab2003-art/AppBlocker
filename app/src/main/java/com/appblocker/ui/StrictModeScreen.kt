@@ -49,13 +49,26 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.appblocker.admin.AppBlockerAdminReceiver
+import com.appblocker.data.SettingsStore
 import com.appblocker.ui.theme.AppGradients
 
 @Composable
-fun StrictModeScreen(vm: FocusViewModel = viewModel()) {
+fun StrictModeScreen(
+    vm: FocusViewModel = viewModel(),
+    homeVm: HomeViewModel = viewModel(),
+    scheduleVm: ScheduleViewModel = viewModel(),
+) {
     val active by vm.isActive.collectAsState()
     val remaining by vm.remainingMillis.collectAsState()
     val context = LocalContext.current
+
+    // What Strict Mode would lock — used to stop a pointless no-op activation.
+    val appsBlocked by homeVm.appsBlocked.collectAsState()
+    val keywords by homeVm.keywordCount.collectAsState()
+    val schedules by scheduleVm.schedules.collectAsState()
+    val enabledSchedules = schedules.count { it.enabled }
+    val adultOn = SettingsStore.blockAdult(context)
+    val hasSomethingToLock = appsBlocked > 0 || keywords > 0 || adultOn || enabledSchedules > 0
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
@@ -80,7 +93,7 @@ fun StrictModeScreen(vm: FocusViewModel = viewModel()) {
 
         if (active) {
             Text(
-                "%02d:%02d".format(remaining / 60000, (remaining / 1000) % 60),
+                fmtDuration(remaining),
                 fontSize = 56.sp, fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
             )
@@ -96,10 +109,14 @@ fun StrictModeScreen(vm: FocusViewModel = viewModel()) {
             Spacer(Modifier.height(12.dp))
             LockedList()
             Spacer(Modifier.height(28.dp))
-            UnlockMethod(onActivate = { minutes ->
-                ensureDeviceAdmin(context)
-                vm.start(minutes)
-            })
+            UnlockMethod(
+                canActivate = hasSomethingToLock,
+                summary = lockSummary(appsBlocked, enabledSchedules, keywords, adultOn),
+                onActivate = { minutes ->
+                    ensureDeviceAdmin(context)
+                    vm.start(minutes)
+                },
+            )
         }
     }
 }
@@ -166,7 +183,7 @@ private fun LockedRow(text: String) {
 }
 
 @Composable
-private fun UnlockMethod(onActivate: (Int) -> Unit) {
+private fun UnlockMethod(canActivate: Boolean, summary: String, onActivate: (Int) -> Unit) {
     var minutes by remember { mutableIntStateOf(60) }
     var showPicker by remember { mutableStateOf(false) }
 
@@ -193,8 +210,17 @@ private fun UnlockMethod(onActivate: (Int) -> Unit) {
             tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 
-    Spacer(Modifier.height(24.dp))
-    GradientButton(text = "Activate lock", onClick = { onActivate(minutes) })
+    Spacer(Modifier.height(16.dp))
+    Text(
+        if (canActivate) summary
+        else "Add something to block first — set up Quick Block or a schedule.",
+        style = MaterialTheme.typography.bodyMedium,
+        color = if (canActivate) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFFFFB020),
+        textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth(),
+    )
+    Spacer(Modifier.height(12.dp))
+    GradientButton(text = "Activate lock", enabled = canActivate, onClick = { onActivate(minutes) })
 
     if (showPicker) {
         DurationPickerDialog(
@@ -204,6 +230,23 @@ private fun UnlockMethod(onActivate: (Int) -> Unit) {
             onDismiss = { showPicker = false },
         )
     }
+}
+
+/** Countdown as H:MM:SS once an hour or longer, else MM:SS. */
+private fun fmtDuration(ms: Long): String {
+    val total = (ms / 1000).coerceAtLeast(0)
+    val h = total / 3600; val m = (total % 3600) / 60; val s = total % 60
+    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%02d:%02d".format(m, s)
+}
+
+/** One-line summary of what Strict Mode will lock. */
+private fun lockSummary(apps: Int, schedules: Int, keywords: Int, adultOn: Boolean): String {
+    val parts = mutableListOf<String>()
+    if (apps > 0) parts += "$apps app${if (apps == 1) "" else "s"}"
+    if (schedules > 0) parts += "$schedules schedule${if (schedules == 1) "" else "s"}"
+    if (keywords > 0) parts += "$keywords word${if (keywords == 1) "" else "s"}"
+    if (adultOn) parts += "adult filter"
+    return "Locks " + parts.joinToString(" · ") + "."
 }
 
 private fun durationLabel(minutes: Int): String = when {
