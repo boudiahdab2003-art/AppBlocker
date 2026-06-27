@@ -43,7 +43,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.appblocker.data.Schedule
 import com.appblocker.data.ScheduleType
 import com.appblocker.data.SettingsStore
-import com.appblocker.service.AccessibilityUtil
 import com.appblocker.ui.theme.AppGradients
 
 private data class Tab(val label: String, val icon: ImageVector)
@@ -59,6 +58,7 @@ private val TABS = listOf(
 private sealed interface Overlay {
     data object QuickBlock : Overlay
     data object Permissions : Overlay
+    data object Onboarding : Overlay
     data class NewSchedule(val type: ScheduleType) : Overlay
     data class EditSchedule(val schedule: Schedule) : Overlay
 }
@@ -73,12 +73,11 @@ fun AppRoot() {
     val updateState by updateVm.state.collectAsState()
     val context = LocalContext.current
 
-    // First launch: if the blocker isn't on yet, guide the user through setup once.
+    // First launch: walk the user through the step-by-step setup wizard. "Setup seen" is only
+    // persisted once they finish/skip the wizard (see Overlay.Onboarding's onDone), so quitting
+    // mid-setup re-shows it next launch instead of stranding the user.
     LaunchedEffect(Unit) {
-        if (!SettingsStore.setupSeen(context) && !AccessibilityUtil.isEnabled(context)) {
-            overlay = Overlay.Permissions
-        }
-        SettingsStore.setSetupSeen(context)
+        if (!SettingsStore.setupSeen(context)) overlay = Overlay.Onboarding
         updateVm.checkOnLaunch()
     }
 
@@ -103,6 +102,11 @@ fun AppRoot() {
                 BlockEditorScreen(strictActive = strictActive, onBack = { overlay = null })
             is Overlay.Permissions ->
                 PermissionsScreen(onBack = { overlay = null })
+            is Overlay.Onboarding ->
+                OnboardingScreen(onDone = {
+                    SettingsStore.setSetupSeen(context)
+                    overlay = null
+                })
             is Overlay.NewSchedule ->
                 ScheduleEditorScreen(
                     type = o.type, existing = null, strictActive = strictActive,

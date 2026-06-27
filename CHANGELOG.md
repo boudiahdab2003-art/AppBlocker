@@ -3,6 +3,12 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.13 — Onboarding
+- New first-run setup wizard: walks through the essential permissions (accessibility, overlay) one
+  step at a time with a progress indicator, then the recommended optional ones.
+- Setup is now only marked "done" once you finish or skip the wizard, so quitting mid-setup brings
+  it back next launch instead of silently dropping you into a half-configured app.
+
 ## v1.12 — Housekeeping & docs
 - Disabled cloud/`adb` backup (`allowBackup=false`) so the PIN hash and block rules can't be
   restored onto another device.
