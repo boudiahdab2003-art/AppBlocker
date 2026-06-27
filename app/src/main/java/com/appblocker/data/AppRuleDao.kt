@@ -15,6 +15,10 @@ interface AppRuleDao {
     @Upsert
     suspend fun upsert(rule: AppRule)
 
+    /** Upserts many rules in a single transaction (used when committing a Quick Block selection). */
+    @Upsert
+    suspend fun upsertAll(rules: List<AppRule>)
+
     @Delete
     suspend fun delete(rule: AppRule)
 }
