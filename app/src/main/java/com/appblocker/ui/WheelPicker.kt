@@ -34,6 +34,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -71,7 +73,16 @@ fun WheelPicker(
                 ?: selectedIndex
         }
     }
-    LaunchedEffect(centerIndex) { onSelectedChange(centerIndex) }
+    val haptic = LocalHapticFeedback.current
+    var lastHapticIndex by remember { mutableIntStateOf(selectedIndex) }
+    LaunchedEffect(centerIndex) {
+        onSelectedChange(centerIndex)
+        // Light tick as each row snaps under the centre band (skips the initial value).
+        if (centerIndex != lastHapticIndex) {
+            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            lastHapticIndex = centerIndex
+        }
+    }
 
     LazyColumn(
         modifier.height(itemHeight * visibleCount),

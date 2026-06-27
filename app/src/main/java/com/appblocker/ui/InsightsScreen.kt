@@ -35,6 +35,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,7 +57,7 @@ import kotlin.math.ceil
 fun InsightsScreen(vm: InsightsViewModel = viewModel()) {
     val state by vm.state.collectAsState()
     val context = LocalContext.current
-    var tab by remember { mutableIntStateOf(0) } // 0 Day, 1 Week, 2 Trend
+    var tab by rememberSaveable { mutableIntStateOf(0) } // 0 Day, 1 Week, 2 Trend
 
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
         item {

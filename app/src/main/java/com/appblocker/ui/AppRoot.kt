@@ -1,6 +1,14 @@
 package com.appblocker.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,6 +33,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -77,31 +86,44 @@ fun AppRoot() {
     BackHandler(enabled = overlay != null) { overlay = null }
 
     Box(Modifier.fillMaxSize().background(AppGradients.background)) {
-    when (val o = overlay) {
-        is Overlay.QuickBlock ->
-            BlockEditorScreen(strictActive = strictActive, onBack = { overlay = null })
-        is Overlay.Permissions ->
-            PermissionsScreen(onBack = { overlay = null })
-        is Overlay.NewSchedule ->
-            ScheduleEditorScreen(
-                type = o.type, existing = null, strictActive = strictActive,
-                onBack = { overlay = null },
+    // Editor overlays slide up over the current tab; the main scaffold cross-fades back in.
+    AnimatedContent(
+        targetState = overlay,
+        transitionSpec = {
+            if (targetState != null) {
+                (slideInVertically { it } + fadeIn()) togetherWith fadeOut()
+            } else {
+                fadeIn() togetherWith (slideOutVertically { it } + fadeOut())
+            }
+        },
+        label = "overlay",
+    ) { o ->
+        when (o) {
+            is Overlay.QuickBlock ->
+                BlockEditorScreen(strictActive = strictActive, onBack = { overlay = null })
+            is Overlay.Permissions ->
+                PermissionsScreen(onBack = { overlay = null })
+            is Overlay.NewSchedule ->
+                ScheduleEditorScreen(
+                    type = o.type, existing = null, strictActive = strictActive,
+                    onBack = { overlay = null },
+                )
+            is Overlay.EditSchedule ->
+                ScheduleEditorScreen(
+                    type = o.schedule.type, existing = o.schedule, strictActive = strictActive,
+                    onBack = { overlay = null },
+                )
+            null -> MainScaffold(
+                tab = tab,
+                onTab = { tab = it },
+                strictActive = strictActive,
+                updateVm = updateVm,
+                onEditQuickBlock = { overlay = Overlay.QuickBlock },
+                onNewSchedule = { overlay = Overlay.NewSchedule(it) },
+                onEditSchedule = { overlay = Overlay.EditSchedule(it) },
+                onOpenPermissions = { overlay = Overlay.Permissions },
             )
-        is Overlay.EditSchedule ->
-            ScheduleEditorScreen(
-                type = o.schedule.type, existing = o.schedule, strictActive = strictActive,
-                onBack = { overlay = null },
-            )
-        null -> MainScaffold(
-            tab = tab,
-            onTab = { tab = it },
-            strictActive = strictActive,
-            updateVm = updateVm,
-            onEditQuickBlock = { overlay = Overlay.QuickBlock },
-            onNewSchedule = { overlay = Overlay.NewSchedule(it) },
-            onEditSchedule = { overlay = Overlay.EditSchedule(it) },
-            onOpenPermissions = { overlay = Overlay.Permissions },
-        )
+        }
     }
 
     // Global download progress while an update is being fetched.
@@ -135,7 +157,7 @@ private fun MainScaffold(
                     NavigationBarItem(
                         selected = tab == i,
                         onClick = { onTab(i) },
-                        icon = { Icon(t.icon, contentDescription = null) },
+                        icon = { Icon(t.icon, contentDescription = t.label) },
                         label = {
                             Text(
                                 t.label,
@@ -156,8 +178,22 @@ private fun MainScaffold(
             }
         }
     ) { padding ->
-        Box(Modifier.padding(padding)) {
-            when (tab) {
+        // Preserve each tab's state (sub-tab choice, scroll position) across switches; without
+        // this the off-screen tab is disposed and its rememberSaveable state is lost.
+        val stateHolder = rememberSaveableStateHolder()
+        AnimatedContent(
+            targetState = tab,
+            modifier = Modifier.padding(padding),
+            transitionSpec = {
+                val forward = targetState > initialState
+                val dir = if (forward) 1 else -1
+                (slideInHorizontally { it * dir / 6 } + fadeIn()) togetherWith
+                    (slideOutHorizontally { -it * dir / 6 } + fadeOut())
+            },
+            label = "tab",
+        ) { current ->
+            stateHolder.SaveableStateProvider(current) {
+            when (current) {
                 0 -> BlockingScreen(
                     onEditQuickBlock = onEditQuickBlock,
                     onNewSchedule = onNewSchedule,
@@ -172,6 +208,7 @@ private fun MainScaffold(
                     onOpenPermissions = onOpenPermissions,
                     updateVm = updateVm,
                 )
+            }
             }
         }
     }

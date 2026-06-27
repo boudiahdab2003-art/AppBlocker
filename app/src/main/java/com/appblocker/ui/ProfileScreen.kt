@@ -38,7 +38,9 @@ fun ProfileScreen(
 ) {
     val context = LocalContext.current
     val updateState by updateVm.state.collectAsState()
-    var pinSet by remember { mutableStateOf(PinStore.isSet(context)) }
+    // Re-read on each resume so a PIN set/cleared elsewhere is reflected when returning here.
+    val resumeTick = resumeTick()
+    var pinSet by remember(resumeTick) { mutableStateOf(PinStore.isSet(context)) }
     var showSetPin by remember { mutableStateOf(false) }
     val locked = strictActive
 

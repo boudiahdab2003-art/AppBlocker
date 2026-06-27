@@ -63,6 +63,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -332,7 +334,10 @@ fun BlockingScreen(
         DurationPickerDialog(
             title = "Set the timer",
             initialMinutes = 25,
-            onSave = { QuickSession.startTimer(context, it); tick = System.currentTimeMillis() },
+            onSave = {
+                QuickSession.startTimer(context, it); tick = System.currentTimeMillis()
+                Toast.makeText(context, "Timer started — blocks for ${fmtDuration(it)}", Toast.LENGTH_SHORT).show()
+            },
             onDismiss = { showTimer = false },
         )
     }
@@ -341,6 +346,7 @@ fun BlockingScreen(
             onStart = { work, brk, rounds ->
                 QuickSession.startPomodoro(context, work, brk, rounds)
                 tick = System.currentTimeMillis()
+                Toast.makeText(context, "Pomodoro started — $work min work · $brk min break", Toast.LENGTH_SHORT).show()
             },
             onDismiss = { showPomo = false },
         )
@@ -416,6 +422,16 @@ private fun TimerPomoRow(enabled: Boolean, onTimer: () -> Unit, onPomo: () -> Un
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         NeutralButton(Modifier.weight(1f), Icons.Filled.Timer, "Timer", enabled, compact = true, onClick = onTimer)
         NeutralButton(Modifier.weight(1f), Icons.Filled.Spa, "Pomodoro", enabled, compact = true, onClick = onPomo)
+    }
+}
+
+/** Formats a whole-minute duration as e.g. "25 min" or "1 h 30 min". */
+private fun fmtDuration(minutes: Int): String {
+    val h = minutes / 60; val m = minutes % 60
+    return when {
+        h > 0 && m > 0 -> "$h h $m min"
+        h > 0 -> "$h h"
+        else -> "$m min"
     }
 }
 
@@ -498,7 +514,7 @@ private fun TemplateCard(modifier: Modifier, t: Template, active: Boolean, onCli
                 Modifier.size(44.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.22f)),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(t.icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
+                Icon(t.icon, contentDescription = "Block ${t.title}", tint = Color.White, modifier = Modifier.size(24.dp))
             }
             Spacer(Modifier.weight(1f))
             if (active) {
@@ -538,10 +554,12 @@ private fun TemplateCard(modifier: Modifier, t: Template, active: Boolean, onCli
 @Composable
 private fun QuickBlockPill(apps: Int = 0, words: Int = 0, adultOn: Boolean = false, dimmed: Boolean = false) {
     val baseTint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (dimmed) 0.45f else 1f)
+    val pillDescription = "Blocking $apps apps, $words words" + if (adultOn) ", adult filter on" else ""
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(50))
             .background(MaterialTheme.colorScheme.background.copy(alpha = 0.55f))
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .clearAndSetSemantics { contentDescription = pillDescription },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
