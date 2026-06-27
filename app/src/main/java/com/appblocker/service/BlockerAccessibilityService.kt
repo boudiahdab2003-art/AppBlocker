@@ -1,12 +1,16 @@
 package com.appblocker.service
 
 import android.accessibilityservice.AccessibilityService
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import androidx.core.content.ContextCompat
 import android.view.LayoutInflater
 import android.view.View
 import android.view.WindowManager
@@ -31,10 +35,13 @@ import java.util.Calendar
 import com.appblocker.ui.BlockScreenActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * The watcher. Two jobs:
@@ -60,24 +67,35 @@ class BlockerAccessibilityService : AccessibilityService() {
 
     private var lastBlockedPkg: String? = null
     private var lastBlockAt: Long = 0L
-    private var lastWebText: String? = null
+    // Read/written from the background web-scan coroutine as well as the main thread.
+    @Volatile private var lastWebText: String? = null
 
     // Instant block screen drawn as an overlay window (no Activity-launch lag).
     private val windowManager by lazy { getSystemService(WINDOW_SERVICE) as WindowManager }
     private var overlayView: View? = null
 
-    private var lastForegroundPkg: String? = null
+    @Volatile private var lastForegroundPkg: String? = null
     @Volatile private var lastLocation: android.location.Location? = null
     private var locationRequested = false
+    private var locationListener: android.location.LocationListener? = null
+
+    // Keeps browserPackages fresh when apps are installed/removed after the service starts.
+    private var packageChangeReceiver: BroadcastReceiver? = null
 
     // Debounced web scan: collapse the page-load event burst into one scan that runs
     // after events stop, so the *settled* page (when its text finally exists) is scanned.
+    // The scan itself runs off the main thread; only showing the block UI hops back to main.
     private val handler = Handler(Looper.getMainLooper())
-    private val webScanRunnable = Runnable { scanWebContent() }
+    @Volatile private var webScanJob: Job? = null
+    private val webScanRunnable = Runnable {
+        webScanJob?.cancel()
+        webScanJob = scope.launch { scanWebContent() }
+    }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         browserPackages = findBrowserPackages()
+        registerPackageChangeReceiver()
         val db = BlockerDatabase.get(applicationContext)
         combine(
             db.appRuleDao().getAll(),
@@ -215,6 +233,25 @@ class BlockerAccessibilityService : AccessibilityService() {
             .toSet()
     }.getOrDefault(emptySet())
 
+    /**
+     * Browsers can be installed/removed after the service starts; re-detect them on package
+     * changes so "Block unsupported browsers" can't be bypassed by installing a new browser.
+     */
+    private fun registerPackageChangeReceiver() {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                scope.launch { browserPackages = findBrowserPackages() }
+            }
+        }
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_PACKAGE_ADDED)
+            addAction(Intent.ACTION_PACKAGE_REMOVED)
+            addDataScheme("package")
+        }
+        ContextCompat.registerReceiver(this, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+        packageChangeReceiver = receiver
+    }
+
     /** True if connected to Wi-Fi and (target empty = any, else SSID matches). */
     private fun onMatchingWifi(target: String): Boolean {
         val cm = getSystemService(CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager ?: return false
@@ -245,7 +282,10 @@ class BlockerAccessibilityService : AccessibilityService() {
         runCatching {
             lastLocation = lm.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER)
                 ?: lm.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER)
+            // Keep a reference so onDestroy can unregister it (otherwise updates leak past the
+            // service's life — wasting battery and holding a location subscription).
             val listener = android.location.LocationListener { lastLocation = it }
+            locationListener = listener
             lm.requestLocationUpdates(android.location.LocationManager.NETWORK_PROVIDER, 60_000L, 50f, listener)
             lm.requestLocationUpdates(android.location.LocationManager.GPS_PROVIDER, 60_000L, 50f, listener)
         }
@@ -266,7 +306,8 @@ class BlockerAccessibilityService : AccessibilityService() {
 
     // --- Web / keyword filtering ---
 
-    private fun scanWebContent() {
+    /** Runs on a background dispatcher (the node-tree walk is heavy); only the block UI hops to main. */
+    private suspend fun scanWebContent() {
         // Web-address/word filtering only makes sense inside a browser. Without this, typing a
         // blocked word in ANY app (messages, notes, even AppBlocker's own keyword field) would
         // trip a block — which is wrong.
@@ -283,10 +324,12 @@ class BlockerAccessibilityService : AccessibilityService() {
         }
         lastWebText = text
         if (DEBUG) Log.d(TAG, "BLOCK: ${hit.title} / ${hit.message}")
-        // Cover the offending page with the block screen. (No GLOBAL_ACTION_BACK — it
-        // races with the just-launched activity and dismisses it, same as the
-        // GLOBAL_ACTION_HOME race removed in M2. The block screen's Close goes home.)
-        showBlockScreen(title = hit.title, message = hit.message, packageName = null, counterKey = "web")
+        // Cover the offending page with the block screen. The overlay/Activity must be shown on
+        // the main thread. (No GLOBAL_ACTION_BACK — it races with the just-launched activity and
+        // dismisses it, same as the GLOBAL_ACTION_HOME race removed in M2. Close goes home.)
+        withContext(Dispatchers.Main) {
+            showBlockScreen(title = hit.title, message = hit.message, packageName = null, counterKey = "web")
+        }
     }
 
     /**
@@ -403,6 +446,13 @@ class BlockerAccessibilityService : AccessibilityService() {
     override fun onDestroy() {
         super.onDestroy()
         handler.removeCallbacks(webScanRunnable)
+        // Stop location updates so they don't leak past the service (battery + privacy).
+        locationListener?.let { listener ->
+            (getSystemService(LOCATION_SERVICE) as? android.location.LocationManager)?.removeUpdates(listener)
+        }
+        locationListener = null
+        packageChangeReceiver?.let { runCatching { unregisterReceiver(it) } }
+        packageChangeReceiver = null
         removeBlockOverlay()
         scope.cancel()
     }
