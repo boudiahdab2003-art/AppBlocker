@@ -3,6 +3,10 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.14 — Internal cleanup
+- Split the 740-line home screen into focused files (Quick Block, schedules, templates, banners).
+  Refactor only — no user-facing change.
+
 ## v1.13 — Onboarding
 - New first-run setup wizard: walks through the essential permissions (accessibility, overlay) one
   step at a time with a progress indicator, then the recommended optional ones.
