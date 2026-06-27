@@ -25,6 +25,7 @@ import com.appblocker.data.LaunchCounter
 import com.appblocker.data.QuickSession
 import com.appblocker.data.Schedule
 import com.appblocker.data.ScheduleType
+import com.appblocker.data.SessionClock
 import com.appblocker.data.SettingsStore
 import java.util.Calendar
 import com.appblocker.ui.BlockScreenActivity
@@ -47,7 +48,11 @@ class BlockerAccessibilityService : AccessibilityService() {
     private val filter by lazy { WebContentFilter.get(applicationContext) }
 
     @Volatile private var rules: Map<String, AppRule> = emptyMap()
-    @Volatile private var focusEndMillis: Long = 0L
+    // Strict/Focus deadline anchored to the monotonic clock (clock-change-proof) with a
+    // wall-clock fallback. See SessionClock.
+    @Volatile private var focusRealtimeStart: Long = 0L
+    @Volatile private var focusRealtimeEnd: Long = 0L
+    @Volatile private var focusWallEnd: Long = 0L
     @Volatile private var userKeywords: List<String> = emptyList()
     @Volatile private var schedules: List<Schedule> = emptyList()
     // Browser packages installed on the device (for "Block unsupported browsers").
@@ -81,7 +86,9 @@ class BlockerAccessibilityService : AccessibilityService() {
             db.scheduleDao().getAll(),
         ) { ruleList, focus, keywords, scheduleList ->
             rules = ruleList.associateBy { it.packageName }
-            focusEndMillis = focus?.endTimeMillis ?: 0L
+            focusRealtimeStart = focus?.realtimeStartMillis ?: 0L
+            focusRealtimeEnd = focus?.realtimeEndMillis ?: 0L
+            focusWallEnd = focus?.endTimeMillis ?: 0L
             userKeywords = keywords.map { it.keyword }
             schedules = scheduleList
             if (scheduleList.any { it.type == ScheduleType.LOCATION }) ensureLocationUpdates()
@@ -154,7 +161,7 @@ class BlockerAccessibilityService : AccessibilityService() {
 
     private fun shouldBlock(pkg: String): Boolean {
         val now = System.currentTimeMillis()
-        val strict = now < focusEndMillis
+        val strict = SessionClock.remaining(focusRealtimeStart, focusRealtimeEnd, focusWallEnd) > 0L
 
         // Quick Block — enforced when Strict, or a running Timer/Pomodoro says "block now",
         // or (no session) when not paused.

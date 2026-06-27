@@ -1,10 +1,12 @@
 package com.appblocker.ui
 
 import android.app.Application
+import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.appblocker.data.BlockerDatabase
 import com.appblocker.data.FocusState
+import com.appblocker.data.SessionClock
 import com.appblocker.data.StatsStore
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
@@ -28,8 +30,11 @@ class FocusViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Milliseconds left in the current focus session (0 if none active). */
     val remainingMillis: StateFlow<Long> =
-        combine(ticker, dao.get()) { now, state ->
-            ((state?.endTimeMillis ?: 0L) - now).coerceAtLeast(0L)
+        combine(ticker, dao.get()) { _, state ->
+            if (state == null) 0L
+            else SessionClock.remaining(
+                state.realtimeStartMillis, state.realtimeEndMillis, state.endTimeMillis,
+            )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0L)
 
     val isActive: StateFlow<Boolean> =
@@ -39,8 +44,17 @@ class FocusViewModel(app: Application) : AndroidViewModel(app) {
     /** Start an un-stoppable Strict Mode session. There is intentionally no "stop". */
     fun start(minutes: Int) {
         StatsStore.addStrictMinutes(getApplication(), minutes)
+        val duration = minutes * 60_000L
+        val nowRt = SystemClock.elapsedRealtime()
         viewModelScope.launch {
-            dao.set(FocusState(0, System.currentTimeMillis() + minutes * 60_000L))
+            dao.set(
+                FocusState(
+                    id = 0,
+                    endTimeMillis = System.currentTimeMillis() + duration,
+                    realtimeStartMillis = nowRt,
+                    realtimeEndMillis = nowRt + duration,
+                )
+            )
         }
     }
 }

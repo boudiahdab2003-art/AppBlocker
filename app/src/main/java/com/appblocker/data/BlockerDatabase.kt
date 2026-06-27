@@ -6,6 +6,8 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverter
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 
 class Converters {
     @TypeConverter fun fromMode(mode: BlockMode): String = mode.name
@@ -22,8 +24,8 @@ class Converters {
 
 @Database(
     entities = [AppRule::class, FocusState::class, BlockedKeyword::class, Schedule::class],
-    version = 5,
-    exportSchema = false,
+    version = 6,
+    exportSchema = true,
 )
 @TypeConverters(Converters::class)
 abstract class BlockerDatabase : RoomDatabase() {
@@ -35,13 +37,29 @@ abstract class BlockerDatabase : RoomDatabase() {
     companion object {
         @Volatile private var INSTANCE: BlockerDatabase? = null
 
+        /**
+         * v5 -> v6: add realtime-anchored columns to focus_state so Strict Mode survives
+         * device-clock changes. Existing rows keep realtime* = 0, which makes the watcher
+         * fall back to the (still valid) wall-clock endTimeMillis for any in-flight session.
+         */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE focus_state ADD COLUMN realtimeStartMillis INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE focus_state ADD COLUMN realtimeEndMillis INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun get(context: Context): BlockerDatabase =
             INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
                     context.applicationContext,
                     BlockerDatabase::class.java,
                     "appblocker.db"
-                ).fallbackToDestructiveMigration().build().also { INSTANCE = it }
+                )
+                    .addMigrations(MIGRATION_5_6)
+                    // Only wipe on a downgrade (installing an older APK) — never on upgrade.
+                    .fallbackToDestructiveMigrationOnDowngrade()
+                    .build().also { INSTANCE = it }
             }
     }
 }
