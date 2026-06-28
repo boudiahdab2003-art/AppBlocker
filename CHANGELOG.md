@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.16
+- The version number now always shows in Profile > About, even after checking for updates.
+
 ## v1.15
 - Automatic 'Update available' prompt on launch with one-tap Update now; easier install via a permanent download link and QR code.
 

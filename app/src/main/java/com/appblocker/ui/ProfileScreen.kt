@@ -108,10 +108,10 @@ fun ProfileScreen(
                 is UpdateState.Available -> "Update available: v${s.release.version} — tap to install"
                 is UpdateState.Downloading -> "Downloading… ${s.percent}%"
                 is UpdateState.Error -> s.message + " Tap to retry."
-                else -> "Version ${appVersion(context)} · tap to check for updates"
+                else -> "Tap to check for updates"
             }
             SettingRow(
-                title = "AppBlocker",
+                title = "AppBlocker v${appVersion(context)}",
                 subtitle = sub,
                 enabled = updateState !is UpdateState.Downloading,
                 onClick = {

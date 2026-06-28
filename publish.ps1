@@ -102,7 +102,7 @@ try {
 
     # --- 7. Publish the release on GitHub -----------------------------------------
     Step 7 "Publishing the release (this is what your phone downloads)"
-    gh release create $tag $ApkAsset -t "AppBlocker $tag" -n $note
+    gh release create $tag $ApkAsset --repo "$Owner/$RepoName" -t "AppBlocker $tag" -n $note
     if ($LASTEXITCODE -ne 0) { Die "Creating the GitHub release failed (is 'gh' signed in?)." }
     Ok "Release $tag is live"
 
