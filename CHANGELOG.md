@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.15
+- Automatic 'Update available' prompt on launch with one-tap Update now; easier install via a permanent download link and QR code.
+
 ## v1.14 — Internal cleanup
 - Split the 740-line home screen into focused files (Quick Block, schedules, templates, banners).
   Refactor only — no user-facing change.

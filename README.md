@@ -3,6 +3,19 @@
 A personal Android app & website blocker that helps you stay off distracting apps. Built from
 scratch in Kotlin + Jetpack Compose (Material 3), no root required.
 
+## Install it on your phone
+Open this link on the phone (or scan the QR code), then tap the downloaded file to install:
+
+**https://github.com/boudiahdab2003-art/AppBlocker/releases/latest/download/AppBlocker.apk**
+
+This link always points to the newest version, so it never goes out of date.
+
+![Scan to install](qr-install.png)
+
+The first time, Android will ask to "allow installing unknown apps" — say yes. After that, the app
+keeps itself up to date: when a new version exists, opening AppBlocker shows an **Update available**
+prompt — tap **Update now**.
+
 ## What it does
 - **Block apps** — pick any installed apps; they're covered the moment you open them by an instant
   full-screen block overlay.
@@ -61,12 +74,20 @@ Install to a device/emulator: `adb install -r app-debug.apk`. The release build 
 resource-shrunk (~1.2 MB).
 
 ## Release process
-1. Bump `versionCode` and `versionName` in `app/build.gradle.kts`.
-2. Add a section to `CHANGELOG.md`.
-3. Commit, then tag: `git tag vX.Y`.
-4. `gradle :app:assembleRelease` (signs with `keystore.properties`).
-5. Create a GitHub release tagged `vX.Y` and upload the `.apk` as an asset — the in-app `Updater`
-   finds the latest release and its first `.apk` asset automatically.
+**Double-click `Publish.bat`** and type a short note about what changed. That's it — it bumps the
+version, builds the signed release, saves it to GitHub, and publishes the new version. Everyone on the
+permanent install link (and every phone running the app) gets the update automatically.
+
+<details>
+<summary>What Publish.bat does under the hood</summary>
+
+1. Bumps `versionCode` and `versionName` in `app/build.gradle.kts`.
+2. Builds the signed release with `gradle :app:assembleRelease` (uses `keystore.properties`).
+3. Verifies the APK is signed with the AppBlocker release key (so in-place updates don't break).
+4. Adds a `CHANGELOG.md` entry, commits, tags `vX.Y`, and pushes.
+5. Creates the GitHub release and uploads the APK as a constant-named asset `AppBlocker.apk`, which
+   powers the permanent download link and the in-app `Updater`.
+</details>
 
 ## Tech
 Kotlin · Jetpack Compose (Material 3) · Room · AccessibilityService · UsageStatsManager · DeviceAdmin

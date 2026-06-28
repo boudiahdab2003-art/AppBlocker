@@ -130,6 +130,32 @@ fun AppRoot() {
         }
     }
 
+    // Big, unmissable prompt when a newer version is found (on launch or via Profile).
+    // One tap downloads + installs; "Later" hides it until the next launch.
+    (updateState as? UpdateState.Available)?.let { avail ->
+        val release = avail.release
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { updateVm.dismiss() },
+            title = { androidx.compose.material3.Text("Update available") },
+            text = {
+                androidx.compose.material3.Text(
+                    "Version ${release.version} is ready." +
+                        if (release.notes.isNotBlank()) "\n\n${release.notes}" else ""
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = { updateVm.downloadAndInstall(release) }
+                ) { androidx.compose.material3.Text("Update now") }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = { updateVm.dismiss() }
+                ) { androidx.compose.material3.Text("Later") }
+            },
+        )
+    }
+
     // Global download progress while an update is being fetched.
     (updateState as? UpdateState.Downloading)?.let { dl ->
         androidx.compose.material3.AlertDialog(

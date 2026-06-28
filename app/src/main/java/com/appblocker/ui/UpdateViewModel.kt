@@ -50,6 +50,11 @@ class UpdateViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Close the "Update available" prompt for this launch without installing. */
+    fun dismiss() {
+        _state.value = UpdateState.Idle
+    }
+
     fun downloadAndInstall(release: Updater.Release) {
         val ctx = getApplication<Application>()
         if (!Updater.canInstall(ctx)) {
