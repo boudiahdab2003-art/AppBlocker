@@ -98,6 +98,36 @@ fun ScheduleEditorScreen(
                 }
             }
         },
+        bottomBar = {
+            GradientButton(
+                text = if (existing == null) "Create schedule" else "Save",
+                onClick = {
+                    vm.save(
+                        (existing ?: Schedule(name = name, type = type)).copy(
+                            name = name.ifBlank { defaultName(type) },
+                            type = type,
+                            startMinutes = start,
+                            endMinutes = end,
+                            daysMask = daysMask,
+                            limitMinutes = limit,
+                            limitCount = limitCount,
+                            wifiSsid = if (anyWifi) "" else wifiSsid.trim(),
+                            latitude = lat,
+                            longitude = lng,
+                            radiusMeters = radius,
+                            packages = selected.toList(),
+                        )
+                    )
+                    onBack()
+                },
+                enabled = editable && selected.isNotEmpty() &&
+                    (type != ScheduleType.LOCATION || locCaptured),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(top = 8.dp, bottom = 24.dp),
+            )
+        },
     ) { padding ->
         LazyColumn(Modifier.padding(padding).fillMaxSize().padding(horizontal = 16.dp)) {
             item {
@@ -204,34 +234,7 @@ fun ScheduleEditorScreen(
                 }
             }
 
-            item {
-                Spacer(Modifier.padding(top = 12.dp))
-                GradientButton(
-                    text = if (existing == null) "Create schedule" else "Save",
-                    onClick = {
-                        vm.save(
-                            (existing ?: Schedule(name = name, type = type)).copy(
-                                name = name.ifBlank { defaultName(type) },
-                                type = type,
-                                startMinutes = start,
-                                endMinutes = end,
-                                daysMask = daysMask,
-                                limitMinutes = limit,
-                                limitCount = limitCount,
-                                wifiSsid = if (anyWifi) "" else wifiSsid.trim(),
-                                latitude = lat,
-                                longitude = lng,
-                                radiusMeters = radius,
-                                packages = selected.toList(),
-                            )
-                        )
-                        onBack()
-                    },
-                    enabled = editable && selected.isNotEmpty() &&
-                        (type != ScheduleType.LOCATION || locCaptured),
-                    modifier = Modifier.padding(bottom = 24.dp),
-                )
-            }
+            item { Spacer(Modifier.padding(top = 8.dp)) }
         }
     }
 }
