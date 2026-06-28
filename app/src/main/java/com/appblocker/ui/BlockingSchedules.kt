@@ -120,12 +120,8 @@ private fun scheduleSummary(s: Schedule): String {
     val apps = "${s.packages.size} app${if (s.packages.size == 1) "" else "s"}"
     return when (s.type) {
         ScheduleType.TIME ->
-            "%02d:%02d–%02d:%02d · %s · %s".format(
-                s.startMinutes / 60, s.startMinutes % 60,
-                s.endMinutes / 60, s.endMinutes % 60,
-                daysText(s.daysMask), apps,
-            )
-        ScheduleType.USAGE_LIMIT -> "${s.limitMinutes} min/day · $apps"
+            "${fmtWindow(s.startMinutes, s.endMinutes)} · ${daysText(s.daysMask)} · $apps"
+        ScheduleType.USAGE_LIMIT -> "${fmtDuration(s.limitMinutes)}/day · $apps"
         ScheduleType.LAUNCH_COUNT -> "${s.limitCount} opens/day · $apps"
         ScheduleType.WIFI -> (if (s.wifiSsid.isBlank()) "Any Wi-Fi" else "Wi-Fi: ${s.wifiSsid}") + " · $apps"
         ScheduleType.LOCATION -> "Within ${s.radiusMeters} m · $apps"

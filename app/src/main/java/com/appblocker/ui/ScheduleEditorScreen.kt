@@ -54,8 +54,6 @@ import com.appblocker.data.ScheduleType
 
 private val DAY_LABELS = listOf("S", "M", "T", "W", "T", "F", "S") // bit0 = Sunday
 
-private fun fmtTime(minutes: Int): String = "%02d:%02d".format(minutes / 60, minutes % 60)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScheduleEditorScreen(
@@ -137,7 +135,7 @@ fun ScheduleEditorScreen(
                     Spacer(Modifier.padding(top = 6.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf(15, 30, 60, 120).forEach { p ->
-                            ChipBtn("$p m", limit == p, editable) { limit = p }
+                            ChipBtn(fmtDuration(p), limit == p, editable) { limit = p }
                         }
                     }
                     Spacer(Modifier.padding(top = 12.dp))
@@ -147,7 +145,7 @@ fun ScheduleEditorScreen(
                     Spacer(Modifier.padding(top = 6.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf(3, 5, 10, 20).forEach { c ->
-                            ChipBtn("$c", limitCount == c, editable) { limitCount = c }
+                            ChipBtn("$c opens", limitCount == c, editable) { limitCount = c }
                         }
                     }
                     Spacer(Modifier.padding(top = 12.dp))
@@ -259,12 +257,12 @@ private fun TimeField(
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(label, style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(fmtTime(minutes), style = MaterialTheme.typography.titleLarge,
+            Text(fmtClock12(minutes), style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
         }
     }
     if (show) {
-        val state = rememberTimePickerState(minutes / 60, minutes % 60, true)
+        val state = rememberTimePickerState(minutes / 60, minutes % 60, false)
         AlertDialog(
             onDismissRequest = { show = false },
             confirmButton = {

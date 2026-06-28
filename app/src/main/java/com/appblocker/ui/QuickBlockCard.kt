@@ -178,12 +178,12 @@ internal fun NeutralButton(
     }
 }
 
-/** Formats a whole-minute duration as e.g. "25 min" or "1 h 30 min". */
+/** Formats a whole-minute duration as e.g. "25 min" or "1 hr 30 min". */
 internal fun fmtDuration(minutes: Int): String {
     val h = minutes / 60; val m = minutes % 60
     return when {
-        h > 0 && m > 0 -> "$h h $m min"
-        h > 0 -> "$h h"
+        h > 0 && m > 0 -> "$h hr $m min"
+        h > 0 -> "$h hr"
         else -> "$m min"
     }
 }

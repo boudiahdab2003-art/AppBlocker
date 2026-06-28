@@ -32,12 +32,9 @@ data class Template(
     /** True when this template creates a time-window app schedule. */
     val hasSchedule: Boolean get() = packages.isNotEmpty() && (startMinutes != endMinutes)
 
-    /** "Mon–Fri · 09:00–17:00" / "Every day · 22:00–07:00" / "" for adult-only. */
+    /** "Mon–Fri · 9:00 AM – 5:00 PM" / "Every day · 10:00 PM – 7:00 AM" / "" for adult-only. */
     val timeLabel: String
-        get() = if (!hasSchedule) "" else "${daysText(daysMask)} · " +
-            "%02d:%02d–%02d:%02d".format(
-                startMinutes / 60, startMinutes % 60, endMinutes / 60, endMinutes % 60,
-            )
+        get() = if (!hasSchedule) "" else "${daysText(daysMask)} · ${fmtWindow(startMinutes, endMinutes)}"
 }
 
 private fun daysText(mask: Int): String {
