@@ -48,6 +48,17 @@ object UsageTracker {
             .take(limit)
     }
 
+    /** Foreground minutes today keyed by package (only apps used > 0 min). */
+    fun minutesByPackageToday(context: Context): Map<String, Int> {
+        val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
+            ?: return emptyMap()
+        val stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, startOfToday(), System.currentTimeMillis())
+            ?: return emptyMap()
+        return stats.groupBy { it.packageName }
+            .mapValues { (_, list) -> (list.sumOf { it.totalTimeInForeground } / 60_000L).toInt() }
+            .filter { it.value > 0 }
+    }
+
     /** Foreground minutes bucketed into the 24 hours of today (for the Day chart). */
     fun hourlyMinutesToday(context: Context): IntArray {
         val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager

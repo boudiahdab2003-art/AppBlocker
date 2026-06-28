@@ -1,13 +1,17 @@
 package com.appblocker.data
 
-/** App categories used to color Insights. Color stored as ARGB Long (no compose dep here). */
-enum class AppCategory(val label: String, val color: Long) {
-    SOCIAL("Social", 0xFFEC4899),
-    VIDEO("Video", 0xFFEF4444),
-    GAMES("Games", 0xFFF59E0B),
-    CHAT("Chat", 0xFF22C55E),
-    PRODUCTIVE("Productive", 0xFF3B82F6),
-    OTHER("Other", 0xFF94A3B8),
+/**
+ * App categories used to color Insights and to rank the app picker.
+ * Color stored as ARGB Long (no compose dep here). [weight] = how distracting / worth
+ * blocking the category is (higher floats to the top of the picker list).
+ */
+enum class AppCategory(val label: String, val color: Long, val weight: Int) {
+    SOCIAL("Social", 0xFFEC4899, 100),
+    VIDEO("Video", 0xFFEF4444, 100),
+    GAMES("Games", 0xFFF59E0B, 70),
+    CHAT("Chat", 0xFF22C55E, 40),
+    PRODUCTIVE("Productive", 0xFF3B82F6, 0),
+    OTHER("Other", 0xFF94A3B8, 20),
 }
 
 object AppCategories {
@@ -41,4 +45,7 @@ object AppCategories {
     }
 
     fun categoryOf(pkg: String): AppCategory = map[pkg] ?: AppCategory.OTHER
+
+    /** Distraction weight for a package (higher = more worth blocking). */
+    fun weightOf(pkg: String): Int = categoryOf(pkg).weight
 }
