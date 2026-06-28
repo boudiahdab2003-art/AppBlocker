@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -38,6 +39,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
@@ -80,6 +82,7 @@ fun ScheduleEditorScreen(
     var radius by remember { mutableIntStateOf(existing?.radiusMeters ?: 150) }
     var locCaptured by remember { mutableStateOf((existing?.latitude ?: 0.0) != 0.0) }
     val selected = remember { (existing?.packages ?: emptyList()).toMutableStateList() }
+    var appsOpen by rememberSaveable { mutableStateOf(true) } // collapsible Apps list
 
     // A NEW schedule can always be created (adding protection is allowed during Strict Mode);
     // an EXISTING one stays locked while Strict is active so it can't be weakened.
@@ -192,13 +195,14 @@ fun ScheduleEditorScreen(
             }
 
             item {
-                Text("Apps", style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                CollapsibleHeader(Icons.Filled.Apps, "Apps", selected.size, appsOpen) { appsOpen = !appsOpen }
                 Spacer(Modifier.padding(top = 4.dp))
             }
-            items(apps, key = { it.packageName }) { app ->
-                AppCheckRow(app, checked = selected.contains(app.packageName), enabled = editable) { on ->
-                    if (on) selected.add(app.packageName) else selected.remove(app.packageName)
+            if (appsOpen) {
+                items(apps, key = { it.packageName }) { app ->
+                    AppCheckRow(app, checked = selected.contains(app.packageName), enabled = editable) { on ->
+                        if (on) selected.add(app.packageName) else selected.remove(app.packageName)
+                    }
                 }
             }
 

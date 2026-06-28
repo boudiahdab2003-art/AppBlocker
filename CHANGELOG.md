@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.17
+- App and Websites lists in the editors can now be collapsed and expanded by tapping their header.
+
 ## v1.16
 - The version number now always shows in Profile > About, even after checking for updates.
 

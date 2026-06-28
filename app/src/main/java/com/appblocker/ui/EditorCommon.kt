@@ -16,6 +16,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -30,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
@@ -54,6 +57,41 @@ fun AppCheckRow(item: AppItem, checked: Boolean, enabled: Boolean, onToggle: (Bo
         Text(item.label, Modifier.weight(1f), color = MaterialTheme.colorScheme.onBackground,
             style = MaterialTheme.typography.bodyLarge)
         Checkbox(checked = checked, enabled = enabled, onCheckedChange = onToggle)
+    }
+}
+
+/**
+ * A tappable section header that collapses/expands the list under it. Same look as a plain section
+ * header (primary-tinted icon, bold title, optional count badge) plus a trailing chevron that flips
+ * with [expanded]. Shared by the Quick Block & schedule editors.
+ */
+@Composable
+fun CollapsibleHeader(
+    icon: ImageVector,
+    title: String,
+    count: Int?,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().clickable { onToggle() }.padding(vertical = 8.dp),
+    ) {
+        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+        if (count != null && count > 0) {
+            Text("$count", style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.width(8.dp))
+        }
+        Icon(
+            if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+            contentDescription = if (expanded) "Collapse" else "Expand",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

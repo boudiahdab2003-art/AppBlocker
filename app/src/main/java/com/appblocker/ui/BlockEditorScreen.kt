@@ -43,6 +43,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -88,6 +89,9 @@ fun BlockEditorScreen(
     }
     var newWord by remember { mutableStateOf("") }
     var query by remember { mutableStateOf("") }
+    // Collapsible sections (default open; remembered across rotation / tab switches).
+    var appsOpen by rememberSaveable { mutableStateOf(true) }
+    var webOpen by rememberSaveable { mutableStateOf(true) }
     var adult by remember { mutableStateOf(SettingsStore.blockAdult(context)) }
     var addNew by remember { mutableStateOf(SettingsStore.addNewApps(context)) }
     var purchases by remember { mutableStateOf(SettingsStore.blockPurchases(context)) }
@@ -132,63 +136,71 @@ fun BlockEditorScreen(
                         color = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.padding(top = 12.dp))
                 }
-                SectionHeader(Icons.Filled.Apps, "Apps", selected.size)
-                OutlinedTextField(
-                    value = query, onValueChange = { query = it },
-                    placeholder = { Text("Search apps") },
-                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                    singleLine = true, enabled = ed,
-                    shape = RoundedCornerShape(28.dp),
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                )
+                CollapsibleHeader(Icons.Filled.Apps, "Apps", selected.size, appsOpen) { appsOpen = !appsOpen }
+                if (appsOpen) {
+                    OutlinedTextField(
+                        value = query, onValueChange = { query = it },
+                        placeholder = { Text("Search apps") },
+                        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                        singleLine = true, enabled = ed,
+                        shape = RoundedCornerShape(28.dp),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                    )
+                }
             }
-            if (loading) {
-                item { Text("Loading apps…", color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(8.dp)) }
-            } else {
-                items(shownApps, key = { it.packageName }) { app ->
-                    val isChecked = selected.contains(app.packageName)
-                    // During Strict you can check (add) an app, but not uncheck (remove) one.
-                    AppCheckRow(app, checked = isChecked, enabled = ed || !isChecked) { on ->
-                        if (strictActive && !on) return@AppCheckRow
-                        editedApps = true
-                        if (on) selected.add(app.packageName) else selected.remove(app.packageName)
+            if (appsOpen) {
+                if (loading) {
+                    item { Text("Loading apps…", color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(8.dp)) }
+                } else {
+                    items(shownApps, key = { it.packageName }) { app ->
+                        val isChecked = selected.contains(app.packageName)
+                        // During Strict you can check (add) an app, but not uncheck (remove) one.
+                        AppCheckRow(app, checked = isChecked, enabled = ed || !isChecked) { on ->
+                            if (strictActive && !on) return@AppCheckRow
+                            editedApps = true
+                            if (on) selected.add(app.packageName) else selected.remove(app.packageName)
+                        }
                     }
                 }
             }
 
             item {
                 Spacer(Modifier.padding(top = 16.dp))
-                SectionHeader(Icons.Filled.Web, "Websites & words", keywords.size)
-                Text("Any web address or search containing one of these is blocked.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(
-                        value = newWord, onValueChange = { newWord = it },
-                        placeholder = { Text("Add a word or site") },
-                        singleLine = true, enabled = true, // adding is allowed during Strict
-                        shape = RoundedCornerShape(28.dp),
-                        modifier = Modifier.weight(1f),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    IconButton(enabled = newWord.isNotBlank(), onClick = {
-                        editedKw = true
-                        val w = newWord.trim().lowercase()
-                        if (w.isNotEmpty() && w !in keywords) keywords.add(w)
-                        newWord = ""
-                    }) { Icon(Icons.Filled.Add, contentDescription = "Add",
-                        tint = MaterialTheme.colorScheme.primary) }
+                CollapsibleHeader(Icons.Filled.Web, "Websites & words", keywords.size, webOpen) { webOpen = !webOpen }
+                if (webOpen) {
+                    Text("Any web address or search containing one of these is blocked.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(
+                            value = newWord, onValueChange = { newWord = it },
+                            placeholder = { Text("Add a word or site") },
+                            singleLine = true, enabled = true, // adding is allowed during Strict
+                            shape = RoundedCornerShape(28.dp),
+                            modifier = Modifier.weight(1f),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        IconButton(enabled = newWord.isNotBlank(), onClick = {
+                            editedKw = true
+                            val w = newWord.trim().lowercase()
+                            if (w.isNotEmpty() && w !in keywords) keywords.add(w)
+                            newWord = ""
+                        }) { Icon(Icons.Filled.Add, contentDescription = "Add",
+                            tint = MaterialTheme.colorScheme.primary) }
+                    }
                 }
             }
-            items(keywords, key = { it }) { word ->
-                Row(Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    Text(word, Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurface,
-                        style = MaterialTheme.typography.bodyLarge)
-                    IconButton(enabled = ed, onClick = { editedKw = true; keywords.remove(word) }) {
-                        Icon(Icons.Filled.Delete, contentDescription = "Remove",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (webOpen) {
+                items(keywords, key = { it }) { word ->
+                    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Text(word, Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurface,
+                            style = MaterialTheme.typography.bodyLarge)
+                        IconButton(enabled = ed, onClick = { editedKw = true; keywords.remove(word) }) {
+                            Icon(Icons.Filled.Delete, contentDescription = "Remove",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 }
             }
