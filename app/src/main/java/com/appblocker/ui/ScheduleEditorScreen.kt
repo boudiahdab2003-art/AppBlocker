@@ -1,6 +1,8 @@
 package com.appblocker.ui
 
 import android.annotation.SuppressLint
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -209,24 +211,47 @@ fun ScheduleEditorScreen(
                     Spacer(Modifier.padding(top = 12.dp))
                 }
                 ScheduleType.LOCATION -> item {
+                    // Re-read permission state whenever we return from Settings.
+                    val tick = resumeTick()
+                    val hasFine = remember(tick) { hasLocation(context) }
+                    val hasBg = remember(tick) { hasBackgroundLocation(context) }
+                    val fineLauncher = rememberLauncherForActivityResult(
+                        ActivityResultContracts.RequestPermission()
+                    ) { /* state re-reads on resume */ }
+
                     SectionLabel("Location")
                     Spacer(Modifier.padding(top = 6.dp))
-                    Text(
-                        if (locCaptured) "Captured: %.4f, %.4f".format(lat, lng) else "No location captured yet.",
-                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.padding(top = 8.dp))
-                    GradientButton(text = "Use my current location", enabled = editable, onClick = {
-                        captureLocation(context)?.let { lat = it.first; lng = it.second; locCaptured = true }
-                    })
-                    Spacer(Modifier.padding(top = 12.dp))
-                    SectionLabel("Radius")
-                    Spacer(Modifier.padding(top = 6.dp))
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        listOf(100, 250, 500).forEach { r ->
-                            ChipBtn("$r m", radius == r, editable) { radius = r }
+                    if (!hasFine) {
+                        Text(
+                            "Location access is needed to block by place.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.padding(top = 8.dp))
+                        GradientButton(text = "Grant location access", enabled = editable, onClick = {
+                            fineLauncher.launch(android.Manifest.permission.ACCESS_FINE_LOCATION)
+                        })
+                    } else {
+                        Text(
+                            if (locCaptured) "Captured: %.4f, %.4f".format(lat, lng) else "No location captured yet.",
+                            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.padding(top = 8.dp))
+                        GradientButton(text = "Use my current location", enabled = editable, onClick = {
+                            requestCurrentLocation(context) { la, ln -> lat = la; lng = ln; locCaptured = true }
+                        })
+                        if (!hasBg) {
+                            Spacer(Modifier.padding(top = 12.dp))
+                            BackgroundLocationWarning { openAppDetails(context) }
+                        }
+                        Spacer(Modifier.padding(top = 12.dp))
+                        SectionLabel("Radius")
+                        Spacer(Modifier.padding(top = 6.dp))
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            listOf(100, 250, 500).forEach { r ->
+                                ChipBtn("$r m", radius == r, editable) { radius = r }
+                            }
                         }
                     }
                     Spacer(Modifier.padding(top = 12.dp))
@@ -304,6 +329,40 @@ private fun typeTitle(type: ScheduleType): String = when (type) {
     ScheduleType.LOCATION -> "Location schedule"
 }
 
+/** Warns that location blocking needs "Allow all the time" and opens settings on tap. */
+@Composable
+private fun BackgroundLocationWarning(onFix: () -> Unit) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.errorContainer)
+            .clickable(onClick = onFix)
+            .padding(14.dp),
+    ) {
+        Column {
+            Text("Location blocking needs “Allow all the time”",
+                style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onErrorContainer)
+            Spacer(Modifier.padding(top = 2.dp))
+            Text("Blocking runs in the background, so foreground-only location isn't enough. " +
+                "Tap to open settings, then choose Location → “Allow all the time” (and Precise).",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onErrorContainer)
+        }
+    }
+}
+
+private fun openAppDetails(context: android.content.Context) {
+    runCatching {
+        context.startActivity(
+            android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                .setData(android.net.Uri.parse("package:${context.packageName}"))
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+    }
+}
+
 @Composable
 private fun SectionLabel(text: String) {
     Text(text, style = MaterialTheme.typography.titleSmall,
@@ -325,24 +384,35 @@ private fun ChipBtn(label: String, selected: Boolean, enabled: Boolean, onClick:
     )
 }
 
-/** One-shot best-effort current location via last-known fix (needs Location permission). */
+/**
+ * Captures the current location: uses a recent last-known fix if available, otherwise actively
+ * requests a fresh one (so it still works when there's no cached fix). Async — [onResult] fires
+ * on the main thread once a fix arrives. Needs Location permission.
+ */
 @SuppressLint("MissingPermission")
-private fun captureLocation(context: android.content.Context): Pair<Double, Double>? {
+private fun requestCurrentLocation(context: android.content.Context, onResult: (Double, Double) -> Unit) {
     if (context.checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) !=
         android.content.pm.PackageManager.PERMISSION_GRANTED
     ) {
-        context.startActivity(
-            android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                .setData(android.net.Uri.parse("package:${context.packageName}"))
-                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-        )
-        return null
+        openAppDetails(context)
+        return
     }
     val lm = context.getSystemService(android.content.Context.LOCATION_SERVICE) as? android.location.LocationManager
-        ?: return null
-    val loc = runCatching {
-        lm.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER)
-            ?: lm.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER)
-    }.getOrNull() ?: return null
-    return loc.latitude to loc.longitude
+        ?: return
+    val gps = android.location.LocationManager.GPS_PROVIDER
+    val net = android.location.LocationManager.NETWORK_PROVIDER
+    val last = runCatching { lm.getLastKnownLocation(gps) ?: lm.getLastKnownLocation(net) }.getOrNull()
+    if (last != null) {
+        onResult(last.latitude, last.longitude)
+        return
+    }
+    // No cached fix — actively ask for one.
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+        val provider = if (lm.isProviderEnabled(gps)) gps else net
+        runCatching {
+            lm.getCurrentLocation(provider, null, context.mainExecutor) { loc ->
+                loc?.let { onResult(it.latitude, it.longitude) }
+            }
+        }
+    }
 }

@@ -78,6 +78,7 @@ class BlockerAccessibilityService : AccessibilityService() {
     @Volatile private var lastLocation: android.location.Location? = null
     private var locationRequested = false
     private var locationListener: android.location.LocationListener? = null
+    private var lastLocationRefreshAt = 0L
 
     // Keeps browserPackages fresh when apps are installed/removed after the service starts.
     private var packageChangeReceiver: BroadcastReceiver? = null
@@ -124,6 +125,8 @@ class BlockerAccessibilityService : AccessibilityService() {
                     lastForegroundPkg = pkg
                     LaunchCounter.recordOpen(applicationContext, pkg) // for LAUNCH_COUNT
                 }
+                // Keep the location fix current (and recover after a late permission grant).
+                if (schedules.any { it.type == ScheduleType.LOCATION }) ensureLocationUpdates()
                 if (pkg != null) {
                     // In-app purchase sheet takes priority; otherwise normal app blocking.
                     if (!handlePurchaseBlock(pkg, event.className?.toString())) handleAppBlock(pkg)
@@ -273,21 +276,50 @@ class BlockerAccessibilityService : AccessibilityService() {
     }
 
     private fun ensureLocationUpdates() {
-        if (locationRequested) return
+        // Needs the "Allow all the time" (background) grant to actually deliver fixes to a
+        // background service on Android 10+; foreground-only location yields null here.
         if (checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) !=
             android.content.pm.PackageManager.PERMISSION_GRANTED
         ) return
         val lm = getSystemService(LOCATION_SERVICE) as? android.location.LocationManager ?: return
+        // Always (throttled) pull a fresh current fix — this also self-heals after the user
+        // grants the permission later, since onDestroy/combine won't re-run on a grant.
+        refreshCurrentLocation(lm)
+        if (locationRequested) return
         locationRequested = true
         runCatching {
-            lastLocation = lm.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER)
-                ?: lm.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER)
+            // Seed from both providers; considerLocation keeps the freshest.
+            considerLocation(lm.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER))
+            considerLocation(lm.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER))
             // Keep a reference so onDestroy can unregister it (otherwise updates leak past the
             // service's life — wasting battery and holding a location subscription).
-            val listener = android.location.LocationListener { lastLocation = it }
+            val listener = android.location.LocationListener { considerLocation(it) }
             locationListener = listener
-            lm.requestLocationUpdates(android.location.LocationManager.NETWORK_PROVIDER, 60_000L, 50f, listener)
-            lm.requestLocationUpdates(android.location.LocationManager.GPS_PROVIDER, 60_000L, 50f, listener)
+            lm.requestLocationUpdates(android.location.LocationManager.NETWORK_PROVIDER, 30_000L, 25f, listener)
+            lm.requestLocationUpdates(android.location.LocationManager.GPS_PROVIDER, 30_000L, 25f, listener)
+        }
+    }
+
+    /** Adopts [loc] only if it's at least as recent as the current fix (prevents a stale provider
+     *  pinning the location so blocking never clears when you leave the area). */
+    private fun considerLocation(loc: android.location.Location?) {
+        loc ?: return
+        val cur = lastLocation
+        if (cur == null || loc.elapsedRealtimeNanos >= cur.elapsedRealtimeNanos) lastLocation = loc
+    }
+
+    /** Asks for a single up-to-date fix (≤ once/60s). API 30+; older relies on passive updates. */
+    private fun refreshCurrentLocation(lm: android.location.LocationManager) {
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - lastLocationRefreshAt < 60_000L) return
+        lastLocationRefreshAt = now
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) return
+        runCatching {
+            // Prefer GPS for a fresh, movement-tracking fix; fall back to network if GPS is off.
+            val provider = if (lm.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER))
+                android.location.LocationManager.GPS_PROVIDER
+            else android.location.LocationManager.NETWORK_PROVIDER
+            lm.getCurrentLocation(provider, null, mainExecutor) { loc -> considerLocation(loc) }
         }
     }
 

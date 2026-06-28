@@ -129,3 +129,13 @@ fun rememberPermissions(): List<Perm> {
 fun hasLocation(ctx: Context): Boolean =
     ctx.checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) ==
         android.content.pm.PackageManager.PERMISSION_GRANTED
+
+/**
+ * Location blocking runs in the background (the accessibility service), so on Android 10+ it
+ * needs the "Allow all the time" (background) location grant — foreground location isn't enough.
+ */
+fun hasBackgroundLocation(ctx: Context): Boolean =
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q)
+        ctx.checkSelfPermission(android.Manifest.permission.ACCESS_BACKGROUND_LOCATION) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+    else hasLocation(ctx)
