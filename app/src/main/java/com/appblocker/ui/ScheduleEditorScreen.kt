@@ -6,6 +6,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -54,7 +56,7 @@ import com.appblocker.data.ScheduleType
 
 private val DAY_LABELS = listOf("S", "M", "T", "W", "T", "F", "S") // bit0 = Sunday
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ScheduleEditorScreen(
     type: ScheduleType,
@@ -163,7 +165,10 @@ fun ScheduleEditorScreen(
                 ScheduleType.USAGE_LIMIT -> item {
                     SectionLabel("Daily limit")
                     Spacer(Modifier.padding(top = 6.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
                         listOf(15, 30, 60, 120).forEach { p ->
                             ChipBtn(fmtDuration(p), limit == p, editable) { limit = p }
                         }
@@ -173,7 +178,10 @@ fun ScheduleEditorScreen(
                 ScheduleType.LAUNCH_COUNT -> item {
                     SectionLabel("Block after how many opens / day")
                     Spacer(Modifier.padding(top = 6.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
                         listOf(3, 5, 10, 20).forEach { c ->
                             ChipBtn("$c opens", limitCount == c, editable) { limitCount = c }
                         }
@@ -213,7 +221,10 @@ fun ScheduleEditorScreen(
                     Spacer(Modifier.padding(top = 12.dp))
                     SectionLabel("Radius")
                     Spacer(Modifier.padding(top = 6.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
                         listOf(100, 250, 500).forEach { r ->
                             ChipBtn("$r m", radius == r, editable) { radius = r }
                         }
@@ -306,7 +317,7 @@ private fun ChipBtn(label: String, selected: Boolean, enabled: Boolean, onClick:
         selected = selected,
         enabled = enabled,
         onClick = onClick,
-        label = { Text(label) },
+        label = { Text(label, maxLines = 1) },
         colors = FilterChipDefaults.filterChipColors(
             selectedContainerColor = MaterialTheme.colorScheme.primary,
             selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
