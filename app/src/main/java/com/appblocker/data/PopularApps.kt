@@ -21,6 +21,7 @@ val POPULAR_APPS: List<PopularApp> = listOf(
     PopularApp("com.pinterest", "Pinterest"),
     PopularApp("com.linkedin.android", "LinkedIn"),
     PopularApp("com.bereal.ft", "BeReal"),
+    PopularApp("ai.x.grok", "Grok"),
     // Video
     PopularApp("com.google.android.youtube", "YouTube"),
     PopularApp("com.netflix.mediaclient", "Netflix"),
