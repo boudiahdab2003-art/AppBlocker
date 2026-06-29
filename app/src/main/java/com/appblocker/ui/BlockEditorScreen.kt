@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.GetApp
 import androidx.compose.material.icons.filled.NoAdultContent
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ShoppingBasket
 import androidx.compose.material.icons.filled.Warning
@@ -97,6 +98,7 @@ fun BlockEditorScreen(
     var addNew by remember { mutableStateOf(SettingsStore.addNewApps(context)) }
     var purchases by remember { mutableStateOf(SettingsStore.blockPurchases(context)) }
     var unsupported by remember { mutableStateOf(SettingsStore.blockUnsupportedBrowsers(context)) }
+    var ytShorts by remember { mutableStateOf(SettingsStore.blockYoutubeShorts(context)) }
 
     val ed = !strictActive // false locks "weakening" edits during Strict Mode
     val shownApps = remember(apps, query) {
@@ -112,6 +114,7 @@ fun BlockEditorScreen(
         SettingsStore.setAddNewApps(context, addNew)
         SettingsStore.setBlockPurchases(context, purchases)
         SettingsStore.setBlockUnsupportedBrowsers(context, unsupported)
+        SettingsStore.setBlockYoutubeShorts(context, ytShorts)
         onBack()
     }
 
@@ -244,6 +247,9 @@ fun BlockEditorScreen(
                     "Newly installed apps are automatically blocked.", addNew, ed) { addNew = it }
                 ToggleRow(Icons.Filled.ShoppingBasket, "In-app purchases blocking",
                     "Blocks the Google Play purchase prompt in games and apps.", purchases, ed) { purchases = it }
+                ToggleRow(Icons.Filled.PlayArrow, "Block YouTube Shorts",
+                    "Blocks the Shorts feed in the YouTube app and youtube.com/shorts — the rest of YouTube still works.",
+                    ytShorts, ed) { ytShorts = it }
                 ToggleRow(Icons.Filled.Web, "Block unsupported browsers",
                     "Blocks browsers we can't filter (e.g. Brave) so they can't bypass website blocking.",
                     unsupported, ed) { unsupported = it }

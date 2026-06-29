@@ -9,6 +9,7 @@ object SettingsStore {
     private const val KEY_ADD_NEW_APPS = "add_new_apps"
     private const val KEY_BLOCK_PURCHASES = "block_purchases"
     private const val KEY_BLOCK_UNSUPPORTED = "block_unsupported_browsers"
+    private const val KEY_BLOCK_YT_SHORTS = "block_youtube_shorts"
 
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -36,6 +37,13 @@ object SettingsStore {
 
     fun setBlockUnsupportedBrowsers(context: Context, value: Boolean) =
         prefs(context).edit().putBoolean(KEY_BLOCK_UNSUPPORTED, value).apply()
+
+    /** Block only the YouTube Shorts feed/player (the rest of YouTube still works). */
+    fun blockYoutubeShorts(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_BLOCK_YT_SHORTS, false)
+
+    fun setBlockYoutubeShorts(context: Context, value: Boolean) =
+        prefs(context).edit().putBoolean(KEY_BLOCK_YT_SHORTS, value).apply()
 
     /** Whether the first-run setup screen has been shown once. */
     fun setupSeen(context: Context): Boolean =

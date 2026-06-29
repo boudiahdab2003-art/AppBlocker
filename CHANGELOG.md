@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.38
+- New option in Quick Block extra options: Block YouTube Shorts. Blocks only the Shorts feed/player in the YouTube app (and youtube.com/shorts in browsers) while the rest of YouTube keeps working.
+
 ## v1.37
 - Redesigned the Profile page: a gradient header with the app shield, version and a live 'Protection active / Action needed' status; iconed rows with On/Off status badges (PIN, Prevent uninstall); a Share AppBlocker option; and a cleaner layout.
 

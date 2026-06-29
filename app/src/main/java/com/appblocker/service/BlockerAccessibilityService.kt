@@ -96,6 +96,14 @@ class BlockerAccessibilityService : AccessibilityService() {
         webScanJob = scope.launch { scanWebContent() }
     }
 
+    // YouTube Shorts: when on, cover the Shorts player but leave the rest of YouTube usable.
+    @Volatile private var shortsScanJob: Job? = null
+    private var shortsCovering = false
+    private val shortsScanRunnable = Runnable {
+        shortsScanJob?.cancel()
+        shortsScanJob = scope.launch { scanShorts() }
+    }
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         browserPackages = findBrowserPackages()
@@ -137,9 +145,13 @@ class BlockerAccessibilityService : AccessibilityService() {
                 }
                 lastWebText = null // new page/app: force a fresh re-check
                 scheduleWebScan()
+                scheduleShortsScan()
             }
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
-            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED -> scheduleWebScan()
+            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED -> {
+                scheduleWebScan()
+                scheduleShortsScan()
+            }
         }
     }
 
@@ -149,10 +161,23 @@ class BlockerAccessibilityService : AccessibilityService() {
         handler.postDelayed(webScanRunnable, 600)
     }
 
+    /** Debounced YouTube-Shorts check (quicker than the web scan so Shorts is caught fast). */
+    private fun scheduleShortsScan() {
+        if (!SettingsStore.blockYoutubeShorts(this)) {
+            if (shortsCovering) { shortsCovering = false; removeBlockOverlay() }
+            return
+        }
+        handler.removeCallbacks(shortsScanRunnable)
+        handler.postDelayed(shortsScanRunnable, 250)
+    }
+
     // --- App blocking (unchanged behaviour) ---
 
     private fun handleAppBlock(pkg: String) {
         if (!shouldBlock(pkg)) {
+            // Keep a Shorts cover up even though the whole app isn't blocked — the shorts
+            // scan owns adding/removing it as the user moves in and out of Shorts.
+            if (pkg == YOUTUBE_PKG && shortsCovering) { lastBlockedPkg = null; return }
             lastBlockedPkg = null
             removeBlockOverlay() // left the blocked app — take the cover down
             return
@@ -384,6 +409,18 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (text.isBlank()) return
         if (text == lastWebText) return
 
+        // YouTube Shorts opened in a browser (youtube.com/shorts).
+        if (SettingsStore.blockYoutubeShorts(applicationContext) &&
+            text.lowercase().contains("youtube.com/shorts")
+        ) {
+            lastWebText = text
+            withContext(Dispatchers.Main) {
+                showBlockScreen(title = "Shorts blocked",
+                    message = "YouTube Shorts is blocked.", packageName = null, counterKey = "shorts")
+            }
+            return
+        }
+
         val hit = filter.check(text, userKeywords + autoSocialKeywords(), SettingsStore.blockAdult(applicationContext))
         if (hit == null) {
             lastWebText = null
@@ -397,6 +434,55 @@ class BlockerAccessibilityService : AccessibilityService() {
         withContext(Dispatchers.Main) {
             showBlockScreen(title = hit.title, message = hit.message, packageName = null, counterKey = "web")
         }
+    }
+
+    /**
+     * Covers the YouTube Shorts player (when the toggle is on) while leaving the rest of the
+     * app usable. Adds the cover when a Short is on screen and removes it the moment the user
+     * scrolls/navigates out of Shorts.
+     */
+    private suspend fun scanShorts() {
+        if (!SettingsStore.blockYoutubeShorts(applicationContext) || lastForegroundPkg != YOUTUBE_PKG) {
+            if (shortsCovering) {
+                shortsCovering = false
+                withContext(Dispatchers.Main) { removeBlockOverlay() }
+            }
+            return
+        }
+        val onShorts = isShortsOnScreen()
+        if (onShorts && !shortsCovering) {
+            shortsCovering = true
+            withContext(Dispatchers.Main) {
+                showBlockScreen(
+                    title = "Shorts blocked",
+                    message = "YouTube Shorts is blocked. The rest of YouTube still works.",
+                    packageName = null,
+                    counterKey = "shorts",
+                )
+            }
+        } else if (!onShorts && shortsCovering) {
+            shortsCovering = false
+            withContext(Dispatchers.Main) { removeBlockOverlay() }
+        }
+    }
+
+    /** True if the YouTube Shorts player (the "reel" surface) is currently on screen. We match
+     *  the player's view-ids, not the always-present "Shorts" nav tab. */
+    private fun isShortsOnScreen(): Boolean {
+        val root = rootInActiveWindow ?: return false
+        if (root.packageName != YOUTUBE_PKG) return false
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        var visited = 0
+        while (queue.isNotEmpty() && visited < 400) {
+            val node = queue.removeFirst()
+            visited++
+            node.viewIdResourceName?.let { id ->
+                if (SHORTS_ID_MARKERS.any { id.contains(it) }) return true
+            }
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+        }
+        return false
     }
 
     /**
@@ -513,6 +599,7 @@ class BlockerAccessibilityService : AccessibilityService() {
     override fun onDestroy() {
         super.onDestroy()
         handler.removeCallbacks(webScanRunnable)
+        handler.removeCallbacks(shortsScanRunnable)
         // Stop location updates so they don't leak past the service (battery + privacy).
         locationListener?.let { listener ->
             (getSystemService(LOCATION_SERVICE) as? android.location.LocationManager)?.removeUpdates(listener)
@@ -535,5 +622,15 @@ class BlockerAccessibilityService : AccessibilityService() {
 
         // Activity-name fragments that identify the Google Play purchase/billing sheet.
         private val PURCHASE_HINTS = listOf("acquire", "purchase", "billing")
+
+        const val YOUTUBE_PKG = "com.google.android.youtube"
+
+        // YouTube Shorts player view-id fragments (Shorts is "reel" internally). These match the
+        // full-screen Short player, NOT the always-present "Shorts" nav tab. Exact ids vary by
+        // YouTube version, so this list is intentionally broad and may need tuning over time.
+        private val SHORTS_ID_MARKERS = listOf(
+            "reel_recycler", "reel_player", "reel_watch", "reels_player",
+            "reel_progress", "shorts_",
+        )
     }
 }
