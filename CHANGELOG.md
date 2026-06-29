@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.33
+- Insights: tap any app to see its screen time, opens and block attempts together in a detail panel; the Most opened apps header now shows total app opens today.
+
 ## v1.32
 - Insights: added a 'Most opened apps' section showing how many times you opened each app today, and the 'Most used apps' rows now show opens alongside screen time.
 

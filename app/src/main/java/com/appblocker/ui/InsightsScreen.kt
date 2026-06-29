@@ -26,8 +26,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -133,7 +135,9 @@ fun InsightsScreen(vm: InsightsViewModel = viewModel()) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         } else {
-            items(state.topApps) { row -> StatListRow(row) }
+            items(state.topApps) { row ->
+                StatListRow(row, onClick = row.pkg?.let { p -> { vm.selectApp(p) } })
+            }
         }
 
         // Most opened apps (launch counts)
@@ -142,12 +146,14 @@ fun InsightsScreen(vm: InsightsViewModel = viewModel()) {
                 Spacer(Modifier.padding(top = 20.dp))
                 Text("Most opened apps", style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground)
-                Text("How many times you opened each app today.",
+                Text("${state.totalOpens} app opens today · tap an app for details",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.padding(top = 8.dp))
             }
-            items(state.topOpens) { row -> StatListRow(row) }
+            items(state.topOpens) { row ->
+                StatListRow(row, onClick = row.pkg?.let { p -> { vm.selectApp(p) } })
+            }
         }
 
         // Blocked-app attempts
@@ -163,10 +169,15 @@ fun InsightsScreen(vm: InsightsViewModel = viewModel()) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         } else {
-            items(state.attempts) { row -> StatListRow(row) }
+            items(state.attempts) { row ->
+                StatListRow(row, onClick = row.pkg?.let { p -> { vm.selectApp(p) } })
+            }
         }
         item { Spacer(Modifier.padding(top = 24.dp)) }
     }
+
+    val detail by vm.detail.collectAsState()
+    detail?.let { AppDetailSheet(it, onDismiss = vm::clearDetail) }
 }
 
 @Composable
@@ -282,8 +293,13 @@ private fun UsageAccessCard(context: android.content.Context) {
 }
 
 @Composable
-private fun StatListRow(row: StatRow) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+private fun StatListRow(row: StatRow, onClick: (() -> Unit)? = null) {
+    Row(
+        Modifier.fillMaxWidth()
+            .clickable(enabled = onClick != null) { onClick?.invoke() }
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         if (row.icon != null) {
             Image(row.icon.asImageBitmap(), null, Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)))
         } else {
@@ -301,6 +317,54 @@ private fun StatListRow(row: StatRow) {
             style = MaterialTheme.typography.bodyLarge, maxLines = 1)
         Text(row.value, color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+/** Bottom sheet showing one app's screen time, opens and block attempts together. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AppDetailSheet(detail: AppDetail, onDismiss: () -> Unit) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface) {
+        Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 28.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (detail.icon != null) {
+                    Image(detail.icon.asImageBitmap(), null,
+                        Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)))
+                } else {
+                    Box(Modifier.size(48.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
+                        contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.Apps, null, tint = Color.White, modifier = Modifier.size(24.dp))
+                    }
+                }
+                Spacer(Modifier.width(14.dp))
+                Column {
+                    Text(detail.label, style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(9.dp).clip(CircleShape).background(detail.categoryColor))
+                        Spacer(Modifier.width(6.dp))
+                        Text(detail.categoryLabel, style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+            Spacer(Modifier.padding(top = 16.dp))
+            DetailStat("Screen time today", InsightsViewModel.fmt(detail.minutes))
+            DetailStat("Opens today", "${detail.opens}")
+            if (detail.attemptsToday > 0 || detail.attemptsTotal > 0) {
+                DetailStat("Opened while blocked", "${detail.attemptsToday}× today · ${detail.attemptsTotal}× total")
+            }
+        }
+    }
+}
+
+@Composable
+private fun DetailStat(label: String, value: String) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface)
     }
 }
 
