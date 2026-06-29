@@ -136,6 +136,20 @@ fun InsightsScreen(vm: InsightsViewModel = viewModel()) {
             items(state.topApps) { row -> StatListRow(row) }
         }
 
+        // Most opened apps (launch counts)
+        if (state.topOpens.isNotEmpty()) {
+            item {
+                Spacer(Modifier.padding(top = 20.dp))
+                Text("Most opened apps", style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground)
+                Text("How many times you opened each app today.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.padding(top = 8.dp))
+            }
+            items(state.topOpens) { row -> StatListRow(row) }
+        }
+
         // Blocked-app attempts
         item {
             Spacer(Modifier.padding(top = 20.dp))

@@ -11,6 +11,7 @@ import androidx.lifecycle.viewModelScope
 import com.appblocker.data.AppCategories
 import com.appblocker.data.AppCategory
 import com.appblocker.data.AttemptCounter
+import com.appblocker.data.LaunchCounter
 import com.appblocker.data.StatsStore
 import com.appblocker.service.UsageTracker
 import kotlinx.coroutines.Dispatchers
@@ -35,6 +36,7 @@ data class InsightsState(
     val weekly: IntArray = IntArray(7),
     val attempts: List<StatRow> = emptyList(),
     val topApps: List<StatRow> = emptyList(),
+    val topOpens: List<StatRow> = emptyList(),
     val categories: List<CatSlice> = emptyList(),
 )
 
@@ -61,9 +63,16 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
                 StatRow(label(a.key), icon(a.key), "${a.today}× today · ${a.total}× total", dotColor(a.key))
             }
         }
+        val opensByApp = LaunchCounter.opensTodayByApp(ctx)
         val topApps = UsageTracker.topAppsToday(ctx, 6).map { u ->
-            StatRow(label(u.packageName), icon(u.packageName), fmt(u.minutes), dotColor(u.packageName))
+            val opens = opensByApp[u.packageName] ?: 0
+            val detail = if (opens > 0) "${fmt(u.minutes)} · $opens opens" else fmt(u.minutes)
+            StatRow(label(u.packageName), icon(u.packageName), detail, dotColor(u.packageName))
         }
+        val topOpens = opensByApp.entries
+            .sortedByDescending { it.value }
+            .take(6)
+            .map { (pkg, n) -> StatRow(label(pkg), icon(pkg), "$n opens", dotColor(pkg)) }
         val categories = UsageTracker.categoryMinutesToday(ctx).mapNotNull { (name, mins) ->
             runCatching { AppCategory.valueOf(name) }.getOrNull()?.let {
                 CatSlice(it.label, Color(it.color), mins)
@@ -80,6 +89,7 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
             weekly = weekly,
             attempts = attempts,
             topApps = topApps,
+            topOpens = topOpens,
             categories = categories,
         )
     }

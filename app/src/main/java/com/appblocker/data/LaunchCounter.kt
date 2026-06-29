@@ -20,4 +20,18 @@ object LaunchCounter {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         return if (prefs.getInt("day_$pkg", -1) == todayStamp()) prefs.getInt("count_$pkg", 0) else 0
     }
+
+    /** Today's open count for every app that has been opened today (package -> count). */
+    fun opensTodayByApp(context: Context): Map<String, Int> {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val today = todayStamp()
+        val result = HashMap<String, Int>()
+        prefs.all.forEach { (key, value) ->
+            if (key.startsWith("count_") && value is Int) {
+                val pkg = key.removePrefix("count_")
+                if (prefs.getInt("day_$pkg", -1) == today && value > 0) result[pkg] = value
+            }
+        }
+        return result
+    }
 }
