@@ -27,6 +27,7 @@ import com.appblocker.data.BlockMode
 import com.appblocker.data.BlockerDatabase
 import com.appblocker.data.LaunchCounter
 import com.appblocker.data.QuickSession
+import com.appblocker.data.SOCIAL_DOMAINS
 import com.appblocker.data.Schedule
 import com.appblocker.data.ScheduleType
 import com.appblocker.data.SessionClock
@@ -334,6 +335,24 @@ class BlockerAccessibilityService : AccessibilityService() {
 
     // --- Web / keyword filtering ---
 
+    /** True when Quick Block is currently enforcing (Strict on, a session says block now, or
+     *  not paused) — mirrors the gating used for app blocking in [shouldBlock]. */
+    private fun quickBlockActive(): Boolean {
+        if (SessionClock.remaining(focusRealtimeStart, focusRealtimeEnd, focusWallEnd) > 0L) return true
+        val session = QuickSession.state(this)
+        return if (session.active) session.blockingNow else !SettingsStore.quickBlockPaused(this)
+    }
+
+    /** Website keywords for the social apps the user has blocked, so a blocked app's site is
+     *  blocked too. Empty while Quick Block is paused so pausing relieves the web block as well. */
+    private fun autoSocialKeywords(): List<String> {
+        if (!quickBlockActive()) return emptyList()
+        return rules.values.asSequence()
+            .filter { it.isBlocked && it.mode != BlockMode.LIMIT }
+            .flatMap { (SOCIAL_DOMAINS[it.packageName] ?: emptyList()).asSequence() }
+            .toList()
+    }
+
     /** Runs on a background dispatcher (the node-tree walk is heavy); only the block UI hops to main. */
     private suspend fun scanWebContent() {
         // Web-address/word filtering only makes sense inside a browser. Without this, typing a
@@ -345,7 +364,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (text.isBlank()) return
         if (text == lastWebText) return
 
-        val hit = filter.check(text, userKeywords, SettingsStore.blockAdult(applicationContext))
+        val hit = filter.check(text, userKeywords + autoSocialKeywords(), SettingsStore.blockAdult(applicationContext))
         if (hit == null) {
             lastWebText = null
             return
