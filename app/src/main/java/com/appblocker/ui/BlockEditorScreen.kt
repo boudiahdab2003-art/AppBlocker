@@ -172,11 +172,11 @@ fun BlockEditorScreen(
             item {
                 Spacer(Modifier.padding(top = 16.dp))
                 val preBlockCount = apps.count { !it.installed && selected.contains(it.packageName) }
-                CollapsibleHeader(Icons.Filled.GetApp, "Block before you install", preBlockCount, preBlockOpen) {
+                CollapsibleHeader(Icons.Filled.GetApp, "Hypothetical apps", preBlockCount, preBlockOpen) {
                     preBlockOpen = !preBlockOpen
                 }
                 if (preBlockOpen) {
-                    Text("Block popular apps now so they're blocked the moment you install them.",
+                    Text("Apps you don't have yet. Block them now and they'll be blocked the moment you install them.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(bottom = 4.dp))
