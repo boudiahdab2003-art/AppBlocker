@@ -29,6 +29,7 @@ import com.appblocker.data.LaunchCounter
 import com.appblocker.data.QuickSession
 import com.appblocker.data.SOCIAL_DOMAINS
 import com.appblocker.data.Schedule
+import com.appblocker.data.UnlockCounter
 import com.appblocker.data.ScheduleType
 import com.appblocker.data.SessionClock
 import com.appblocker.data.SettingsStore
@@ -83,6 +84,7 @@ class BlockerAccessibilityService : AccessibilityService() {
 
     // Keeps browserPackages fresh when apps are installed/removed after the service starts.
     private var packageChangeReceiver: BroadcastReceiver? = null
+    private var unlockReceiver: BroadcastReceiver? = null
 
     // Debounced web scan: collapse the page-load event burst into one scan that runs
     // after events stop, so the *settled* page (when its text finally exists) is scanned.
@@ -98,6 +100,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         super.onServiceConnected()
         browserPackages = findBrowserPackages()
         registerPackageChangeReceiver()
+        registerUnlockReceiver()
         val db = BlockerDatabase.get(applicationContext)
         combine(
             db.appRuleDao().getAll(),
@@ -254,6 +257,23 @@ class BlockerAccessibilityService : AccessibilityService() {
         }
         ContextCompat.registerReceiver(this, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
         packageChangeReceiver = receiver
+    }
+
+    /** Counts phone unlocks (for Insights "pickups"). USER_PRESENT can't be a static receiver
+     *  on modern Android, so we register it at runtime in this always-on service. */
+    private fun registerUnlockReceiver() {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                if (intent.action == Intent.ACTION_USER_PRESENT) {
+                    UnlockCounter.recordUnlock(applicationContext)
+                }
+            }
+        }
+        ContextCompat.registerReceiver(
+            this, receiver, IntentFilter(Intent.ACTION_USER_PRESENT),
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+        unlockReceiver = receiver
     }
 
     /** True if connected to Wi-Fi and (target empty = any, else SSID matches). */
@@ -500,6 +520,8 @@ class BlockerAccessibilityService : AccessibilityService() {
         locationListener = null
         packageChangeReceiver?.let { runCatching { unregisterReceiver(it) } }
         packageChangeReceiver = null
+        unlockReceiver?.let { runCatching { unregisterReceiver(it) } }
+        unlockReceiver = null
         removeBlockOverlay()
         scope.cancel()
     }

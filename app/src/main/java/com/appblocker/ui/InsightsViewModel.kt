@@ -13,7 +13,9 @@ import com.appblocker.data.AppCategory
 import com.appblocker.data.AttemptCounter
 import com.appblocker.data.LaunchCounter
 import com.appblocker.data.StatsStore
+import com.appblocker.data.UnlockCounter
 import com.appblocker.service.UsageTracker
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -58,6 +60,15 @@ data class InsightsState(
     val topOpens: List<StatRow> = emptyList(),
     val totalOpens: Int = 0,
     val categories: List<CatSlice> = emptyList(),
+    // Deeper stats
+    val monthly: IntArray = IntArray(30),
+    val monthAvg: Int = 0,
+    val thisWeekMin: Int = 0,
+    val lastWeekMin: Int = 0,
+    val weekdayAvg: Int = 0,
+    val weekendAvg: Int = 0,
+    val appTrends: List<StatRow> = emptyList(),
+    val unlocksToday: Int = 0,
 )
 
 class InsightsViewModel(app: Application) : AndroidViewModel(app) {
@@ -128,7 +139,39 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
                 CatSlice(it.label, Color(it.color), mins)
             }
         }
-        val weekly = UsageTracker.weeklyMinutes(ctx)
+        // 30-day history powers the Trend tab, week-vs-week and weekday/weekend patterns.
+        val monthly = UsageTracker.dailyMinutes(ctx, 30)
+        val weekly = monthly.copyOfRange(23, 30) // last 7 days
+        val thisWeekMin = monthly.copyOfRange(23, 30).sum()
+        val lastWeekMin = monthly.copyOfRange(16, 23).sum()
+        // Split the last 30 days into weekday vs weekend (Sat/Sun) and average each.
+        val weekdayVals = ArrayList<Int>(); val weekendVals = ArrayList<Int>()
+        val cal = java.util.Calendar.getInstance()
+        for (i in monthly.indices) {
+            cal.timeInMillis = System.currentTimeMillis()
+            cal.add(java.util.Calendar.DAY_OF_YEAR, -(monthly.size - 1 - i))
+            val dow = cal.get(java.util.Calendar.DAY_OF_WEEK)
+            if (dow == java.util.Calendar.SATURDAY || dow == java.util.Calendar.SUNDAY) weekendVals.add(monthly[i])
+            else weekdayVals.add(monthly[i])
+        }
+
+        // Per-app week-over-week trends ("YouTube +40%").
+        val now = System.currentTimeMillis()
+        val thisWeekApps = UsageTracker.appMinutesInRange(ctx, UsageTracker.startOfDayAgo(6), now)
+        val lastWeekApps = UsageTracker.appMinutesInRange(ctx, UsageTracker.startOfDayAgo(13), UsageTracker.startOfDayAgo(6))
+        val appTrends = thisWeekApps.entries
+            .filter { it.value >= 5 } // ignore trivially-small apps
+            .sortedByDescending { it.value }
+            .take(5)
+            .map { (pkg, mins) ->
+                val prev = lastWeekApps[pkg] ?: 0
+                val delta = if (prev > 0) {
+                    val pct = ((mins - prev) * 100f / prev).roundToInt()
+                    if (pct >= 0) "▲$pct%" else "▼${-pct}%"
+                } else "new"
+                StatRow(label(pkg), icon(pkg), "${fmt(mins)} · $delta", dotColor(pkg), pkg = pkg)
+            }
+
         return InsightsState(
             loaded = true,
             usageAccess = hasUsageAccess(ctx),
@@ -142,6 +185,14 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
             topOpens = topOpens,
             totalOpens = opensByApp.values.sum(),
             categories = categories,
+            monthly = monthly,
+            monthAvg = if (monthly.isNotEmpty()) monthly.sum() / monthly.size else 0,
+            thisWeekMin = thisWeekMin,
+            lastWeekMin = lastWeekMin,
+            weekdayAvg = if (weekdayVals.isNotEmpty()) weekdayVals.average().roundToInt() else 0,
+            weekendAvg = if (weekendVals.isNotEmpty()) weekendVals.average().roundToInt() else 0,
+            appTrends = appTrends,
+            unlocksToday = UnlockCounter.unlocksToday(ctx),
         )
     }
 

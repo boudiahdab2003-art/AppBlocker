@@ -100,33 +100,68 @@ fun InsightsScreen(vm: InsightsViewModel = viewModel()) {
 
         // Big number + chart
         item {
-            val minutes = if (tab == 0) state.screenMinutes else state.weekMinutes
+            val minutes = when (tab) {
+                0 -> state.screenMinutes
+                1 -> state.weekMinutes
+                else -> state.monthAvg
+            }
             Spacer(Modifier.padding(top = 8.dp))
             Text(fmtBig(minutes), fontSize = 52.sp, fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
-            Text("SCREEN TIME", style = MaterialTheme.typography.labelLarge,
+            Text(if (tab == 2) "30-DAY AVERAGE" else "SCREEN TIME",
+                style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
             Spacer(Modifier.padding(top = 20.dp))
-            if (tab == 0) {
-                BarChart(values = state.hourly, maxMinutes = 60,
+            when (tab) {
+                0 -> BarChart(values = state.hourly, maxMinutes = 60,
                     bottomLabels = listOf("12a", "6a", "12p", "6p", "11p"),
                     yLabels = listOf("1h", "30m", "0s"),
                     readoutLabel = { hourLabel(it) })
-            } else {
-                val maxDay = (state.weekly.maxOrNull() ?: 0).coerceAtLeast(60)
-                val cap = (ceil(maxDay / 60.0) * 60).toInt()
-                BarChart(values = state.weekly, maxMinutes = cap,
-                    bottomLabels = (0..6).map { weekdayLabel(daysAgo = 6 - it, short = false) },
-                    yLabels = listOf("${cap / 60}h", "${cap / 120}h", "0s"),
-                    readoutLabel = { weekdayLabel(daysAgo = 6 - it, short = true) })
+                1 -> {
+                    val cap = chartCap(state.weekly)
+                    BarChart(values = state.weekly, maxMinutes = cap,
+                        bottomLabels = (0..6).map { weekdayLabel(daysAgo = 6 - it, short = false) },
+                        yLabels = listOf("${cap / 60}h", "${cap / 120}h", "0s"),
+                        readoutLabel = { weekdayLabel(daysAgo = 6 - it, short = true) })
+                }
+                else -> {
+                    val cap = chartCap(state.monthly)
+                    val n = state.monthly.size
+                    BarChart(values = state.monthly, maxMinutes = cap,
+                        bottomLabels = listOf("30d", "20d", "10d", "today"),
+                        yLabels = listOf("${cap / 60}h", "${cap / 120}h", "0s"),
+                        readoutLabel = { dateLabel(n - 1 - it) })
+                    Spacer(Modifier.padding(top = 10.dp))
+                    WeekOverWeek(state.thisWeekMin, state.lastWeekMin)
+                }
             }
-            if (state.categories.isNotEmpty()) {
+            if (tab != 2 && state.categories.isNotEmpty()) {
                 Spacer(Modifier.padding(top = 20.dp))
                 CategoryBreakdown(state.categories)
             }
             Spacer(Modifier.padding(top = 24.dp))
+        }
+
+        // Patterns: weekday vs weekend
+        if (state.usageAccess && (state.weekdayAvg > 0 || state.weekendAvg > 0)) {
+            item { PatternsCard(state); Spacer(Modifier.padding(top = 24.dp)) }
+        }
+
+        // Trending apps (week over week)
+        if (state.appTrends.isNotEmpty()) {
+            item {
+                Text("Trending this week", style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                Text("How each app changed vs last week.", style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.padding(top = 8.dp))
+            }
+            items(state.appTrends) { row ->
+                StatListRow(row, onClick = row.pkg?.let { p -> { vm.selectApp(p) } })
+            }
+            item { Spacer(Modifier.padding(top = 24.dp)) }
         }
 
         // Summary statistics (derived from today + the last-7-days array)
@@ -328,6 +363,10 @@ private fun SummaryStats(state: InsightsState) {
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
         }
+        SummaryRow("Phone unlocks today") {
+            Text("${state.unlocksToday}", style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+        }
         SummaryRow("Compared to yesterday") {
             if (yesterday > 0) {
                 val pct = ((today - yesterday) * 100f / yesterday).roundToInt()
@@ -366,6 +405,65 @@ private fun rateUsage(totalMinutes: Int): Pair<String, Color> = when {
     totalMinutes < 210 -> "Moderate" to Color(0xFF3B82F6)
     totalMinutes < 360 -> "Heavy" to Color(0xFFF59E0B)
     else -> "Very heavy" to Color(0xFFEF4444)
+}
+
+/** Weekday-vs-weekend averages, shown on the Patterns card. */
+@Composable
+private fun PatternsCard(state: InsightsState) {
+    Text("Patterns", style = MaterialTheme.typography.titleLarge,
+        fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+    Spacer(Modifier.padding(top = 8.dp))
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.surface).padding(horizontal = 18.dp, vertical = 6.dp),
+    ) {
+        SummaryRow("Weekday average") {
+            Text(InsightsViewModel.fmt(state.weekdayAvg), style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+        }
+        SummaryRow("Weekend average") {
+            Text(InsightsViewModel.fmt(state.weekendAvg), style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+        }
+    }
+    val takeaway = when {
+        state.weekendAvg > state.weekdayAvg * 1.2 -> "You use your phone more on weekends."
+        state.weekdayAvg > state.weekendAvg * 1.2 -> "You use your phone more on weekdays."
+        else -> "Your use is fairly even across the week."
+    }
+    Spacer(Modifier.padding(top = 8.dp))
+    Text(takeaway, style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+/** This-week vs last-week total, shown under the Trend chart. */
+@Composable
+private fun WeekOverWeek(thisWeek: Int, lastWeek: Int) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically) {
+        Text("This week ${InsightsViewModel.fmt(thisWeek)}",
+            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (lastWeek > 0) {
+            val pct = ((thisWeek - lastWeek) * 100f / lastWeek).roundToInt()
+            val up = pct >= 0
+            val color = if (up) Color(0xFFEF4444) else Color(0xFF22C55E)
+            Spacer(Modifier.width(8.dp))
+            Text("${if (up) "▲" else "▼"} ${kotlin.math.abs(pct)}% vs last week",
+                style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = color)
+        }
+    }
+}
+
+/** Round a value array's max up to a whole-hour cap (min 1h) for the chart's y-axis. */
+private fun chartCap(values: IntArray): Int {
+    val maxV = (values.maxOrNull() ?: 0).coerceAtLeast(60)
+    return (ceil(maxV / 60.0) * 60).toInt()
+}
+
+/** A date [daysAgo] days before today as "MMM d", e.g. "Jun 5". */
+private fun dateLabel(daysAgo: Int): String {
+    val cal = java.util.Calendar.getInstance().apply { add(java.util.Calendar.DAY_OF_YEAR, -daysAgo) }
+    return java.text.SimpleDateFormat("MMM d", java.util.Locale.getDefault()).format(cal.time)
 }
 
 /** A 0–23 hour as a 12-hour clock label, e.g. 0 -> "12 AM", 19 -> "7 PM". */

@@ -94,15 +94,18 @@ object UsageTracker {
     }
 
     /** Total foreground minutes for each of the last 7 days (index 6 = today). */
-    fun weeklyMinutes(context: Context): IntArray {
+    fun weeklyMinutes(context: Context): IntArray = dailyMinutes(context, 7)
+
+    /** Total foreground minutes for each of the last [days] days (last index = today). */
+    fun dailyMinutes(context: Context, days: Int): IntArray {
         val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
-            ?: return IntArray(7)
-        val result = IntArray(7)
-        for (i in 0..6) {
+            ?: return IntArray(days)
+        val result = IntArray(days)
+        for (i in 0 until days) {
             val cal = Calendar.getInstance().apply {
                 set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
                 set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-                add(Calendar.DAY_OF_YEAR, -(6 - i))
+                add(Calendar.DAY_OF_YEAR, -(days - 1 - i))
             }
             val start = cal.timeInMillis
             val end = start + 24 * 3_600_000L
@@ -111,6 +114,26 @@ object UsageTracker {
         }
         return result
     }
+
+    /** Foreground minutes per package across [start]..[end] (skips our own app). */
+    fun appMinutesInRange(context: Context, start: Long, end: Long): Map<String, Int> {
+        val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
+            ?: return emptyMap()
+        val stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, start, end) ?: return emptyMap()
+        val byPkg = HashMap<String, Long>()
+        stats.forEach { s ->
+            if (s.packageName == "com.appblocker") return@forEach
+            byPkg[s.packageName] = (byPkg[s.packageName] ?: 0L) + s.totalTimeInForeground
+        }
+        return byPkg.mapValues { (it.value / 60_000L).toInt() }.filter { it.value > 0 }
+    }
+
+    /** Midnight (start of day) [daysAgo] days before today, in epoch millis. */
+    fun startOfDayAgo(daysAgo: Int): Long = Calendar.getInstance().apply {
+        set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+        add(Calendar.DAY_OF_YEAR, -daysAgo)
+    }.timeInMillis
 
     /** Minutes per app category today (keyed by AppCategory.name), biggest first. */
     fun categoryMinutesToday(context: Context): Map<String, Int> {
