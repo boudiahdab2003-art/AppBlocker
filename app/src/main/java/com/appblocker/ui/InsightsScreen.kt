@@ -6,6 +6,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,6 +48,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -107,13 +110,16 @@ fun InsightsScreen(vm: InsightsViewModel = viewModel()) {
             Spacer(Modifier.padding(top = 20.dp))
             if (tab == 0) {
                 BarChart(values = state.hourly, maxMinutes = 60,
-                    bottomLabels = listOf("12", "6", "12", "6"), yLabels = listOf("1h", "30m", "0s"))
+                    bottomLabels = listOf("12a", "6a", "12p", "6p", "11p"),
+                    yLabels = listOf("1h", "30m", "0s"),
+                    readoutLabel = { hourLabel(it) })
             } else {
                 val maxDay = (state.weekly.maxOrNull() ?: 0).coerceAtLeast(60)
                 val cap = (ceil(maxDay / 60.0) * 60).toInt()
                 BarChart(values = state.weekly, maxMinutes = cap,
-                    bottomLabels = listOf("S", "M", "T", "W", "T", "F", "S"),
-                    yLabels = listOf("${cap / 60}h", "${cap / 120}h", "0s"))
+                    bottomLabels = (0..6).map { weekdayLabel(daysAgo = 6 - it, short = false) },
+                    yLabels = listOf("${cap / 60}h", "${cap / 120}h", "0s"),
+                    readoutLabel = { weekdayLabel(daysAgo = 6 - it, short = true) })
             }
             if (state.categories.isNotEmpty()) {
                 Spacer(Modifier.padding(top = 20.dp))
@@ -204,12 +210,49 @@ private fun SegmentedTabs(selected: Int, onSelect: (Int) -> Unit) {
 }
 
 @Composable
-private fun BarChart(values: IntArray, maxMinutes: Int, bottomLabels: List<String>, yLabels: List<String>) {
+private fun BarChart(
+    values: IntArray,
+    maxMinutes: Int,
+    bottomLabels: List<String>,
+    yLabels: List<String>,
+    readoutLabel: (Int) -> String,
+    valueLabel: (Int) -> String = { InsightsViewModel.fmt(values[it]) },
+) {
     val barBrush = AppGradients.chartBar
     val trackColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
     val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+    val highlight = MaterialTheme.colorScheme.primary
+    val peak = remember(values) { values.indices.maxByOrNull { values[it] } ?: 0 }
+    var selected by remember(values) { mutableIntStateOf(peak) }
+
+    // Readout: the selected bar's exact value + when it was.
+    Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(valueLabel(selected), style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+        Spacer(Modifier.width(6.dp))
+        Text("· ${readoutLabel(selected)}", style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (selected == peak && values[peak] > 0) {
+            Spacer(Modifier.width(8.dp))
+            Box(Modifier.clip(RoundedCornerShape(50)).background(highlight.copy(alpha = 0.18f))
+                .padding(horizontal = 8.dp, vertical = 2.dp)) {
+                Text("peak", style = MaterialTheme.typography.labelSmall, color = highlight)
+            }
+        }
+    }
     Row(Modifier.fillMaxWidth()) {
-        Canvas(Modifier.weight(1f).height(180.dp)) {
+        val n = values.size
+        Canvas(
+            Modifier.weight(1f).height(180.dp)
+                .pointerInput(values) {
+                    detectTapGestures { o -> selected = (o.x / (size.width / n)).toInt().coerceIn(0, n - 1) }
+                }
+                .pointerInput(values) {
+                    detectHorizontalDragGestures { change, _ ->
+                        selected = (change.position.x / (size.width / n)).toInt().coerceIn(0, n - 1)
+                    }
+                },
+        ) {
             val h = size.height
             val w = size.width
             // gridlines (0, 0.5, 1.0)
@@ -217,7 +260,6 @@ private fun BarChart(values: IntArray, maxMinutes: Int, bottomLabels: List<Strin
                 val y = h * f
                 drawLine(gridColor, Offset(0f, y), Offset(w, y), strokeWidth = 1f)
             }
-            val n = values.size
             val slot = w / n
             val barW = slot * 0.5f
             val radius = androidx.compose.ui.geometry.CornerRadius(barW / 2, barW / 2)
@@ -229,6 +271,11 @@ private fun BarChart(values: IntArray, maxMinutes: Int, bottomLabels: List<Strin
                 val barH = h * frac
                 if (barH > 1f) {
                     drawRoundRect(barBrush, Offset(x, h - barH), Size(barW, barH), radius)
+                }
+                // highlight the selected bar (full-height marker + solid fill)
+                if (i == selected) {
+                    drawRoundRect(highlight.copy(alpha = 0.12f), Offset(x, 0f), Size(barW, h), radius)
+                    if (barH > 1f) drawRoundRect(highlight, Offset(x, h - barH), Size(barW, barH), radius)
                 }
             }
         }
@@ -245,6 +292,22 @@ private fun BarChart(values: IntArray, maxMinutes: Int, bottomLabels: List<Strin
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
+}
+
+/** A 0–23 hour as a 12-hour clock label, e.g. 0 -> "12 AM", 19 -> "7 PM". */
+private fun hourLabel(h: Int): String {
+    val period = if (h < 12) "AM" else "PM"
+    val h12 = if (h % 12 == 0) 12 else h % 12
+    return "$h12 $period"
+}
+
+/** Weekday label for the day [daysAgo] days before today. [short]=true gives "Mon"/"Today"
+ *  for the readout; [short]=false gives the one-letter axis label. */
+private fun weekdayLabel(daysAgo: Int, short: Boolean): String {
+    if (daysAgo == 0 && short) return "Today"
+    val cal = java.util.Calendar.getInstance().apply { add(java.util.Calendar.DAY_OF_YEAR, -daysAgo) }
+    val pattern = if (short) "EEE" else "EEEEE"
+    return java.text.SimpleDateFormat(pattern, java.util.Locale.getDefault()).format(cal.time)
 }
 
 @Composable
