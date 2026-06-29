@@ -2,6 +2,7 @@ package com.appblocker.ui
 
 import android.content.Intent
 import android.provider.Settings
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -26,9 +27,11 @@ import androidx.compose.material.icons.filled.GetApp
 import androidx.compose.material.icons.filled.NoAdultContent
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SubdirectoryArrowRight
 import androidx.compose.material.icons.filled.ShoppingBasket
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Web
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -50,6 +53,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -168,6 +172,13 @@ fun BlockEditorScreen(
                             editedApps = true
                             if (on) selected.add(app.packageName) else selected.remove(app.packageName)
                         }
+                        // Nested "Shorts" sub-row right under YouTube (blocks only the Shorts feed).
+                        if (app.packageName == "com.google.android.youtube") {
+                            ShortsSubRow(icon = app.icon, checked = ytShorts, enabled = ed || !ytShorts) { on ->
+                                if (strictActive && !on) return@ShortsSubRow
+                                ytShorts = on
+                            }
+                        }
                     }
                 }
             }
@@ -247,9 +258,6 @@ fun BlockEditorScreen(
                     "Newly installed apps are automatically blocked.", addNew, ed) { addNew = it }
                 ToggleRow(Icons.Filled.ShoppingBasket, "In-app purchases blocking",
                     "Blocks the Google Play purchase prompt in games and apps.", purchases, ed) { purchases = it }
-                ToggleRow(Icons.Filled.PlayArrow, "Block YouTube Shorts",
-                    "Blocks the Shorts feed in the YouTube app and youtube.com/shorts — the rest of YouTube still works.",
-                    ytShorts, ed) { ytShorts = it }
                 ToggleRow(Icons.Filled.Web, "Block unsupported browsers",
                     "Blocks browsers we can't filter (e.g. Brave) so they can't bypass website blocking.",
                     unsupported, ed) { unsupported = it }
@@ -296,6 +304,49 @@ private fun ToggleRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Switch(checked = checked, enabled = enabled, onCheckedChange = onChange)
+    }
+}
+
+/** Indented "Shorts" child row shown directly under YouTube — blocks only the Shorts feed. */
+@Composable
+private fun ShortsSubRow(
+    icon: android.graphics.Bitmap?,
+    checked: Boolean,
+    enabled: Boolean,
+    onToggle: (Boolean) -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth()
+            .clickable(enabled = enabled) { onToggle(!checked) }
+            .padding(start = 40.dp)
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Filled.SubdirectoryArrowRight, contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(8.dp))
+        if (icon != null) {
+            Image(icon.asImageBitmap(), null, Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)))
+        } else {
+            Box(Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(18.dp))
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Text("Shorts", style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onBackground)
+        Spacer(Modifier.width(8.dp))
+        Box(
+            Modifier.clip(RoundedCornerShape(6.dp))
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f))
+                .padding(horizontal = 6.dp, vertical = 1.dp),
+        ) {
+            Text("BETA", style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+        }
+        Spacer(Modifier.weight(1f))
+        Checkbox(checked = checked, enabled = enabled, onCheckedChange = onToggle)
     }
 }
 
