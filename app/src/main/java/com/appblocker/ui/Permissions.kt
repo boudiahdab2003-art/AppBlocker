@@ -1,6 +1,7 @@
 package com.appblocker.ui
 
 import android.app.AppOpsManager
+import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -8,6 +9,7 @@ import android.net.Uri
 import android.os.PowerManager
 import android.os.Process
 import android.provider.Settings
+import com.appblocker.admin.AppBlockerAdminReceiver
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -122,7 +124,42 @@ fun rememberPermissions(): List<Perm> {
                 "Only for Wi-Fi and Location schedules. Not needed otherwise.",
                 hasLocation(ctx), essential = false,
             ) { open(ctx, Settings.ACTION_APPLICATION_DETAILS_SETTINGS, withPackage = true) },
+            Perm(
+                "deviceadmin", "Prevent uninstall (Device admin)",
+                "Stops AppBlocker being uninstalled until you turn this off — extra friction against bypassing your blocks.",
+                isDeviceAdminActive(ctx), essential = false,
+            ) { toggleDeviceAdmin(ctx) },
         )
+    }
+}
+
+/** Whether AppBlocker is currently an active device admin (so it can't be uninstalled). */
+fun isDeviceAdminActive(ctx: Context): Boolean {
+    val dpm = ctx.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+    return dpm.isAdminActive(AppBlockerAdminReceiver.componentName(ctx))
+}
+
+/** Turns device admin on (system confirm screen) or off (removes it, allowing uninstall). */
+private fun toggleDeviceAdmin(ctx: Context) {
+    val dpm = ctx.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+    val admin = AppBlockerAdminReceiver.componentName(ctx)
+    if (dpm.isAdminActive(admin)) {
+        dpm.removeActiveAdmin(admin) // turn protection off so the app can be uninstalled
+    } else {
+        // NOTE: no FLAG_ACTIVITY_NEW_TASK — the system's ADD_DEVICE_ADMIN screen refuses to
+        // start as a new task ("Cannot start ADD_DEVICE_ADMIN as a new task") and must run in
+        // the caller's (Activity) task, which ctx is here.
+        runCatching {
+            ctx.startActivity(
+                Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
+                    putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, admin)
+                    putExtra(
+                        DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                        "Lets AppBlocker resist being uninstalled until you turn this off.",
+                    )
+                }
+            )
+        }
     }
 }
 

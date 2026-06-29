@@ -295,6 +295,8 @@ private fun ensureDeviceAdmin(context: Context) {
     val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
     val admin = AppBlockerAdminReceiver.componentName(context)
     if (dpm.isAdminActive(admin)) return
+    // No FLAG_ACTIVITY_NEW_TASK — the system's ADD_DEVICE_ADMIN screen self-closes ("Cannot
+    // start ADD_DEVICE_ADMIN as a new task") and must run in the caller's (Activity) task.
     context.startActivity(
         Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
             putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, admin)
@@ -302,7 +304,6 @@ private fun ensureDeviceAdmin(context: Context) {
                 DevicePolicyManager.EXTRA_ADD_EXPLANATION,
                 "Strict Mode needs this so AppBlocker can't be uninstalled until the timer ends."
             )
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
     )
 }

@@ -145,6 +145,8 @@ private fun requestDeviceAdmin(context: Context) {
         )
         return
     }
+    // No FLAG_ACTIVITY_NEW_TASK — the system's ADD_DEVICE_ADMIN screen self-closes ("Cannot
+    // start ADD_DEVICE_ADMIN as a new task") and must run in the caller's (Activity) task.
     context.startActivity(
         Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
             putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, admin)
@@ -152,7 +154,6 @@ private fun requestDeviceAdmin(context: Context) {
                 DevicePolicyManager.EXTRA_ADD_EXPLANATION,
                 "Enables AppBlocker to resist being uninstalled while your blocks are active."
             )
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
     )
 }
