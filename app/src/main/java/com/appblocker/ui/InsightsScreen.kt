@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.appblocker.ui.theme.AppGradients
 import kotlin.math.ceil
+import kotlin.math.roundToInt
 
 @Composable
 fun InsightsScreen(vm: InsightsViewModel = viewModel()) {
@@ -126,6 +127,14 @@ fun InsightsScreen(vm: InsightsViewModel = viewModel()) {
                 CategoryBreakdown(state.categories)
             }
             Spacer(Modifier.padding(top = 24.dp))
+        }
+
+        // Summary statistics (derived from today + the last-7-days array)
+        if (state.usageAccess && state.weekly.any { it > 0 }) {
+            item {
+                SummaryStats(state)
+                Spacer(Modifier.padding(top = 24.dp))
+            }
         }
 
         // Most used apps
@@ -292,6 +301,71 @@ private fun BarChart(
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
+}
+
+/** Extra at-a-glance stats: daily average, busiest day, vs-yesterday change, usage rating. */
+@Composable
+private fun SummaryStats(state: InsightsState) {
+    val today = state.screenMinutes
+    val yesterday = state.weekly.getOrElse(5) { 0 }
+    val avg = if (state.weekly.isNotEmpty()) state.weekly.sum() / state.weekly.size else 0
+    val busiestIdx = state.weekly.indices.maxByOrNull { state.weekly[it] } ?: 6
+    val rating = rateUsage(today)
+
+    Text("Summary", style = MaterialTheme.typography.titleLarge,
+        fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+    Spacer(Modifier.padding(top = 8.dp))
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.surface).padding(horizontal = 18.dp, vertical = 6.dp),
+    ) {
+        SummaryRow("Daily average (7 days)") {
+            Text(InsightsViewModel.fmt(avg), style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+        }
+        SummaryRow("Busiest day") {
+            Text(weekdayLabel(daysAgo = 6 - busiestIdx, short = true),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+        }
+        SummaryRow("Compared to yesterday") {
+            if (yesterday > 0) {
+                val pct = ((today - yesterday) * 100f / yesterday).roundToInt()
+                val up = pct >= 0
+                // More screen time than yesterday = red (worse); less = green (better).
+                val color = if (up) Color(0xFFEF4444) else Color(0xFF22C55E)
+                Text("${if (up) "▲" else "▼"} ${kotlin.math.abs(pct)}%",
+                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = color)
+            } else {
+                Text("—", style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        SummaryRow("Today's usage") {
+            Box(Modifier.clip(RoundedCornerShape(50)).background(rating.second.copy(alpha = 0.18f))
+                .padding(horizontal = 12.dp, vertical = 4.dp)) {
+                Text(rating.first, style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold, color = rating.second)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SummaryRow(label: String, value: @Composable () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        value()
+    }
+}
+
+/** A light/moderate/heavy rating of today's screen time, with a colour. */
+private fun rateUsage(totalMinutes: Int): Pair<String, Color> = when {
+    totalMinutes < 90 -> "Light" to Color(0xFF22C55E)
+    totalMinutes < 210 -> "Moderate" to Color(0xFF3B82F6)
+    totalMinutes < 360 -> "Heavy" to Color(0xFFF59E0B)
+    else -> "Very heavy" to Color(0xFFEF4444)
 }
 
 /** A 0–23 hour as a 12-hour clock label, e.g. 0 -> "12 AM", 19 -> "7 PM". */
