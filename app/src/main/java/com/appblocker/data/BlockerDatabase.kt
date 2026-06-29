@@ -23,8 +23,9 @@ class Converters {
 }
 
 @Database(
-    entities = [AppRule::class, FocusState::class, BlockedKeyword::class, Schedule::class],
-    version = 6,
+    entities = [AppRule::class, FocusState::class, BlockedKeyword::class, Schedule::class,
+        SavedPlace::class],
+    version = 7,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -33,6 +34,7 @@ abstract class BlockerDatabase : RoomDatabase() {
     abstract fun focusDao(): FocusDao
     abstract fun blockedKeywordDao(): BlockedKeywordDao
     abstract fun scheduleDao(): ScheduleDao
+    abstract fun savedPlaceDao(): SavedPlaceDao
 
     companion object {
         @Volatile private var INSTANCE: BlockerDatabase? = null
@@ -49,6 +51,17 @@ abstract class BlockerDatabase : RoomDatabase() {
             }
         }
 
+        /** v6 -> v7: add the saved_places table so locations can be named and reused. */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS saved_places (" +
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "name TEXT NOT NULL, latitude REAL NOT NULL, longitude REAL NOT NULL)"
+                )
+            }
+        }
+
         fun get(context: Context): BlockerDatabase =
             INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -56,7 +69,7 @@ abstract class BlockerDatabase : RoomDatabase() {
                     BlockerDatabase::class.java,
                     "appblocker.db"
                 )
-                    .addMigrations(MIGRATION_5_6)
+                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7)
                     // Only wipe on a downgrade (installing an older APK) — never on upgrade.
                     .fallbackToDestructiveMigrationOnDowngrade()
                     .build().also { INSTANCE = it }

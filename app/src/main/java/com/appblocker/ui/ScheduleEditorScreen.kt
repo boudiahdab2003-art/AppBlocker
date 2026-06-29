@@ -3,8 +3,10 @@ package com.appblocker.ui
 import android.annotation.SuppressLint
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -265,6 +267,10 @@ fun ScheduleEditorScreen(
                             fineLauncher.launch(android.Manifest.permission.ACCESS_FINE_LOCATION)
                         })
                     } else {
+                        val places by vm.savedPlaces.collectAsState()
+                        var showSaveDialog by remember { mutableStateOf(false) }
+                        var placeToDelete by remember { mutableStateOf<com.appblocker.data.SavedPlace?>(null) }
+
                         Text(
                             if (locCaptured) "Captured: %.4f, %.4f".format(lat, lng) else "No location captured yet.",
                             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -272,6 +278,31 @@ fun ScheduleEditorScreen(
                         GradientButton(text = "Use my current location", enabled = editable, onClick = {
                             requestCurrentLocation(context) { la, ln -> lat = la; lng = ln; locCaptured = true }
                         })
+                        if (locCaptured && editable) {
+                            TextButton(onClick = { showSaveDialog = true }) { Text("Save this place") }
+                        }
+
+                        if (places.isNotEmpty()) {
+                            Spacer(Modifier.padding(top = 8.dp))
+                            SectionLabel("Saved places")
+                            Spacer(Modifier.padding(top = 6.dp))
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                places.forEach { place ->
+                                    val isSel = locCaptured && place.latitude == lat && place.longitude == lng
+                                    PlaceChip(place.name, isSel, editable,
+                                        onClick = { lat = place.latitude; lng = place.longitude; locCaptured = true },
+                                        onLongClick = { if (editable) placeToDelete = place })
+                                }
+                            }
+                            Text("Tip: long-press a place to delete it.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 4.dp))
+                        }
+
                         if (!hasBg) {
                             Spacer(Modifier.padding(top = 12.dp))
                             BackgroundLocationWarning { openAppDetails(context) }
@@ -286,6 +317,28 @@ fun ScheduleEditorScreen(
                             listOf(100, 250, 500).forEach { r ->
                                 ChipBtn("$r m", radius == r, editable) { radius = r }
                             }
+                        }
+
+                        if (showSaveDialog) {
+                            TextInputDialog(
+                                title = "Name this place",
+                                label = "Name (e.g. UK)",
+                                onConfirm = { vm.savePlace(it, lat, lng); showSaveDialog = false },
+                                onDismiss = { showSaveDialog = false },
+                            )
+                        }
+                        placeToDelete?.let { p ->
+                            AlertDialog(
+                                onDismissRequest = { placeToDelete = null },
+                                title = { Text("Delete place") },
+                                text = { Text("Remove \"${p.name}\" from saved places?") },
+                                confirmButton = {
+                                    TextButton(onClick = { vm.deletePlace(p); placeToDelete = null }) { Text("Delete") }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { placeToDelete = null }) { Text("Cancel") }
+                                },
+                            )
                         }
                     }
                     Spacer(Modifier.padding(top = 12.dp))
@@ -448,6 +501,58 @@ private fun NumberInputDialog(
             )
         },
     )
+}
+
+/** A small text-entry dialog; OK is enabled only when the trimmed text is non-blank. */
+@Composable
+private fun TextInputDialog(
+    title: String,
+    label: String,
+    initial: String = "",
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var text by remember { mutableStateOf(initial) }
+    val valid = text.trim().isNotEmpty()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        confirmButton = {
+            TextButton(enabled = valid, onClick = { onConfirm(text.trim()) }) { Text("Save") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it.take(30) },
+                label = { Text(label) },
+                singleLine = true,
+            )
+        },
+    )
+}
+
+/** A pill chip for a saved place: tap to select, long-press to delete. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun PlaceChip(
+    label: String,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
+    val bg = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+    val fg = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+    Box(
+        Modifier
+            .clip(RoundedCornerShape(50))
+            .background(bg)
+            .combinedClickable(enabled = enabled, onClick = onClick, onLongClick = onLongClick)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+    ) {
+        Text(label, maxLines = 1, color = fg, style = MaterialTheme.typography.labelLarge)
+    }
 }
 
 /**
