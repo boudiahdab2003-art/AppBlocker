@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -55,6 +56,17 @@ fun AppCheckRow(
     ) {
         if (item.icon != null) {
             Image(item.icon.asImageBitmap(), null, Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)))
+        } else if (item.accentColor != null) {
+            // No real icon yet (not installed) — show a brand-coloured initial badge.
+            val brand = Color(item.accentColor)
+            val onBrand = if (brand.luminance() > 0.5f) Color.Black else Color.White
+            Box(
+                Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(brand),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(item.label.take(1).uppercase(), color = onBrand,
+                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            }
         } else {
             Box(
                 Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant),

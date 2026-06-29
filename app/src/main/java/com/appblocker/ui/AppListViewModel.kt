@@ -27,6 +27,8 @@ data class AppItem(
     val mode: BlockMode = BlockMode.HARD,
     val dailyLimitMinutes: Int = -1,
     val installed: Boolean = true,
+    // Brand colour for a coloured-initial badge when there's no real icon (not-installed apps).
+    val accentColor: Long? = null,
 )
 
 class AppListViewModel(app: Application) : AndroidViewModel(app) {
@@ -71,6 +73,7 @@ class AppListViewModel(app: Application) : AndroidViewModel(app) {
                         mode = r?.mode ?: BlockMode.HARD,
                         dailyLimitMinutes = r?.dailyLimitMinutes ?: -1,
                         installed = false,
+                        accentColor = p.color,
                     )
                 }
             (installedItems + preBlockItems).sortedWith(
