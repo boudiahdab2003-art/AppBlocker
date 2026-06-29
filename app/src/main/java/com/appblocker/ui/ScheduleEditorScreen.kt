@@ -21,11 +21,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -34,6 +37,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -55,6 +59,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.appblocker.data.Schedule
@@ -129,7 +134,8 @@ fun ScheduleEditorScreen(
                     onBack()
                 },
                 enabled = editable && selected.isNotEmpty() &&
-                    (type != ScheduleType.LOCATION || locCaptured),
+                    (type != ScheduleType.LOCATION || locCaptured) &&
+                    (type != ScheduleType.USAGE_LIMIT || limit >= 1),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
@@ -169,61 +175,23 @@ fun ScheduleEditorScreen(
                     Spacer(Modifier.padding(top = 12.dp))
                 }
                 ScheduleType.USAGE_LIMIT -> item {
-                    val presets = listOf(15, 30, 60, 120)
-                    val isCustom = limit !in presets
-                    var showLimitDialog by remember { mutableStateOf(false) }
+                    val hours = limit / 60
+                    val mins = limit % 60
                     SectionLabel("Daily limit")
                     Spacer(Modifier.padding(top = 6.dp))
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        presets.forEach { p ->
-                            ChipBtn(fmtDuration(p), limit == p, editable) { limit = p }
-                        }
-                        ChipBtn(if (isCustom) fmtDuration(limit) else "Other…", isCustom, editable) {
-                            showLimitDialog = true
-                        }
-                    }
-                    if (showLimitDialog) {
-                        NumberInputDialog(
-                            title = "Daily limit (minutes)",
-                            label = "Minutes per day",
-                            initial = limit,
-                            max = 1440,
-                            onConfirm = { limit = it; showLimitDialog = false },
-                            onDismiss = { showLimitDialog = false },
-                        )
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        StepperField("hours", hours, "h", min = 0, max = 23, step = 1,
+                            enabled = editable, modifier = Modifier.weight(1f)) { limit = it * 60 + mins }
+                        StepperField("minutes", mins, "m", min = 0, max = 59, step = 5,
+                            enabled = editable, modifier = Modifier.weight(1f)) { limit = hours * 60 + it }
                     }
                     Spacer(Modifier.padding(top = 12.dp))
                 }
                 ScheduleType.LAUNCH_COUNT -> item {
-                    val presets = listOf(3, 5, 10, 20)
-                    val isCustom = limitCount !in presets
-                    var showCountDialog by remember { mutableStateOf(false) }
                     SectionLabel("Block after how many opens / day")
                     Spacer(Modifier.padding(top = 6.dp))
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        presets.forEach { c ->
-                            ChipBtn("$c opens", limitCount == c, editable) { limitCount = c }
-                        }
-                        ChipBtn(if (isCustom) "$limitCount opens" else "Other…", isCustom, editable) {
-                            showCountDialog = true
-                        }
-                    }
-                    if (showCountDialog) {
-                        NumberInputDialog(
-                            title = "Block after how many opens",
-                            label = "Number of opens",
-                            initial = limitCount,
-                            max = 999,
-                            onConfirm = { limitCount = it; showCountDialog = false },
-                            onDismiss = { showCountDialog = false },
-                        )
-                    }
+                    StepperField("opens", limitCount, "opens", min = 1, max = 999, step = 1,
+                        enabled = editable, modifier = Modifier.fillMaxWidth()) { limitCount = it }
                     Spacer(Modifier.padding(top = 12.dp))
                 }
                 ScheduleType.WIFI -> item {
@@ -471,36 +439,69 @@ private fun ChipBtn(label: String, selected: Boolean, enabled: Boolean, onClick:
     )
 }
 
-/** A small number-entry dialog; OK is enabled only for an integer between 1 and [max]. */
+/**
+ * A rounded value field with a unit and − / + steppers. The number is directly typeable
+ * (numeric keyboard) and always kept within [min]..[max]. [name] is used for accessibility.
+ */
 @Composable
-private fun NumberInputDialog(
-    title: String,
-    label: String,
-    initial: Int,
+private fun StepperField(
+    name: String,
+    value: Int,
+    unit: String,
+    min: Int,
     max: Int,
-    onConfirm: (Int) -> Unit,
-    onDismiss: () -> Unit,
+    step: Int,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    onChange: (Int) -> Unit,
 ) {
-    var text by remember { mutableStateOf(initial.toString()) }
-    val value = text.toIntOrNull()
-    val valid = value != null && value in 1..max
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        confirmButton = {
-            TextButton(enabled = valid, onClick = { onConfirm(value!!) }) { Text("OK") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-        text = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { new -> text = new.filter { it.isDigit() }.take(4) },
-                label = { Text(label) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            )
-        },
-    )
+    var text by remember(value) { mutableStateOf(value.toString()) }
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = modifier,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+        ) {
+            IconButton(
+                onClick = { onChange((value - step).coerceIn(min, max)) },
+                enabled = enabled && value > min,
+            ) { Icon(Icons.Filled.Remove, contentDescription = "Decrease $name") }
+
+            Row(verticalAlignment = Alignment.Bottom) {
+                BasicTextField(
+                    value = text,
+                    onValueChange = { new ->
+                        val digits = new.filter { it.isDigit() }.take(4)
+                        text = digits
+                        digits.toIntOrNull()?.coerceIn(min, max)?.let(onChange)
+                    },
+                    enabled = enabled,
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    textStyle = MaterialTheme.typography.headlineSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.End,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    ),
+                    cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
+                    modifier = Modifier.width(56.dp),
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(unit, style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 4.dp))
+            }
+
+            IconButton(
+                onClick = { onChange((value + step).coerceIn(min, max)) },
+                enabled = enabled && value < max,
+            ) { Icon(Icons.Filled.Add, contentDescription = "Increase $name") }
+        }
+    }
 }
 
 /** A small text-entry dialog; OK is enabled only when the trimmed text is non-blank. */
