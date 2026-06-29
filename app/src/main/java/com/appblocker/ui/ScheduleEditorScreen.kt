@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
@@ -51,6 +52,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.appblocker.data.Schedule
@@ -165,28 +167,60 @@ fun ScheduleEditorScreen(
                     Spacer(Modifier.padding(top = 12.dp))
                 }
                 ScheduleType.USAGE_LIMIT -> item {
+                    val presets = listOf(15, 30, 60, 120)
+                    val isCustom = limit !in presets
+                    var showLimitDialog by remember { mutableStateOf(false) }
                     SectionLabel("Daily limit")
                     Spacer(Modifier.padding(top = 6.dp))
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        listOf(15, 30, 60, 120).forEach { p ->
+                        presets.forEach { p ->
                             ChipBtn(fmtDuration(p), limit == p, editable) { limit = p }
                         }
+                        ChipBtn(if (isCustom) fmtDuration(limit) else "Other…", isCustom, editable) {
+                            showLimitDialog = true
+                        }
+                    }
+                    if (showLimitDialog) {
+                        NumberInputDialog(
+                            title = "Daily limit (minutes)",
+                            label = "Minutes per day",
+                            initial = limit,
+                            max = 1440,
+                            onConfirm = { limit = it; showLimitDialog = false },
+                            onDismiss = { showLimitDialog = false },
+                        )
                     }
                     Spacer(Modifier.padding(top = 12.dp))
                 }
                 ScheduleType.LAUNCH_COUNT -> item {
+                    val presets = listOf(3, 5, 10, 20)
+                    val isCustom = limitCount !in presets
+                    var showCountDialog by remember { mutableStateOf(false) }
                     SectionLabel("Block after how many opens / day")
                     Spacer(Modifier.padding(top = 6.dp))
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        listOf(3, 5, 10, 20).forEach { c ->
+                        presets.forEach { c ->
                             ChipBtn("$c opens", limitCount == c, editable) { limitCount = c }
                         }
+                        ChipBtn(if (isCustom) "$limitCount opens" else "Other…", isCustom, editable) {
+                            showCountDialog = true
+                        }
+                    }
+                    if (showCountDialog) {
+                        NumberInputDialog(
+                            title = "Block after how many opens",
+                            label = "Number of opens",
+                            initial = limitCount,
+                            max = 999,
+                            onConfirm = { limitCount = it; showCountDialog = false },
+                            onDismiss = { showCountDialog = false },
+                        )
                     }
                     Spacer(Modifier.padding(top = 12.dp))
                 }
@@ -381,6 +415,38 @@ private fun ChipBtn(label: String, selected: Boolean, enabled: Boolean, onClick:
             selectedContainerColor = MaterialTheme.colorScheme.primary,
             selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
         ),
+    )
+}
+
+/** A small number-entry dialog; OK is enabled only for an integer between 1 and [max]. */
+@Composable
+private fun NumberInputDialog(
+    title: String,
+    label: String,
+    initial: Int,
+    max: Int,
+    onConfirm: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var text by remember { mutableStateOf(initial.toString()) }
+    val value = text.toIntOrNull()
+    val valid = value != null && value in 1..max
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        confirmButton = {
+            TextButton(enabled = valid, onClick = { onConfirm(value!!) }) { Text("OK") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { new -> text = new.filter { it.isDigit() }.take(4) },
+                label = { Text(label) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            )
+        },
     )
 }
 
