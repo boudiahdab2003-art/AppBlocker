@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.37
+- Redesigned the Profile page: a gradient header with the app shield, version and a live 'Protection active / Action needed' status; iconed rows with On/Off status badges (PIN, Prevent uninstall); a Share AppBlocker option; and a cleaner layout.
+
 ## v1.36
 - Insights: new Trend tab with a 30-day chart, 30-day average and this-week-vs-last-week; a Patterns card (weekday vs weekend); a 'Trending this week' list showing how each app changed vs last week; and phone unlocks per day in the Summary.
 
