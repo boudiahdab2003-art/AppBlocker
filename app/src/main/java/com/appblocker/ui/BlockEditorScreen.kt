@@ -91,6 +91,7 @@ fun BlockEditorScreen(
     var query by remember { mutableStateOf("") }
     // Collapsible sections (default open; remembered across rotation / tab switches).
     var appsOpen by rememberSaveable { mutableStateOf(true) }
+    var preBlockOpen by rememberSaveable { mutableStateOf(false) }
     var webOpen by rememberSaveable { mutableStateOf(true) }
     var adult by remember { mutableStateOf(SettingsStore.blockAdult(context)) }
     var addNew by remember { mutableStateOf(SettingsStore.addNewApps(context)) }
@@ -101,6 +102,8 @@ fun BlockEditorScreen(
     val shownApps = remember(apps, query) {
         if (query.isBlank()) apps else apps.filter { it.label.contains(query.trim(), ignoreCase = true) }
     }
+    val installedApps = remember(shownApps) { shownApps.filter { it.installed } }
+    val preBlockApps = remember(shownApps) { shownApps.filter { !it.installed } }
 
     fun save() {
         appsVm.commitBlocked(selected.toSet())
@@ -136,7 +139,8 @@ fun BlockEditorScreen(
                         color = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.padding(top = 12.dp))
                 }
-                CollapsibleHeader(Icons.Filled.Apps, "Apps", selected.size, appsOpen) { appsOpen = !appsOpen }
+                val installedSelected = apps.count { it.installed && selected.contains(it.packageName) }
+                CollapsibleHeader(Icons.Filled.Apps, "Apps", installedSelected, appsOpen) { appsOpen = !appsOpen }
                 if (appsOpen) {
                     OutlinedTextField(
                         value = query, onValueChange = { query = it },
@@ -153,7 +157,7 @@ fun BlockEditorScreen(
                     item { Text("Loading apps…", color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(8.dp)) }
                 } else {
-                    items(shownApps, key = { it.packageName }) { app ->
+                    items(installedApps, key = { it.packageName }) { app ->
                         val isChecked = selected.contains(app.packageName)
                         // During Strict you can check (add) an app, but not uncheck (remove) one.
                         AppCheckRow(app, checked = isChecked, enabled = ed || !isChecked) { on ->
@@ -161,6 +165,31 @@ fun BlockEditorScreen(
                             editedApps = true
                             if (on) selected.add(app.packageName) else selected.remove(app.packageName)
                         }
+                    }
+                }
+            }
+
+            item {
+                Spacer(Modifier.padding(top = 16.dp))
+                val preBlockCount = apps.count { !it.installed && selected.contains(it.packageName) }
+                CollapsibleHeader(Icons.Filled.GetApp, "Block before you install", preBlockCount, preBlockOpen) {
+                    preBlockOpen = !preBlockOpen
+                }
+                if (preBlockOpen) {
+                    Text("Block popular apps now so they're blocked the moment you install them.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 4.dp))
+                }
+            }
+            if (preBlockOpen) {
+                items(preBlockApps, key = { it.packageName }) { app ->
+                    val isChecked = selected.contains(app.packageName)
+                    AppCheckRow(app, checked = isChecked, enabled = ed || !isChecked,
+                        subtitle = "Not installed yet") { on ->
+                        if (strictActive && !on) return@AppCheckRow
+                        editedApps = true
+                        if (on) selected.add(app.packageName) else selected.remove(app.packageName)
                     }
                 }
             }

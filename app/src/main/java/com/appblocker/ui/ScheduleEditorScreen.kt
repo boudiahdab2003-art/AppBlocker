@@ -318,7 +318,7 @@ fun ScheduleEditorScreen(
                 Spacer(Modifier.padding(top = 4.dp))
             }
             if (appsOpen) {
-                items(apps, key = { it.packageName }) { app ->
+                items(apps.filter { it.installed }, key = { it.packageName }) { app ->
                     AppCheckRow(app, checked = selected.contains(app.packageName), enabled = editable) { on ->
                         if (on) selected.add(app.packageName) else selected.remove(app.packageName)
                     }

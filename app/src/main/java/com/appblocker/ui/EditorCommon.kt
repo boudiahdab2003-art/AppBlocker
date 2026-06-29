@@ -4,6 +4,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -36,9 +37,16 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
-/** A selectable app row (icon + label + checkbox) shared by the Quick Block & schedule editors. */
+/** A selectable app row (icon + label + checkbox) shared by the Quick Block & schedule editors.
+ *  [subtitle], when set, shows a small line under the label (e.g. "Not installed yet"). */
 @Composable
-fun AppCheckRow(item: AppItem, checked: Boolean, enabled: Boolean, onToggle: (Boolean) -> Unit) {
+fun AppCheckRow(
+    item: AppItem,
+    checked: Boolean,
+    enabled: Boolean,
+    subtitle: String? = null,
+    onToggle: (Boolean) -> Unit,
+) {
     Row(
         Modifier.fillMaxWidth()
             .clickable(enabled = enabled) { onToggle(!checked) }
@@ -54,8 +62,14 @@ fun AppCheckRow(item: AppItem, checked: Boolean, enabled: Boolean, onToggle: (Bo
             ) { Icon(Icons.Filled.Apps, null, Modifier.size(22.dp)) }
         }
         Spacer(Modifier.width(12.dp))
-        Text(item.label, Modifier.weight(1f), color = MaterialTheme.colorScheme.onBackground,
-            style = MaterialTheme.typography.bodyLarge)
+        Column(Modifier.weight(1f)) {
+            Text(item.label, color = MaterialTheme.colorScheme.onBackground,
+                style = MaterialTheme.typography.bodyLarge)
+            if (subtitle != null) {
+                Text(subtitle, style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
         Checkbox(checked = checked, enabled = enabled, onCheckedChange = onToggle)
     }
 }

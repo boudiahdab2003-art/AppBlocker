@@ -9,6 +9,7 @@ import com.appblocker.data.AppRule
 import com.appblocker.data.BlockMode
 import com.appblocker.data.BlockerDatabase
 import com.appblocker.data.InstalledAppsRepository
+import com.appblocker.data.POPULAR_APPS
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -16,7 +17,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-/** One row in the picker: an installed app + whether/how it's blocked. */
+/** One row in the picker: an app + whether/how it's blocked. [installed] is false for a
+ *  curated popular app the user can pre-block before installing it. */
 data class AppItem(
     val packageName: String,
     val label: String,
@@ -24,6 +26,7 @@ data class AppItem(
     val isBlocked: Boolean,
     val mode: BlockMode = BlockMode.HARD,
     val dailyLimitMinutes: Int = -1,
+    val installed: Boolean = true,
 )
 
 class AppListViewModel(app: Application) : AndroidViewModel(app) {
@@ -42,7 +45,7 @@ class AppListViewModel(app: Application) : AndroidViewModel(app) {
     val apps: StateFlow<List<AppItem>> =
         combine(InstalledAppsRepository.apps, dao.getAll(), InstalledAppsRepository.usage) { list, rules, usageMap ->
             val byPkg = rules.associateBy { it.packageName }
-            list.map { app ->
+            val installedItems = list.map { app ->
                 val r = byPkg[app.packageName]
                 AppItem(
                     packageName = app.packageName,
@@ -51,11 +54,29 @@ class AppListViewModel(app: Application) : AndroidViewModel(app) {
                     isBlocked = r?.isBlocked == true,
                     mode = r?.mode ?: BlockMode.HARD,
                     dailyLimitMinutes = r?.dailyLimitMinutes ?: -1,
+                    installed = true,
                 )
-            }.sortedWith(
-                compareByDescending<AppItem> {
-                    AppCategories.weightOf(it.packageName) + (usageMap[it.packageName] ?: 0)
-                }.thenBy { it.label.lowercase() }
+            }
+            // Curated popular apps that aren't installed yet, so they can be pre-blocked.
+            val installedPkgs = list.mapTo(HashSet()) { it.packageName }
+            val preBlockItems = POPULAR_APPS
+                .filter { it.packageName !in installedPkgs }
+                .map { p ->
+                    val r = byPkg[p.packageName]
+                    AppItem(
+                        packageName = p.packageName,
+                        label = p.label,
+                        icon = null,
+                        isBlocked = r?.isBlocked == true,
+                        mode = r?.mode ?: BlockMode.HARD,
+                        dailyLimitMinutes = r?.dailyLimitMinutes ?: -1,
+                        installed = false,
+                    )
+                }
+            (installedItems + preBlockItems).sortedWith(
+                compareByDescending<AppItem> { it.installed }
+                    .thenByDescending { AppCategories.weightOf(it.packageName) + (usageMap[it.packageName] ?: 0) }
+                    .thenBy { it.label.lowercase() }
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
