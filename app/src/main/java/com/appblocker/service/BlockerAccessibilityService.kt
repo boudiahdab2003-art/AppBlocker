@@ -161,9 +161,10 @@ class BlockerAccessibilityService : AccessibilityService() {
         handler.postDelayed(webScanRunnable, 600)
     }
 
-    /** Debounced YouTube-Shorts check (quicker than the web scan so Shorts is caught fast). */
+    /** Debounced YouTube-Shorts check (quicker than the web scan so Shorts is caught fast).
+     *  Only runs while Quick Block is active, so Shorts blocking starts/stops with it. */
     private fun scheduleShortsScan() {
-        if (!SettingsStore.blockYoutubeShorts(this)) {
+        if (!SettingsStore.blockYoutubeShorts(this) || !quickBlockActive()) {
             if (shortsCovering) { shortsCovering = false; removeBlockOverlay() }
             return
         }
@@ -409,8 +410,8 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (text.isBlank()) return
         if (text == lastWebText) return
 
-        // YouTube Shorts opened in a browser (youtube.com/shorts).
-        if (SettingsStore.blockYoutubeShorts(applicationContext) &&
+        // YouTube Shorts opened in a browser (youtube.com/shorts) — while Quick Block is active.
+        if (SettingsStore.blockYoutubeShorts(applicationContext) && quickBlockActive() &&
             text.lowercase().contains("youtube.com/shorts")
         ) {
             lastWebText = text
@@ -442,7 +443,9 @@ class BlockerAccessibilityService : AccessibilityService() {
      * scrolls/navigates out of Shorts.
      */
     private suspend fun scanShorts() {
-        if (!SettingsStore.blockYoutubeShorts(applicationContext) || lastForegroundPkg != YOUTUBE_PKG) {
+        if (!SettingsStore.blockYoutubeShorts(applicationContext) || !quickBlockActive() ||
+            lastForegroundPkg != YOUTUBE_PKG
+        ) {
             if (shortsCovering) {
                 shortsCovering = false
                 withContext(Dispatchers.Main) { removeBlockOverlay() }

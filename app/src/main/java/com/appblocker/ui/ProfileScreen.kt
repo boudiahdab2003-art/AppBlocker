@@ -24,12 +24,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -50,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.appblocker.admin.AppBlockerAdminReceiver
 import com.appblocker.data.PinStore
+import com.appblocker.data.SettingsStore
 import com.appblocker.service.AccessibilityUtil
 import com.appblocker.ui.theme.AppGradients
 
@@ -67,14 +70,18 @@ fun ProfileScreen(
     val protectionOk = remember(resumeTick) { protectionOk(context) }
     val adminOn = remember(resumeTick) { isDeviceAdminActive(context) }
     var showSetPin by remember { mutableStateOf(false) }
+    var userName by remember(resumeTick) { mutableStateOf(SettingsStore.userName(context)) }
+    var showRename by remember { mutableStateOf(false) }
     val locked = strictActive
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)
     ) {
         ProfileHeader(
+            name = userName,
             version = appVersion(context),
             protectionOk = protectionOk,
+            onEditName = { showRename = true },
             onFix = { if (!protectionOk) onOpenPermissions() },
         )
 
@@ -184,42 +191,100 @@ fun ProfileScreen(
             onDismiss = { showSetPin = false },
         )
     }
+    if (showRename) {
+        RenameDialog(
+            initial = userName,
+            onSet = { newName -> SettingsStore.setUserName(context, newName); userName = newName; showRename = false },
+            onDismiss = { showRename = false },
+        )
+    }
 }
 
-/** Gradient hero with the app identity + live protection status. */
+/** Gradient hero: the owner's identity (avatar + name) + live protection status. */
 @Composable
-private fun ProfileHeader(version: String, protectionOk: Boolean, onFix: () -> Unit) {
+private fun ProfileHeader(
+    name: String,
+    version: String,
+    protectionOk: Boolean,
+    onEditName: () -> Unit,
+    onFix: () -> Unit,
+) {
     Box(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(AppGradients.accent)
-            .clickable(enabled = !protectionOk, onClick = onFix).padding(20.dp)
+            .padding(20.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier.size(56.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.18f)),
-                contentAlignment = Alignment.Center,
-            ) { Icon(Icons.Filled.Shield, null, tint = Color.White, modifier = Modifier.size(30.dp)) }
-            Spacer(Modifier.width(16.dp))
-            Column(Modifier.weight(1f)) {
-                Text("AppBlocker", style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold, color = Color.White)
-                Text("Version $version", style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.8f))
-                Spacer(Modifier.height(10.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clip(RoundedCornerShape(50))
-                        .background(Color.White.copy(alpha = 0.22f)).padding(horizontal = 12.dp, vertical = 5.dp),
+        Column {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier.size(56.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.18f)),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Box(Modifier.size(9.dp).clip(CircleShape)
-                        .background(if (protectionOk) Color(0xFF22C55E) else Color(0xFFFFB020)))
-                    Spacer(Modifier.width(7.dp))
-                    Text(if (protectionOk) "Protection active" else "Action needed — tap to fix",
-                        style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold,
-                        color = Color.White)
+                    Text(initials(name), style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold, color = Color.White)
                 }
+                Spacer(Modifier.width(16.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(name.ifBlank { "Your name" }, style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
+                    Text("AppBlocker · v$version", style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.8f))
+                }
+                IconButton(onClick = onEditName) {
+                    Icon(Icons.Filled.Edit, contentDescription = "Edit name", tint = Color.White)
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.clip(RoundedCornerShape(50))
+                    .background(Color.White.copy(alpha = 0.22f))
+                    .clickable(enabled = !protectionOk, onClick = onFix)
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+            ) {
+                Box(Modifier.size(9.dp).clip(CircleShape)
+                    .background(if (protectionOk) Color(0xFF22C55E) else Color(0xFFFFB020)))
+                Spacer(Modifier.width(7.dp))
+                Text(if (protectionOk) "Protection active" else "Action needed — tap to fix",
+                    style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold,
+                    color = Color.White)
             }
         }
     }
+}
+
+/** Up-to-two initials from a name, e.g. "Abdallah Ahdab" -> "AA". */
+private fun initials(name: String): String {
+    val parts = name.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+    return when {
+        parts.isEmpty() -> "?"
+        parts.size == 1 -> parts[0].take(1).uppercase()
+        else -> (parts[0].take(1) + parts.last().take(1)).uppercase()
+    }
+}
+
+/** Simple rename dialog for the profile name. */
+@Composable
+private fun RenameDialog(initial: String, onSet: (String) -> Unit, onDismiss: () -> Unit) {
+    var text by remember { mutableStateOf(initial) }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Your name") },
+        confirmButton = {
+            androidx.compose.material3.TextButton(
+                enabled = text.trim().isNotEmpty(),
+                onClick = { onSet(text.trim()) },
+            ) { Text("Save") }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+        text = {
+            androidx.compose.material3.OutlinedTextField(
+                value = text, onValueChange = { text = it.take(40) },
+                label = { Text("Name") }, singleLine = true,
+            )
+        },
+    )
 }
 
 /** Whether the core blocking permissions (accessibility + overlay) are both granted. */

@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -32,7 +33,13 @@ import com.appblocker.data.Schedule
 import com.appblocker.ui.theme.softGlow
 
 @Composable
-internal fun TemplateCard(modifier: Modifier, t: Template, active: Boolean, onClick: () -> Unit) {
+internal fun TemplateCard(
+    modifier: Modifier,
+    t: Template,
+    active: Boolean,
+    onEditApps: (() -> Unit)? = null,
+    onClick: () -> Unit,
+) {
     Box(modifier.fillMaxHeight().softGlow(RoundedCornerShape(20.dp), glow = t.colors.first(), elevation = 10.dp)) {
     Column(
         Modifier.fillMaxWidth().fillMaxHeight()
@@ -49,6 +56,17 @@ internal fun TemplateCard(modifier: Modifier, t: Template, active: Boolean, onCl
                 Icon(t.icon, contentDescription = "Block ${t.title}", tint = Color.White, modifier = Modifier.size(24.dp))
             }
             Spacer(Modifier.weight(1f))
+            if (onEditApps != null) {
+                Box(
+                    Modifier.size(30.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.22f))
+                        .clickable(onClick = onEditApps),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Filled.Edit, contentDescription = "Choose apps for ${t.title}",
+                        tint = Color.White, modifier = Modifier.size(16.dp))
+                }
+                Spacer(Modifier.width(6.dp))
+            }
             if (active) {
                 Row(
                     Modifier.clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.28f))

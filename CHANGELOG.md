@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.40
+- Profile now shows your name (Abdallah Ahdab) with an avatar and a rename option. YouTube Shorts blocking now starts and stops with Quick Block. You can now choose which of your apps each template blocks (edit pencil on each template card).
+
 ## v1.39
 - Block YouTube Shorts is now shown as a nested 'Shorts (BETA)' sub-row right under YouTube in the app list (with its own checkbox), instead of a separate Extra-options toggle.
 

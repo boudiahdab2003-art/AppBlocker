@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -33,8 +34,10 @@ import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -45,6 +48,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -57,6 +61,7 @@ import com.appblocker.data.QuickSession
 import com.appblocker.data.Schedule
 import com.appblocker.data.ScheduleType
 import com.appblocker.data.SettingsStore
+import com.appblocker.data.TemplateStore
 import com.appblocker.ui.theme.AppGradients
 import com.appblocker.ui.theme.softGlow
 import kotlinx.coroutines.delay
@@ -71,6 +76,7 @@ fun BlockingScreen(
     scheduleVm: ScheduleViewModel = viewModel(),
     focusVm: FocusViewModel = viewModel(),
     updateVm: UpdateViewModel = viewModel(),
+    appsVm: AppListViewModel = viewModel(),
 ) {
     val updateState by updateVm.state.collectAsState()
     val context = LocalContext.current
@@ -84,6 +90,7 @@ fun BlockingScreen(
     val essentialMissing = perms.count { !it.granted && it.essential }
     val adultOn = SettingsStore.blockAdult(context)
     var pending by remember { mutableStateOf<Template?>(null) }
+    var editingTemplate by remember { mutableStateOf<Template?>(null) }
     var showTimer by remember { mutableStateOf(false) }
     var showPomo by remember { mutableStateOf(false) }
     // 1s ticker drives the Timer/Pomodoro countdown.
@@ -280,6 +287,7 @@ fun BlockingScreen(
                     TemplateCard(
                         Modifier.weight(1f), t,
                         active = isTemplateActive(t, schedules, adultOn),
+                        onEditApps = if (t.packages.isNotEmpty()) ({ editingTemplate = t }) else null,
                     ) { pending = t }
                 }
                 if (rowItems.size == 1) Spacer(Modifier.weight(1f))
@@ -306,6 +314,19 @@ fun BlockingScreen(
         )
     }
 
+    editingTemplate?.let { t ->
+        TemplateAppsSheet(
+            template = t,
+            appsVm = appsVm,
+            onDismiss = { editingTemplate = null },
+            onSave = { pkgs ->
+                TemplateStore.setPackages(context, t.id, pkgs)
+                editingTemplate = null
+                Toast.makeText(context, "Saved apps for “${t.title}”", Toast.LENGTH_SHORT).show()
+            },
+        )
+    }
+
     if (showTimer) {
         DurationPickerDialog(
             title = "Set the timer",
@@ -326,5 +347,43 @@ fun BlockingScreen(
             },
             onDismiss = { showPomo = false },
         )
+    }
+}
+
+/** Bottom sheet to choose which of the user's installed apps a template blocks. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TemplateAppsSheet(
+    template: Template,
+    appsVm: AppListViewModel,
+    onDismiss: () -> Unit,
+    onSave: (List<String>) -> Unit,
+) {
+    val context = LocalContext.current
+    val apps by appsVm.apps.collectAsState()
+    val installed = remember(apps) { apps.filter { it.installed } }
+    val selected = remember(template.id) {
+        (TemplateStore.packagesFor(context, template.id) ?: template.packages.map { it.first })
+            .toMutableStateList()
+    }
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface) {
+        Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 24.dp)) {
+            Text("Choose apps for “${template.title}”", style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+            Text("Pick which of your apps this template blocks.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(8.dp))
+            LazyColumn(Modifier.fillMaxWidth().heightIn(max = 380.dp)) {
+                items(installed, key = { it.packageName }) { app ->
+                    val checked = selected.contains(app.packageName)
+                    AppCheckRow(app, checked = checked, enabled = true) { on ->
+                        if (on) selected.add(app.packageName) else selected.remove(app.packageName)
+                    }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            GradientButton(text = "Save", onClick = { onSave(selected.toList()) },
+                modifier = Modifier.fillMaxWidth())
+        }
     }
 }

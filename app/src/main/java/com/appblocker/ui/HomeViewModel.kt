@@ -8,6 +8,7 @@ import com.appblocker.data.BlockerDatabase
 import com.appblocker.data.Schedule
 import com.appblocker.data.ScheduleType
 import com.appblocker.data.SettingsStore
+import com.appblocker.data.TemplateStore
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -33,7 +34,9 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun applyTemplate(t: Template) {
         viewModelScope.launch {
-            if (t.packages.isNotEmpty()) {
+            // Use the user's chosen apps for this template if they've customised it.
+            val packages = TemplateStore.packagesFor(getApplication(), t.id) ?: t.packages.map { it.first }
+            if (packages.isNotEmpty()) {
                 val existingId = db.scheduleDao().findByName(t.title)?.id ?: 0L
                 db.scheduleDao().upsert(
                     Schedule(
@@ -44,7 +47,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                         startMinutes = t.startMinutes,
                         endMinutes = t.endMinutes,
                         daysMask = t.daysMask,
-                        packages = t.packages.map { it.first },
+                        packages = packages,
                     )
                 )
             }

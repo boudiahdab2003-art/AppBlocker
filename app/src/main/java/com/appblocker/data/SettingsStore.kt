@@ -45,6 +45,13 @@ object SettingsStore {
     fun setBlockYoutubeShorts(context: Context, value: Boolean) =
         prefs(context).edit().putBoolean(KEY_BLOCK_YT_SHORTS, value).apply()
 
+    /** The owner's display name shown on the Profile page. */
+    fun userName(context: Context): String =
+        prefs(context).getString("user_name", "Abdallah Ahdab") ?: "Abdallah Ahdab"
+
+    fun setUserName(context: Context, value: String) =
+        prefs(context).edit().putString("user_name", value.trim()).apply()
+
     /** Whether the first-run setup screen has been shown once. */
     fun setupSeen(context: Context): Boolean =
         prefs(context).getBoolean("setup_seen", false)
