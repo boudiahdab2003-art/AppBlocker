@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.44
+- Insights page redesigned: gradient hero with key stats, comparison bars on every app list, colored week-over-week trends, glowing cards with section icons, animated charts
+
 ## v1.43
 - Blocks now apply mid-use (limits/schedules catch you inside the app), disabled location schedules stop draining battery, tablet-friendly New-schedule tiles, more professional Profile page
 
