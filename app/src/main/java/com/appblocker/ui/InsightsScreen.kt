@@ -34,16 +34,20 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Assessment
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.TouchApp
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -51,6 +55,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -81,8 +86,10 @@ import kotlin.math.roundToInt
 @Composable
 fun InsightsScreen(vm: InsightsViewModel = viewModel()) {
     val state by vm.state.collectAsState()
+    val coach by vm.coach.collectAsState()
     val context = LocalContext.current
     var tab by rememberSaveable { mutableIntStateOf(0) } // 0 Day, 1 Week, 2 Trend
+    var showKeyDialog by remember { mutableStateOf(false) }
 
     // Rebuild the stats every time the tab is opened, so they're always current.
     LaunchedEffect(Unit) { vm.refresh() }
@@ -165,6 +172,12 @@ fun InsightsScreen(vm: InsightsViewModel = viewModel()) {
             Spacer(Modifier.padding(top = 24.dp))
         }
 
+        // AI Coach: Gemini's daily read of the numbers above.
+        item {
+            CoachCard(coach, onEditKey = { showKeyDialog = true }, onNewTips = { vm.newTips() })
+            Spacer(Modifier.padding(top = 24.dp))
+        }
+
         // Patterns: weekday vs weekend
         if (state.usageAccess && (state.weekdayAvg > 0 || state.weekendAvg > 0)) {
             item { PatternsCard(state); Spacer(Modifier.padding(top = 24.dp)) }
@@ -243,6 +256,100 @@ fun InsightsScreen(vm: InsightsViewModel = viewModel()) {
 
     val detail by vm.detail.collectAsState()
     detail?.let { AppDetailSheet(it, onDismiss = vm::clearDetail) }
+
+    if (showKeyDialog) {
+        var keyText by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { showKeyDialog = false },
+            title = { Text("Gemini API key") },
+            text = {
+                Column {
+                    Text(
+                        "Paste your free key from aistudio.google.com/apikey. " +
+                            "It's stored on this device only.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = keyText,
+                        onValueChange = { keyText = it.trim() },
+                        label = { Text("API key") },
+                        singleLine = true,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = keyText.isNotBlank(),
+                    onClick = { vm.setApiKey(keyText); showKeyDialog = false },
+                ) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { showKeyDialog = false }) { Text("Cancel") } },
+        )
+    }
+}
+
+/** The AI Coach panel: Gemini-written tips from today's aggregate stats. */
+@Composable
+private fun CoachCard(state: CoachState, onEditKey: () -> Unit, onNewTips: () -> Unit) {
+    SectionCard("AI Coach", "Personalized tips from your data",
+        icon = Icons.Filled.AutoAwesome) {
+        when (state) {
+            CoachState.NoKey -> {
+                Text(
+                    "Add your free Gemini API key to get daily coaching based on how you " +
+                        "actually used your phone.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+                TextButton(onClick = onEditKey) { Text("Add key") }
+            }
+            CoachState.Loading -> {
+                Row(Modifier.padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(10.dp))
+                    Text("Analyzing your day…", style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            is CoachState.Tips -> {
+                state.tips.forEachIndexed { i, tip ->
+                    if (i > 0) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                    }
+                    Row(Modifier.padding(vertical = 10.dp)) {
+                        Box(
+                            Modifier.padding(top = 7.dp).size(8.dp).clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary)
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(tip, style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface)
+                    }
+                }
+                Row {
+                    TextButton(onClick = onNewTips) { Text("New tips") }
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = onEditKey) { Text("Change key") }
+                }
+            }
+            CoachState.Unavailable -> {
+                Text(
+                    "Couldn't reach Gemini — tips will return when you're online.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+                Row {
+                    TextButton(onClick = onNewTips) { Text("Try again") }
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = onEditKey) { Text("Change key") }
+                }
+            }
+        }
+    }
 }
 
 @Composable
