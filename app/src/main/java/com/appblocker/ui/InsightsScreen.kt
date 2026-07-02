@@ -36,6 +36,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -70,6 +71,9 @@ fun InsightsScreen(vm: InsightsViewModel = viewModel()) {
     val state by vm.state.collectAsState()
     val context = LocalContext.current
     var tab by rememberSaveable { mutableIntStateOf(0) } // 0 Day, 1 Week, 2 Trend
+
+    // Rebuild the stats every time the tab is opened, so they're always current.
+    LaunchedEffect(Unit) { vm.refresh() }
 
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
         item {

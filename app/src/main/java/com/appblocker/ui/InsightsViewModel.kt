@@ -80,7 +80,8 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
     private val _detail = MutableStateFlow<AppDetail?>(null)
     val detail: StateFlow<AppDetail?> = _detail
 
-    init { refresh() }
+    // No init-time refresh: InsightsScreen calls refresh() every time the tab is opened,
+    // so the numbers are current on each visit (cheap now — the history is cached per day).
 
     /** Loads the per-app detail sheet for [pkg] (screen time + opens + block attempts). */
     fun selectApp(pkg: String) {
@@ -115,6 +116,9 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun build(): InsightsState {
         val ctx = getApplication<Application>()
+        // One system query for everything derived from "today's stats" (total, top apps,
+        // categories) instead of three identical ones.
+        val snapshot = UsageTracker.todaySnapshot(ctx)
         val attempts = AttemptCounter.summary(ctx).take(6).map { a ->
             if (a.key == "web") {
                 StatRow("Websites", null, "${a.today}× today · ${a.total}× total")
@@ -124,7 +128,7 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         val opensByApp = LaunchCounter.opensTodayByApp(ctx)
-        val topApps = UsageTracker.topAppsToday(ctx, 6).map { u ->
+        val topApps = UsageTracker.topAppsToday(snapshot, 6).map { u ->
             val opens = opensByApp[u.packageName] ?: 0
             val detail = if (opens > 0) "${fmt(u.minutes)} · $opens opens" else fmt(u.minutes)
             StatRow(label(u.packageName), icon(u.packageName), detail, dotColor(u.packageName),
@@ -134,7 +138,7 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
             .sortedByDescending { it.value }
             .take(6)
             .map { (pkg, n) -> StatRow(label(pkg), icon(pkg), "$n opens", dotColor(pkg), pkg = pkg) }
-        val categories = UsageTracker.categoryMinutesToday(ctx).mapNotNull { (name, mins) ->
+        val categories = UsageTracker.categoryMinutesToday(snapshot).mapNotNull { (name, mins) ->
             runCatching { AppCategory.valueOf(name) }.getOrNull()?.let {
                 CatSlice(it.label, Color(it.color), mins)
             }
@@ -158,7 +162,7 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
         // Per-app week-over-week trends ("YouTube +40%").
         val now = System.currentTimeMillis()
         val thisWeekApps = UsageTracker.appMinutesInRange(ctx, UsageTracker.startOfDayAgo(6), now)
-        val lastWeekApps = UsageTracker.appMinutesInRange(ctx, UsageTracker.startOfDayAgo(13), UsageTracker.startOfDayAgo(6))
+        val lastWeekApps = UsageTracker.lastWeekAppMinutes(ctx) // fixed range in the past — cached per day
         val appTrends = thisWeekApps.entries
             .filter { it.value >= 5 } // ignore trivially-small apps
             .sortedByDescending { it.value }
@@ -175,7 +179,7 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
         return InsightsState(
             loaded = true,
             usageAccess = hasUsageAccess(ctx),
-            screenMinutes = UsageTracker.totalMinutesToday(ctx),
+            screenMinutes = UsageTracker.totalMinutesToday(snapshot),
             weekMinutes = weekly.sum(),
             strictMinutes = StatsStore.strictMinutesToday(ctx),
             hourly = UsageTracker.hourlyMinutesToday(ctx),
