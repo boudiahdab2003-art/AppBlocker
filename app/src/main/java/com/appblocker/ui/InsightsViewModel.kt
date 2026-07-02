@@ -10,6 +10,8 @@ import androidx.lifecycle.viewModelScope
 import com.appblocker.data.AppCategories
 import com.appblocker.data.AppCategory
 import com.appblocker.data.AttemptCounter
+import com.appblocker.data.InstalledApp
+import com.appblocker.data.InstalledAppsRepository
 import com.appblocker.data.LaunchCounter
 import com.appblocker.data.StatsStore
 import com.appblocker.data.UnlockCounter
@@ -92,13 +94,14 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
 
     fun clearDetail() { _detail.value = null }
 
-    private fun buildDetail(pkg: String): AppDetail {
+    private suspend fun buildDetail(pkg: String): AppDetail {
         val ctx = getApplication<Application>()
+        val installed = installedByPackage(ctx)
         val attempt = AttemptCounter.summary(ctx).find { it.key == pkg }
         val cat = AppCategories.categoryOf(pkg)
         return AppDetail(
-            label = label(pkg),
-            icon = icon(pkg),
+            label = label(installed, pkg),
+            icon = icon(installed, pkg),
             categoryLabel = cat.label,
             categoryColor = Color(cat.color),
             minutes = UsageTracker.usedMinutesToday(ctx, pkg),
@@ -114,8 +117,11 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private fun build(): InsightsState {
+    private suspend fun build(): InsightsState {
         val ctx = getApplication<Application>()
+        // Labels/icons come from the launch-warmed installed-apps cache — decoding ~20 icon
+        // bitmaps per refresh via PackageManager was most of the remaining build time.
+        val installed = installedByPackage(ctx)
         // One system query for everything derived from "today's stats" (total, top apps,
         // categories) instead of three identical ones.
         val snapshot = UsageTracker.todaySnapshot(ctx)
@@ -123,21 +129,23 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
             if (a.key == "web") {
                 StatRow("Websites", null, "${a.today}× today · ${a.total}× total")
             } else {
-                StatRow(label(a.key), icon(a.key), "${a.today}× today · ${a.total}× total",
-                    dotColor(a.key), pkg = a.key)
+                StatRow(label(installed, a.key), icon(installed, a.key),
+                    "${a.today}× today · ${a.total}× total", dotColor(a.key), pkg = a.key)
             }
         }
         val opensByApp = LaunchCounter.opensTodayByApp(ctx)
         val topApps = UsageTracker.topAppsToday(snapshot, 6).map { u ->
             val opens = opensByApp[u.packageName] ?: 0
             val detail = if (opens > 0) "${fmt(u.minutes)} · $opens opens" else fmt(u.minutes)
-            StatRow(label(u.packageName), icon(u.packageName), detail, dotColor(u.packageName),
-                pkg = u.packageName)
+            StatRow(label(installed, u.packageName), icon(installed, u.packageName), detail,
+                dotColor(u.packageName), pkg = u.packageName)
         }
         val topOpens = opensByApp.entries
             .sortedByDescending { it.value }
             .take(6)
-            .map { (pkg, n) -> StatRow(label(pkg), icon(pkg), "$n opens", dotColor(pkg), pkg = pkg) }
+            .map { (pkg, n) ->
+                StatRow(label(installed, pkg), icon(installed, pkg), "$n opens", dotColor(pkg), pkg = pkg)
+            }
         val categories = UsageTracker.categoryMinutesToday(snapshot).mapNotNull { (name, mins) ->
             runCatching { AppCategory.valueOf(name) }.getOrNull()?.let {
                 CatSlice(it.label, Color(it.color), mins)
@@ -173,7 +181,8 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
                     val pct = ((mins - prev) * 100f / prev).roundToInt()
                     if (pct >= 0) "▲$pct%" else "▼${-pct}%"
                 } else "new"
-                StatRow(label(pkg), icon(pkg), "${fmt(mins)} · $delta", dotColor(pkg), pkg = pkg)
+                StatRow(label(installed, pkg), icon(installed, pkg), "${fmt(mins)} · $delta",
+                    dotColor(pkg), pkg = pkg)
             }
 
         return InsightsState(
@@ -200,13 +209,23 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
-    private fun label(pkg: String): String = runCatching {
-        pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
-    }.getOrDefault(pkg)
+    /** The launch-warmed installed-apps cache, keyed by package. */
+    private suspend fun installedByPackage(ctx: Application): Map<String, InstalledApp> {
+        InstalledAppsRepository.ensureLoaded(ctx)
+        return InstalledAppsRepository.apps.value.associateBy { it.packageName }
+    }
 
-    private fun icon(pkg: String): Bitmap? = runCatching {
-        pm.getApplicationIcon(pkg).toBitmap(96, 96)
-    }.getOrNull()
+    // Cache hit for launchable apps; PackageManager fallback for the rest (e.g. system UI
+    // packages that show up in usage stats but aren't in the launcher).
+    private fun label(cache: Map<String, InstalledApp>, pkg: String): String =
+        cache[pkg]?.label ?: runCatching {
+            pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
+        }.getOrDefault(pkg)
+
+    private fun icon(cache: Map<String, InstalledApp>, pkg: String): Bitmap? =
+        cache[pkg]?.icon ?: runCatching {
+            pm.getApplicationIcon(pkg).toBitmap(96, 96)
+        }.getOrNull()
 
     private fun dotColor(pkg: String): Color = Color(AppCategories.categoryOf(pkg).color)
 

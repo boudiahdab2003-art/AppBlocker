@@ -143,7 +143,7 @@ fun isDeviceAdminActive(ctx: Context): Boolean {
 }
 
 /** Turns device admin on (system confirm screen) or off (removes it, allowing uninstall). */
-private fun toggleDeviceAdmin(ctx: Context) {
+fun toggleDeviceAdmin(ctx: Context) {
     val dpm = ctx.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
     val admin = AppBlockerAdminReceiver.componentName(ctx)
     if (dpm.isAdminActive(admin)) {

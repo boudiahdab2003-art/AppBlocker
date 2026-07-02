@@ -165,16 +165,22 @@ class BlockerAccessibilityService : AccessibilityService() {
         }
     }
 
-    /** Debounce: run the scan ~600ms after the last event, i.e. once the page settles. */
+    /** Debounce: run the scan ~600ms after the last event, i.e. once the page settles.
+     *  Only scheduled while a browser is foreground — the scan would no-op anywhere else,
+     *  and content/text events fire constantly in every app (e.g. while scrolling). */
     private fun scheduleWebScan() {
+        if (lastForegroundPkg !in browserPackages) return
         handler.removeCallbacks(webScanRunnable)
         handler.postDelayed(webScanRunnable, 600)
     }
 
     /** Debounced YouTube-Shorts check (quicker than the web scan so Shorts is caught fast).
-     *  Only runs while Quick Block is active, so Shorts blocking starts/stops with it. */
+     *  Only runs while Quick Block is active AND YouTube is foreground (the browser
+     *  youtube.com/shorts case is the web scan's job), so other apps' events cost nothing. */
     private fun scheduleShortsScan() {
-        if (!SettingsStore.blockYoutubeShorts(this) || !quickBlockActive()) {
+        if (!SettingsStore.blockYoutubeShorts(this) || !quickBlockActive() ||
+            lastForegroundPkg != YOUTUBE_PKG
+        ) {
             if (shortsCovering) { shortsCovering = false; removeBlockOverlay() }
             return
         }

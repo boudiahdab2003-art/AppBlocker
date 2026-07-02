@@ -1,6 +1,5 @@
 package com.appblocker.ui
 
-import android.app.admin.DevicePolicyManager
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
@@ -53,7 +52,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.appblocker.admin.AppBlockerAdminReceiver
 import com.appblocker.data.PinStore
 import com.appblocker.data.SettingsStore
 import com.appblocker.service.AccessibilityUtil
@@ -71,7 +69,7 @@ fun ProfileScreen(
     val resumeTick = resumeTick()
     var pinSet by remember(resumeTick) { mutableStateOf(PinStore.isSet(context)) }
     val protectionOk = remember(resumeTick) { protectionOk(context) }
-    val adminOn = remember(resumeTick) { isDeviceAdminActive(context) }
+    var adminOn by remember(resumeTick) { mutableStateOf(isDeviceAdminActive(context)) }
     var showSetPin by remember { mutableStateOf(false) }
     var userName by remember(resumeTick) { mutableStateOf(SettingsStore.userName(context)) }
     var showRename by remember { mutableStateOf(false) }
@@ -129,7 +127,14 @@ fun ProfileScreen(
                 subtitle = "Device admin stops AppBlocker being uninstalled until you turn this off.",
                 badge = adminOn,
                 enabled = !locked,
-                onClick = { requestDeviceAdmin(context) },
+                // Same toggle as Setup & permissions: on -> system confirm screen, off -> remove.
+                // removeActiveAdmin completes async, so flip the badge optimistically when
+                // turning off; turning on is corrected on resume from the system screen.
+                onClick = {
+                    val wasOn = isDeviceAdminActive(context)
+                    toggleDeviceAdmin(context)
+                    adminOn = if (wasOn) false else isDeviceAdminActive(context)
+                },
             )
         }
 
@@ -311,28 +316,6 @@ private fun shareApp(context: Context) {
 private fun appVersion(context: Context): String = runCatching {
     context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.0"
 }.getOrDefault("1.0")
-
-private fun requestDeviceAdmin(context: Context) {
-    val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-    val admin = AppBlockerAdminReceiver.componentName(context)
-    if (dpm.isAdminActive(admin)) {
-        context.startActivity(
-            Intent(Settings.ACTION_SECURITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        )
-        return
-    }
-    // No FLAG_ACTIVITY_NEW_TASK — the system's ADD_DEVICE_ADMIN screen self-closes ("Cannot
-    // start ADD_DEVICE_ADMIN as a new task") and must run in the caller's (Activity) task.
-    context.startActivity(
-        Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
-            putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, admin)
-            putExtra(
-                DevicePolicyManager.EXTRA_ADD_EXPLANATION,
-                "Enables AppBlocker to resist being uninstalled while your blocks are active."
-            )
-        }
-    )
-}
 
 @Composable
 private fun SectionTitle(text: String) {
