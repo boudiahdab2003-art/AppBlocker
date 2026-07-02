@@ -3,15 +3,21 @@ package com.appblocker.ui
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -25,9 +31,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.Assessment
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -51,14 +62,15 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.appblocker.ui.theme.AppGradients
+import com.appblocker.ui.theme.softGlow
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -103,51 +115,52 @@ fun InsightsScreen(vm: InsightsViewModel = viewModel()) {
             item { UsageAccessCard(context); Spacer(Modifier.padding(top = 8.dp)) }
         }
 
-        // Big number + chart
+        // Gradient hero: the headline number, its context, and today's key counters.
         item {
-            val minutes = when (tab) {
-                0 -> state.screenMinutes
-                1 -> state.weekMinutes
-                else -> state.monthAvg
-            }
             Spacer(Modifier.padding(top = 8.dp))
-            Text(InsightsViewModel.fmt(minutes), fontSize = 52.sp, fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
-            Text(if (tab == 2) "30-DAY AVERAGE" else "SCREEN TIME",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
-            if (tab == 0) VsAverage(today = state.screenMinutes, weekly = state.weekly)
+            InsightsHero(tab, state)
             Spacer(Modifier.padding(top = 20.dp))
-            when (tab) {
-                0 -> BarChart(values = state.hourly, maxMinutes = 60,
-                    bottomLabels = listOf("12a", "6a", "12p", "6p", "11p"),
-                    yLabels = listOf("1h", "30m", "0s"),
-                    readoutLabel = { hourLabel(it) })
-                1 -> {
-                    val cap = chartCap(state.weekly)
-                    BarChart(values = state.weekly, maxMinutes = cap,
-                        bottomLabels = (0..6).map { weekdayLabel(daysAgo = 6 - it, short = false) },
-                        yLabels = listOf("${cap / 60}h", "${cap / 120}h", "0s"),
-                        readoutLabel = { weekdayLabel(daysAgo = 6 - it, short = true) })
-                    Spacer(Modifier.padding(top = 10.dp))
-                    WeekOverWeek(state.thisWeekMin, state.lastWeekMin)
+        }
+
+        // Activity: the interactive chart + category split in one designed card.
+        item {
+            Column(
+                Modifier.fillMaxWidth()
+                    .softGlow(RoundedCornerShape(20.dp), elevation = 4.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .border(
+                        1.dp,
+                        MaterialTheme.colorScheme.outline.copy(alpha = 0.25f),
+                        RoundedCornerShape(20.dp),
+                    )
+                    .padding(16.dp),
+            ) {
+                when (tab) {
+                    0 -> BarChart(values = state.hourly, maxMinutes = 60,
+                        bottomLabels = listOf("12a", "6a", "12p", "6p", "11p"),
+                        yLabels = listOf("1h", "30m", "0s"),
+                        readoutLabel = { hourLabel(it) })
+                    1 -> {
+                        val cap = chartCap(state.weekly)
+                        BarChart(values = state.weekly, maxMinutes = cap,
+                            bottomLabels = (0..6).map { weekdayLabel(daysAgo = 6 - it, short = false) },
+                            yLabels = listOf("${cap / 60}h", "${cap / 120}h", "0s"),
+                            readoutLabel = { weekdayLabel(daysAgo = 6 - it, short = true) })
+                    }
+                    else -> {
+                        val cap = chartCap(state.monthly)
+                        val n = state.monthly.size
+                        BarChart(values = state.monthly, maxMinutes = cap,
+                            bottomLabels = listOf("30d", "20d", "10d", "today"),
+                            yLabels = listOf("${cap / 60}h", "${cap / 120}h", "0s"),
+                            readoutLabel = { dateLabel(n - 1 - it) })
+                    }
                 }
-                else -> {
-                    val cap = chartCap(state.monthly)
-                    val n = state.monthly.size
-                    BarChart(values = state.monthly, maxMinutes = cap,
-                        bottomLabels = listOf("30d", "20d", "10d", "today"),
-                        yLabels = listOf("${cap / 60}h", "${cap / 120}h", "0s"),
-                        readoutLabel = { dateLabel(n - 1 - it) })
-                    Spacer(Modifier.padding(top = 10.dp))
-                    WeekOverWeek(state.thisWeekMin, state.lastWeekMin)
+                if (tab != 2 && state.categories.isNotEmpty()) {
+                    Spacer(Modifier.padding(top = 16.dp))
+                    CategoryBreakdown(state.categories)
                 }
-            }
-            if (tab != 2 && state.categories.isNotEmpty()) {
-                Spacer(Modifier.padding(top = 20.dp))
-                CategoryBreakdown(state.categories)
             }
             Spacer(Modifier.padding(top = 24.dp))
         }
@@ -160,7 +173,8 @@ fun InsightsScreen(vm: InsightsViewModel = viewModel()) {
         // Trending apps (week over week)
         if (state.appTrends.isNotEmpty()) {
             item {
-                SectionCard("Trending this week", "How each app changed vs last week.") {
+                SectionCard("Trending this week", "How each app changed vs last week.",
+                    icon = Icons.AutoMirrored.Filled.TrendingUp) {
                     StatRows(state.appTrends, vm)
                 }
                 Spacer(Modifier.padding(top = 24.dp))
@@ -177,7 +191,7 @@ fun InsightsScreen(vm: InsightsViewModel = viewModel()) {
 
         // Most used apps
         item {
-            SectionCard("Most used apps") {
+            SectionCard("Most used apps", icon = Icons.Filled.BarChart) {
                 if (state.topApps.isEmpty()) {
                     Text(if (state.usageAccess) "No usage recorded yet." else "Needs Usage Access.",
                         style = MaterialTheme.typography.bodyMedium,
@@ -194,7 +208,8 @@ fun InsightsScreen(vm: InsightsViewModel = viewModel()) {
             item {
                 Spacer(Modifier.padding(top = 24.dp))
                 SectionCard("Most opened apps",
-                    "${state.totalOpens} app opens today · tap an app for details") {
+                    "${state.totalOpens} app opens today · tap an app for details",
+                    icon = Icons.Filled.TouchApp) {
                     StatRows(state.topOpens, vm)
                 }
             }
@@ -203,7 +218,7 @@ fun InsightsScreen(vm: InsightsViewModel = viewModel()) {
         // Blocked-app attempts
         item {
             Spacer(Modifier.padding(top = 24.dp))
-            SectionCard("Times you opened blocked apps") {
+            SectionCard("Times you opened blocked apps", icon = Icons.Filled.Block) {
                 if (state.attempts.isEmpty()) {
                     Text("No blocks yet today.", style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -268,6 +283,9 @@ private fun BarChart(
     val highlight = MaterialTheme.colorScheme.primary
     val peak = remember(values) { values.indices.maxByOrNull { values[it] } ?: 0 }
     var selected by remember(values) { mutableIntStateOf(peak) }
+    // Bars grow in when the data (tab) changes — read inside the Canvas so it redraws per frame.
+    val growth = remember(values) { Animatable(0f) }
+    LaunchedEffect(values) { growth.animateTo(1f, tween(500)) }
 
     // Readout: the selected bar's exact value + when it was.
     Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -312,7 +330,7 @@ private fun BarChart(
                 // faint full-height track behind each bar for a polished look
                 drawRoundRect(trackColor, Offset(x, 0f), Size(barW, h), radius)
                 val frac = (v.toFloat() / maxMinutes).coerceIn(0f, 1f)
-                val barH = h * frac
+                val barH = h * frac * growth.value
                 if (barH > 1f) {
                     drawRoundRect(barBrush, Offset(x, h - barH), Size(barW, barH), radius)
                 }
@@ -347,7 +365,7 @@ private fun SummaryStats(state: InsightsState) {
     val busiestIdx = state.weekly.indices.maxByOrNull { state.weekly[it] } ?: 6
     val rating = rateUsage(today)
 
-    SectionCard("Summary") {
+    SectionCard("Summary", icon = Icons.Filled.Assessment) {
         SummaryRow("Daily average (7 days)") {
             Text(InsightsViewModel.fmt(avg), style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
@@ -404,7 +422,7 @@ private fun rateUsage(totalMinutes: Int): Pair<String, Color> = when {
 /** Weekday-vs-weekend averages, shown on the Patterns card. */
 @Composable
 private fun PatternsCard(state: InsightsState) {
-    SectionCard("Patterns") {
+    SectionCard("Patterns", icon = Icons.Filled.CalendarMonth) {
         SummaryRow("Weekday average") {
             Text(InsightsViewModel.fmt(state.weekdayAvg), style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
@@ -422,24 +440,6 @@ private fun PatternsCard(state: InsightsState) {
     Spacer(Modifier.padding(top = 8.dp))
     Text(takeaway, style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant)
-}
-
-/** This-week vs last-week total, shown under the Trend chart. */
-@Composable
-private fun WeekOverWeek(thisWeek: Int, lastWeek: Int) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically) {
-        Text("This week ${InsightsViewModel.fmt(thisWeek)}",
-            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        if (lastWeek > 0) {
-            val pct = ((thisWeek - lastWeek) * 100f / lastWeek).roundToInt()
-            val up = pct >= 0
-            val color = if (up) Color(0xFFEF4444) else Color(0xFF22C55E)
-            Spacer(Modifier.width(8.dp))
-            Text("${if (up) "▲" else "▼"} ${abs(pct)}% vs last week",
-                style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = color)
-        }
-    }
 }
 
 /** Round a value array's max up to a whole-hour cap (min 1h) for the chart's y-axis. */
@@ -480,19 +480,29 @@ private fun CategoryBreakdown(cats: List<CatSlice>) {
         }
     }
     Spacer(Modifier.padding(top = 12.dp))
-    // legend: wrap into rows of up to 3
-    cats.chunked(3).forEach { rowCats ->
-        Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            rowCats.forEach { c ->
-                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(10.dp).clip(CircleShape).background(c.color))
-                    Spacer(Modifier.width(6.dp))
-                    Text("${c.label} ${InsightsViewModel.fmt(c.minutes)}",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-                }
+    // legend: tinted pill chips in the category colours, wrapping as needed
+    legendPills(cats)
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun legendPills(cats: List<CatSlice>) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        cats.forEach { c ->
+            Row(
+                Modifier.clip(RoundedCornerShape(50)).background(c.color.copy(alpha = 0.15f))
+                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.size(8.dp).clip(CircleShape).background(c.color))
+                Spacer(Modifier.width(6.dp))
+                Text("${c.label} ${InsightsViewModel.fmt(c.minutes)}",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold, color = c.color, maxLines = 1)
             }
-            repeat(3 - rowCats.size) { Spacer(Modifier.weight(1f)) }
         }
     }
 }
@@ -517,23 +527,47 @@ private fun UsageAccessCard(context: Context) {
     }
 }
 
-/** Section header + its rows in one rounded surface card — the page's shared card language. */
+/** Section header (tinted icon tile + title) + its rows in one glowing card — the page's
+ *  shared card language, matching the Blocking/Profile cards. */
 @Composable
 private fun SectionCard(
     title: String,
     subtitle: String? = null,
+    icon: ImageVector? = null,
     content: @Composable () -> Unit,
 ) {
-    Text(title, style = MaterialTheme.typography.titleLarge,
-        fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-    if (subtitle != null) {
-        Text(subtitle, style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        if (icon != null) {
+            Box(
+                Modifier.size(30.dp).clip(RoundedCornerShape(9.dp))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp))
+            }
+            Spacer(Modifier.width(10.dp))
+        }
+        Column {
+            Text(title, style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+            if (subtitle != null) {
+                Text(subtitle, style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
     }
     Spacer(Modifier.padding(top = 8.dp))
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
+        Modifier.fillMaxWidth()
+            .softGlow(RoundedCornerShape(20.dp), elevation = 4.dp)
+            .clip(RoundedCornerShape(20.dp))
             .background(MaterialTheme.colorScheme.surface)
+            .border(
+                1.dp,
+                MaterialTheme.colorScheme.outline.copy(alpha = 0.25f),
+                RoundedCornerShape(20.dp),
+            )
             .padding(horizontal = 16.dp, vertical = 4.dp),
     ) { content() }
 }
@@ -555,18 +589,71 @@ private fun InsetDivider() {
     )
 }
 
-/** Today vs the 7-day average, under the Day tab's big number (green = below your average). */
+/** Gradient hero card: big number, its comparison pill, and today's key counters. */
 @Composable
-private fun VsAverage(today: Int, weekly: IntArray) {
-    val avg = if (weekly.isNotEmpty()) weekly.sum() / weekly.size else 0
-    if (avg <= 0) return
-    val pct = ((today - avg) * 100f / avg).roundToInt()
-    val up = pct >= 0
-    val color = if (up) Color(0xFFEF4444) else Color(0xFF22C55E)
-    Spacer(Modifier.padding(top = 6.dp))
-    Text("${if (up) "▲" else "▼"} ${abs(pct)}% vs your 7-day average",
-        style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold,
-        color = color, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+private fun InsightsHero(tab: Int, state: InsightsState) {
+    val minutes = when (tab) {
+        0 -> state.screenMinutes
+        1 -> state.weekMinutes
+        else -> state.monthAvg
+    }
+    // Comparison baseline per tab: Day vs the 7-day average, Week/Trend vs last week.
+    val (baseline, baselineLabel) = when (tab) {
+        0 -> (if (state.weekly.isNotEmpty()) state.weekly.sum() / state.weekly.size else 0) to
+            "vs your 7-day average"
+        else -> state.lastWeekMin to "vs last week"
+    }
+    val compared = if (tab == 0) state.screenMinutes else state.thisWeekMin
+    Column(
+        Modifier.fillMaxWidth()
+            .softGlow(RoundedCornerShape(24.dp), elevation = 12.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .background(AppGradients.accent)
+            .padding(20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(InsightsViewModel.fmt(minutes), fontSize = 52.sp, fontWeight = FontWeight.Bold,
+            color = Color.White)
+        Text(if (tab == 2) "30-DAY AVERAGE" else "SCREEN TIME",
+            style = MaterialTheme.typography.labelLarge, color = Color.White.copy(alpha = 0.8f))
+        if (baseline > 0) {
+            val pct = ((compared - baseline) * 100f / baseline).roundToInt()
+            val up = pct >= 0
+            Spacer(Modifier.height(10.dp))
+            Row(
+                Modifier.clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.18f))
+                    .padding(horizontal = 12.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(if (up) "▲" else "▼", style = MaterialTheme.typography.labelLarge,
+                    color = if (up) Color(0xFFFFB4AB) else Color(0xFF7BE8A8))
+                Spacer(Modifier.width(5.dp))
+                Text("${abs(pct)}% $baselineLabel", style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold, color = Color.White)
+            }
+        }
+        Spacer(Modifier.height(14.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            HeroChip("${state.unlocksToday}", "unlocks today", Modifier.weight(1f))
+            HeroChip("${state.attemptsTodayTotal}", "blocks today", Modifier.weight(1f))
+            HeroChip(InsightsViewModel.fmt(state.strictMinutes), "strict time", Modifier.weight(1f))
+        }
+    }
+}
+
+/** One translucent number chip in the hero (same language as the Profile header). */
+@Composable
+private fun HeroChip(value: String, label: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier.clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = 0.14f))
+            .padding(vertical = 10.dp, horizontal = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
+            color = Color.White)
+        Text(label, style = MaterialTheme.typography.labelSmall,
+            color = Color.White.copy(alpha = 0.85f), maxLines = 1)
+    }
 }
 
 @Composable
@@ -608,9 +695,11 @@ private fun StatListRow(row: StatRow, onClick: (() -> Unit)? = null) {
             row.fraction?.let { f ->
                 Spacer(Modifier.height(6.dp))
                 val tint = row.dotColor ?: MaterialTheme.colorScheme.primary
+                val animated by animateFloatAsState(
+                    targetValue = f.coerceIn(0.02f, 1f), animationSpec = tween(500), label = "bar")
                 Box(Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(50))
                     .background(tint.copy(alpha = 0.15f))) {
-                    Box(Modifier.fillMaxWidth(f.coerceIn(0.02f, 1f)).fillMaxHeight()
+                    Box(Modifier.fillMaxWidth(animated).fillMaxHeight()
                         .clip(RoundedCornerShape(50)).background(tint))
                 }
             }
