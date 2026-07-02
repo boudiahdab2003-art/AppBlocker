@@ -1,16 +1,25 @@
 package com.appblocker.service
 
+import android.Manifest
 import android.accessibilityservice.AccessibilityService
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.graphics.PixelFormat
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.net.Uri
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
-import androidx.core.content.ContextCompat
 import android.view.LayoutInflater
 import android.view.View
 import android.view.WindowManager
@@ -19,6 +28,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
 import com.appblocker.R
 import com.appblocker.data.AppRule
@@ -29,12 +39,12 @@ import com.appblocker.data.LaunchCounter
 import com.appblocker.data.QuickSession
 import com.appblocker.data.SOCIAL_DOMAINS
 import com.appblocker.data.Schedule
-import com.appblocker.data.UnlockCounter
 import com.appblocker.data.ScheduleType
 import com.appblocker.data.SessionClock
 import com.appblocker.data.SettingsStore
-import java.util.Calendar
+import com.appblocker.data.UnlockCounter
 import com.appblocker.ui.BlockScreenActivity
+import java.util.Calendar
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -77,9 +87,9 @@ class BlockerAccessibilityService : AccessibilityService() {
     private var overlayView: View? = null
 
     @Volatile private var lastForegroundPkg: String? = null
-    @Volatile private var lastLocation: android.location.Location? = null
+    @Volatile private var lastLocation: Location? = null
     private var locationRequested = false
-    private var locationListener: android.location.LocationListener? = null
+    private var locationListener: LocationListener? = null
     private var lastLocationRefreshAt = 0L
 
     // Keeps browserPackages fresh when apps are installed/removed after the service starts.
@@ -258,7 +268,7 @@ class BlockerAccessibilityService : AccessibilityService() {
 
     /** All packages that can handle an https:// link — i.e. the device's browsers. */
     private fun findBrowserPackages(): Set<String> = runCatching {
-        val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://example.com"))
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com"))
             .addCategory(Intent.CATEGORY_BROWSABLE)
         packageManager.queryIntentActivities(intent, 0)
             .mapNotNull { it.activityInfo?.packageName }
@@ -304,11 +314,11 @@ class BlockerAccessibilityService : AccessibilityService() {
 
     /** True if connected to Wi-Fi and (target empty = any, else SSID matches). */
     private fun onMatchingWifi(target: String): Boolean {
-        val cm = getSystemService(CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager ?: return false
+        val cm = getSystemService(CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
         val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
-        if (!caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI)) return false
+        if (!caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) return false
         if (target.isBlank()) return true
-        val wm = applicationContext.getSystemService(WIFI_SERVICE) as? android.net.wifi.WifiManager ?: return false
+        val wm = applicationContext.getSystemService(WIFI_SERVICE) as? WifiManager ?: return false
         @Suppress("DEPRECATION")
         val ssid = wm.connectionInfo?.ssid?.trim('"') ?: return false
         return ssid.equals(target, ignoreCase = true)
@@ -318,17 +328,17 @@ class BlockerAccessibilityService : AccessibilityService() {
     private fun inLocation(s: Schedule): Boolean {
         val loc = lastLocation ?: return false
         val out = FloatArray(1)
-        android.location.Location.distanceBetween(loc.latitude, loc.longitude, s.latitude, s.longitude, out)
+        Location.distanceBetween(loc.latitude, loc.longitude, s.latitude, s.longitude, out)
         return out[0] <= s.radiusMeters
     }
 
     private fun ensureLocationUpdates() {
         // Needs the "Allow all the time" (background) grant to actually deliver fixes to a
         // background service on Android 10+; foreground-only location yields null here.
-        if (checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) !=
-            android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) !=
+            PackageManager.PERMISSION_GRANTED
         ) return
-        val lm = getSystemService(LOCATION_SERVICE) as? android.location.LocationManager ?: return
+        val lm = getSystemService(LOCATION_SERVICE) as? LocationManager ?: return
         // Always (throttled) pull a fresh current fix — this also self-heals after the user
         // grants the permission later, since onDestroy/combine won't re-run on a grant.
         refreshCurrentLocation(lm)
@@ -336,36 +346,36 @@ class BlockerAccessibilityService : AccessibilityService() {
         locationRequested = true
         runCatching {
             // Seed from both providers; considerLocation keeps the freshest.
-            considerLocation(lm.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER))
-            considerLocation(lm.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER))
+            considerLocation(lm.getLastKnownLocation(LocationManager.GPS_PROVIDER))
+            considerLocation(lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER))
             // Keep a reference so onDestroy can unregister it (otherwise updates leak past the
             // service's life — wasting battery and holding a location subscription).
-            val listener = android.location.LocationListener { considerLocation(it) }
+            val listener = LocationListener { considerLocation(it) }
             locationListener = listener
-            lm.requestLocationUpdates(android.location.LocationManager.NETWORK_PROVIDER, 30_000L, 25f, listener)
-            lm.requestLocationUpdates(android.location.LocationManager.GPS_PROVIDER, 30_000L, 25f, listener)
+            lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 30_000L, 25f, listener)
+            lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 30_000L, 25f, listener)
         }
     }
 
     /** Adopts [loc] only if it's at least as recent as the current fix (prevents a stale provider
      *  pinning the location so blocking never clears when you leave the area). */
-    private fun considerLocation(loc: android.location.Location?) {
+    private fun considerLocation(loc: Location?) {
         loc ?: return
         val cur = lastLocation
         if (cur == null || loc.elapsedRealtimeNanos >= cur.elapsedRealtimeNanos) lastLocation = loc
     }
 
     /** Asks for a single up-to-date fix (≤ once/60s). API 30+; older relies on passive updates. */
-    private fun refreshCurrentLocation(lm: android.location.LocationManager) {
-        val now = android.os.SystemClock.elapsedRealtime()
+    private fun refreshCurrentLocation(lm: LocationManager) {
+        val now = SystemClock.elapsedRealtime()
         if (now - lastLocationRefreshAt < 60_000L) return
         lastLocationRefreshAt = now
-        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) return
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
         runCatching {
             // Prefer GPS for a fresh, movement-tracking fix; fall back to network if GPS is off.
-            val provider = if (lm.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER))
-                android.location.LocationManager.GPS_PROVIDER
-            else android.location.LocationManager.NETWORK_PROVIDER
+            val provider = if (lm.isProviderEnabled(LocationManager.GPS_PROVIDER))
+                LocationManager.GPS_PROVIDER
+            else LocationManager.NETWORK_PROVIDER
             lm.getCurrentLocation(provider, null, mainExecutor) { loc -> considerLocation(loc) }
         }
     }
@@ -605,7 +615,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         handler.removeCallbacks(shortsScanRunnable)
         // Stop location updates so they don't leak past the service (battery + privacy).
         locationListener?.let { listener ->
-            (getSystemService(LOCATION_SERVICE) as? android.location.LocationManager)?.removeUpdates(listener)
+            (getSystemService(LOCATION_SERVICE) as? LocationManager)?.removeUpdates(listener)
         }
         locationListener = null
         packageChangeReceiver?.let { runCatching { unregisterReceiver(it) } }
@@ -626,7 +636,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         // Activity-name fragments that identify the Google Play purchase/billing sheet.
         private val PURCHASE_HINTS = listOf("acquire", "purchase", "billing")
 
-        const val YOUTUBE_PKG = "com.google.android.youtube"
+        private const val YOUTUBE_PKG = "com.google.android.youtube"
 
         // YouTube Shorts player view-id fragments (Shorts is "reel" internally). These match the
         // full-screen Short player, NOT the always-present "Shorts" nav tab. Exact ids vary by

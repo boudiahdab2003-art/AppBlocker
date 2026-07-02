@@ -1,6 +1,14 @@
 package com.appblocker.ui
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.location.LocationManager
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -21,14 +29,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -43,7 +52,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberTimePickerState
-import androidx.compose.material3.AlertDialog
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -55,13 +63,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.appblocker.data.SavedPlace
 import com.appblocker.data.Schedule
 import com.appblocker.data.ScheduleType
 
@@ -100,7 +111,7 @@ fun ScheduleEditorScreen(
     val editable = existing == null || !strictActive
 
     Scaffold(
-        containerColor = androidx.compose.ui.graphics.Color.Transparent,
+        containerColor = Color.Transparent,
         topBar = {
             EditorTopBar(typeTitle(type), onBack) {
                 if (existing != null && editable) {
@@ -232,12 +243,12 @@ fun ScheduleEditorScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.padding(top = 8.dp))
                         GradientButton(text = "Grant location access", enabled = editable, onClick = {
-                            fineLauncher.launch(android.Manifest.permission.ACCESS_FINE_LOCATION)
+                            fineLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                         })
                     } else {
                         val places by vm.savedPlaces.collectAsState()
                         var showSaveDialog by remember { mutableStateOf(false) }
-                        var placeToDelete by remember { mutableStateOf<com.appblocker.data.SavedPlace?>(null) }
+                        var placeToDelete by remember { mutableStateOf<SavedPlace?>(null) }
 
                         Text(
                             if (locCaptured) "Captured: %.4f, %.4f".format(lat, lng) else "No location captured yet.",
@@ -408,12 +419,12 @@ private fun BackgroundLocationWarning(onFix: () -> Unit) {
     }
 }
 
-private fun openAppDetails(context: android.content.Context) {
+private fun openAppDetails(context: Context) {
     runCatching {
         context.startActivity(
-            android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                .setData(android.net.Uri.parse("package:${context.packageName}"))
-                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                .setData(Uri.parse("package:${context.packageName}"))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         )
     }
 }
@@ -487,7 +498,7 @@ private fun StepperField(
                         textAlign = TextAlign.End,
                         color = MaterialTheme.colorScheme.onSurface,
                     ),
-                    cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                     modifier = Modifier.width(56.dp),
                 )
                 Spacer(Modifier.width(4.dp))
@@ -562,24 +573,24 @@ private fun PlaceChip(
  * on the main thread once a fix arrives. Needs Location permission.
  */
 @SuppressLint("MissingPermission")
-private fun requestCurrentLocation(context: android.content.Context, onResult: (Double, Double) -> Unit) {
-    if (context.checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) !=
-        android.content.pm.PackageManager.PERMISSION_GRANTED
+private fun requestCurrentLocation(context: Context, onResult: (Double, Double) -> Unit) {
+    if (context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) !=
+        PackageManager.PERMISSION_GRANTED
     ) {
         openAppDetails(context)
         return
     }
-    val lm = context.getSystemService(android.content.Context.LOCATION_SERVICE) as? android.location.LocationManager
+    val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
         ?: return
-    val gps = android.location.LocationManager.GPS_PROVIDER
-    val net = android.location.LocationManager.NETWORK_PROVIDER
+    val gps = LocationManager.GPS_PROVIDER
+    val net = LocationManager.NETWORK_PROVIDER
     val last = runCatching { lm.getLastKnownLocation(gps) ?: lm.getLastKnownLocation(net) }.getOrNull()
     if (last != null) {
         onResult(last.latitude, last.longitude)
         return
     }
     // No cached fix — actively ask for one.
-    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
         val provider = if (lm.isProviderEnabled(gps)) gps else net
         runCatching {
             lm.getCurrentLocation(provider, null, context.mainExecutor) { loc ->

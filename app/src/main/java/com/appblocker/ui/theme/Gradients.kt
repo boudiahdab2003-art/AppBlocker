@@ -5,6 +5,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
@@ -44,7 +45,7 @@ object AppGradients {
 fun Modifier.softGlow(
     shape: Shape,
     glow: Color = AppGradients.AccentStart,
-    elevation: androidx.compose.ui.unit.Dp = 10.dp,
+    elevation: Dp = 10.dp,
 ): Modifier = this.shadow(
     elevation = elevation,
     shape = shape,

@@ -28,7 +28,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.appblocker.ui.theme.AppGradients
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

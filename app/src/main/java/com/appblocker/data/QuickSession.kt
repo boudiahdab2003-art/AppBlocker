@@ -83,7 +83,5 @@ object QuickSession {
         }
     }
 
-    fun isBlockingNow(ctx: Context): Boolean = state(ctx).blockingNow
-
     private fun idle() = State(active = false, blockingNow = false, remainingMillis = 0L, label = "")
 }

@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -25,6 +26,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -134,35 +136,35 @@ fun AppRoot() {
     // One tap downloads + installs; "Later" hides it until the next launch.
     (updateState as? UpdateState.Available)?.let { avail ->
         val release = avail.release
-        androidx.compose.material3.AlertDialog(
+        AlertDialog(
             onDismissRequest = { updateVm.dismiss() },
-            title = { androidx.compose.material3.Text("Update available") },
+            title = { Text("Update available") },
             text = {
-                androidx.compose.material3.Text(
+                Text(
                     "Version ${release.version} is ready." +
                         if (release.notes.isNotBlank()) "\n\n${release.notes}" else ""
                 )
             },
             confirmButton = {
-                androidx.compose.material3.TextButton(
+                TextButton(
                     onClick = { updateVm.downloadAndInstall(release) }
-                ) { androidx.compose.material3.Text("Update now") }
+                ) { Text("Update now") }
             },
             dismissButton = {
-                androidx.compose.material3.TextButton(
+                TextButton(
                     onClick = { updateVm.dismiss() }
-                ) { androidx.compose.material3.Text("Later") }
+                ) { Text("Later") }
             },
         )
     }
 
     // Global download progress while an update is being fetched.
     (updateState as? UpdateState.Downloading)?.let { dl ->
-        androidx.compose.material3.AlertDialog(
+        AlertDialog(
             onDismissRequest = {},
             confirmButton = {},
-            title = { androidx.compose.material3.Text("Downloading update") },
-            text = { androidx.compose.material3.Text("${dl.percent}%") },
+            title = { Text("Downloading update") },
+            text = { Text("${dl.percent}%") },
         )
     }
     }

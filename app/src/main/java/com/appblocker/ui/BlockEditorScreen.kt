@@ -1,6 +1,8 @@
 package com.appblocker.ui
 
+import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.provider.Settings
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -310,7 +312,7 @@ private fun ToggleRow(
 /** Indented "Shorts" child row shown directly under YouTube — blocks only the Shorts feed. */
 @Composable
 private fun ShortsSubRow(
-    icon: android.graphics.Bitmap?,
+    icon: Bitmap?,
     checked: Boolean,
     enabled: Boolean,
     onToggle: (Boolean) -> Unit,
@@ -351,7 +353,7 @@ private fun ShortsSubRow(
 }
 
 @Composable
-private fun ProtectionBanner(context: android.content.Context) {
+private fun ProtectionBanner(context: Context) {
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
             .background(MaterialTheme.colorScheme.surface).padding(16.dp),

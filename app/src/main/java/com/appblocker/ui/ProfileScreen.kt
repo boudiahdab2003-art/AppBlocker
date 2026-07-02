@@ -6,7 +6,6 @@ import android.content.Intent
 import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -30,10 +29,14 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -266,20 +269,20 @@ private fun initials(name: String): String {
 @Composable
 private fun RenameDialog(initial: String, onSet: (String) -> Unit, onDismiss: () -> Unit) {
     var text by remember { mutableStateOf(initial) }
-    androidx.compose.material3.AlertDialog(
+    AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Your name") },
         confirmButton = {
-            androidx.compose.material3.TextButton(
+            TextButton(
                 enabled = text.trim().isNotEmpty(),
                 onClick = { onSet(text.trim()) },
             ) { Text("Save") }
         },
         dismissButton = {
-            androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text("Cancel") }
         },
         text = {
-            androidx.compose.material3.OutlinedTextField(
+            OutlinedTextField(
                 value = text, onValueChange = { text = it.take(40) },
                 label = { Text("Name") }, singleLine = true,
             )
@@ -403,7 +406,7 @@ private fun StatusPill(on: Boolean) {
 
 @Composable
 private fun Divider() {
-    androidx.compose.material3.HorizontalDivider(
+    HorizontalDivider(
         color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f),
         modifier = Modifier.padding(start = 70.dp),
     )

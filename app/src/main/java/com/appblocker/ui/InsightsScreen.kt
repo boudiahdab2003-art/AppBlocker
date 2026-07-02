@@ -1,5 +1,6 @@
 package com.appblocker.ui
 
+import android.content.Context
 import android.content.Intent
 import android.provider.Settings
 import androidx.compose.foundation.Canvas
@@ -44,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -56,6 +58,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.appblocker.ui.theme.AppGradients
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.roundToInt
 
@@ -72,12 +78,7 @@ fun InsightsScreen(vm: InsightsViewModel = viewModel()) {
                 Box(
                     Modifier.size(36.dp).clip(CircleShape)
                         .background(MaterialTheme.colorScheme.surface)
-                        .clickable {
-                            context.startActivity(
-                                Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
-                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            )
-                        },
+                        .clickable { openUsageAccessSettings(context) },
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(Icons.Filled.Settings, contentDescription = "Settings",
@@ -106,7 +107,7 @@ fun InsightsScreen(vm: InsightsViewModel = viewModel()) {
                 else -> state.monthAvg
             }
             Spacer(Modifier.padding(top = 8.dp))
-            Text(fmtBig(minutes), fontSize = 52.sp, fontWeight = FontWeight.Bold,
+            Text(InsightsViewModel.fmt(minutes), fontSize = 52.sp, fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
             Text(if (tab == 2) "30-DAY AVERAGE" else "SCREEN TIME",
@@ -306,7 +307,7 @@ private fun BarChart(
             }
             val slot = w / n
             val barW = slot * 0.5f
-            val radius = androidx.compose.ui.geometry.CornerRadius(barW / 2, barW / 2)
+            val radius = CornerRadius(barW / 2, barW / 2)
             values.forEachIndexed { i, v ->
                 val x = i * slot + (slot - barW) / 2
                 // faint full-height track behind each bar for a polished look
@@ -373,7 +374,7 @@ private fun SummaryStats(state: InsightsState) {
                 val up = pct >= 0
                 // More screen time than yesterday = red (worse); less = green (better).
                 val color = if (up) Color(0xFFEF4444) else Color(0xFF22C55E)
-                Text("${if (up) "▲" else "▼"} ${kotlin.math.abs(pct)}%",
+                Text("${if (up) "▲" else "▼"} ${abs(pct)}%",
                     style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = color)
             } else {
                 Text("—", style = MaterialTheme.typography.titleMedium,
@@ -448,7 +449,7 @@ private fun WeekOverWeek(thisWeek: Int, lastWeek: Int) {
             val up = pct >= 0
             val color = if (up) Color(0xFFEF4444) else Color(0xFF22C55E)
             Spacer(Modifier.width(8.dp))
-            Text("${if (up) "▲" else "▼"} ${kotlin.math.abs(pct)}% vs last week",
+            Text("${if (up) "▲" else "▼"} ${abs(pct)}% vs last week",
                 style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = color)
         }
     }
@@ -462,8 +463,8 @@ private fun chartCap(values: IntArray): Int {
 
 /** A date [daysAgo] days before today as "MMM d", e.g. "Jun 5". */
 private fun dateLabel(daysAgo: Int): String {
-    val cal = java.util.Calendar.getInstance().apply { add(java.util.Calendar.DAY_OF_YEAR, -daysAgo) }
-    return java.text.SimpleDateFormat("MMM d", java.util.Locale.getDefault()).format(cal.time)
+    val cal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -daysAgo) }
+    return SimpleDateFormat("MMM d", Locale.getDefault()).format(cal.time)
 }
 
 /** A 0–23 hour as a 12-hour clock label, e.g. 0 -> "12 AM", 19 -> "7 PM". */
@@ -477,9 +478,9 @@ private fun hourLabel(h: Int): String {
  *  for the readout; [short]=false gives the one-letter axis label. */
 private fun weekdayLabel(daysAgo: Int, short: Boolean): String {
     if (daysAgo == 0 && short) return "Today"
-    val cal = java.util.Calendar.getInstance().apply { add(java.util.Calendar.DAY_OF_YEAR, -daysAgo) }
+    val cal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -daysAgo) }
     val pattern = if (short) "EEE" else "EEEEE"
-    return java.text.SimpleDateFormat(pattern, java.util.Locale.getDefault()).format(cal.time)
+    return SimpleDateFormat(pattern, Locale.getDefault()).format(cal.time)
 }
 
 @Composable
@@ -509,8 +510,14 @@ private fun CategoryBreakdown(cats: List<CatSlice>) {
     }
 }
 
+private fun openUsageAccessSettings(context: Context) {
+    context.startActivity(
+        Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    )
+}
+
 @Composable
-private fun UsageAccessCard(context: android.content.Context) {
+private fun UsageAccessCard(context: Context) {
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
             .background(MaterialTheme.colorScheme.surface).padding(20.dp),
@@ -519,11 +526,7 @@ private fun UsageAccessCard(context: android.content.Context) {
             fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
         Text("Insights needs Usage Access to show your screen time and most-used apps.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        TextButton(onClick = {
-            context.startActivity(
-                Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            )
-        }) { Text("Grant access") }
+        TextButton(onClick = { openUsageAccessSettings(context) }) { Text("Grant access") }
     }
 }
 
@@ -601,10 +604,4 @@ private fun DetailStat(label: String, value: String) {
         Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface)
     }
-}
-
-private fun fmtBig(minutes: Int): String {
-    val h = minutes / 60
-    val m = minutes % 60
-    return if (h > 0) "${h}h ${m}m" else "${m}m"
 }

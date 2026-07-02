@@ -32,12 +32,5 @@ object UnlockCounter {
         return prefs.getInt(key(todayStamp()), 0)
     }
 
-    /** Unlock count for each of the last [days] days (last index = today). */
-    fun unlocksByDay(context: Context, days: Int): IntArray {
-        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val today = todayStamp()
-        return IntArray(days) { i -> prefs.getInt(key(today - (days - 1 - i)), 0) }
-    }
-
     private fun key(dayStamp: Int) = "day_$dayStamp"
 }

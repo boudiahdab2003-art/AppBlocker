@@ -53,6 +53,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.appblocker.admin.AppBlockerAdminReceiver
 import com.appblocker.data.SettingsStore
 import com.appblocker.ui.theme.AppGradients
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun StrictModeScreen(
@@ -264,8 +267,8 @@ private fun humanDuration(minutes: Int): String {
 
 /** When a lock of [minutes] would end, e.g. "Mon, Jun 23 at 3:45 PM". */
 private fun endsAt(minutes: Int): String {
-    val end = java.util.Date(System.currentTimeMillis() + minutes * 60_000L)
-    return java.text.SimpleDateFormat("EEE, MMM d 'at' h:mm a", java.util.Locale.getDefault()).format(end)
+    val end = Date(System.currentTimeMillis() + minutes * 60_000L)
+    return SimpleDateFormat("EEE, MMM d 'at' h:mm a", Locale.getDefault()).format(end)
 }
 
 /** Countdown as H:MM:SS once an hour or longer, else MM:SS. */

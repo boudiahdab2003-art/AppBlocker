@@ -1,15 +1,17 @@
 package com.appblocker.ui
 
+import android.Manifest
 import android.app.AppOpsManager
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.PowerManager
 import android.os.Process
 import android.provider.Settings
-import com.appblocker.admin.AppBlockerAdminReceiver
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -20,6 +22,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.appblocker.admin.AppBlockerAdminReceiver
 import com.appblocker.service.AccessibilityUtil
 
 /** One setup step the user may need to grant. */
@@ -164,15 +167,15 @@ private fun toggleDeviceAdmin(ctx: Context) {
 }
 
 fun hasLocation(ctx: Context): Boolean =
-    ctx.checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) ==
-        android.content.pm.PackageManager.PERMISSION_GRANTED
+    ctx.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) ==
+        PackageManager.PERMISSION_GRANTED
 
 /**
  * Location blocking runs in the background (the accessibility service), so on Android 10+ it
  * needs the "Allow all the time" (background) location grant — foreground location isn't enough.
  */
 fun hasBackgroundLocation(ctx: Context): Boolean =
-    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q)
-        ctx.checkSelfPermission(android.Manifest.permission.ACCESS_BACKGROUND_LOCATION) ==
-            android.content.pm.PackageManager.PERMISSION_GRANTED
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+        ctx.checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED
     else hasLocation(ctx)

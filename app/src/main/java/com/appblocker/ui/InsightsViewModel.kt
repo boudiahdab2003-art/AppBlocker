@@ -1,7 +1,6 @@
 package com.appblocker.ui
 
 import android.app.Application
-import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import androidx.compose.ui.graphics.Color
@@ -15,6 +14,7 @@ import com.appblocker.data.LaunchCounter
 import com.appblocker.data.StatsStore
 import com.appblocker.data.UnlockCounter
 import com.appblocker.service.UsageTracker
+import java.util.Calendar
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -146,12 +146,12 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
         val lastWeekMin = monthly.copyOfRange(16, 23).sum()
         // Split the last 30 days into weekday vs weekend (Sat/Sun) and average each.
         val weekdayVals = ArrayList<Int>(); val weekendVals = ArrayList<Int>()
-        val cal = java.util.Calendar.getInstance()
+        val cal = Calendar.getInstance()
         for (i in monthly.indices) {
             cal.timeInMillis = System.currentTimeMillis()
-            cal.add(java.util.Calendar.DAY_OF_YEAR, -(monthly.size - 1 - i))
-            val dow = cal.get(java.util.Calendar.DAY_OF_WEEK)
-            if (dow == java.util.Calendar.SATURDAY || dow == java.util.Calendar.SUNDAY) weekendVals.add(monthly[i])
+            cal.add(Calendar.DAY_OF_YEAR, -(monthly.size - 1 - i))
+            val dow = cal.get(Calendar.DAY_OF_WEEK)
+            if (dow == Calendar.SATURDAY || dow == Calendar.SUNDAY) weekendVals.add(monthly[i])
             else weekdayVals.add(monthly[i])
         }
 
