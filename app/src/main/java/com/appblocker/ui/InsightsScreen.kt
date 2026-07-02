@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material3.AlertDialog
@@ -290,41 +291,71 @@ fun InsightsScreen(vm: InsightsViewModel = viewModel()) {
     }
 }
 
-/** The AI Coach panel: Gemini-written tips from today's aggregate stats. */
+/** The AI Coach panel: Gemini-written tips from today's aggregate stats. Styled as the page's
+ *  special card — gradient icon + gradient border — so the AI feature stands out. */
 @Composable
 private fun CoachCard(state: CoachState, onEditKey: () -> Unit, onNewTips: () -> Unit) {
-    SectionCard("AI Coach", "Personalized tips from your data",
-        icon = Icons.Filled.AutoAwesome) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            Modifier.size(30.dp).clip(RoundedCornerShape(9.dp)).background(AppGradients.accent),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Filled.AutoAwesome, contentDescription = null, tint = Color.White,
+                modifier = Modifier.size(18.dp))
+        }
+        Spacer(Modifier.width(10.dp))
+        Column {
+            Text("AI Coach", style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+            Text("Personalized tips from your data · Gemini",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+    Spacer(Modifier.padding(top = 8.dp))
+    Column(
+        Modifier.fillMaxWidth()
+            .softGlow(RoundedCornerShape(20.dp), elevation = 10.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.5.dp, AppGradients.accent, RoundedCornerShape(20.dp))
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+    ) {
         when (state) {
             CoachState.NoKey -> {
                 Text(
                     "Add your free Gemini API key to get daily coaching based on how you " +
                         "actually used your phone.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(top = 12.dp),
                 )
                 TextButton(onClick = onEditKey) { Text("Add key") }
             }
             CoachState.Loading -> {
-                Row(Modifier.padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.padding(vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                     Spacer(Modifier.width(10.dp))
                     Text("Analyzing your day…", style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        color = MaterialTheme.colorScheme.onSurface)
                 }
             }
             is CoachState.Tips -> {
+                Spacer(Modifier.height(4.dp))
                 state.tips.forEachIndexed { i, tip ->
                     if (i > 0) {
                         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
                     }
-                    Row(Modifier.padding(vertical = 10.dp)) {
+                    Row(Modifier.padding(vertical = 12.dp)) {
                         Box(
-                            Modifier.padding(top = 7.dp).size(8.dp).clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary)
-                        )
-                        Spacer(Modifier.width(10.dp))
+                            Modifier.padding(top = 1.dp).size(22.dp).clip(CircleShape)
+                                .background(AppGradients.accent),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(Icons.Filled.Lightbulb, contentDescription = null,
+                                tint = Color.White, modifier = Modifier.size(13.dp))
+                        }
+                        Spacer(Modifier.width(12.dp))
                         Text(tip, style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface)
                     }
@@ -339,7 +370,7 @@ private fun CoachCard(state: CoachState, onEditKey: () -> Unit, onNewTips: () ->
                 Text(
                     "Couldn't reach Gemini — tips will return when you're online.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(top = 12.dp),
                 )
                 Row {
@@ -512,8 +543,9 @@ private fun SummaryStats(state: InsightsState) {
 @Composable
 private fun SummaryRow(label: String, value: @Composable () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        // Bright row titles — the muted variant grey was hard to read on the dark surface.
         Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
+            fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
         value()
     }
 }
@@ -782,8 +814,9 @@ private fun StatListRow(row: StatRow, onClick: (() -> Unit)? = null) {
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(row.label, Modifier.weight(1f), color = MaterialTheme.colorScheme.onBackground,
-                    style = MaterialTheme.typography.bodyLarge, maxLines = 1)
+                Text(row.label, Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold,
+                    maxLines = 1)
                 Text(row.value, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium)
                 row.delta?.let { d ->
@@ -856,7 +889,7 @@ private fun AppDetailSheet(detail: AppDetail, onDismiss: () -> Unit) {
 private fun DetailStat(label: String, value: String) {
     Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
+            fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
         Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface)
     }
