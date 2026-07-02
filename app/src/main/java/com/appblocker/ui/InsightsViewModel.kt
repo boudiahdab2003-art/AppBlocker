@@ -24,14 +24,20 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** One row in an Insights list: a labelled app/site with an icon, value, and category dot.
- *  [pkg] is the app's package when the row represents a real app (so it can open a detail). */
+/** One row in an Insights list: a labelled app/site with an icon and value.
+ *  [pkg] is the app's package when the row represents a real app (so it can open a detail).
+ *  [fraction] (0..1, relative to the section's largest row) draws the comparison bar, tinted
+ *  [dotColor]. [delta] is an optional trailing change ("▲40%"), coloured by [deltaGood]
+ *  (true = green, false = red, null = neutral). */
 data class StatRow(
     val label: String,
     val icon: Bitmap?,
     val value: String,
     val dotColor: Color? = null,
     val pkg: String? = null,
+    val fraction: Float? = null,
+    val delta: String? = null,
+    val deltaGood: Boolean? = null,
 )
 
 /** Everything shown in the per-app detail sheet, gathered on demand. */
@@ -58,6 +64,8 @@ data class InsightsState(
     val hourly: IntArray = IntArray(24),
     val weekly: IntArray = IntArray(7),
     val attempts: List<StatRow> = emptyList(),
+    val attemptsTodayTotal: Int = 0,
+    val attemptsAllTotal: Int = 0,
     val topApps: List<StatRow> = emptyList(),
     val topOpens: List<StatRow> = emptyList(),
     val totalOpens: Int = 0,
@@ -125,27 +133,35 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
         // One system query for everything derived from "today's stats" (total, top apps,
         // categories) instead of three identical ones.
         val snapshot = UsageTracker.todaySnapshot(ctx)
-        val attempts = AttemptCounter.summary(ctx).take(6).map { a ->
+        val attemptSummary = AttemptCounter.summary(ctx)
+        val attemptRows = attemptSummary.take(6)
+        val maxAttempts = attemptRows.maxOfOrNull { it.total } ?: 0
+        val attempts = attemptRows.map { a ->
+            val frac = if (maxAttempts > 0) a.total.toFloat() / maxAttempts else null
             if (a.key == "web") {
-                StatRow("Websites", null, "${a.today}× today · ${a.total}× total")
+                StatRow("Websites", null, "${a.today}× today · ${a.total}× total", fraction = frac)
             } else {
                 StatRow(label(installed, a.key), icon(installed, a.key),
-                    "${a.today}× today · ${a.total}× total", dotColor(a.key), pkg = a.key)
+                    "${a.today}× today · ${a.total}× total", dotColor(a.key), pkg = a.key,
+                    fraction = frac)
             }
         }
         val opensByApp = LaunchCounter.opensTodayByApp(ctx)
-        val topApps = UsageTracker.topAppsToday(snapshot, 6).map { u ->
+        val topUsage = UsageTracker.topAppsToday(snapshot, 6)
+        val maxUsage = topUsage.maxOfOrNull { it.minutes } ?: 0
+        val topApps = topUsage.map { u ->
             val opens = opensByApp[u.packageName] ?: 0
-            val detail = if (opens > 0) "${fmt(u.minutes)} · $opens opens" else fmt(u.minutes)
+            val detail = if (opens > 0) "${fmt(u.minutes)} · ${opensText(opens)}" else fmt(u.minutes)
             StatRow(label(installed, u.packageName), icon(installed, u.packageName), detail,
-                dotColor(u.packageName), pkg = u.packageName)
+                dotColor(u.packageName), pkg = u.packageName,
+                fraction = if (maxUsage > 0) u.minutes.toFloat() / maxUsage else null)
         }
-        val topOpens = opensByApp.entries
-            .sortedByDescending { it.value }
-            .take(6)
-            .map { (pkg, n) ->
-                StatRow(label(installed, pkg), icon(installed, pkg), "$n opens", dotColor(pkg), pkg = pkg)
-            }
+        val topOpenEntries = opensByApp.entries.sortedByDescending { it.value }.take(6)
+        val maxOpens = topOpenEntries.maxOfOrNull { it.value } ?: 0
+        val topOpens = topOpenEntries.map { (pkg, n) ->
+            StatRow(label(installed, pkg), icon(installed, pkg), opensText(n), dotColor(pkg), pkg = pkg,
+                fraction = if (maxOpens > 0) n.toFloat() / maxOpens else null)
+        }
         val categories = UsageTracker.categoryMinutesToday(snapshot).mapNotNull { (name, mins) ->
             runCatching { AppCategory.valueOf(name) }.getOrNull()?.let {
                 CatSlice(it.label, Color(it.color), mins)
@@ -171,19 +187,23 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
         val now = System.currentTimeMillis()
         val thisWeekApps = UsageTracker.appMinutesInRange(ctx, UsageTracker.startOfDayAgo(6), now)
         val lastWeekApps = UsageTracker.lastWeekAppMinutes(ctx) // fixed range in the past — cached per day
-        val appTrends = thisWeekApps.entries
+        val trendEntries = thisWeekApps.entries
             .filter { it.value >= 5 } // ignore trivially-small apps
             .sortedByDescending { it.value }
             .take(5)
-            .map { (pkg, mins) ->
-                val prev = lastWeekApps[pkg] ?: 0
-                val delta = if (prev > 0) {
-                    val pct = ((mins - prev) * 100f / prev).roundToInt()
-                    if (pct >= 0) "▲$pct%" else "▼${-pct}%"
-                } else "new"
-                StatRow(label(installed, pkg), icon(installed, pkg), "${fmt(mins)} · $delta",
-                    dotColor(pkg), pkg = pkg)
-            }
+        val maxTrend = trendEntries.maxOfOrNull { it.value } ?: 0
+        val appTrends = trendEntries.map { (pkg, mins) ->
+            val prev = lastWeekApps[pkg] ?: 0
+            // deltaGood: less use than last week = green; more = red; "new" = neutral.
+            val (delta, good) = if (prev > 0) {
+                val pct = ((mins - prev) * 100f / prev).roundToInt()
+                (if (pct >= 0) "▲$pct%" else "▼${-pct}%") to (pct < 0)
+            } else "new" to null
+            StatRow(label(installed, pkg), icon(installed, pkg), fmt(mins),
+                dotColor(pkg), pkg = pkg,
+                fraction = if (maxTrend > 0) mins.toFloat() / maxTrend else null,
+                delta = delta, deltaGood = good)
+        }
 
         return InsightsState(
             loaded = true,
@@ -194,6 +214,8 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
             hourly = UsageTracker.hourlyMinutesToday(ctx),
             weekly = weekly,
             attempts = attempts,
+            attemptsTodayTotal = attemptSummary.sumOf { it.today },
+            attemptsAllTotal = attemptSummary.sumOf { it.total },
             topApps = topApps,
             topOpens = topOpens,
             totalOpens = opensByApp.values.sum(),
@@ -232,5 +254,7 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
     companion object {
         fun fmt(minutes: Int): String =
             if (minutes >= 60) "${minutes / 60}h ${minutes % 60}m" else "${minutes}m"
+
+        private fun opensText(n: Int): String = if (n == 1) "1 open" else "$n opens"
     }
 }

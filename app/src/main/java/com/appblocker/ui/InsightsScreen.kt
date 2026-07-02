@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -30,6 +29,7 @@ import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -118,6 +118,7 @@ fun InsightsScreen(vm: InsightsViewModel = viewModel()) {
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+            if (tab == 0) VsAverage(today = state.screenMinutes, weekly = state.weekly)
             Spacer(Modifier.padding(top = 20.dp))
             when (tab) {
                 0 -> BarChart(values = state.hourly, maxMinutes = 60,
@@ -130,6 +131,8 @@ fun InsightsScreen(vm: InsightsViewModel = viewModel()) {
                         bottomLabels = (0..6).map { weekdayLabel(daysAgo = 6 - it, short = false) },
                         yLabels = listOf("${cap / 60}h", "${cap / 120}h", "0s"),
                         readoutLabel = { weekdayLabel(daysAgo = 6 - it, short = true) })
+                    Spacer(Modifier.padding(top = 10.dp))
+                    WeekOverWeek(state.thisWeekMin, state.lastWeekMin)
                 }
                 else -> {
                     val cap = chartCap(state.monthly)
@@ -157,16 +160,11 @@ fun InsightsScreen(vm: InsightsViewModel = viewModel()) {
         // Trending apps (week over week)
         if (state.appTrends.isNotEmpty()) {
             item {
-                Text("Trending this week", style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-                Text("How each app changed vs last week.", style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.padding(top = 8.dp))
+                SectionCard("Trending this week", "How each app changed vs last week.") {
+                    StatRows(state.appTrends, vm)
+                }
+                Spacer(Modifier.padding(top = 24.dp))
             }
-            items(state.appTrends) { row ->
-                StatListRow(row, onClick = row.pkg?.let { p -> { vm.selectApp(p) } })
-            }
-            item { Spacer(Modifier.padding(top = 24.dp)) }
         }
 
         // Summary statistics (derived from today + the last-7-days array)
@@ -179,53 +177,50 @@ fun InsightsScreen(vm: InsightsViewModel = viewModel()) {
 
         // Most used apps
         item {
-            Text("Most used apps", style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-            Spacer(Modifier.padding(top = 8.dp))
-        }
-        if (state.topApps.isEmpty()) {
-            item {
-                Text(if (state.usageAccess) "No usage recorded yet." else "Needs Usage Access.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        } else {
-            items(state.topApps) { row ->
-                StatListRow(row, onClick = row.pkg?.let { p -> { vm.selectApp(p) } })
+            SectionCard("Most used apps") {
+                if (state.topApps.isEmpty()) {
+                    Text(if (state.usageAccess) "No usage recorded yet." else "Needs Usage Access.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 12.dp))
+                } else {
+                    StatRows(state.topApps, vm)
+                }
             }
         }
 
         // Most opened apps (launch counts)
         if (state.topOpens.isNotEmpty()) {
             item {
-                Spacer(Modifier.padding(top = 20.dp))
-                Text("Most opened apps", style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground)
-                Text("${state.totalOpens} app opens today · tap an app for details",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.padding(top = 8.dp))
-            }
-            items(state.topOpens) { row ->
-                StatListRow(row, onClick = row.pkg?.let { p -> { vm.selectApp(p) } })
+                Spacer(Modifier.padding(top = 24.dp))
+                SectionCard("Most opened apps",
+                    "${state.totalOpens} app opens today · tap an app for details") {
+                    StatRows(state.topOpens, vm)
+                }
             }
         }
 
         // Blocked-app attempts
         item {
-            Spacer(Modifier.padding(top = 20.dp))
-            Text("Times you opened blocked apps", style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground)
-            Spacer(Modifier.padding(top = 8.dp))
-        }
-        if (state.attempts.isEmpty()) {
-            item {
-                Text("No blocks yet today.", style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        } else {
-            items(state.attempts) { row ->
-                StatListRow(row, onClick = row.pkg?.let { p -> { vm.selectApp(p) } })
+            Spacer(Modifier.padding(top = 24.dp))
+            SectionCard("Times you opened blocked apps") {
+                if (state.attempts.isEmpty()) {
+                    Text("No blocks yet today.", style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 12.dp))
+                } else {
+                    // Headline: what AppBlocker caught, without reading every row.
+                    Row(Modifier.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("${state.attemptsTodayTotal}× today",
+                            style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary)
+                        Text(" · ${state.attemptsAllTotal}× all time",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    InsetDivider()
+                    StatRows(state.attempts, vm)
+                }
             }
         }
         item { Spacer(Modifier.padding(top = 24.dp)) }
@@ -352,13 +347,7 @@ private fun SummaryStats(state: InsightsState) {
     val busiestIdx = state.weekly.indices.maxByOrNull { state.weekly[it] } ?: 6
     val rating = rateUsage(today)
 
-    Text("Summary", style = MaterialTheme.typography.titleLarge,
-        fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-    Spacer(Modifier.padding(top = 8.dp))
-    Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
-            .background(MaterialTheme.colorScheme.surface).padding(horizontal = 18.dp, vertical = 6.dp),
-    ) {
+    SectionCard("Summary") {
         SummaryRow("Daily average (7 days)") {
             Text(InsightsViewModel.fmt(avg), style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
@@ -415,13 +404,7 @@ private fun rateUsage(totalMinutes: Int): Pair<String, Color> = when {
 /** Weekday-vs-weekend averages, shown on the Patterns card. */
 @Composable
 private fun PatternsCard(state: InsightsState) {
-    Text("Patterns", style = MaterialTheme.typography.titleLarge,
-        fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-    Spacer(Modifier.padding(top = 8.dp))
-    Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
-            .background(MaterialTheme.colorScheme.surface).padding(horizontal = 18.dp, vertical = 6.dp),
-    ) {
+    SectionCard("Patterns") {
         SummaryRow("Weekday average") {
             Text(InsightsViewModel.fmt(state.weekdayAvg), style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
@@ -534,12 +517,64 @@ private fun UsageAccessCard(context: Context) {
     }
 }
 
+/** Section header + its rows in one rounded surface card — the page's shared card language. */
+@Composable
+private fun SectionCard(
+    title: String,
+    subtitle: String? = null,
+    content: @Composable () -> Unit,
+) {
+    Text(title, style = MaterialTheme.typography.titleLarge,
+        fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+    if (subtitle != null) {
+        Text(subtitle, style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    Spacer(Modifier.padding(top = 8.dp))
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+    ) { content() }
+}
+
+/** The rows of one section, divider-separated; app rows open the detail sheet. */
+@Composable
+private fun StatRows(rows: List<StatRow>, vm: InsightsViewModel) {
+    rows.forEachIndexed { i, row ->
+        if (i > 0) InsetDivider()
+        StatListRow(row, onClick = row.pkg?.let { p -> { vm.selectApp(p) } })
+    }
+}
+
+@Composable
+private fun InsetDivider() {
+    HorizontalDivider(
+        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+        modifier = Modifier.padding(start = 52.dp),
+    )
+}
+
+/** Today vs the 7-day average, under the Day tab's big number (green = below your average). */
+@Composable
+private fun VsAverage(today: Int, weekly: IntArray) {
+    val avg = if (weekly.isNotEmpty()) weekly.sum() / weekly.size else 0
+    if (avg <= 0) return
+    val pct = ((today - avg) * 100f / avg).roundToInt()
+    val up = pct >= 0
+    val color = if (up) Color(0xFFEF4444) else Color(0xFF22C55E)
+    Spacer(Modifier.padding(top = 6.dp))
+    Text("${if (up) "▲" else "▼"} ${abs(pct)}% vs your 7-day average",
+        style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold,
+        color = color, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+}
+
 @Composable
 private fun StatListRow(row: StatRow, onClick: (() -> Unit)? = null) {
     Row(
         Modifier.fillMaxWidth()
             .clickable(enabled = onClick != null) { onClick?.invoke() }
-            .padding(vertical = 8.dp),
+            .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (row.icon != null) {
@@ -551,14 +586,35 @@ private fun StatListRow(row: StatRow, onClick: (() -> Unit)? = null) {
             }
         }
         Spacer(Modifier.width(12.dp))
-        if (row.dotColor != null) {
-            Box(Modifier.size(9.dp).clip(CircleShape).background(row.dotColor))
-            Spacer(Modifier.width(8.dp))
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(row.label, Modifier.weight(1f), color = MaterialTheme.colorScheme.onBackground,
+                    style = MaterialTheme.typography.bodyLarge, maxLines = 1)
+                Text(row.value, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium)
+                row.delta?.let { d ->
+                    val color = when (row.deltaGood) {
+                        true -> Color(0xFF22C55E)
+                        false -> Color(0xFFEF4444)
+                        null -> MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                    Spacer(Modifier.width(6.dp))
+                    Text(d, style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold, color = color)
+                }
+            }
+            // Comparison bar: this row relative to the section's biggest row, in its
+            // category colour — spot the dominant app without reading the numbers.
+            row.fraction?.let { f ->
+                Spacer(Modifier.height(6.dp))
+                val tint = row.dotColor ?: MaterialTheme.colorScheme.primary
+                Box(Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(50))
+                    .background(tint.copy(alpha = 0.15f))) {
+                    Box(Modifier.fillMaxWidth(f.coerceIn(0.02f, 1f)).fillMaxHeight()
+                        .clip(RoundedCornerShape(50)).background(tint))
+                }
+            }
         }
-        Text(row.label, Modifier.weight(1f), color = MaterialTheme.colorScheme.onBackground,
-            style = MaterialTheme.typography.bodyLarge, maxLines = 1)
-        Text(row.value, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodyMedium)
     }
 }
 
