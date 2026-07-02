@@ -1,6 +1,7 @@
 package com.appblocker.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,6 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Schedule
@@ -40,31 +42,50 @@ import com.appblocker.data.ScheduleType
 import com.appblocker.ui.theme.AppGradients
 import com.appblocker.ui.theme.softGlow
 
+/** One "create a schedule" tile. [modifier] carries the width — a fixed 116dp on phones
+ *  (scrolling row) or weight(1f) on wide screens where the five tiles share the full row. */
 @Composable
 internal fun ScheduleTile(
+    modifier: Modifier,
     label: String,
     icon: ImageVector,
     enabled: Boolean,
     onClick: () -> Unit,
 ) {
     Column(
-        Modifier
-            .width(116.dp).height(120.dp)
+        modifier
+            .height(134.dp)
             .softGlow(RoundedCornerShape(20.dp), elevation = 6.dp)
             .clip(RoundedCornerShape(20.dp))
             .background(MaterialTheme.colorScheme.surface)
+            .border(
+                1.dp,
+                MaterialTheme.colorScheme.outline.copy(alpha = 0.25f),
+                RoundedCornerShape(20.dp),
+            )
             .clickable(enabled = enabled, onClick = onClick)
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Box(
-            Modifier.size(46.dp).clip(CircleShape)
-                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(24.dp))
+        // Icon in a soft circle with a small "+" badge — reads as "tap to create".
+        Box {
+            Box(
+                Modifier.size(46.dp).clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp))
+            }
+            Box(
+                Modifier.size(18.dp).align(Alignment.TopEnd).clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = null, tint = Color.White,
+                    modifier = Modifier.size(13.dp))
+            }
         }
         Spacer(Modifier.padding(top = 10.dp))
         Text(label, style = MaterialTheme.typography.titleSmall,

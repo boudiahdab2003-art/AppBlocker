@@ -4,7 +4,9 @@ import android.content.Context
 import android.content.Intent
 import android.provider.Settings
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -52,36 +55,49 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.appblocker.data.AttemptCounter
 import com.appblocker.data.PinStore
 import com.appblocker.data.SettingsStore
 import com.appblocker.service.AccessibilityUtil
 import com.appblocker.ui.theme.AppGradients
+import com.appblocker.ui.theme.softGlow
 
 @Composable
 fun ProfileScreen(
     strictActive: Boolean = false,
     onOpenPermissions: () -> Unit = {},
     updateVm: UpdateViewModel = viewModel(),
+    vm: HomeViewModel = viewModel(),
+    scheduleVm: ScheduleViewModel = viewModel(),
 ) {
     val context = LocalContext.current
     val updateState by updateVm.state.collectAsState()
+    val appsBlocked by vm.appsBlocked.collectAsState()
+    val schedules by scheduleVm.schedules.collectAsState()
     // Re-read on each resume so PIN / device-admin / permission changes elsewhere are reflected.
     val resumeTick = resumeTick()
     var pinSet by remember(resumeTick) { mutableStateOf(PinStore.isSet(context)) }
     val protectionOk = remember(resumeTick) { protectionOk(context) }
     var adminOn by remember(resumeTick) { mutableStateOf(isDeviceAdminActive(context)) }
+    val blocksToday = remember(resumeTick) { AttemptCounter.summary(context).sumOf { it.today } }
     var showSetPin by remember { mutableStateOf(false) }
     var userName by remember(resumeTick) { mutableStateOf(SettingsStore.userName(context)) }
     var showRename by remember { mutableStateOf(false) }
     val locked = strictActive
 
+    // Cap the content width on wide screens (tablets) so cards don't stretch edge-to-edge.
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)
+        Modifier.widthIn(max = 640.dp).fillMaxWidth()
+            .verticalScroll(rememberScrollState()).padding(16.dp)
     ) {
         ProfileHeader(
             name = userName,
             version = appVersion(context),
             protectionOk = protectionOk,
+            appsBlocked = appsBlocked,
+            schedules = schedules.size,
+            blocksToday = blocksToday,
             onEditName = { showRename = true },
             onFix = { if (!protectionOk) onOpenPermissions() },
         )
@@ -107,6 +123,7 @@ fun ProfileScreen(
                 subtitle = if (pinSet) "A PIN is set. It's needed to change your blocks."
                 else "Lock your settings so blocks can't be removed on a whim.",
                 badge = pinSet,
+                chevron = true,
                 enabled = !locked,
                 onClick = { showSetPin = true },
             )
@@ -116,6 +133,8 @@ fun ProfileScreen(
                     icon = Icons.Filled.Delete,
                     title = "Remove PIN",
                     subtitle = "Stop requiring a PIN to open settings.",
+                    chevron = true,
+                    destructive = true,
                     enabled = !locked,
                     onClick = { PinStore.clear(context); pinSet = false },
                 )
@@ -192,6 +211,7 @@ fun ProfileScreen(
             textAlign = TextAlign.Center,
         )
     }
+    }
 
     if (showSetPin) {
         SetPinDialog(
@@ -208,12 +228,15 @@ fun ProfileScreen(
     }
 }
 
-/** Gradient hero: the owner's identity (avatar + name) + live protection status. */
+/** Gradient hero: the owner's identity (avatar + name) + live protection status + key numbers. */
 @Composable
 private fun ProfileHeader(
     name: String,
     version: String,
     protectionOk: Boolean,
+    appsBlocked: Int,
+    schedules: Int,
+    blocksToday: Int,
     onEditName: () -> Unit,
     onFix: () -> Unit,
 ) {
@@ -256,7 +279,28 @@ private fun ProfileHeader(
                     style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold,
                     color = Color.White)
             }
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                HeroStat("$appsBlocked", "apps blocked", Modifier.weight(1f))
+                HeroStat("$schedules", if (schedules == 1) "schedule" else "schedules", Modifier.weight(1f))
+                HeroStat("$blocksToday", "blocks today", Modifier.weight(1f))
+            }
         }
+    }
+}
+
+/** One translucent number chip in the hero (e.g. "6 / apps blocked"). */
+@Composable
+private fun HeroStat(value: String, label: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier.clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = 0.14f))
+            .padding(vertical = 10.dp, horizontal = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
+            color = Color.White)
+        Text(label, style = MaterialTheme.typography.labelSmall,
+            color = Color.White.copy(alpha = 0.85f), maxLines = 1)
     }
 }
 
@@ -330,13 +374,22 @@ private fun SectionTitle(text: String) {
 
 @Composable
 private fun SettingCard(content: @Composable () -> Unit) {
+    // Same card language as the Blocking tab: soft glow + faint outline, not a flat box.
     Box(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
+        Modifier.fillMaxWidth()
+            .softGlow(RoundedCornerShape(20.dp), elevation = 4.dp)
+            .clip(RoundedCornerShape(20.dp))
             .background(MaterialTheme.colorScheme.surface)
+            .border(
+                1.dp,
+                MaterialTheme.colorScheme.outline.copy(alpha = 0.25f),
+                RoundedCornerShape(20.dp),
+            )
     ) { Column { content() } }
 }
 
-/** An iconed settings row with an optional On/Off status badge and/or chevron. */
+/** An iconed settings row with an optional On/Off status badge and/or chevron.
+ *  [destructive] renders it in the error color (e.g. Remove PIN). */
 @Composable
 private fun ProfileRow(
     icon: ImageVector,
@@ -346,20 +399,22 @@ private fun ProfileRow(
     onClick: () -> Unit,
     badge: Boolean? = null,
     chevron: Boolean = false,
+    destructive: Boolean = false,
 ) {
+    val accent = if (destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
     Row(
         Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onClick).padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             Modifier.size(40.dp).clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
+                .background(accent.copy(alpha = 0.16f)),
             contentAlignment = Alignment.Center,
-        ) { Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp)) }
+        ) { Icon(icon, null, tint = accent, modifier = Modifier.size(22.dp)) }
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface)
+                color = if (destructive) accent else MaterialTheme.colorScheme.onSurface)
             Text(subtitle, style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }

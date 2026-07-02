@@ -8,6 +8,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -220,25 +221,28 @@ fun BlockingScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.padding(top = 12.dp))
-            Row(
-                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                // Adding new protection is always allowed — even during Strict Mode.
-                ScheduleTile("Time", Icons.Filled.Schedule, enabled = true) {
-                    onNewSchedule(ScheduleType.TIME)
-                }
-                ScheduleTile("Usage limit", Icons.Filled.HourglassEmpty, enabled = true) {
-                    onNewSchedule(ScheduleType.USAGE_LIMIT)
-                }
-                ScheduleTile("Launch count", Icons.AutoMirrored.Filled.OpenInNew, enabled = true) {
-                    onNewSchedule(ScheduleType.LAUNCH_COUNT)
-                }
-                ScheduleTile("Wi-Fi", Icons.Filled.Wifi, enabled = true) {
-                    onNewSchedule(ScheduleType.WIFI)
-                }
-                ScheduleTile("Location", Icons.Filled.LocationOn, enabled = true) {
-                    onNewSchedule(ScheduleType.LOCATION)
+            // On wide screens (tablets) the five tiles share the full row width — a scrolling
+            // row of small fixed tiles leaves a dead gap there. Phones keep the scroll row.
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val wide = maxWidth >= 640.dp
+                val rowModifier =
+                    if (wide) Modifier.fillMaxWidth()
+                    else Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+                Row(rowModifier, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    val tiles = listOf(
+                        Triple("Time", Icons.Filled.Schedule, ScheduleType.TIME),
+                        Triple("Usage limit", Icons.Filled.HourglassEmpty, ScheduleType.USAGE_LIMIT),
+                        Triple("Launch count", Icons.AutoMirrored.Filled.OpenInNew, ScheduleType.LAUNCH_COUNT),
+                        Triple("Wi-Fi", Icons.Filled.Wifi, ScheduleType.WIFI),
+                        Triple("Location", Icons.Filled.LocationOn, ScheduleType.LOCATION),
+                    )
+                    tiles.forEach { (label, icon, type) ->
+                        // Adding new protection is always allowed — even during Strict Mode.
+                        ScheduleTile(
+                            modifier = if (wide) Modifier.weight(1f) else Modifier.width(116.dp),
+                            label = label, icon = icon, enabled = true,
+                        ) { onNewSchedule(type) }
+                    }
                 }
             }
             Spacer(Modifier.padding(top = 24.dp))
