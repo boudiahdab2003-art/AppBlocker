@@ -35,6 +35,7 @@ import com.appblocker.data.AppRule
 import com.appblocker.data.AttemptCounter
 import com.appblocker.data.BlockMode
 import com.appblocker.data.BlockerDatabase
+import com.appblocker.data.InstalledAppsRepository
 import com.appblocker.data.LaunchCounter
 import com.appblocker.data.QuickSession
 import com.appblocker.data.SOCIAL_DOMAINS
@@ -85,6 +86,9 @@ class BlockerAccessibilityService : AccessibilityService() {
     // Instant block screen drawn as an overlay window (no Activity-launch lag).
     private val windowManager by lazy { getSystemService(WINDOW_SERVICE) as WindowManager }
     private var overlayView: View? = null
+    // Whether the current overlay is an app-rule block (vs web/purchase/Shorts, which are
+    // owned by their own scans and must not be taken down by the periodic re-check).
+    private var overlayIsAppBlock = false
 
     @Volatile private var lastForegroundPkg: String? = null
     @Volatile private var lastLocation: Location? = null
@@ -114,6 +118,35 @@ class BlockerAccessibilityService : AccessibilityService() {
         shortsScanJob = scope.launch { scanShorts() }
     }
 
+    // Periodic re-check of the app the user is sitting in, so time-based conditions take
+    // effect mid-use instead of only on the next app switch: a daily limit crossing, a time
+    // schedule starting (or ending — the same tick releases a stale block overlay), a
+    // Pomodoro break starting/ending, a Timer or Strict session running out.
+    private val recheckRunnable = object : Runnable {
+        override fun run() {
+            val pkg = lastForegroundPkg ?: return
+            if (overlayView == null) {
+                // May block now (limit just crossed, schedule started, break ended…).
+                handleAppBlock(pkg)
+            } else if (overlayIsAppBlock && !shouldBlock(pkg)) {
+                // The condition ended while the cover was up → release without an app switch.
+                // (Acting only on this transition also avoids re-recording an "attempt" every
+                // tick; web/purchase/Shorts covers are owned by their own scans — hands off.)
+                lastBlockedPkg = null
+                removeBlockOverlay()
+            }
+            if (recheckMatters(pkg)) handler.postDelayed(this, RECHECK_MS)
+        }
+    }
+
+    /** Whether a later re-check of [pkg] could change the blocking outcome — i.e. the app is
+     *  covered by any rule/schedule, a session is running, or a block cover is up. */
+    private fun recheckMatters(pkg: String): Boolean =
+        overlayView != null ||
+            rules[pkg]?.isBlocked == true ||
+            QuickSession.state(this).active ||
+            schedules.any { it.enabled && pkg in it.packages }
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         browserPackages = findBrowserPackages()
@@ -132,7 +165,14 @@ class BlockerAccessibilityService : AccessibilityService() {
             focusWallEnd = focus?.endTimeMillis ?: 0L
             userKeywords = keywords.map { it.keyword }
             schedules = scheduleList
-            if (scheduleList.any { it.type == ScheduleType.LOCATION }) ensureLocationUpdates()
+            // Location plumbing follows *enabled* location schedules only — and shuts down
+            // when the last one is toggled off, so a disabled schedule can't keep GPS running.
+            // Hop to the main thread: requestLocationUpdates needs a looper thread.
+            if (scheduleList.any { it.enabled && it.type == ScheduleType.LOCATION }) {
+                handler.post { ensureLocationUpdates() }
+            } else {
+                handler.post { stopLocationUpdates() }
+            }
         }.launchIn(scope)
     }
 
@@ -148,11 +188,17 @@ class BlockerAccessibilityService : AccessibilityService() {
                     LaunchCounter.recordOpen(applicationContext, pkg) // for LAUNCH_COUNT
                 }
                 // Keep the location fix current (and recover after a late permission grant).
-                if (schedules.any { it.type == ScheduleType.LOCATION }) ensureLocationUpdates()
+                if (schedules.any { it.enabled && it.type == ScheduleType.LOCATION }) {
+                    ensureLocationUpdates()
+                }
                 if (pkg != null) {
                     // In-app purchase sheet takes priority; otherwise normal app blocking.
                     if (!handlePurchaseBlock(pkg, event.className?.toString())) handleAppBlock(pkg)
                 }
+                // (Re)arm the mid-use re-check for the new foreground app; a neutral app
+                // (no rules, no session, no cover) costs nothing.
+                handler.removeCallbacks(recheckRunnable)
+                if (pkg != null && recheckMatters(pkg)) handler.postDelayed(recheckRunnable, RECHECK_MS)
                 lastWebText = null // new page/app: force a fresh re-check
                 scheduleWebScan()
                 scheduleShortsScan()
@@ -363,6 +409,16 @@ class BlockerAccessibilityService : AccessibilityService() {
         }
     }
 
+    /** Unregisters location updates (no enabled location schedules left / service stopping). */
+    private fun stopLocationUpdates() {
+        val listener = locationListener
+        if (listener != null) {
+            (getSystemService(LOCATION_SERVICE) as? LocationManager)?.removeUpdates(listener)
+            locationListener = null
+        }
+        locationRequested = false
+    }
+
     /** Adopts [loc] only if it's at least as recent as the current fix (prevents a stale provider
      *  pinning the location so blocking never clears when you leave the area). */
     private fun considerLocation(loc: Location?) {
@@ -541,6 +597,9 @@ class BlockerAccessibilityService : AccessibilityService() {
         counterKey: String,
     ) {
         val (today, total) = AttemptCounter.record(applicationContext, counterKey)
+        // Only app-rule blocks pass a package; web/purchase/Shorts covers are managed by
+        // their own scans and the periodic re-check must leave them alone.
+        overlayIsAppBlock = packageName != null
         val label = packageName?.let { loadLabel(it) }
         val msg = message ?: label?.let { "$it is blocked" } ?: "This is blocked right now."
         // Instant overlay; fall back to the Activity only if the overlay can't be drawn.
@@ -605,13 +664,17 @@ class BlockerAccessibilityService : AccessibilityService() {
         overlayView = null
     }
 
-    private fun loadLabel(pkg: String): String? = runCatching {
-        packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
-    }.getOrNull()
+    // Launch-warmed cache first (label + icon already decoded); PackageManager fallback for
+    // packages that aren't in it (repo not loaded in this process, or non-launchable apps).
+    private fun loadLabel(pkg: String): String? =
+        InstalledAppsRepository.apps.value.firstOrNull { it.packageName == pkg }?.label
+            ?: runCatching {
+                packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
+            }.getOrNull()
 
-    private fun loadIcon(pkg: String) = runCatching {
-        packageManager.getApplicationIcon(pkg).toBitmap(144, 144)
-    }.getOrNull()
+    private fun loadIcon(pkg: String) =
+        InstalledAppsRepository.apps.value.firstOrNull { it.packageName == pkg }?.icon
+            ?: runCatching { packageManager.getApplicationIcon(pkg).toBitmap(144, 144) }.getOrNull()
 
     override fun onInterrupt() {}
 
@@ -619,11 +682,9 @@ class BlockerAccessibilityService : AccessibilityService() {
         super.onDestroy()
         handler.removeCallbacks(webScanRunnable)
         handler.removeCallbacks(shortsScanRunnable)
+        handler.removeCallbacks(recheckRunnable)
         // Stop location updates so they don't leak past the service (battery + privacy).
-        locationListener?.let { listener ->
-            (getSystemService(LOCATION_SERVICE) as? LocationManager)?.removeUpdates(listener)
-        }
-        locationListener = null
+        stopLocationUpdates()
         packageChangeReceiver?.let { runCatching { unregisterReceiver(it) } }
         packageChangeReceiver = null
         unlockReceiver?.let { runCatching { unregisterReceiver(it) } }
@@ -635,6 +696,9 @@ class BlockerAccessibilityService : AccessibilityService() {
     companion object {
         private const val TAG = "AppBlocker"
         private const val DEBUG = false // flip to true to log scans/blocks for debugging
+
+        // How often to re-check the app the user is currently inside (mid-use enforcement).
+        private const val RECHECK_MS = 30_000L
 
         // Browsers whose on-screen content the web filter can read; others are "unsupported".
         private val SUPPORTED_BROWSERS = setOf("com.android.chrome")
