@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.42
+- Insights loads lighter (reuses cached app icons), less background work while using other apps, and Profile's Prevent-uninstall now switches off properly
+
 ## v1.41
 - Faster Insights (stats cached per day, refreshes every time you open the tab) and snappier blocking checks
 
