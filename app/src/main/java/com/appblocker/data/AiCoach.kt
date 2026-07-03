@@ -133,7 +133,7 @@ object AiCoach {
             val today = SimpleDateFormat("EEEE, MMM d, yyyy", Locale.US).format(Date())
             val system = buildString {
                 appendLine("You are the AI Coach inside AppBlocker, a screen-time app on the phone of ${SettingsStore.userName(ctx)}. Today is $today.")
-                appendLine("Personality: warm, encouraging, direct. Plain language, no emojis, no markdown symbols (*, #, backticks). Keep replies under 80 words — EXCEPT when the user asks for a report, a summary, or a plan: then reply up to 200 words, structured with short lines, dashes and line breaks so it reads like a clean report. Ask at most one question per reply, and only when it genuinely helps you coach.")
+                appendLine("Personality: warm, encouraging, direct. Plain language, no emojis. You may wrap the key numbers, app names and the single most important phrase in **bold**. Structure longer replies with short heading lines ending in ':', list lines starting with '- ', and blank lines between sections. No other markdown (#, backticks, tables). Keep replies under 80 words — EXCEPT when the user asks for a report, a summary, or a plan: then reply up to 200 words using that structure so it reads like a clean report. Ask at most one question per reply, and only when it genuinely helps you coach.")
                 appendLine("Your job: help the user understand their usage, agree on goals together, and track progress against those goals using the data below. Suggest specific app features with concrete settings when they would help.")
                 appendLine("When the user wants a goal or plan for the week: propose ONE specific, measurable weekly goal grounded in the data (for example a daily-average target around 10-20% below their current average — realistic, not drastic), then give a concrete plan: which apps to limit with which feature and what setting, and what to check each day. Save the goal via the goals field prefixed 'This week: '. When a weekly goal already exists, report progress against it using the per-day numbers.")
                 appendLine()
@@ -228,9 +228,9 @@ object AiCoach {
         // so weekly reports and weekly-goal progress have real numbers to stand on.
         val dayName = SimpleDateFormat("EEE", Locale.US)
         val last7 = weekly.indices.joinToString {
-            val cal = Calendar.getInstance()
-            cal.add(Calendar.DAY_OF_YEAR, -(weekly.size - 1 - it))
-            "${dayName.format(cal.time)} ${fmt(weekly[it])}"
+            val dayCal = Calendar.getInstance()
+            dayCal.add(Calendar.DAY_OF_YEAR, -(weekly.size - 1 - it))
+            "${dayName.format(dayCal.time)} ${fmt(weekly[it])}"
         }
 
         return buildString {

@@ -49,7 +49,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.appblocker.data.ChatMsg
@@ -232,14 +236,69 @@ private fun Bubble(msg: ChatMsg) {
                 Text(msg.text, style = MaterialTheme.typography.bodyMedium, color = Color.White)
             }
         }
-        "model" -> CoachRow {
-            Text(msg.text, style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface)
-        }
+        "model" -> CoachRow { CoachMessage(msg.text) }
         else -> CoachRow { // "local": greeting / error notes — same side, muted
             Text(msg.text, style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+    }
+}
+
+/**
+ * Renders a coach reply with light structure so reports read like reports, not walls of text:
+ * short lines ending in ':' become bold headings, '-'/'•'/'*' lines become gradient-dot
+ * bullets, blank lines become spacing, and **bold** spans highlight key numbers. Plain
+ * replies (old messages included) come through unchanged.
+ */
+@Composable
+private fun CoachMessage(text: String) {
+    Column {
+        text.lines().forEach { raw ->
+            val line = raw.trimEnd()
+            val trimmed = line.trim()
+            when {
+                trimmed.isEmpty() -> Spacer(Modifier.padding(top = 6.dp))
+
+                trimmed.length <= 48 && trimmed.endsWith(":") &&
+                    !trimmed.startsWith("-") && !trimmed.startsWith("•") -> {
+                    Text(parseBold(trimmed), style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 2.dp))
+                }
+
+                trimmed.startsWith("- ") || trimmed.startsWith("• ") ||
+                    trimmed.startsWith("* ") -> {
+                    Row(Modifier.padding(top = 4.dp)) {
+                        Box(Modifier.padding(top = 7.dp).size(6.dp).clip(CircleShape)
+                            .background(AppGradients.accent))
+                        Spacer(Modifier.width(9.dp))
+                        Text(parseBold(trimmed.substring(2).trim()),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface)
+                    }
+                }
+
+                else -> Text(parseBold(trimmed),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface)
+            }
+        }
+    }
+}
+
+/** Turns `**bold**` spans into real bold; a line with unmatched markers renders plain. */
+private fun parseBold(line: String): AnnotatedString = buildAnnotatedString {
+    val parts = line.split("**")
+    // Well-formed lines split into an odd count (text, bold, text, …); an even count means
+    // an unmatched marker — drop the noise and render the text plain.
+    if (parts.size % 2 == 0) {
+        append(line.replace("**", ""))
+        return@buildAnnotatedString
+    }
+    parts.forEachIndexed { i, part ->
+        if (i % 2 == 1) withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(part) }
+        else append(part)
     }
 }
 

@@ -13,6 +13,11 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.48", "Jul 3, 2026", "Coach replies got a face-lift", listOf(
+        "The coach's answers are now properly formatted: section headings stand out in bold, lists render with the app's gradient bullet dots, and the key numbers and app names are highlighted.",
+        "Weekly reports finally look like reports — scannable sections instead of a wall of text.",
+        "Older messages in your chat history keep rendering exactly as before.",
+    )),
     VersionLog("1.47", "Jul 3, 2026", "Reports, weekly goals, one-tap questions", listOf(
         "Ask the coach for a proper report: 'Give me my weekly report' gets you a structured, day-by-day breakdown of your week — what went up, what went down, and what it means.",
         "Weekly goals with a plan: ask the coach to set a goal for the week and he proposes one specific, measurable target based on your real numbers, plus a concrete plan — which apps to limit, with which feature, at what setting, and what to check each day.",
