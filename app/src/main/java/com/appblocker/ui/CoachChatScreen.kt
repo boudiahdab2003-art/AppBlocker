@@ -3,6 +3,8 @@ package com.appblocker.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -61,6 +63,7 @@ fun CoachChatScreen(onBack: () -> Unit, vm: CoachChatViewModel = viewModel()) {
     val messages by vm.messages.collectAsState()
     val sending by vm.sending.collectAsState()
     val goals by vm.goals.collectAsState()
+    val suggestions by vm.suggestions.collectAsState()
     var input by remember { mutableStateOf("") }
     var confirmClear by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
@@ -102,6 +105,10 @@ fun CoachChatScreen(onBack: () -> Unit, vm: CoachChatViewModel = viewModel()) {
                     }
                 }
             }
+        }
+
+        if (suggestions.isNotEmpty() && !sending) {
+            SuggestionChips(suggestions, onTap = { vm.send(it) })
         }
 
         InputBar(
@@ -157,6 +164,32 @@ private fun GoalChips(goals: List<String>, onRemove: (String) -> Unit) {
                         modifier = Modifier.size(16.dp).clip(CircleShape)
                             .clickable { onRemove(goal) })
                 }
+            }
+        }
+    }
+}
+
+/** Tappable one-tap prompts above the input bar — starters on open, then the coach's own
+ *  suggested follow-ups after each reply. */
+@Composable
+private fun SuggestionChips(suggestions: List<String>, onTap: (String) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        suggestions.forEach { s ->
+            Box(
+                Modifier.clip(RoundedCornerShape(50))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
+                        RoundedCornerShape(50))
+                    .clickable { onTap(s) }
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+            ) {
+                Text(s, style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
             }
         }
     }

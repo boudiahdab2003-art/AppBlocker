@@ -13,6 +13,12 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.47", "Jul 3, 2026", "Reports, weekly goals, one-tap questions", listOf(
+        "Ask the coach for a proper report: 'Give me my weekly report' gets you a structured, day-by-day breakdown of your week — what went up, what went down, and what it means.",
+        "Weekly goals with a plan: ask the coach to set a goal for the week and he proposes one specific, measurable target based on your real numbers, plus a concrete plan — which apps to limit, with which feature, at what setting, and what to check each day.",
+        "One-tap suggestions above the message box: starter prompts when you open the chat, then the coach's own suggested follow-ups after every reply — keep the conversation going without typing.",
+        "The coach now knows today's date and your exact last 7 days, so 'this week' finally means this week.",
+    )),
     VersionLog("1.46", "Jul 3, 2026", "Your coach becomes a real coach", listOf(
         "Chat with your AI Coach: a full conversation screen (Insights ▸ Chat with coach). Ask how you're doing, talk through a rough day, or just check in — he answers using your real numbers.",
         "The coach now knows the whole app: Quick Block, every schedule type, Pomodoro, Shorts blocking, the web filter — and what you already have set up. His advice names real features with real settings instead of generic tips.",

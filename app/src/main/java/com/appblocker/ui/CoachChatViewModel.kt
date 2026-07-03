@@ -23,6 +23,11 @@ class CoachChatViewModel(app: Application) : AndroidViewModel(app) {
     private val _goals = MutableStateFlow<List<String>>(emptyList())
     val goals: StateFlow<List<String>> = _goals
 
+    // Tappable prompts above the input: static starters on open, then whatever follow-ups
+    // the coach suggests with each reply.
+    private val _suggestions = MutableStateFlow(DEFAULT_SUGGESTIONS)
+    val suggestions: StateFlow<List<String>> = _suggestions
+
     init {
         val ctx = getApplication<Application>()
         val history = AiCoach.chatHistory(ctx)
@@ -45,15 +50,17 @@ class CoachChatViewModel(app: Application) : AndroidViewModel(app) {
         _messages.value = _messages.value + ChatMsg("user", msg)
         AiCoach.saveChat(ctx, _messages.value)
         _sending.value = true
+        _suggestions.value = emptyList()
         viewModelScope.launch {
             val history = _messages.value
                 .filter { it.role == "user" || it.role == "model" }
                 .dropLast(1) // chat() re-appends the new message itself
             val reply = AiCoach.chat(ctx, history, msg)
             if (reply != null) {
-                _messages.value = _messages.value + ChatMsg("model", reply)
+                _messages.value = _messages.value + ChatMsg("model", reply.reply)
                 AiCoach.saveChat(ctx, _messages.value)
                 _goals.value = AiCoach.goals(ctx)
+                _suggestions.value = reply.suggestions
             } else {
                 _messages.value = _messages.value +
                     ChatMsg("local", "Couldn't reach Gemini — check your connection and try again.")
@@ -72,5 +79,14 @@ class CoachChatViewModel(app: Application) : AndroidViewModel(app) {
     fun clearChat() {
         AiCoach.clearChat(getApplication())
         _messages.value = listOf(greeting())
+        _suggestions.value = DEFAULT_SUGGESTIONS
+    }
+
+    private companion object {
+        val DEFAULT_SUGGESTIONS = listOf(
+            "Give me my weekly report",
+            "Set a goal for this week with a plan",
+            "How am I doing today?",
+        )
     }
 }

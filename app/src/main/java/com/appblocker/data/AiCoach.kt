@@ -4,7 +4,10 @@ import android.content.Context
 import com.appblocker.service.UsageTracker
 import java.net.HttpURLConnection
 import java.net.URL
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -15,6 +18,10 @@ import org.json.JSONObject
 /** One turn of the coach conversation. Role is "user", "model", or "local" — "local" bubbles
  *  (greeting, error notes) are shown in the UI but never sent to Gemini or persisted. */
 data class ChatMsg(val role: String, val text: String)
+
+/** One chat answer: the coach's reply plus up to 3 suggested follow-up messages the user
+ *  can tap instead of typing. */
+data class CoachReply(val reply: String, val suggestions: List<String>)
 
 /**
  * The AI Coach: Gemini-powered daily tips AND a two-way chat, both grounded in the user's real
@@ -119,14 +126,16 @@ object AiCoach {
      * coach's reply (or null on failure). If Gemini includes an updated goal list, it is
      * saved here so both chat and daily tips see it.
      */
-    suspend fun chat(ctx: Context, history: List<ChatMsg>, userMsg: String): String? =
+    suspend fun chat(ctx: Context, history: List<ChatMsg>, userMsg: String): CoachReply? =
         withContext(Dispatchers.IO) {
             val key = apiKey(ctx)
             if (key.isBlank()) return@withContext null
+            val today = SimpleDateFormat("EEEE, MMM d, yyyy", Locale.US).format(Date())
             val system = buildString {
-                appendLine("You are the AI Coach inside AppBlocker, a screen-time app on the phone of ${SettingsStore.userName(ctx)}.")
-                appendLine("Personality: warm, encouraging, direct. Plain language, no emojis, no markdown. Keep replies under 80 words. Ask at most one question per reply, and only when it genuinely helps you coach.")
-                appendLine("Your job: help the user understand their usage, agree on long-term goals together, and track progress against those goals using the data below. Suggest specific app features with concrete settings when they would help.")
+                appendLine("You are the AI Coach inside AppBlocker, a screen-time app on the phone of ${SettingsStore.userName(ctx)}. Today is $today.")
+                appendLine("Personality: warm, encouraging, direct. Plain language, no emojis, no markdown symbols (*, #, backticks). Keep replies under 80 words — EXCEPT when the user asks for a report, a summary, or a plan: then reply up to 200 words, structured with short lines, dashes and line breaks so it reads like a clean report. Ask at most one question per reply, and only when it genuinely helps you coach.")
+                appendLine("Your job: help the user understand their usage, agree on goals together, and track progress against those goals using the data below. Suggest specific app features with concrete settings when they would help.")
+                appendLine("When the user wants a goal or plan for the week: propose ONE specific, measurable weekly goal grounded in the data (for example a daily-average target around 10-20% below their current average — realistic, not drastic), then give a concrete plan: which apps to limit with which feature and what setting, and what to check each day. Save the goal via the goals field prefixed 'This week: '. When a weekly goal already exists, report progress against it using the per-day numbers.")
                 appendLine()
                 appendLine(FEATURE_CATALOG)
                 appendLine()
@@ -142,7 +151,7 @@ object AiCoach {
                     else "Long-term goals:\n" + goals.joinToString("\n") { "- $it" }
                 )
                 appendLine()
-                appendLine("Reply ONLY with a JSON object: {\"reply\": string, \"goals\": array of short goal strings (optional)}. Include \"goals\" ONLY when the goal list should change (the user agreed on a new goal, changed, completed or dropped one) — it replaces the whole list. Never invent goals the user didn't agree to.")
+                appendLine("Reply ONLY with a JSON object: {\"reply\": string, \"goals\": array of short goal strings (optional), \"suggestions\": array of up to 3 short strings (optional)}. Include \"goals\" ONLY when the goal list should change (the user agreed on a new goal, changed, completed or dropped one) — it replaces the whole list; never invent goals the user didn't agree to. \"suggestions\" are follow-up messages the user might want to send next, phrased in the user's own voice (like \"Show me my weekly report\" or \"Which app should I limit first?\"), each under 40 characters, relevant to where the conversation is.")
             }
 
             // Gemini wants contents to start with a user turn; drop any leading model greeting.
@@ -169,7 +178,11 @@ object AiCoach {
                     obj.optJSONArray("goals")?.let { g ->
                         setGoals(ctx, (0 until g.length()).map { g.getString(it) })
                     }
-                    reply.ifBlank { null }
+                    val suggestions = obj.optJSONArray("suggestions")?.let { s ->
+                        (0 until s.length()).map { s.getString(it).trim() }
+                            .filter { it.isNotBlank() }.take(3)
+                    } ?: emptyList()
+                    if (reply.isBlank()) null else CoachReply(reply, suggestions)
                 }.getOrNull()?.let { return@withContext it }
             }
             null
@@ -211,10 +224,20 @@ object AiCoach {
                 "${label(pkg)} ${fmt(mins)} ($delta)"
             }
 
+        // Per-day view of the last 7 days ("Mon 3h 2m, Tue 45m, …", oldest first, ends today)
+        // so weekly reports and weekly-goal progress have real numbers to stand on.
+        val dayName = SimpleDateFormat("EEE", Locale.US)
+        val last7 = weekly.indices.joinToString {
+            val cal = Calendar.getInstance()
+            cal.add(Calendar.DAY_OF_YEAR, -(weekly.size - 1 - it))
+            "${dayName.format(cal.time)} ${fmt(weekly[it])}"
+        }
+
         return buildString {
             appendLine("Screen time today: ${fmt(UsageTracker.totalMinutesToday(snapshot))}")
             appendLine("7-day daily average: ${fmt(if (weekly.isNotEmpty()) weekly.sum() / weekly.size else 0)}")
             appendLine("Yesterday: ${fmt(weekly.getOrElse(5) { 0 })}")
+            appendLine("Last 7 days (oldest first, ending today): $last7")
             appendLine("Weekday average: ${fmt(avg(weekdayVals))}, weekend average: ${fmt(avg(weekendVals))}")
             val top = UsageTracker.topAppsToday(snapshot, 3)
             if (top.isNotEmpty()) {
