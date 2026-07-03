@@ -62,6 +62,7 @@ private sealed interface Overlay {
     data object Permissions : Overlay
     data object Onboarding : Overlay
     data object CoachChat : Overlay
+    data object Changelog : Overlay
     data class NewSchedule(val type: ScheduleType) : Overlay
     data class EditSchedule(val schedule: Schedule) : Overlay
 }
@@ -74,6 +75,7 @@ fun AppRoot() {
     val strictActive by focusVm.isActive.collectAsState()
     val updateVm: UpdateViewModel = viewModel()
     val updateState by updateVm.state.collectAsState()
+    val updatePrompt by updateVm.prompt.collectAsState()
     val context = LocalContext.current
 
     // First launch: walk the user through the step-by-step setup wizard. "Setup seen" is only
@@ -112,6 +114,8 @@ fun AppRoot() {
                 })
             is Overlay.CoachChat ->
                 CoachChatScreen(onBack = { overlay = null })
+            is Overlay.Changelog ->
+                ChangelogScreen(onBack = { overlay = null })
             is Overlay.NewSchedule ->
                 ScheduleEditorScreen(
                     type = o.type, existing = null, strictActive = strictActive,
@@ -132,16 +136,16 @@ fun AppRoot() {
                 onEditSchedule = { overlay = Overlay.EditSchedule(it) },
                 onOpenPermissions = { overlay = Overlay.Permissions },
                 onOpenCoach = { overlay = Overlay.CoachChat },
+                onOpenChangelog = { overlay = Overlay.Changelog },
             )
         }
     }
 
-    // Big, unmissable prompt when a newer version is found (on launch or via Profile).
-    // One tap downloads + installs; "Later" hides it until the next launch.
-    (updateState as? UpdateState.Available)?.let { avail ->
-        val release = avail.release
+    // Big, unmissable prompt when a newer version is found — shown ONCE per launch (the
+    // launch check feeds it). Manual checks from Profile only update that row, no popup.
+    updatePrompt?.let { release ->
         AlertDialog(
-            onDismissRequest = { updateVm.dismiss() },
+            onDismissRequest = { updateVm.dismissPrompt() },
             title = { Text("Update available") },
             text = {
                 Text(
@@ -151,12 +155,15 @@ fun AppRoot() {
             },
             confirmButton = {
                 TextButton(
-                    onClick = { updateVm.downloadAndInstall(release) }
+                    onClick = {
+                        updateVm.dismissPrompt()
+                        updateVm.downloadAndInstall(release)
+                    }
                 ) { Text("Update now") }
             },
             dismissButton = {
                 TextButton(
-                    onClick = { updateVm.dismiss() }
+                    onClick = { updateVm.dismissPrompt() }
                 ) { Text("Later") }
             },
         )
@@ -185,6 +192,7 @@ private fun MainScaffold(
     onEditSchedule: (Schedule) -> Unit,
     onOpenPermissions: () -> Unit,
     onOpenCoach: () -> Unit,
+    onOpenChangelog: () -> Unit,
 ) {
     Scaffold(
         containerColor = Color.Transparent,
@@ -243,6 +251,7 @@ private fun MainScaffold(
                 else -> ProfileScreen(
                     strictActive = strictActive,
                     onOpenPermissions = onOpenPermissions,
+                    onOpenChangelog = onOpenChangelog,
                     updateVm = updateVm,
                 )
             }

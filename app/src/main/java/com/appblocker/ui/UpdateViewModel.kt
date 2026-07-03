@@ -21,6 +21,11 @@ class UpdateViewModel(app: Application) : AndroidViewModel(app) {
     private val _state = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val state: StateFlow<UpdateState> = _state
 
+    // The big "Update available" popup. Fed ONLY by the launch check, so the user sees it
+    // exactly once per app open — manual checks from Profile just update that row's text.
+    private val _prompt = MutableStateFlow<Updater.Release?>(null)
+    val prompt: StateFlow<Updater.Release?> = _prompt
+
     val currentVersion: String get() = Updater.current(getApplication())
 
     private var checkedOnce = false
@@ -33,8 +38,14 @@ class UpdateViewModel(app: Application) : AndroidViewModel(app) {
             val latest = Updater.latest() ?: return@launch
             if (Updater.isNewer(latest.version, currentVersion)) {
                 _state.value = UpdateState.Available(latest)
+                _prompt.value = latest
             }
         }
+    }
+
+    /** Closes the once-per-launch "Update available" popup. */
+    fun dismissPrompt() {
+        _prompt.value = null
     }
 
     /** Manual check from the Profile screen — always reports a result. */
@@ -68,7 +79,9 @@ class UpdateViewModel(app: Application) : AndroidViewModel(app) {
                     _state.value = UpdateState.Downloading(pct)
                 }
                 Updater.install(ctx, file)
-                _state.value = UpdateState.Available(release) // back to actionable state after launching installer
+                // Installer is on screen now — go quiet instead of re-raising "Update available"
+                // (which used to re-pop the dialog after every install/cancel).
+                _state.value = UpdateState.Idle
             }.onFailure {
                 _state.value = UpdateState.Error("Download failed — try again.")
             }

@@ -26,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Share
@@ -66,6 +67,7 @@ import com.appblocker.ui.theme.softGlow
 fun ProfileScreen(
     strictActive: Boolean = false,
     onOpenPermissions: () -> Unit = {},
+    onOpenChangelog: () -> Unit = {},
     updateVm: UpdateViewModel = viewModel(),
     vm: HomeViewModel = viewModel(),
     scheduleVm: ScheduleViewModel = viewModel(),
@@ -190,6 +192,15 @@ fun ProfileScreen(
                         else -> updateVm.check()
                     }
                 },
+            )
+            Divider()
+            ProfileRow(
+                icon = Icons.Filled.History,
+                title = "What's new",
+                subtitle = "Every version and what it changed.",
+                chevron = true,
+                enabled = true,
+                onClick = onOpenChangelog,
             )
             Divider()
             ProfileRow(
