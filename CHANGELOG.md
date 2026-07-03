@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.47
+- The coach levels up: ask for a proper weekly report (day-by-day breakdown of your week), have him set a specific weekly goal with a detailed plan he tracks, and tap suggestion chips above the message box to chat without typing - starters when you open, his own follow-ups after every reply.
+
 ## v1.46
 - Chat with your AI Coach: a full conversation screen in Insights - he knows your data, the app's features and your setup, and you can set long-term goals together that he tracks in daily tips. Plus: the 'Update available' popup now shows only once per app open, and Profile has a new 'What's new' page with the full detailed history of every version.
 
