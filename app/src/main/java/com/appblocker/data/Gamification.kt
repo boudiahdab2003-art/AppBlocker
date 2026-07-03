@@ -59,7 +59,9 @@ object Gamification {
         Achievement("strict_first", "Iron will", "Complete your first focus session.", 25),
         Achievement("strict_10h", "Deep worker", "10 hours of focus sessions, total.", 150),
         Achievement("coach_chat", "Open up", "Have your first chat with the coach.", 25),
-        Achievement("goal_set", "Direction", "Set a goal with the coach.", 50),
+        Achievement("goal_set", "Direction", "Set a measurable goal.", 50),
+        Achievement("goal_hit", "On target", "Finish a day under one of your goals.", 25),
+        Achievement("goal_streak7", "Promise kept", "Hit a goal 7 days in a row.", 150),
         Achievement("score_80", "Great day", "Finish a day with a Focus Score of 80+.", 50),
         Achievement("under_2h", "Featherlight", "Finish a day under 2 hours of screen time.", 75),
         Achievement("low_unlocks", "Present", "Finish a day with fewer than 30 unlocks.", 50),
@@ -95,6 +97,8 @@ object Gamification {
             (quickBlockActive || schedules.any { it.enabled })
 
         val score = liveScore(ctx, protectionOn)
+        // Snapshot today's per-goal usage too, so finished days can be judged hit/miss.
+        Goals.recordToday(ctx)
 
         // Persist today's running numbers — the day's LAST write becomes its final record.
         val editor = prefs.edit()
@@ -114,6 +118,8 @@ object Gamification {
         bankedDays.forEach { day ->
             val s = prefs.getInt("score_$day", 0)
             xp += s
+            // Every goal hit on a finished day pays a bonus on top of the day's score.
+            xp += 15 * Goals.hitCountOn(ctx, day)
             if (s >= 80) bankedFlags.add("score_80")
             if (prefs.getInt("min_$day", Int.MAX_VALUE) < 120) bankedFlags.add("under_2h")
             if (prefs.getInt("unl_$day", Int.MAX_VALUE) < 30) bankedFlags.add("low_unlocks")
@@ -129,8 +135,8 @@ object Gamification {
 
         // Streak: walk back from yesterday over stored finals; today extends it live.
         var streak = 0
-        var day = today - 1
-        while (prefs.getInt("score_$day", -1) >= GOOD_DAY) { streak++; day = prevDay(day) ?: break }
+        var day = prevDayStamp(today)
+        while (prefs.getInt("score_$day", -1) >= GOOD_DAY) { streak++; day = prevDayStamp(day) }
         if (score >= GOOD_DAY) streak++
 
         // Achievement conditions (booleans first; progress hints for the locked ones below).
@@ -145,7 +151,9 @@ object Gamification {
             "strict_first" to (strictTotal > 0 || StatsStore.strictMinutesToday(ctx) > 0),
             "strict_10h" to (strictTotal >= 600),
             "coach_chat" to AiCoach.chatHistory(ctx).any { it.role == "user" },
-            "goal_set" to AiCoach.goals(ctx).isNotEmpty(),
+            "goal_set" to Goals.all(ctx).isNotEmpty(),
+            "goal_hit" to Goals.anyHitEver(ctx),
+            "goal_streak7" to (Goals.bestStreak(ctx) >= 7),
             "score_80" to bankedFlags.contains("score_80"),
             "under_2h" to bankedFlags.contains("under_2h"),
             "low_unlocks" to bankedFlags.contains("low_unlocks"),
@@ -188,6 +196,8 @@ object Gamification {
             if ("streak_3" !in unlocked) put("streak_3", "$streak/3 days")
             if ("streak_7" !in unlocked) put("streak_7", "$streak/7 days")
             if ("streak_30" !in unlocked) put("streak_30", "$streak/30 days")
+            if ("goal_streak7" !in unlocked)
+                put("goal_streak7", "${Goals.bestStreak(ctx)}/7 days")
         }
 
         return GamifyState(
@@ -245,20 +255,4 @@ object Gamification {
         return score.roundToInt().coerceIn(0, 100)
     }
 
-    /** The day-stamp immediately before [day] (handles the year boundary). */
-    private fun prevDay(day: Int): Int? {
-        val year = day / 1000
-        val doy = day % 1000
-        return when {
-            doy > 1 -> year * 1000 + (doy - 1)
-            year > 2000 -> {
-                val cal = Calendar.getInstance()
-                cal.set(Calendar.YEAR, year - 1)
-                cal.set(Calendar.MONTH, Calendar.DECEMBER)
-                cal.set(Calendar.DAY_OF_MONTH, 31)
-                (year - 1) * 1000 + cal.get(Calendar.DAY_OF_YEAR)
-            }
-            else -> null
-        }
-    }
 }

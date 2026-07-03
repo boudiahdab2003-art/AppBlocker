@@ -5,6 +5,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.appblocker.data.AiCoach
 import com.appblocker.data.ChatMsg
+import com.appblocker.data.Goal
+import com.appblocker.data.Goals
 import com.appblocker.data.SettingsStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,8 +22,8 @@ class CoachChatViewModel(app: Application) : AndroidViewModel(app) {
     private val _sending = MutableStateFlow(false)
     val sending: StateFlow<Boolean> = _sending
 
-    private val _goals = MutableStateFlow<List<String>>(emptyList())
-    val goals: StateFlow<List<String>> = _goals
+    private val _goals = MutableStateFlow<List<Goal>>(emptyList())
+    val goals: StateFlow<List<Goal>> = _goals
 
     // Tappable prompts above the input: static starters on open, then whatever follow-ups
     // the coach suggests with each reply.
@@ -32,7 +34,7 @@ class CoachChatViewModel(app: Application) : AndroidViewModel(app) {
         val ctx = getApplication<Application>()
         val history = AiCoach.chatHistory(ctx)
         _messages.value = history.ifEmpty { listOf(greeting()) }
-        _goals.value = AiCoach.goals(ctx)
+        _goals.value = Goals.all(ctx)
     }
 
     private fun greeting(): ChatMsg {
@@ -59,7 +61,7 @@ class CoachChatViewModel(app: Application) : AndroidViewModel(app) {
             if (reply != null) {
                 _messages.value = _messages.value + ChatMsg("model", reply.reply)
                 AiCoach.saveChat(ctx, _messages.value)
-                _goals.value = AiCoach.goals(ctx)
+                _goals.value = Goals.all(ctx)
                 _suggestions.value = reply.suggestions
             } else {
                 _messages.value = _messages.value +
@@ -69,11 +71,10 @@ class CoachChatViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun removeGoal(goal: String) {
+    fun removeGoal(goal: Goal) {
         val ctx = getApplication<Application>()
-        val updated = _goals.value - goal
-        AiCoach.setGoals(ctx, updated)
-        _goals.value = updated
+        Goals.remove(ctx, goal.id)
+        _goals.value = Goals.all(ctx)
     }
 
     fun clearChat() {

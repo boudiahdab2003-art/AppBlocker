@@ -13,6 +13,14 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.50", "Jul 3, 2026", "Goals that actually mean something", listOf(
+        "Goals are no longer just words — they're measurable daily targets the app tracks itself: total screen time under X, one app under X, or unlocks under N.",
+        "A new Goals card in Insights shows a live progress bar for each goal (green while you're under, red once you're past), the last 7 days as hit/miss dots, and a per-goal streak.",
+        "Hitting a goal pays: every finished day under target adds +15 XP per goal, and two new achievements — 'On target' and 'Promise kept' (7-day goal streak).",
+        "Create goals yourself with the New goal button (pick what to measure, set the target), or agree on them in chat — the coach now sets real, structured goals and sees your live progress toward them.",
+        "One tap on 'Enforce with a schedule' turns a goal into a real Usage-limit schedule that blocks when you cross the line.",
+        "Your old text goal is automatically converted to a tracked one.",
+    )),
     VersionLog("1.49", "Jul 3, 2026", "Focus Score: your discipline, gamified", listOf(
         "A live Focus Score (0-100) at the top of Insights, recomputed all day from your real behavior: screen time vs your own 30-day baseline, unlocks vs your average, urges stopped, focus-session minutes, and whether your protection is armed.",
         "Every finished day banks its score as XP. Climb 7 levels: Starter, Aware, Focused, Disciplined, Guardian, Master, Legend.",

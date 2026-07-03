@@ -57,6 +57,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.appblocker.data.ChatMsg
+import com.appblocker.data.Goal
 import com.appblocker.ui.theme.AppGradients
 import com.appblocker.ui.theme.softGlow
 
@@ -138,7 +139,7 @@ fun CoachChatScreen(onBack: () -> Unit, vm: CoachChatViewModel = viewModel()) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun GoalChips(goals: List<String>, onRemove: (String) -> Unit) {
+private fun GoalChips(goals: List<Goal>, onRemove: (Goal) -> Unit) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Filled.Flag, contentDescription = null,
@@ -160,7 +161,7 @@ private fun GoalChips(goals: List<String>, onRemove: (String) -> Unit) {
                         .padding(start = 12.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(goal, style = MaterialTheme.typography.labelMedium,
+                    Text(goal.label(), style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurface)
                     Spacer(Modifier.width(4.dp))
                     Icon(Icons.Filled.Close, contentDescription = "Remove goal",

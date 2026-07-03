@@ -79,7 +79,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.appblocker.data.AiCoach
 import com.appblocker.data.Gamification
 import com.appblocker.data.GamifyState
 import com.appblocker.ui.theme.AppGradients
@@ -95,13 +94,12 @@ import kotlin.math.roundToInt
 fun InsightsScreen(
     onOpenCoach: () -> Unit = {},
     onOpenAchievements: () -> Unit = {},
+    onNewGoalSchedule: () -> Unit = {},
     vm: InsightsViewModel = viewModel(),
 ) {
     val state by vm.state.collectAsState()
     val coach by vm.coach.collectAsState()
     val context = LocalContext.current
-    // The coach's long-term goals (agreed in chat); re-read whenever the coach state settles.
-    val goals = remember(coach) { AiCoach.goals(context) }
     var tab by rememberSaveable { mutableIntStateOf(0) } // 0 Day, 1 Week, 2 Trend
     var showKeyDialog by remember { mutableStateOf(false) }
 
@@ -151,6 +149,18 @@ fun InsightsScreen(
             }
         }
 
+        // Goals: measurable daily targets, tracked live with hit/miss history.
+        item {
+            GoalsCard(
+                goals = state.goals,
+                onAddGoal = { vm.addGoal(it) },
+                onRemoveGoal = { vm.removeGoal(it) },
+                onEnforce = onNewGoalSchedule,
+                onOpenCoach = onOpenCoach,
+            )
+            Spacer(Modifier.padding(top = 24.dp))
+        }
+
         // Activity: the interactive chart + category split in one designed card.
         item {
             Column(
@@ -196,7 +206,8 @@ fun InsightsScreen(
 
         // AI Coach: Gemini's daily read of the numbers above.
         item {
-            CoachCard(coach, goals, onEditKey = { showKeyDialog = true },
+            CoachCard(coach, state.goals.map { it.goal.label() },
+                onEditKey = { showKeyDialog = true },
                 onNewTips = { vm.newTips() }, onChat = onOpenCoach)
             Spacer(Modifier.padding(top = 24.dp))
         }

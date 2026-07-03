@@ -56,20 +56,6 @@ object AiCoach {
         p(ctx).edit().putString("key", key.trim()).remove("tips").apply()
     }
 
-    // --- Long-term goals (agreed in chat, tracked in every prompt) ---
-
-    fun goals(ctx: Context): List<String> =
-        p(ctx).getString("goals", null)?.let { raw ->
-            runCatching {
-                val arr = JSONArray(raw)
-                (0 until arr.length()).map { arr.getString(it) }.filter { it.isNotBlank() }
-            }.getOrNull()
-        } ?: emptyList()
-
-    fun setGoals(ctx: Context, goals: List<String>) {
-        p(ctx).edit().putString("goals", JSONArray(goals.filter { it.isNotBlank() }).toString()).apply()
-    }
-
     // --- Chat history (persisted so the conversation survives restarts) ---
 
     fun chatHistory(ctx: Context): List<ChatMsg> =
@@ -110,7 +96,7 @@ object AiCoach {
             val key = apiKey(ctx)
             if (key.isBlank()) return@withContext null
             val setup = runCatching { setupSnapshot(ctx) }.getOrDefault("")
-            val goals = goals(ctx)
+            val goals = Goals.all(ctx).map { it.label() }
             // One retry to ride out transient blips, same as the updater.
             repeat(2) {
                 runCatching { fetchTips(key, summary, setup, goals) }.getOrNull()?.let { tips ->
@@ -145,13 +131,14 @@ object AiCoach {
                 appendLine("The user's usage data:")
                 appendLine(runCatching { usageSummary(ctx) }.getOrDefault("(unavailable)"))
                 appendLine()
-                val goals = goals(ctx)
+                val goalsText = runCatching { Goals.promptSummary(ctx) }.getOrDefault("")
                 appendLine(
-                    if (goals.isEmpty()) "Long-term goals: none yet — consider helping the user set one."
-                    else "Long-term goals:\n" + goals.joinToString("\n") { "- $it" }
+                    if (goalsText.isBlank())
+                        "Goals: none yet — consider helping the user agree on one measurable daily target."
+                    else "The user's goals, tracked live by the app (hit = the day finishes under the target):\n$goalsText"
                 )
                 appendLine()
-                appendLine("Reply ONLY with a JSON object: {\"reply\": string, \"goals\": array of short goal strings (optional), \"suggestions\": array of up to 3 short strings (optional)}. Include \"goals\" ONLY when the goal list should change (the user agreed on a new goal, changed, completed or dropped one) — it replaces the whole list; never invent goals the user didn't agree to. \"suggestions\" are follow-up messages the user might want to send next, phrased in the user's own voice (like \"Show me my weekly report\" or \"Which app should I limit first?\"), each under 40 characters, relevant to where the conversation is.")
+                appendLine("Reply ONLY with a JSON object: {\"reply\": string, \"goals\": array (optional), \"suggestions\": array of up to 3 short strings (optional)}. \"goals\" REPLACES the user's whole goal list and must contain OBJECTS: {\"kind\": \"screen_time\" or \"app\" or \"unlocks\", \"minutes\": integer daily target (for unlocks, the unlock count), \"app\": the exact app name, only for kind app}. Include \"goals\" ONLY when the user agreed to add, change, complete or drop a goal — and when you do, also include the existing goals being kept. Goals must be measurable daily targets; never invent one the user didn't agree to. \"suggestions\" are follow-up messages the user might want to send next, phrased in the user's own voice (like \"Show me my weekly report\" or \"Which app should I limit first?\"), each under 40 characters, relevant to where the conversation is.")
             }
 
             // Gemini wants contents to start with a user turn; drop any leading model greeting.
@@ -175,9 +162,7 @@ object AiCoach {
                 runCatching {
                     val obj = JSONObject(post(key, body))
                     val reply = obj.getString("reply").trim()
-                    obj.optJSONArray("goals")?.let { g ->
-                        setGoals(ctx, (0 until g.length()).map { g.getString(it) })
-                    }
+                    obj.optJSONArray("goals")?.let { g -> applyGoalUpdate(ctx, g) }
                     val suggestions = obj.optJSONArray("suggestions")?.let { s ->
                         (0 until s.length()).map { s.getString(it).trim() }
                             .filter { it.isNotBlank() }.take(3)
@@ -187,6 +172,38 @@ object AiCoach {
             }
             null
         }
+
+    /** Turns the coach's goal objects into real [Goals], keeping the id (and so the whole
+     *  hit history) of any goal that survives the update unchanged. */
+    private suspend fun applyGoalUpdate(ctx: Context, arr: JSONArray) {
+        InstalledAppsRepository.ensureLoaded(ctx)
+        val apps = InstalledAppsRepository.apps.value
+        val parsed = (0 until arr.length()).mapNotNull { i ->
+            val o = arr.optJSONObject(i) ?: return@mapNotNull null
+            val target = o.optInt("minutes", 0)
+            if (target <= 0) return@mapNotNull null
+            when (o.optString("kind")) {
+                "screen_time" -> Goal(Goals.newId(), GoalKind.SCREEN_TIME, target)
+                "unlocks" -> Goal(Goals.newId(), GoalKind.UNLOCKS, target)
+                "app" -> {
+                    val name = o.optString("app")
+                    val match = apps.firstOrNull { it.label.equals(name, ignoreCase = true) }
+                        ?: apps.firstOrNull { name.isNotBlank() && it.label.contains(name, true) }
+                    match?.let {
+                        Goal(Goals.newId(), GoalKind.APP_LIMIT, target, it.packageName, it.label)
+                    }
+                }
+                else -> null
+            }
+        }
+        val existing = Goals.all(ctx)
+        val merged = parsed.map { new ->
+            existing.firstOrNull {
+                it.kind == new.kind && it.target == new.target && it.pkg == new.pkg
+            } ?: new
+        }
+        Goals.replaceAll(ctx, merged)
+    }
 
     /** Compact plain-text usage summary — aggregate numbers and app names only, nothing
      *  sensitive. Shared by daily tips and chat; everything reads from day-cached sources. */

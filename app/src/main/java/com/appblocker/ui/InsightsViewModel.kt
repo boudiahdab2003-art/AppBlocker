@@ -11,6 +11,9 @@ import com.appblocker.data.AiCoach
 import com.appblocker.data.AppCategories
 import com.appblocker.data.GamifyState
 import com.appblocker.data.Gamification
+import com.appblocker.data.Goal
+import com.appblocker.data.GoalProgress
+import com.appblocker.data.Goals
 import com.appblocker.data.AppCategory
 import com.appblocker.data.AttemptCounter
 import com.appblocker.data.InstalledApp
@@ -91,6 +94,7 @@ data class InsightsState(
     val appTrends: List<StatRow> = emptyList(),
     val unlocksToday: Int = 0,
     val gamify: GamifyState? = null,
+    val goals: List<GoalProgress> = emptyList(),
 )
 
 class InsightsViewModel(app: Application) : AndroidViewModel(app) {
@@ -271,7 +275,19 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
             // Focus Score + achievements: evaluating also banks finished days into XP and
             // unlocks any newly earned badges (returned in newlyUnlocked for celebration).
             gamify = runCatching { Gamification.evaluate(ctx) }.getOrNull(),
+            goals = runCatching { Goals.progress(ctx) }.getOrDefault(emptyList()),
         )
+    }
+
+    /** Adds a hand-made goal and refreshes so its live bar appears immediately. */
+    fun addGoal(goal: Goal) {
+        Goals.add(getApplication(), goal)
+        refresh()
+    }
+
+    fun removeGoal(goal: Goal) {
+        Goals.remove(getApplication(), goal.id)
+        refresh()
     }
 
     /** The launch-warmed installed-apps cache, keyed by package. */

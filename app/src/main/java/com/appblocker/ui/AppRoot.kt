@@ -255,6 +255,7 @@ private fun MainScaffold(
                 2 -> InsightsScreen(
                     onOpenCoach = onOpenCoach,
                     onOpenAchievements = onOpenAchievements,
+                    onNewGoalSchedule = { onNewSchedule(ScheduleType.USAGE_LIMIT) },
                 )
                 else -> ProfileScreen(
                     strictActive = strictActive,
