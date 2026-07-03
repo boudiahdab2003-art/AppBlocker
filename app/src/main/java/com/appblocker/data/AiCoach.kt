@@ -247,6 +247,13 @@ object AiCoach {
             if (trends.isNotBlank()) appendLine("This week vs last week: $trends")
             appendLine("Blocked-app open attempts today: ${AttemptCounter.summary(ctx).sumOf { it.today }}")
             appendLine("Phone unlocks today: ${UnlockCounter.unlocksToday(ctx)}")
+            // The gamification layer — so the coach can celebrate score, streak and badges.
+            runCatching { Gamification.evaluate(ctx) }.getOrNull()?.let { g ->
+                appendLine("Focus Score today (0-100, the app's live gamified day score): " +
+                    "${g.score} (${g.band}); level ${g.levelIndex + 1} ${g.level.name}, " +
+                    "${g.xp} XP; streak of good days: ${g.streak}; achievements unlocked: " +
+                    "${g.unlocked.size}/${Gamification.ACHIEVEMENTS.size}.")
+            }
         }
     }
 

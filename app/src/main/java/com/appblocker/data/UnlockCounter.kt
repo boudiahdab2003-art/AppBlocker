@@ -32,5 +32,14 @@ object UnlockCounter {
         return prefs.getInt(key(todayStamp()), 0)
     }
 
+    /** Mean unlocks per recorded day, excluding today — the Focus Score's baseline. */
+    fun averageUnlocksPerDay(context: Context): Float {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val todayKey = key(todayStamp())
+        val past = prefs.all.filterKeys { it.startsWith("day_") && it != todayKey }
+            .values.mapNotNull { it as? Int }
+        return if (past.isEmpty()) 0f else past.average().toFloat()
+    }
+
     private fun key(dayStamp: Int) = "day_$dayStamp"
 }

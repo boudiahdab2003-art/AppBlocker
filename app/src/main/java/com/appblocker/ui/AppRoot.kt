@@ -63,6 +63,7 @@ private sealed interface Overlay {
     data object Onboarding : Overlay
     data object CoachChat : Overlay
     data object Changelog : Overlay
+    data object Achievements : Overlay
     data class NewSchedule(val type: ScheduleType) : Overlay
     data class EditSchedule(val schedule: Schedule) : Overlay
 }
@@ -116,6 +117,8 @@ fun AppRoot() {
                 CoachChatScreen(onBack = { overlay = null })
             is Overlay.Changelog ->
                 ChangelogScreen(onBack = { overlay = null })
+            is Overlay.Achievements ->
+                AchievementsScreen(onBack = { overlay = null })
             is Overlay.NewSchedule ->
                 ScheduleEditorScreen(
                     type = o.type, existing = null, strictActive = strictActive,
@@ -137,6 +140,7 @@ fun AppRoot() {
                 onOpenPermissions = { overlay = Overlay.Permissions },
                 onOpenCoach = { overlay = Overlay.CoachChat },
                 onOpenChangelog = { overlay = Overlay.Changelog },
+                onOpenAchievements = { overlay = Overlay.Achievements },
             )
         }
     }
@@ -193,6 +197,7 @@ private fun MainScaffold(
     onOpenPermissions: () -> Unit,
     onOpenCoach: () -> Unit,
     onOpenChangelog: () -> Unit,
+    onOpenAchievements: () -> Unit,
 ) {
     Scaffold(
         containerColor = Color.Transparent,
@@ -247,7 +252,10 @@ private fun MainScaffold(
                     updateVm = updateVm,
                 )
                 1 -> StrictModeScreen()
-                2 -> InsightsScreen(onOpenCoach = onOpenCoach)
+                2 -> InsightsScreen(
+                    onOpenCoach = onOpenCoach,
+                    onOpenAchievements = onOpenAchievements,
+                )
                 else -> ProfileScreen(
                     strictActive = strictActive,
                     onOpenPermissions = onOpenPermissions,

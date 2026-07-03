@@ -13,6 +13,14 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.49", "Jul 3, 2026", "Focus Score: your discipline, gamified", listOf(
+        "A live Focus Score (0-100) at the top of Insights, recomputed all day from your real behavior: screen time vs your own 30-day baseline, unlocks vs your average, urges stopped, focus-session minutes, and whether your protection is armed.",
+        "Every finished day banks its score as XP. Climb 7 levels: Starter, Aware, Focused, Disciplined, Guardian, Master, Legend.",
+        "Streaks: days scoring 60+ chain together — miss a day and it breaks, so showing up daily matters.",
+        "17 achievements with XP rewards, from 'First stand' (your first block) to 'Fortress' (1,000 blocks) and 'Transformed' (a 30-day streak) — each with live progress toward the next one.",
+        "New Achievements page: your level, XP bar, and every badge — earned ones in full color with their date, locked ones with exactly what's left.",
+        "The coach sees your score, level and streak, so he celebrates milestones and pushes you toward the next one.",
+    )),
     VersionLog("1.48", "Jul 3, 2026", "Coach replies got a face-lift", listOf(
         "The coach's answers are now properly formatted: section headings stand out in bold, lists render with the app's gradient bullet dots, and the key numbers and app names are highlighted.",
         "Weekly reports finally look like reports — scannable sections instead of a wall of text.",
