@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.49
+- Focus Score: your discipline, gamified. A live 0-100 score at the top of Insights measured against your own habits, XP banked from every finished day, 7 levels from Starter to Legend, streaks for good days, and 17 achievements with rewards - from your first block to a 30-day streak. Your coach celebrates every milestone with you.
+
 ## v1.48
 - The coach's answers got a face-lift: section headings in bold, lists with the app's gradient bullet dots, and key numbers and app names highlighted - weekly reports finally look like real reports instead of a wall of text.
 
