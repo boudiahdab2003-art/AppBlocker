@@ -132,7 +132,7 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val built = withContext(Dispatchers.IO) { build() }
             _state.value = built
-            refreshCoach(built, force = false)
+            refreshCoach(force = false)
         }
     }
 
@@ -144,40 +144,22 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
     /** Saves the user's Gemini key (device-local only) and fetches tips with it. */
     fun setApiKey(key: String) {
         AiCoach.setApiKey(getApplication(), key)
-        viewModelScope.launch { refreshCoach(_state.value, force = false) }
+        viewModelScope.launch { refreshCoach(force = false) }
     }
 
     /** Forces a fresh Gemini call instead of today's cached tips. */
     fun newTips() {
-        viewModelScope.launch { refreshCoach(_state.value, force = true) }
+        viewModelScope.launch { refreshCoach(force = true) }
     }
 
-    private suspend fun refreshCoach(s: InsightsState, force: Boolean) {
+    private suspend fun refreshCoach(force: Boolean) {
         val ctx = getApplication<Application>()
         if (AiCoach.apiKey(ctx).isBlank()) { _coach.value = CoachState.NoKey; return }
         _coach.value = CoachState.Loading
-        val tips = AiCoach.dailyTips(ctx, summaryOf(s), force)
+        // The usage summary is built inside AiCoach (shared with the chat) from day-cached data.
+        val summary = withContext(Dispatchers.IO) { AiCoach.usageSummary(ctx) }
+        val tips = AiCoach.dailyTips(ctx, summary, force)
         _coach.value = if (tips.isNullOrEmpty()) CoachState.Unavailable else CoachState.Tips(tips)
-    }
-
-    /** Compact plain-text summary of the day for the coach prompt — aggregate numbers and app
-     *  names only, nothing sensitive. */
-    private fun summaryOf(s: InsightsState): String = buildString {
-        appendLine("Screen time today: ${fmt(s.screenMinutes)}")
-        val avg = if (s.weekly.isNotEmpty()) s.weekly.sum() / s.weekly.size else 0
-        appendLine("7-day daily average: ${fmt(avg)}")
-        appendLine("Yesterday: ${fmt(s.weekly.getOrElse(5) { 0 })}")
-        appendLine("Weekday average: ${fmt(s.weekdayAvg)}, weekend average: ${fmt(s.weekendAvg)}")
-        if (s.topApps.isNotEmpty()) {
-            appendLine("Top apps today: " +
-                s.topApps.take(3).joinToString { "${it.label} (${it.value})" })
-        }
-        if (s.appTrends.isNotEmpty()) {
-            appendLine("Change vs last week: " +
-                s.appTrends.joinToString { "${it.label} ${it.value} ${it.delta ?: ""}".trim() })
-        }
-        appendLine("Blocked-app open attempts today: ${s.attemptsTodayTotal}")
-        appendLine("Phone unlocks today: ${s.unlocksToday}")
     }
 
     private suspend fun build(): InsightsState {

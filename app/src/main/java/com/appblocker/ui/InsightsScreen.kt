@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.TouchApp
@@ -75,6 +76,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.appblocker.data.AiCoach
 import com.appblocker.ui.theme.AppGradients
 import com.appblocker.ui.theme.softGlow
 import java.text.SimpleDateFormat
@@ -85,10 +87,12 @@ import kotlin.math.ceil
 import kotlin.math.roundToInt
 
 @Composable
-fun InsightsScreen(vm: InsightsViewModel = viewModel()) {
+fun InsightsScreen(onOpenCoach: () -> Unit = {}, vm: InsightsViewModel = viewModel()) {
     val state by vm.state.collectAsState()
     val coach by vm.coach.collectAsState()
     val context = LocalContext.current
+    // The coach's long-term goals (agreed in chat); re-read whenever the coach state settles.
+    val goals = remember(coach) { AiCoach.goals(context) }
     var tab by rememberSaveable { mutableIntStateOf(0) } // 0 Day, 1 Week, 2 Trend
     var showKeyDialog by remember { mutableStateOf(false) }
 
@@ -175,7 +179,8 @@ fun InsightsScreen(vm: InsightsViewModel = viewModel()) {
 
         // AI Coach: Gemini's daily read of the numbers above.
         item {
-            CoachCard(coach, onEditKey = { showKeyDialog = true }, onNewTips = { vm.newTips() })
+            CoachCard(coach, goals, onEditKey = { showKeyDialog = true },
+                onNewTips = { vm.newTips() }, onChat = onOpenCoach)
             Spacer(Modifier.padding(top = 24.dp))
         }
 
@@ -294,7 +299,13 @@ fun InsightsScreen(vm: InsightsViewModel = viewModel()) {
 /** The AI Coach panel: Gemini-written tips from today's aggregate stats. Styled as the page's
  *  special card — gradient icon + gradient border — so the AI feature stands out. */
 @Composable
-private fun CoachCard(state: CoachState, onEditKey: () -> Unit, onNewTips: () -> Unit) {
+private fun CoachCard(
+    state: CoachState,
+    goals: List<String>,
+    onEditKey: () -> Unit,
+    onNewTips: () -> Unit,
+    onChat: () -> Unit,
+) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
             Modifier.size(30.dp).clip(RoundedCornerShape(9.dp)).background(AppGradients.accent),
@@ -360,6 +371,22 @@ private fun CoachCard(state: CoachState, onEditKey: () -> Unit, onNewTips: () ->
                             color = MaterialTheme.colorScheme.onSurface)
                     }
                 }
+                if (goals.isNotEmpty()) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                    Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.Flag, contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            if (goals.size == 1) "Goal: ${goals[0]}"
+                            else "Goals: ${goals.joinToString(" · ")}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                GradientButton("Chat with coach", onClick = onChat,
+                    modifier = Modifier.padding(top = 12.dp))
                 Row {
                     TextButton(onClick = onNewTips) { Text("New tips") }
                     Spacer(Modifier.weight(1f))
@@ -373,6 +400,8 @@ private fun CoachCard(state: CoachState, onEditKey: () -> Unit, onNewTips: () ->
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(top = 12.dp),
                 )
+                GradientButton("Chat with coach", onClick = onChat,
+                    modifier = Modifier.padding(top = 12.dp))
                 Row {
                     TextButton(onClick = onNewTips) { Text("Try again") }
                     Spacer(Modifier.weight(1f))
