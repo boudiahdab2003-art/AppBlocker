@@ -13,6 +13,11 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.51", "Jul 3, 2026", "Fewer numbers, more meaning", listOf(
+        "The Focus Score, XP levels and achievements are retired — after real use they added noise, not motivation. Numbers you have to interpret lost to goals you can feel.",
+        "Goals stay front and center: live progress bars, 7-day hit/miss dots, per-goal streaks, one-tap enforcement, and the coach tracking every target with you.",
+        "Insights is cleaner for it: your data, your goals, your coach — nothing artificial in between.",
+    )),
     VersionLog("1.50", "Jul 3, 2026", "Goals that actually mean something", listOf(
         "Goals are no longer just words — they're measurable daily targets the app tracks itself: total screen time under X, one app under X, or unlocks under N.",
         "A new Goals card in Insights shows a live progress bar for each goal (green while you're under, red once you're past), the last 7 days as hit/miss dots, and a per-goal streak.",

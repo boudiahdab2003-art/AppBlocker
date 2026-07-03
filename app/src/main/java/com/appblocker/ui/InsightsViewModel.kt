@@ -9,8 +9,6 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.appblocker.data.AiCoach
 import com.appblocker.data.AppCategories
-import com.appblocker.data.GamifyState
-import com.appblocker.data.Gamification
 import com.appblocker.data.Goal
 import com.appblocker.data.GoalProgress
 import com.appblocker.data.Goals
@@ -93,7 +91,6 @@ data class InsightsState(
     val weekendAvg: Int = 0,
     val appTrends: List<StatRow> = emptyList(),
     val unlocksToday: Int = 0,
-    val gamify: GamifyState? = null,
     val goals: List<GoalProgress> = emptyList(),
 )
 
@@ -272,10 +269,12 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
             weekendAvg = if (weekendVals.isNotEmpty()) weekendVals.average().roundToInt() else 0,
             appTrends = appTrends,
             unlocksToday = UnlockCounter.unlocksToday(ctx),
-            // Focus Score + achievements: evaluating also banks finished days into XP and
-            // unlocks any newly earned badges (returned in newlyUnlocked for celebration).
-            gamify = runCatching { Gamification.evaluate(ctx) }.getOrNull(),
-            goals = runCatching { Goals.progress(ctx) }.getOrDefault(emptyList()),
+            // Snapshot today's per-goal usage so finished days get judged hit/miss — the
+            // day's last snapshot becomes its final record.
+            goals = runCatching {
+                Goals.recordToday(ctx)
+                Goals.progress(ctx)
+            }.getOrDefault(emptyList()),
         )
     }
 

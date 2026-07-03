@@ -31,7 +31,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Assessment
@@ -39,10 +38,8 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Lightbulb
-import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material3.AlertDialog
@@ -79,8 +76,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.appblocker.data.Gamification
-import com.appblocker.data.GamifyState
 import com.appblocker.ui.theme.AppGradients
 import com.appblocker.ui.theme.softGlow
 import java.text.SimpleDateFormat
@@ -93,7 +88,6 @@ import kotlin.math.roundToInt
 @Composable
 fun InsightsScreen(
     onOpenCoach: () -> Unit = {},
-    onOpenAchievements: () -> Unit = {},
     onNewGoalSchedule: () -> Unit = {},
     vm: InsightsViewModel = viewModel(),
 ) {
@@ -139,14 +133,6 @@ fun InsightsScreen(
             Spacer(Modifier.padding(top = 8.dp))
             InsightsHero(tab, state)
             Spacer(Modifier.padding(top = 20.dp))
-        }
-
-        // Focus Score: today's live score, level/XP, streak, and the door to achievements.
-        state.gamify?.let { g ->
-            item {
-                ScoreCard(g, onOpenAchievements)
-                Spacer(Modifier.padding(top = 24.dp))
-            }
         }
 
         // Goals: measurable daily targets, tracked live with hit/miss history.
@@ -321,152 +307,6 @@ fun InsightsScreen(
             },
             dismissButton = { TextButton(onClick = { showKeyDialog = false }) { Text("Cancel") } },
         )
-    }
-}
-
-/** Focus Score card: animated score ring, level + XP bar, streak, achievements door. */
-@Composable
-private fun ScoreCard(g: GamifyState, onOpenAchievements: () -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            Modifier.size(30.dp).clip(RoundedCornerShape(9.dp)).background(AppGradients.accent),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(Icons.Filled.EmojiEvents, contentDescription = null, tint = Color.White,
-                modifier = Modifier.size(18.dp))
-        }
-        Spacer(Modifier.width(10.dp))
-        Column {
-            Text("Focus Score", style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-            Text("Your day, scored live from your habits",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-    Spacer(Modifier.padding(top = 8.dp))
-    Column(
-        Modifier.fillMaxWidth()
-            .softGlow(RoundedCornerShape(20.dp), elevation = 6.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f),
-                RoundedCornerShape(20.dp))
-            .padding(16.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            ScoreRing(g.score, g.band)
-            Spacer(Modifier.width(18.dp))
-            Column(Modifier.weight(1f)) {
-                Text("Level ${g.levelIndex + 1} · ${g.level.name}",
-                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface)
-                Spacer(Modifier.height(6.dp))
-                // XP progress toward the next level.
-                Box(Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(50))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)) {
-                    Box(Modifier.fillMaxWidth(g.levelProgress.coerceIn(0.03f, 1f))
-                        .fillMaxHeight().clip(RoundedCornerShape(50))
-                        .background(AppGradients.accent))
-                }
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    g.nextLevel?.let { "${g.xp} / ${it.threshold} XP to ${it.name}" }
-                        ?: "${g.xp} XP · max level",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.LocalFireDepartment, contentDescription = null,
-                        tint = if (g.streak > 0) Color(0xFFFF9E45)
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(5.dp))
-                    Text(
-                        when {
-                            g.streak > 1 -> "${g.streak}-day streak"
-                            g.streak == 1 -> "1 good day — keep it going"
-                            else -> "Score 60+ to start a streak"
-                        },
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (g.streak > 0) MaterialTheme.colorScheme.onSurface
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
-
-        // Celebrate anything unlocked on this refresh.
-        g.newlyUnlocked.forEach { a ->
-            Spacer(Modifier.height(10.dp))
-            Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
-                    .padding(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(Icons.Filled.EmojiEvents, contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Achievement unlocked: ${a.title}  (+${a.xp} XP)",
-                    style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary)
-            }
-        }
-
-        Spacer(Modifier.height(12.dp))
-        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
-        Row(
-            Modifier.fillMaxWidth().clickable { onOpenAchievements() }.padding(top = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("Achievements", style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-            Spacer(Modifier.weight(1f))
-            Text("${g.unlocked.size}/${Gamification.ACHIEVEMENTS.size} unlocked",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
-
-/** The animated score dial: gradient arc over a faint track, score + band in the middle. */
-@Composable
-private fun ScoreRing(score: Int, band: String) {
-    val sweep by animateFloatAsState(targetValue = score / 100f, animationSpec = tween(700),
-        label = "score")
-    val track = MaterialTheme.colorScheme.surfaceVariant
-    Box(Modifier.size(104.dp), contentAlignment = Alignment.Center) {
-        Canvas(Modifier.fillMaxSize()) {
-            val stroke = 10.dp.toPx()
-            val inset = stroke / 2
-            drawArc(
-                color = track,
-                startAngle = 135f, sweepAngle = 270f, useCenter = false,
-                topLeft = Offset(inset, inset),
-                size = Size(size.width - stroke, size.height - stroke),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(
-                    width = stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round),
-            )
-            drawArc(
-                brush = AppGradients.accent,
-                startAngle = 135f, sweepAngle = 270f * sweep, useCenter = false,
-                topLeft = Offset(inset, inset),
-                size = Size(size.width - stroke, size.height - stroke),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(
-                    width = stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round),
-            )
-        }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("$score", fontSize = 30.sp, fontWeight = FontWeight.ExtraBold,
-                color = MaterialTheme.colorScheme.onSurface)
-            Text(band, style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
     }
 }
 

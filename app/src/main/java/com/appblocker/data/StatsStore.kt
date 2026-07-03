@@ -16,14 +16,8 @@ object StatsStore {
         prefs.edit()
             .putInt("strict_minutes", current + minutes)
             .putInt("strict_day", today)
-            // Lifetime total feeds the "Deep worker" achievement (counts from v1.49 on).
-            .putInt("strict_total", prefs.getInt("strict_total", 0) + minutes)
             .apply()
     }
-
-    /** All focus-session minutes ever recorded (accumulates from v1.49 onward). */
-    fun strictMinutesTotal(context: Context): Int =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt("strict_total", 0)
 
     fun strictMinutesToday(context: Context): Int {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
