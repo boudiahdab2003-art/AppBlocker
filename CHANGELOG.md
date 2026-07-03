@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.50
+- Goals that actually mean something: measurable daily targets the app tracks itself (screen time, one app, or unlocks), with live progress bars, 7-day hit/miss dots and per-goal streaks on a new Goals card in Insights. Hitting a goal pays XP and unlocks achievements, one tap turns a goal into a real Usage-limit schedule, and the coach sets and follows structured goals with your live numbers. Your old text goal converts automatically.
+
 ## v1.49
 - Focus Score: your discipline, gamified. A live 0-100 score at the top of Insights measured against your own habits, XP banked from every finished day, 7 levels from Starter to Legend, streaks for good days, and 17 achievements with rewards - from your first block to a 30-day streak. Your coach celebrates every milestone with you.
 
