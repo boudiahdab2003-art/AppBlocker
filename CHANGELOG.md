@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.46
+- Chat with your AI Coach: a full conversation screen in Insights - he knows your data, the app's features and your setup, and you can set long-term goals together that he tracks in daily tips. Plus: the 'Update available' popup now shows only once per app open, and Profile has a new 'What's new' page with the full detailed history of every version.
+
 ## v1.45
 - NEW: AI Coach in Insights - Gemini writes you 2-3 daily tips from your real usage data (paste your free Gemini API key once in the app); plus brighter, easier-to-read row titles across Insights
 
