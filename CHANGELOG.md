@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.57
+- Editing a template now opens the same clean full-screen editor as Quick Block, with the app list hidden by default (tap Apps to expand, with search) and the extra options as proper labelled switches.
+
 ## v1.56
 - Templates now switch on Quick Block's extra options too (block in-app purchases, unsupported browsers, and more) - each template has smart defaults, and the pencil lets you choose exactly which options it turns on. Applying a template only ever turns options on, never off.
 
