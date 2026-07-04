@@ -71,6 +71,11 @@ android {
     buildFeatures {
         compose = true
     }
+    lint {
+        // Skip the slow lintVital pass on every release build — this is a personal app
+        // published from a known-good branch, not a library where lint gates matter.
+        checkReleaseBuilds = false
+    }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.14"
     }

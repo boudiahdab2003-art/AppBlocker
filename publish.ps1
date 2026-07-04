@@ -58,7 +58,7 @@ try {
     # --- 3. Build the signed app --------------------------------------------------
     Step 3 "Building the app (this can take a minute or two)..."
     $env:JAVA_HOME = $Jbr
-    & $GradleBat -p $Repo assembleGithubRelease --no-daemon
+    & $GradleBat -p $Repo assembleGithubRelease
     if ($LASTEXITCODE -ne 0) { Die "The build failed (see the messages above)." }
     if (-not (Test-Path $ApkBuilt)) { Die "The build finished but no APK was produced." }
     Ok "Built app-github-release.apk"
