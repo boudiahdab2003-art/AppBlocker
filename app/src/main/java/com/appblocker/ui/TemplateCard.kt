@@ -1,5 +1,6 @@
 package com.appblocker.ui
 
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -30,6 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.appblocker.data.Schedule
+import com.appblocker.data.TemplateStore
 import com.appblocker.ui.theme.softGlow
 
 @Composable
@@ -100,18 +102,24 @@ internal fun TemplateCard(
     }
 }
 
-internal fun isTemplateActive(t: Template, schedules: List<Schedule>, adultOn: Boolean): Boolean {
+internal fun isTemplateActive(t: Template, schedules: List<Schedule>, context: Context): Boolean {
+    // App templates are "active" while their schedule is enabled.
     if (t.packages.isNotEmpty()) return schedules.any { it.name == t.title && it.enabled }
-    if (t.enableAdult) return adultOn
-    return false
+    // Options-only templates (e.g. Stay Clean) are active when all their options are on.
+    val opts = t.effectiveOptions(context)
+    return opts.isNotEmpty() && opts.all { it.isOn(context) }
 }
 
-internal fun templateSummary(t: Template): String {
+internal fun templateSummary(t: Template, context: Context): String {
     val parts = mutableListOf<String>()
-    if (t.packages.isNotEmpty()) {
-        parts += "${t.packages.size} apps" + if (t.timeLabel.isNotEmpty()) " (${t.timeLabel})" else ""
+    val appCount = TemplateStore.packagesFor(context, t.id)?.size ?: t.packages.size
+    if (appCount > 0) {
+        parts += "$appCount apps" + if (t.timeLabel.isNotEmpty()) " (${t.timeLabel})" else ""
     }
     if (t.keywords.isNotEmpty()) parts += "${t.keywords.size} words"
-    if (t.enableAdult) parts += "the adult filter"
-    return "This will block " + parts.joinToString(", ") + "."
+    val summary = if (parts.isEmpty()) "" else "This will block " + parts.joinToString(", ") + "."
+    val opts = t.effectiveOptions(context)
+    val optLine = if (opts.isEmpty()) ""
+    else " It will also turn on: " + opts.joinToString(", ") { it.label.replaceFirstChar { c -> c.lowercase() } } + "."
+    return (summary + optLine).trim()
 }

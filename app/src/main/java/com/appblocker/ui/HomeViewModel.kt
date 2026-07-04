@@ -7,7 +7,6 @@ import com.appblocker.data.BlockedKeyword
 import com.appblocker.data.BlockerDatabase
 import com.appblocker.data.Schedule
 import com.appblocker.data.ScheduleType
-import com.appblocker.data.SettingsStore
 import com.appblocker.data.TemplateStore
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -52,7 +51,8 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                 )
             }
             t.keywords.forEach { db.blockedKeywordDao().insert(BlockedKeyword(it.lowercase().trim())) }
-            if (t.enableAdult) SettingsStore.setBlockAdult(getApplication(), true)
+            // Switch on the template's Quick Block extra options (additive — never turns any off).
+            t.effectiveOptions(getApplication()).forEach { it.turnOn(getApplication()) }
         }
     }
 }

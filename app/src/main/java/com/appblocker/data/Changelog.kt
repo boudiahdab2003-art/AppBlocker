@@ -13,6 +13,11 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.56", "Jul 4, 2026", "Smarter templates", listOf(
+        "Templates now switch on Quick Block's extra options too, not just apps and words — like blocking in-app purchases or unsupported browsers.",
+        "Each template comes with sensible defaults (Gaming Break blocks in-app purchases, Stay Clean blocks unsupported browsers so the adult filter can't be dodged), and the pencil on any template now lets you choose exactly which options it turns on.",
+        "Applying a template only ever turns options on — it never switches your protections off.",
+    )),
     VersionLog("1.55", "Jul 4, 2026", "Blocked words, front and center", listOf(
         "Blocked words now have their own screen — open it from the new 'Blocked words' card on the Blocking tab (or from Profile). Add and remove words instantly, no Save needed.",
         "New: block your words inside apps too, not just browsers. Pick apps like YouTube or TikTok and a blocked word gets caught there as well.",

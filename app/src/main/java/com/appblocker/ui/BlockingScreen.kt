@@ -37,12 +37,14 @@ import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -65,6 +67,7 @@ import com.appblocker.data.QuickSession
 import com.appblocker.data.Schedule
 import com.appblocker.data.ScheduleType
 import com.appblocker.data.SettingsStore
+import com.appblocker.data.TemplateOptionsStore
 import com.appblocker.data.TemplateStore
 import com.appblocker.ui.theme.AppGradients
 import com.appblocker.ui.theme.softGlow
@@ -337,8 +340,9 @@ fun BlockingScreen(
                 rowItems.forEach { t ->
                     TemplateCard(
                         Modifier.weight(1f), t,
-                        active = isTemplateActive(t, schedules, adultOn),
-                        onEditApps = if (t.packages.isNotEmpty()) ({ editingTemplate = t }) else null,
+                        active = isTemplateActive(t, schedules, context),
+                        // Every template is now customisable (apps and/or extra options).
+                        onEditApps = { editingTemplate = t },
                     ) { pending = t }
                 }
                 if (rowItems.size == 1) Spacer(Modifier.weight(1f))
@@ -361,19 +365,20 @@ fun BlockingScreen(
             },
             dismissButton = { TextButton(onClick = { pending = null }) { Text("Cancel") } },
             title = { Text("Apply “${t.title}”?") },
-            text = { Text(templateSummary(t)) },
+            text = { Text(templateSummary(t, context)) },
         )
     }
 
     editingTemplate?.let { t ->
-        TemplateAppsSheet(
+        TemplateCustomizeSheet(
             template = t,
             appsVm = appsVm,
             onDismiss = { editingTemplate = null },
-            onSave = { pkgs ->
-                TemplateStore.setPackages(context, t.id, pkgs)
+            onSave = { pkgs, optionKeys ->
+                if (t.packages.isNotEmpty()) TemplateStore.setPackages(context, t.id, pkgs)
+                TemplateOptionsStore.setOptions(context, t.id, optionKeys)
                 editingTemplate = null
-                Toast.makeText(context, "Saved apps for “${t.title}”", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Saved “${t.title}”", Toast.LENGTH_SHORT).show()
             },
         )
     }
@@ -401,39 +406,77 @@ fun BlockingScreen(
     }
 }
 
-/** Bottom sheet to choose which of the user's installed apps a template blocks. */
+/** Bottom sheet to customise a template: which apps it blocks (if any) and which Quick Block
+ *  extra options it turns on. Opens full-height so the Save button is always reachable. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TemplateAppsSheet(
+private fun TemplateCustomizeSheet(
     template: Template,
     appsVm: AppListViewModel,
     onDismiss: () -> Unit,
-    onSave: (List<String>) -> Unit,
+    onSave: (List<String>, Set<String>) -> Unit,
 ) {
     val context = LocalContext.current
     val apps by appsVm.apps.collectAsState()
     val installed = remember(apps) { apps.filter { it.installed } }
+    val hasApps = template.packages.isNotEmpty()
     val selected = remember(template.id) {
         (TemplateStore.packagesFor(context, template.id) ?: template.packages.map { it.first })
             .toMutableStateList()
     }
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface) {
+    val selectedOptions = remember(template.id) {
+        template.effectiveOptions(context).map { it.key }.toMutableStateList()
+    }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface) {
         Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 24.dp)) {
-            Text("Choose apps for “${template.title}”", style = MaterialTheme.typography.titleLarge,
+            Text("Customise “${template.title}”", style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-            Text("Pick which of your apps this template blocks.",
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(8.dp))
-            LazyColumn(Modifier.fillMaxWidth().heightIn(max = 380.dp)) {
-                items(installed, key = { it.packageName }) { app ->
-                    val checked = selected.contains(app.packageName)
-                    AppCheckRow(app, checked = checked, enabled = true) { on ->
-                        if (on) selected.add(app.packageName) else selected.remove(app.packageName)
+            LazyColumn(Modifier.fillMaxWidth().heightIn(max = 460.dp)) {
+                if (hasApps) {
+                    item {
+                        Text("APPS", style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(bottom = 4.dp))
+                    }
+                    items(installed, key = { it.packageName }) { app ->
+                        val checked = selected.contains(app.packageName)
+                        AppCheckRow(app, checked = checked, enabled = true) { on ->
+                            if (on) selected.add(app.packageName) else selected.remove(app.packageName)
+                        }
+                    }
+                }
+                item {
+                    Text("EXTRA OPTIONS", style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(top = if (hasApps) 16.dp else 0.dp, bottom = 4.dp))
+                }
+                items(QuickOption.entries, key = { it.key }) { opt ->
+                    Row(
+                        Modifier.fillMaxWidth().clickable {
+                            if (opt.key in selectedOptions) selectedOptions.remove(opt.key)
+                            else selectedOptions.add(opt.key)
+                        }.padding(vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(opt.label, Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface)
+                        Checkbox(
+                            checked = opt.key in selectedOptions,
+                            onCheckedChange = { on ->
+                                if (on) { if (opt.key !in selectedOptions) selectedOptions.add(opt.key) }
+                                else selectedOptions.remove(opt.key)
+                            },
+                        )
                     }
                 }
             }
             Spacer(Modifier.height(12.dp))
-            GradientButton(text = "Save", onClick = { onSave(selected.toList()) },
+            GradientButton(text = "Save",
+                onClick = { onSave(selected.toList(), selectedOptions.toSet()) },
                 modifier = Modifier.fillMaxWidth())
         }
     }
