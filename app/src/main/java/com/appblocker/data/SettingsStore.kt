@@ -65,4 +65,16 @@ object SettingsStore {
 
     fun setQuickBlockPaused(context: Context, value: Boolean) =
         prefs(context).edit().putBoolean("quick_block_paused", value).apply()
+
+    const val KEY_KEYWORD_SCAN_APPS = "keyword_scan_apps"
+
+    /** Packages the user opted in to also have blocked words matched inside (beyond browsers).
+     *  Empty by default, so existing users' behavior is unchanged. */
+    fun keywordScanApps(context: Context): Set<String> =
+        // getStringSet returns a shared instance the caller must not mutate — hand back a copy.
+        prefs(context).getStringSet(KEY_KEYWORD_SCAN_APPS, emptySet())?.toSet() ?: emptySet()
+
+    fun setKeywordScanApps(context: Context, value: Set<String>) =
+        // putStringSet only persists reliably when given a fresh set instance.
+        prefs(context).edit().putStringSet(KEY_KEYWORD_SCAN_APPS, HashSet(value)).apply()
 }

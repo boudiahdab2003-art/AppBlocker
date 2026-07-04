@@ -28,6 +28,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.HourglassEmpty
+import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Stop
@@ -71,6 +73,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun BlockingScreen(
     onEditQuickBlock: () -> Unit,
+    onOpenKeywords: () -> Unit,
     onNewSchedule: (ScheduleType) -> Unit,
     onEditSchedule: (Schedule) -> Unit,
     onOpenPermissions: () -> Unit,
@@ -202,6 +205,47 @@ fun BlockingScreen(
                             TimerPomoRow(enabled = true, onTimer = { showTimer = true }, onPomo = { showPomo = true })
                         }
                     }
+                }
+            }
+            Spacer(Modifier.padding(top = 24.dp))
+        }
+
+        // Blocked words card — its own discoverable entry point (the words were previously only
+        // reachable buried inside the Quick Block editor).
+        item {
+            val scanAppCount = SettingsStore.keywordScanApps(context).size
+            Card(
+                Modifier.fillMaxWidth()
+                    .softGlow(RoundedCornerShape(22.dp), elevation = 4.dp)
+                    .clickable { onOpenKeywords() },
+                shape = RoundedCornerShape(22.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().padding(20.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        Modifier.size(44.dp).clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.primaryContainer),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(Icons.Filled.Language, contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
+                    }
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Blocked words", style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                        Text(
+                            if (keywords == 0) "Block words in browsers and chosen apps"
+                            else "$keywords ${if (keywords == 1) "word" else "words"}" +
+                                if (scanAppCount > 0) " · $scanAppCount ${if (scanAppCount == 1) "app" else "apps"}" else "",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             Spacer(Modifier.padding(top = 24.dp))

@@ -6,6 +6,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.graphics.PixelFormat
 import android.location.Location
@@ -77,6 +78,10 @@ class BlockerAccessibilityService : AccessibilityService() {
     @Volatile private var schedules: List<Schedule> = emptyList()
     // Browser packages installed on the device (for "Block unsupported browsers").
     @Volatile private var browserPackages: Set<String> = emptySet()
+    // Non-browser apps the user opted in to keyword scanning (from SettingsStore). Cached here
+    // and refreshed by a prefs listener so opt-in changes apply without restarting the service.
+    @Volatile private var keywordScanApps: Set<String> = emptySet()
+    private var prefsListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
 
     private var lastBlockedPkg: String? = null
     private var lastBlockAt: Long = 0L
@@ -150,6 +155,14 @@ class BlockerAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         browserPackages = findBrowserPackages()
+        keywordScanApps = SettingsStore.keywordScanApps(this)
+        // React to the user opting apps in/out on the Blocked-words screen without a restart.
+        val sp = getSharedPreferences("appblocker_prefs", Context.MODE_PRIVATE)
+        prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == SettingsStore.KEY_KEYWORD_SCAN_APPS) {
+                keywordScanApps = SettingsStore.keywordScanApps(this)
+            }
+        }.also { sp.registerOnSharedPreferenceChangeListener(it) }
         registerPackageChangeReceiver()
         registerUnlockReceiver()
         val db = BlockerDatabase.get(applicationContext)
@@ -211,11 +224,17 @@ class BlockerAccessibilityService : AccessibilityService() {
         }
     }
 
-    /** Debounce: run the scan ~600ms after the last event, i.e. once the page settles.
-     *  Only scheduled while a browser is foreground — the scan would no-op anywhere else,
-     *  and content/text events fire constantly in every app (e.g. while scrolling). */
+    /** Packages whose on-screen text we scan for blocked words: always browsers, plus any apps
+     *  the user opted in — but only when there are words to look for (browsers still scan for
+     *  adult content even with no user words, so they stay in unconditionally). */
+    private fun scanTargets(): Set<String> =
+        if (userKeywords.isEmpty()) browserPackages else browserPackages + keywordScanApps
+
+    /** Debounce: run the scan ~600ms after the last event, i.e. once the screen settles.
+     *  Only scheduled while a scan target (browser or an opted-in app) is foreground — the scan
+     *  would no-op anywhere else, and content/text events fire constantly in every app. */
     private fun scheduleWebScan() {
-        if (lastForegroundPkg !in browserPackages) return
+        if (lastForegroundPkg !in scanTargets()) return
         handler.removeCallbacks(webScanRunnable)
         handler.postDelayed(webScanRunnable, 600)
     }
@@ -473,17 +492,19 @@ class BlockerAccessibilityService : AccessibilityService() {
 
     /** Runs on a background dispatcher (the node-tree walk is heavy); only the block UI hops to main. */
     private suspend fun scanWebContent() {
-        // Web-address/word filtering only makes sense inside a browser. Without this, typing a
-        // blocked word in ANY app (messages, notes, even AppBlocker's own keyword field) would
-        // trip a block — which is wrong.
-        if (lastForegroundPkg !in browserPackages) return
+        // Scan browsers (word + adult + social-domain filtering) and any app the user explicitly
+        // opted in (its own words only). We never scan arbitrary apps, so typing a blocked word in
+        // Messages/Notes — or AppBlocker's own keyword field — can't trip a block.
+        val pkg = lastForegroundPkg
+        if (pkg == null || pkg !in scanTargets()) return
+        val isBrowser = pkg in browserPackages
         val text = extractVisibleText()
-        if (DEBUG) Log.d(TAG, "scan: ${text.length} chars: ${text.take(120)}")
+        if (DEBUG) Log.d(TAG, "scan[$pkg browser=$isBrowser]: ${text.length} chars: ${text.take(120)}")
         if (text.isBlank()) return
         if (text == lastWebText) return
 
         // YouTube Shorts opened in a browser (youtube.com/shorts) — while Quick Block is active.
-        if (SettingsStore.blockYoutubeShorts(applicationContext) && quickBlockActive() &&
+        if (isBrowser && SettingsStore.blockYoutubeShorts(applicationContext) && quickBlockActive() &&
             text.lowercase().contains("youtube.com/shorts")
         ) {
             lastWebText = text
@@ -494,7 +515,14 @@ class BlockerAccessibilityService : AccessibilityService() {
             return
         }
 
-        val hit = filter.check(text, userKeywords + autoSocialKeywords(), SettingsStore.blockAdult(applicationContext))
+        // Browsers get the full filter (user words + blocked apps' domains + adult). Opted-in apps
+        // match the user's own words only — adult domains/keywords are URL/heuristic lists that
+        // don't make sense against arbitrary app UI text.
+        val hit = if (isBrowser) {
+            filter.check(text, userKeywords + autoSocialKeywords(), SettingsStore.blockAdult(applicationContext))
+        } else {
+            filter.check(text, userKeywords, blockAdult = false)
+        }
         if (hit == null) {
             lastWebText = null
             return
@@ -685,6 +713,13 @@ class BlockerAccessibilityService : AccessibilityService() {
         handler.removeCallbacks(recheckRunnable)
         // Stop location updates so they don't leak past the service (battery + privacy).
         stopLocationUpdates()
+        prefsListener?.let {
+            runCatching {
+                getSharedPreferences("appblocker_prefs", Context.MODE_PRIVATE)
+                    .unregisterOnSharedPreferenceChangeListener(it)
+            }
+        }
+        prefsListener = null
         packageChangeReceiver?.let { runCatching { unregisterReceiver(it) } }
         packageChangeReceiver = null
         unlockReceiver?.let { runCatching { unregisterReceiver(it) } }

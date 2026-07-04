@@ -214,7 +214,8 @@ fun BlockEditorScreen(
                 Spacer(Modifier.padding(top = 16.dp))
                 CollapsibleHeader(Icons.Filled.Web, "Websites & words", keywords.size, webOpen) { webOpen = !webOpen }
                 if (webOpen) {
-                    Text("Any web address or search containing one of these is blocked.",
+                    Text("Any web address or search containing one of these is blocked. " +
+                        "Also on the Blocked words screen (Blocking tab), where you can block them inside apps too.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {

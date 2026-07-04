@@ -13,6 +13,11 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.55", "Jul 4, 2026", "Blocked words, front and center", listOf(
+        "Blocked words now have their own screen — open it from the new 'Blocked words' card on the Blocking tab (or from Profile). Add and remove words instantly, no Save needed.",
+        "New: block your words inside apps too, not just browsers. Pick apps like YouTube or TikTok and a blocked word gets caught there as well.",
+        "Your browsers are always covered. Apps are strictly opt-in — nothing new is scanned unless you choose it, so typing in Messages or Notes is never affected.",
+    )),
     VersionLog("1.54", "Jul 4, 2026", "Small fixes", listOf(
         "Fixed the New schedule tiles (Usage limit, Launch count…) cutting off their labels when your phone uses a larger font size — they now grow to fit the text.",
     )),

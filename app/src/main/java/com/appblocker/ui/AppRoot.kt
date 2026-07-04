@@ -59,6 +59,7 @@ private val TABS = listOf(
 /** Editor sub-screens shown full-screen over the current tab. */
 private sealed interface Overlay {
     data object QuickBlock : Overlay
+    data object Keywords : Overlay
     data object Permissions : Overlay
     data object Onboarding : Overlay
     data object CoachChat : Overlay
@@ -105,6 +106,8 @@ fun AppRoot() {
         when (o) {
             is Overlay.QuickBlock ->
                 BlockEditorScreen(strictActive = strictActive, onBack = { overlay = null })
+            is Overlay.Keywords ->
+                KeywordsScreen(strictActive = strictActive, onBack = { overlay = null })
             is Overlay.Permissions ->
                 PermissionsScreen(onBack = { overlay = null })
             is Overlay.Onboarding ->
@@ -132,6 +135,7 @@ fun AppRoot() {
                 strictActive = strictActive,
                 updateVm = updateVm,
                 onEditQuickBlock = { overlay = Overlay.QuickBlock },
+                onOpenKeywords = { overlay = Overlay.Keywords },
                 onNewSchedule = { overlay = Overlay.NewSchedule(it) },
                 onEditSchedule = { overlay = Overlay.EditSchedule(it) },
                 onOpenPermissions = { overlay = Overlay.Permissions },
@@ -188,6 +192,7 @@ private fun MainScaffold(
     strictActive: Boolean,
     updateVm: UpdateViewModel,
     onEditQuickBlock: () -> Unit,
+    onOpenKeywords: () -> Unit,
     onNewSchedule: (ScheduleType) -> Unit,
     onEditSchedule: (Schedule) -> Unit,
     onOpenPermissions: () -> Unit,
@@ -241,6 +246,7 @@ private fun MainScaffold(
             when (current) {
                 0 -> BlockingScreen(
                     onEditQuickBlock = onEditQuickBlock,
+                    onOpenKeywords = onOpenKeywords,
                     onNewSchedule = onNewSchedule,
                     onEditSchedule = onEditSchedule,
                     onOpenPermissions = onOpenPermissions,
@@ -255,6 +261,7 @@ private fun MainScaffold(
                     strictActive = strictActive,
                     onOpenPermissions = onOpenPermissions,
                     onOpenChangelog = onOpenChangelog,
+                    onOpenKeywords = onOpenKeywords,
                     updateVm = updateVm,
                 )
             }

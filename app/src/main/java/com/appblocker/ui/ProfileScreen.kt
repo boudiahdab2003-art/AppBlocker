@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Shield
@@ -69,6 +70,7 @@ fun ProfileScreen(
     strictActive: Boolean = false,
     onOpenPermissions: () -> Unit = {},
     onOpenChangelog: () -> Unit = {},
+    onOpenKeywords: () -> Unit = {},
     updateVm: UpdateViewModel = viewModel(),
     vm: HomeViewModel = viewModel(),
     scheduleVm: ScheduleViewModel = viewModel(),
@@ -157,6 +159,18 @@ fun ProfileScreen(
                     toggleDeviceAdmin(context)
                     adminOn = if (wasOn) false else isDeviceAdminActive(context)
                 },
+            )
+        }
+
+        SectionTitle("Blocking")
+        SettingCard {
+            ProfileRow(
+                icon = Icons.Filled.Language,
+                title = "Blocked words",
+                subtitle = "Words to block in browsers, and inside apps you choose.",
+                chevron = true,
+                enabled = true, // adding words is allowed even during Strict; the screen guards removal
+                onClick = onOpenKeywords,
             )
         }
 
