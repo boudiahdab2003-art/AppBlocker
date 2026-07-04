@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -52,9 +53,14 @@ internal fun ScheduleTile(
     enabled: Boolean,
     onClick: () -> Unit,
 ) {
+    // Grow the tile with the system font size so two-line labels ("Usage limit", "Launch
+    // count") never clip on phones set to a larger font. Padding + icon are dp (not font-scaled),
+    // so only the text needs the extra room; all tiles share the value, staying uniform.
+    val fontScale = LocalDensity.current.fontScale
+    val tileHeight = (134f + ((fontScale - 1f).coerceIn(0f, 1.2f) * 48f)).dp
     Column(
         modifier
-            .height(134.dp)
+            .height(tileHeight)
             .softGlow(RoundedCornerShape(20.dp), elevation = 6.dp)
             .clip(RoundedCornerShape(20.dp))
             .background(MaterialTheme.colorScheme.surface)
