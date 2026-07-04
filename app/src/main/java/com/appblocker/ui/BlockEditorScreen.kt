@@ -286,7 +286,7 @@ private fun SectionHeader(icon: ImageVector, title: String, count: Int?) {
 }
 
 @Composable
-private fun ToggleRow(
+internal fun ToggleRow(
     icon: ImageVector, title: String, desc: String,
     checked: Boolean, enabled: Boolean, onChange: (Boolean) -> Unit,
 ) {

@@ -13,6 +13,11 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.57", "Jul 4, 2026", "Templates get the full editor", listOf(
+        "Editing a template now opens the same clean full-screen editor as Quick Block, instead of a cramped pop-up sheet.",
+        "The app list is tucked away by default — tap 'Apps' to expand it, with a search box — so you're not scrolling past a long list to reach the options.",
+        "The extra options are proper switches now, each with a short description of what it does.",
+    )),
     VersionLog("1.56", "Jul 4, 2026", "Smarter templates", listOf(
         "Templates now switch on Quick Block's extra options too, not just apps and words — like blocking in-app purchases or unsupported browsers.",
         "Each template comes with sensible defaults (Gaming Break blocks in-app purchases, Stay Clean blocks unsupported browsers so the adult filter can't be dodged), and the pencil on any template now lets you choose exactly which options it turns on.",
