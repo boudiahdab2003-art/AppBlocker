@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.52
+- AI Coach upgrade: the coach now remembers you (personal facts saved on device, visible via the person icon in chat), asks natural get-to-know-you questions, leads with your wins in a more motivating voice with emojis, renders step-by-step plans as numbered lists, and daily tips refresh every 3 hours instead of once a day.
+
 ## v1.51
 - Fewer numbers, more meaning: the Focus Score, XP levels and achievements are retired - they added noise, not motivation. Goals stay front and center: live progress bars against your real usage, 7-day hit/miss dots, per-goal streaks, one-tap enforcement, and your coach tracking every target with you.
 
