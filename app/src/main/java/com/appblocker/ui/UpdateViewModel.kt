@@ -3,6 +3,7 @@ package com.appblocker.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.appblocker.Dist
 import com.appblocker.data.Updater
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -32,6 +33,7 @@ class UpdateViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Silent check used on app launch — only surfaces a result if an update exists. */
     fun checkOnLaunch() {
+        if (!Dist.SELF_UPDATE) return // Play builds update through Google Play
         if (checkedOnce) return
         checkedOnce = true
         viewModelScope.launch {
@@ -50,6 +52,7 @@ class UpdateViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Manual check from the Profile screen — always reports a result. */
     fun check() {
+        if (!Dist.SELF_UPDATE) return // Play builds update through Google Play
         _state.value = UpdateState.Checking
         viewModelScope.launch {
             val latest = Updater.latest()

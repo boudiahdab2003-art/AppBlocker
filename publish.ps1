@@ -15,7 +15,7 @@ $Jbr         = 'C:\Program Files\Android\Android Studio\jbr'
 $Sdk         = Join-Path $env:LOCALAPPDATA 'Android\Sdk'
 $GradleBat   = Join-Path $Repo '_tools\gradle\gradle-8.9\bin\gradle.bat'
 $GradleFile  = Join-Path $Repo 'app\build.gradle.kts'
-$ApkBuilt    = Join-Path $Repo 'app\build\outputs\apk\release\app-release.apk'
+$ApkBuilt    = Join-Path $Repo 'app\build\outputs\apk\github\release\app-github-release.apk'
 $ApkAsset    = Join-Path $Repo 'AppBlocker.apk'
 $Changelog   = Join-Path $Repo 'CHANGELOG.md'
 $ReleaseCert = '027953856e2a387cb2618b3b2e2cd35e119e3416d6b551aeff3cb9d09148b0e1'
@@ -58,10 +58,10 @@ try {
     # --- 3. Build the signed app --------------------------------------------------
     Step 3 "Building the app (this can take a minute or two)..."
     $env:JAVA_HOME = $Jbr
-    & $GradleBat -p $Repo assembleRelease --no-daemon
+    & $GradleBat -p $Repo assembleGithubRelease --no-daemon
     if ($LASTEXITCODE -ne 0) { Die "The build failed (see the messages above)." }
     if (-not (Test-Path $ApkBuilt)) { Die "The build finished but no APK was produced." }
-    Ok "Built app-release.apk"
+    Ok "Built app-github-release.apk"
 
     # --- 4. Check it's signed with the right key (so updates install in place) -----
     # Modern APKs (minSdk 24) use APK Signature Scheme v2/v3, so we must use apksigner

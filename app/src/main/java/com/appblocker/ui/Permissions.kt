@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.appblocker.Dist
 import com.appblocker.admin.AppBlockerAdminReceiver
 import com.appblocker.service.AccessibilityUtil
 
@@ -137,7 +138,7 @@ fun rememberPermissions(): List<Perm> {
                 "Stops AppBlocker being uninstalled until you turn this off — extra friction against bypassing your blocks.",
                 isDeviceAdminActive(ctx), essential = false,
             ) { toggleDeviceAdmin(ctx) },
-        )
+        ).filter { Dist.LOCATION_SCHEDULES || it.key != "location" }
     }
 }
 

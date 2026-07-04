@@ -25,6 +25,20 @@ android {
         versionName = "1.52"
     }
 
+    // Two distribution channels, same app: "github" = the original sideloaded build with the
+    // self-updater and all schedule types; "play" = Google Play build (Play forbids self-updating
+    // APKs, and background location would trigger the heaviest review — see src/*/Dist.kt).
+    flavorDimensions += "dist"
+    productFlavors {
+        create("github") {
+            dimension = "dist"
+            isDefault = true
+        }
+        create("play") {
+            dimension = "dist"
+        }
+    }
+
     signingConfigs {
         if (hasKeystore) {
             create("release") {

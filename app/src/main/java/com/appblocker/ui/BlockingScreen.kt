@@ -58,6 +58,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.appblocker.Dist
 import com.appblocker.data.QuickSession
 import com.appblocker.data.Schedule
 import com.appblocker.data.ScheduleType
@@ -229,13 +230,15 @@ fun BlockingScreen(
                     if (wide) Modifier.fillMaxWidth()
                     else Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
                 Row(rowModifier, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    val tiles = listOf(
-                        Triple("Time", Icons.Filled.Schedule, ScheduleType.TIME),
-                        Triple("Usage limit", Icons.Filled.HourglassEmpty, ScheduleType.USAGE_LIMIT),
-                        Triple("Launch count", Icons.AutoMirrored.Filled.OpenInNew, ScheduleType.LAUNCH_COUNT),
-                        Triple("Wi-Fi", Icons.Filled.Wifi, ScheduleType.WIFI),
-                        Triple("Location", Icons.Filled.LocationOn, ScheduleType.LOCATION),
-                    )
+                    val tiles = buildList {
+                        add(Triple("Time", Icons.Filled.Schedule, ScheduleType.TIME))
+                        add(Triple("Usage limit", Icons.Filled.HourglassEmpty, ScheduleType.USAGE_LIMIT))
+                        add(Triple("Launch count", Icons.AutoMirrored.Filled.OpenInNew, ScheduleType.LAUNCH_COUNT))
+                        if (Dist.LOCATION_SCHEDULES) {
+                            add(Triple("Wi-Fi", Icons.Filled.Wifi, ScheduleType.WIFI))
+                            add(Triple("Location", Icons.Filled.LocationOn, ScheduleType.LOCATION))
+                        }
+                    }
                     tiles.forEach { (label, icon, type) ->
                         // Adding new protection is always allowed — even during Strict Mode.
                         ScheduleTile(

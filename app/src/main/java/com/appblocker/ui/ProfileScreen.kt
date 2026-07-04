@@ -56,6 +56,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.appblocker.Dist
 import com.appblocker.data.AttemptCounter
 import com.appblocker.data.PinStore
 import com.appblocker.data.SettingsStore
@@ -173,19 +174,22 @@ fun ProfileScreen(
 
         SectionTitle("About")
         SettingCard {
-            val sub = when (val s = updateState) {
-                is UpdateState.Checking -> "Checking for updates…"
-                is UpdateState.UpToDate -> "You're on the latest version."
-                is UpdateState.Available -> "Update available: v${s.release.version} — tap to install"
-                is UpdateState.Downloading -> "Downloading… ${s.percent}%"
-                is UpdateState.Error -> s.message + " Tap to retry."
-                else -> "Tap to check for updates"
+            val sub = when {
+                !Dist.SELF_UPDATE -> "Updates arrive through Google Play."
+                else -> when (val s = updateState) {
+                    is UpdateState.Checking -> "Checking for updates…"
+                    is UpdateState.UpToDate -> "You're on the latest version."
+                    is UpdateState.Available -> "Update available: v${s.release.version} — tap to install"
+                    is UpdateState.Downloading -> "Downloading… ${s.percent}%"
+                    is UpdateState.Error -> s.message + " Tap to retry."
+                    else -> "Tap to check for updates"
+                }
             }
             ProfileRow(
                 icon = Icons.Filled.Info,
                 title = "AppBlocker v${appVersion(context)}",
                 subtitle = sub,
-                enabled = updateState !is UpdateState.Downloading,
+                enabled = Dist.SELF_UPDATE && updateState !is UpdateState.Downloading,
                 onClick = {
                     when (val s = updateState) {
                         is UpdateState.Available -> updateVm.downloadAndInstall(s.release)
