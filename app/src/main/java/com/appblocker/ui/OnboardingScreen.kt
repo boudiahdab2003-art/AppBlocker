@@ -16,8 +16,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.QueryStats
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Visibility
@@ -53,9 +56,10 @@ fun OnboardingScreen(onDone: () -> Unit) {
     val essentials = perms.filter { it.essential }
     val recommended = perms.filter { it.key == "usage" || it.key == "battery" }
 
-    // Layout: 0 = Welcome, 1..N = one essential each, N+1 = recommended, N+2 = Done.
-    val recommendedStep = essentials.size + 1
-    val doneStep = essentials.size + 2
+    // Layout: 0 = Welcome, 1 = AI Coach intro, 2..N+1 = one essential each, then recommended, Done.
+    val coachStep = 1
+    val recommendedStep = essentials.size + 2
+    val doneStep = essentials.size + 3
     val totalSteps = doneStep // steps shown in the progress header (Welcome excluded)
 
     var step by rememberSaveable { mutableIntStateOf(0) }
@@ -74,8 +78,9 @@ fun OnboardingScreen(onDone: () -> Unit) {
 
             when {
                 step == 0 -> WelcomeStep(onNext = { step++ })
-                step <= essentials.size -> EssentialStep(
-                    perm = essentials[step - 1],
+                step == coachStep -> CoachStep(onNext = { step++ })
+                step <= essentials.size + 1 -> EssentialStep(
+                    perm = essentials[step - 2],
                     onContinue = { step++ },
                     onSkip = { step = doneStep },
                 )
@@ -152,6 +157,68 @@ private fun WelcomeStep(onNext: () -> Unit) {
         )
         Spacer(Modifier.weight(1f))
         GradientButton(text = "Get started", onClick = onNext)
+    }
+}
+
+/** The app's signature feature, introduced right after Welcome so new users meet the coach
+ *  before the permission chores. Pure showcase — nothing to grant here. */
+@Composable
+private fun CoachStep(onNext: () -> Unit) {
+    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+        Spacer(Modifier.height(8.dp))
+        StepIcon(Icons.Filled.AutoAwesome)
+        Spacer(Modifier.height(24.dp))
+        Text(
+            "Meet your AI Coach",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Not just a blocker — a coach in your pocket that helps you win back your time.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(20.dp))
+        CoachFeatureRow(Icons.Filled.QueryStats, "Knows your real numbers",
+            "Talks about your actual screen time and habits, never generic advice.")
+        Spacer(Modifier.height(12.dp))
+        CoachFeatureRow(Icons.Filled.Person, "Gets to know you",
+            "Remembers why you're blocking and what tempts you. Ask it anything in chat.")
+        Spacer(Modifier.height(12.dp))
+        CoachFeatureRow(Icons.Filled.Flag, "Sets goals with you",
+            "Agree on targets together, track them live, and get fresh tips through the day.")
+        Spacer(Modifier.height(16.dp))
+        Text(
+            "Free — just add your free Gemini key later in Insights ▸ AI Coach.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.weight(1f))
+        GradientButton(text = "Continue", onClick = onNext)
+    }
+}
+
+@Composable
+private fun CoachFeatureRow(icon: ImageVector, title: String, desc: String) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surface).padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(28.dp))
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+            Text(desc, style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 

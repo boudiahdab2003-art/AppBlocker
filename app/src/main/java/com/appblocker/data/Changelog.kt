@@ -13,6 +13,10 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.53", "Jul 4, 2026", "The coach greets you at the door", listOf(
+        "The welcome tour now introduces the AI Coach right after the first page — new users meet the app's signature feature before anything else: it knows your real numbers, gets to know you, and sets goals with you.",
+        "The tour's step counter includes the new page, and everything else about setup works exactly as before.",
+    )),
     VersionLog("1.52", "Jul 4, 2026", "A coach that knows you", listOf(
         "Your coach now remembers you: things you share in chat — why you're blocking, what tempts you, what you'd rather be doing — are saved on your device and shape every reply and every daily tip from then on.",
         "He gets to know you naturally, one question at a time — never an interrogation. See (or erase) everything he knows via the new person icon at the top of the chat.",
