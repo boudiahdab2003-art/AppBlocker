@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.56
+- Templates now switch on Quick Block's extra options too (block in-app purchases, unsupported browsers, and more) - each template has smart defaults, and the pencil lets you choose exactly which options it turns on. Applying a template only ever turns options on, never off.
+
 ## v1.55
 - Blocked words now have their own screen (on the Blocking tab and in Profile) - add and remove words instantly. And you can now block words inside apps you choose, like YouTube or TikTok, not just browsers. Apps are opt-in, so Messages and Notes are never affected.
 
