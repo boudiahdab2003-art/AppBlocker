@@ -95,7 +95,10 @@ private fun PermCard(p: Perm) {
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (!p.granted) {
             Spacer(Modifier.padding(top = 12.dp))
-            GradientButton(text = if (p.key == "autostart") "Open settings" else "Grant", onClick = p.onFix)
+            GradientButton(
+                text = if (p.key == "autostart") "Open settings" else "Grant",
+                onClick = rememberGatedFix(p),
+            )
         }
     }
 }

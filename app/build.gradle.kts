@@ -15,12 +15,12 @@ val keystoreProps = Properties().apply {
 
 android {
     namespace = "com.appblocker"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.appblocker"
         minSdk = 24
-        targetSdk = 34
+        targetSdk = 35 // Google Play requires 35+ for new app submissions
         versionCode = 53
         versionName = "1.52"
     }

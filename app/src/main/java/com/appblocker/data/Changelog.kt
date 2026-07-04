@@ -16,6 +16,9 @@ val changelog: List<VersionLog> = listOf(
     VersionLog("1.53", "Jul 4, 2026", "The coach greets you at the door", listOf(
         "The welcome tour now introduces the AI Coach right after the first page — new users meet the app's signature feature before anything else: it knows your real numbers, gets to know you, and sets goals with you.",
         "The tour's step counter includes the new page, and everything else about setup works exactly as before.",
+        "AppBlocker now has a public privacy policy (linked from the project page). Short version: everything stays on your device; only the optional AI Coach talks to Google's Gemini, and only with your own key.",
+        "Before you enable the Accessibility service, the app now explains exactly what it reads and why, and asks for your agreement — clearer, and required for app stores.",
+        "Behind the scenes: the app asks Android for less (no more 'see all apps' permission — it only sees launchable apps and browsers, which is all it ever needed) and now targets the newest Android 15 requirements. Groundwork for a future Play Store release.",
     )),
     VersionLog("1.52", "Jul 4, 2026", "A coach that knows you", listOf(
         "Your coach now remembers you: things you share in chat — why you're blocking, what tempts you, what you'd rather be doing — are saved on your device and shape every reply and every daily tip from then on.",

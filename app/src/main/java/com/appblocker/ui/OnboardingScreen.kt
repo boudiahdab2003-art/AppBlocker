@@ -249,7 +249,7 @@ private fun EssentialStep(perm: Perm, onContinue: () -> Unit, onSkip: () -> Unit
         if (perm.granted) {
             GradientButton(text = "Continue", onClick = onContinue)
         } else {
-            GradientButton(text = "Grant", onClick = perm.onFix)
+            GradientButton(text = "Grant", onClick = rememberGatedFix(perm))
             Spacer(Modifier.height(8.dp))
             TextButton(onClick = onSkip) {
                 Text("Skip for now", color = MaterialTheme.colorScheme.onSurfaceVariant)

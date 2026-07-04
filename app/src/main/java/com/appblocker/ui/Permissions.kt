@@ -12,10 +12,15 @@ import android.os.Build
 import android.os.PowerManager
 import android.os.Process
 import android.provider.Settings
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
@@ -134,6 +139,41 @@ fun rememberPermissions(): List<Perm> {
             ) { toggleDeviceAdmin(ctx) },
         )
     }
+}
+
+/**
+ * Google Play's AccessibilityService policy requires a prominent disclosure and explicit
+ * consent BEFORE sending the user to accessibility settings. Returns a click handler that
+ * shows the consent dialog first for the (ungranted) accessibility perm and passes straight
+ * through for everything else — so every Grant call site gets the gate by using this.
+ */
+@Composable
+fun rememberGatedFix(perm: Perm): () -> Unit {
+    if (perm.key != "accessibility" || perm.granted) return perm.onFix
+    var show by remember { mutableStateOf(false) }
+    if (show) {
+        AlertDialog(
+            onDismissRequest = { show = false },
+            title = { Text("How blocking works") },
+            text = {
+                Text(
+                    "AppBlocker uses Android's Accessibility service to know which app is on " +
+                        "screen, and — inside web browsers only — to read the page address and " +
+                        "visible text so it can block your chosen sites and keywords.\n\n" +
+                        "All of this is checked on your device only. Screen content is never " +
+                        "stored and never sent anywhere.\n\n" +
+                        "By continuing you agree to AppBlocker using the Accessibility service " +
+                        "for blocking.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { show = false; perm.onFix() }) { Text("Agree & continue") }
+            },
+            dismissButton = { TextButton(onClick = { show = false }) { Text("Cancel") } },
+        )
+    }
+    return { show = true }
 }
 
 /** Whether AppBlocker is currently an active device admin (so it can't be uninstalled). */
