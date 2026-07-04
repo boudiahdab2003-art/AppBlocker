@@ -6,16 +6,24 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Shield (subtle top-down white gradient for depth) -->
-    <path android:pathData="M54,26 L77,34 L77,57 C77,72 67,81.5 54,86.5 C41,81.5 31,72 31,57 L31,34 Z">
-        <aapt:attr name="android:fillColor">
-            <gradient
-                android:type="linear"
-                android:startX="54" android:startY="26"
-                android:endX="54" android:endY="86"
-                android:startColor="#FFFFFFFF"
-                android:endColor="#FFD9E2F5" />
-        </aapt:attr>
-    </path>
+    <!-- Shield (subtle top-down white gradient for depth). Slightly scaled down: without the
+         old dark emblem the plain white shape reads larger, so 0.9 restores the original
+         visual weight. -->
+    <group
+        android:scaleX="0.9"
+        android:scaleY="0.9"
+        android:pivotX="54"
+        android:pivotY="56">
+        <path android:pathData="M54,26 L77,34 L77,57 C77,72 67,81.5 54,86.5 C41,81.5 31,72 31,57 L31,34 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:type="linear"
+                    android:startX="54" android:startY="26"
+                    android:endX="54" android:endY="86"
+                    android:startColor="#FFFFFFFF"
+                    android:endColor="#FFD9E2F5" />
+            </aapt:attr>
+        </path>
+    </group>
 
 </vector>
