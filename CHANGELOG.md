@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.53
+- New: the welcome tour now introduces your AI Coach right up front. Cleaner app icon (just the shield). Under the hood: a clear consent screen before enabling Accessibility, a public privacy policy, fewer permissions requested, and Android 15 support - groundwork for a Play Store release.
+
 ## v1.52
 - AI Coach upgrade: the coach now remembers you (personal facts saved on device, visible via the person icon in chat), asks natural get-to-know-you questions, leads with your wins in a more motivating voice with emojis, renders step-by-step plans as numbered lists, and daily tips refresh every 3 hours instead of once a day.
 
