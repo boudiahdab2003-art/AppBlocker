@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">AppBlocker</string>
-    <string name="accessibility_description">AppBlocker uses this to detect when a blocked app opens, and to check the web address or search text on screen against your blocked sites/keywords, so it can stop them. All checking happens on your device; nothing is collected or sent anywhere.</string>
+    <string name="accessibility_description">AppBlocker uses this to detect when a blocked app opens, and to check the web address or search text on screen against your blocked sites/keywords, so it can stop them. All screen checking happens on your device; screen content is never stored or sent anywhere. See the privacy policy in the app\'s README for details on the optional AI Coach.</string>
 </resources>

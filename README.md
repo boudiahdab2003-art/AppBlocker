@@ -39,6 +39,14 @@ schedule, or during Strict Mode) it draws a full-screen **block overlay** over i
 over other apps* permission). Rules live in a local **Room** database; daily usage comes from
 Android's **UsageStatsManager**.
 
+## Privacy
+All blocking rules, statistics, goals and coach data live **only on your device** — no accounts, no
+analytics, no ads, no servers of ours. Blocking and web-filter checks happen entirely on-device. The
+**optional AI Coach** (enabled only if you paste your own free Gemini API key) sends aggregate usage
+statistics, your goals/profile facts and your chat messages to Google's Gemini API to generate tips
+and replies; remove the key to stop all AI traffic. The launch-time update check contacts GitHub with
+no personal data. Full details: **[Privacy Policy](https://boudiahdab2003-art.github.io/AppBlocker/privacy-policy)**.
+
 ## Project layout
 ```
 app/src/main/java/com/appblocker/
