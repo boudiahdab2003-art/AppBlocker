@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,6 +30,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -69,8 +71,10 @@ fun CoachChatScreen(onBack: () -> Unit, vm: CoachChatViewModel = viewModel()) {
     val sending by vm.sending.collectAsState()
     val goals by vm.goals.collectAsState()
     val suggestions by vm.suggestions.collectAsState()
+    val profile by vm.profile.collectAsState()
     var input by remember { mutableStateOf("") }
     var confirmClear by remember { mutableStateOf(false) }
+    var showProfile by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
     // Keep the newest bubble (or the typing indicator) in view.
@@ -81,6 +85,9 @@ fun CoachChatScreen(onBack: () -> Unit, vm: CoachChatViewModel = viewModel()) {
 
     Column(Modifier.fillMaxSize().imePadding()) {
         EditorTopBar(title = "AI Coach", onBack = onBack) {
+            IconButton(onClick = { showProfile = true }) {
+                Icon(Icons.Filled.Person, contentDescription = "What your coach knows")
+            }
             IconButton(onClick = { confirmClear = true }) {
                 Icon(Icons.Filled.DeleteOutline, contentDescription = "Clear chat")
             }
@@ -128,13 +135,64 @@ fun CoachChatScreen(onBack: () -> Unit, vm: CoachChatViewModel = viewModel()) {
         AlertDialog(
             onDismissRequest = { confirmClear = false },
             title = { Text("Clear chat?") },
-            text = { Text("The conversation is deleted from this device. Your goals are kept.") },
+            text = { Text("The conversation is deleted from this device. Your goals and what " +
+                "your coach knows about you are kept.") },
             confirmButton = {
                 TextButton(onClick = { vm.clearChat(); confirmClear = false }) { Text("Clear") }
             },
             dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Cancel") } },
         )
     }
+
+    if (showProfile) {
+        ProfileDialog(
+            profile = profile,
+            onForget = { vm.clearProfile(); showProfile = false },
+            onClose = { showProfile = false },
+        )
+    }
+}
+
+/** Everything the coach has learned about the user — visible, and erasable in one tap. */
+@Composable
+private fun ProfileDialog(
+    profile: Map<String, String>,
+    onForget: () -> Unit,
+    onClose: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text("What your coach knows") },
+        text = {
+            if (profile.isEmpty()) {
+                Text("Nothing yet — the more you chat, the better your coach knows you.")
+            } else {
+                Column(
+                    Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    profile.forEach { (key, value) ->
+                        Column {
+                            Text(key.replace('_', ' ').replaceFirstChar { it.uppercase() },
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary)
+                            Text(value, style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onClose) { Text("Close") } },
+        dismissButton = {
+            if (profile.isNotEmpty()) {
+                TextButton(onClick = onForget) {
+                    Text("Forget everything", color = MaterialTheme.colorScheme.error)
+                }
+            }
+        },
+    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -248,8 +306,8 @@ private fun Bubble(msg: ChatMsg) {
 /**
  * Renders a coach reply with light structure so reports read like reports, not walls of text:
  * short lines ending in ':' become bold headings, '-'/'•'/'*' lines become gradient-dot
- * bullets, blank lines become spacing, and **bold** spans highlight key numbers. Plain
- * replies (old messages included) come through unchanged.
+ * bullets, '1. '/'2) ' lines become numbered steps, blank lines become spacing, and **bold**
+ * spans highlight key numbers. Plain replies (old messages included) come through unchanged.
  */
 @Composable
 private fun CoachMessage(text: String) {
@@ -280,6 +338,20 @@ private fun CoachMessage(text: String) {
                     }
                 }
 
+                trimmed.matches(NUMBERED_LINE) -> {
+                    val sep = trimmed.indexOfFirst { it == '.' || it == ')' }
+                    Row(Modifier.padding(top = 4.dp)) {
+                        Text(trimmed.substring(0, sep + 1),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.width(8.dp))
+                        Text(parseBold(trimmed.substring(sep + 1).trim()),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface)
+                    }
+                }
+
                 else -> Text(parseBold(trimmed),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface)
@@ -287,6 +359,9 @@ private fun CoachMessage(text: String) {
         }
     }
 }
+
+/** "1. Do this" / "2) Then that" step lines — 1-2 digits so years/plain numbers never match. */
+private val NUMBERED_LINE = Regex("""^\d{1,2}[.)] .+""")
 
 /** Turns `**bold**` spans into real bold; a line with unmatched markers renders plain. */
 private fun parseBold(line: String): AnnotatedString = buildAnnotatedString {

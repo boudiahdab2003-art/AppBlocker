@@ -13,6 +13,13 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.52", "Jul 4, 2026", "A coach that knows you", listOf(
+        "Your coach now remembers you: things you share in chat — why you're blocking, what tempts you, what you'd rather be doing — are saved on your device and shape every reply and every daily tip from then on.",
+        "He gets to know you naturally, one question at a time — never an interrogation. See (or erase) everything he knows via the new person icon at the top of the chat.",
+        "A more motivating voice: the coach now leads with your wins — streaks alive, goals hit, numbers going down — calls you by name, and can finally use an emoji or two. 🎉",
+        "Cleaner answers: step-by-step plans render as proper numbered lists, and anything longer than a couple of sentences gets headings and bullets.",
+        "Daily tips refresh every 3 hours instead of once a day, so a rough afternoon gets an evening course-correction — and the first tip celebrates progress when there is some.",
+    )),
     VersionLog("1.51", "Jul 3, 2026", "Fewer numbers, more meaning", listOf(
         "The Focus Score, XP levels and achievements are retired — after real use they added noise, not motivation. Numbers you have to interpret lost to goals you can feel.",
         "Goals stay front and center: live progress bars, 7-day hit/miss dots, per-goal streaks, one-tap enforcement, and the coach tracking every target with you.",
