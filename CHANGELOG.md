@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.54
+- Fixed the New schedule tiles (Usage limit, Launch count) cutting off their labels on phones with a larger font size - they now grow to fit the text.
+
 ## v1.53
 - New: the welcome tour now introduces your AI Coach right up front. Cleaner app icon (just the shield). Under the hood: a clear consent screen before enabling Accessibility, a public privacy policy, fewer permissions requested, and Android 15 support - groundwork for a Play Store release.
 
