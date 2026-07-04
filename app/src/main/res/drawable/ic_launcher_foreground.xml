@@ -18,15 +18,4 @@
         </aapt:attr>
     </path>
 
-    <!-- "Block" emblem: ring + diagonal slash, in deep navy -->
-    <path
-        android:pathData="M54,46 a11,11 0 1,0 0,22 a11,11 0 1,0 0,-22 Z"
-        android:strokeColor="#0B1020"
-        android:strokeWidth="4.5"
-        android:fillColor="#00000000" />
-    <path
-        android:pathData="M46.2,49.2 L61.8,64.8"
-        android:strokeColor="#0B1020"
-        android:strokeWidth="4.5"
-        android:strokeLineCap="round" />
 </vector>
