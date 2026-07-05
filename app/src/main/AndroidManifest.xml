@@ -26,6 +26,9 @@
          permissions live in src/github/AndroidManifest.xml — the Play flavor must not carry
          them (self-updating and background location are Play-review problems). -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Lets us alert the user if the blocking service gets silently disabled. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:allowBackup="false"
@@ -35,7 +38,8 @@
         android:theme="@android:style/Theme.Material.NoActionBar">
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -73,6 +77,15 @@
                 <action android:name="android.intent.action.PACKAGE_REMOVED" />
                 <action android:name="android.intent.action.PACKAGE_FULLY_REMOVED" />
                 <data android:scheme="package" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Re-arms the protection watchdog and re-checks immediately after a reboot. -->
+        <receiver
+            android:name=".service.BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
 

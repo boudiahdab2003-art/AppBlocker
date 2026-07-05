@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Large icon (badge) for the protection-off notification: the app's blue-violet accent
+     gradient circle (matches AppGradients.accent) with a white shield glyph, echoing the
+     in-app ShieldMark badge. Large icons support full color, unlike the small status-bar icon. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="72dp"
+    android:height="72dp"
+    android:viewportWidth="72"
+    android:viewportHeight="72">
+
+    <path android:pathData="M36,0 A36,36 0 1,0 36,72 A36,36 0 1,0 36,0 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="0" android:startY="0"
+                android:endX="72" android:endY="72"
+                android:startColor="#FF2E7BFF"
+                android:endColor="#FF7C5CFF" />
+        </aapt:attr>
+    </path>
+
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M36,15.83 L51.33,21.17 L51.33,36.5 C51.33,46.5 44.67,52.83 36,56.17 C27.33,52.83 20.67,46.5 20.67,36.5 L20.67,21.17 Z" />
+</vector>

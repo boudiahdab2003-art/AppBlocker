@@ -77,4 +77,16 @@ object SettingsStore {
     fun setKeywordScanApps(context: Context, value: Set<String>) =
         // putStringSet only persists reliably when given a fresh set instance.
         prefs(context).edit().putStringSet(KEY_KEYWORD_SCAN_APPS, HashSet(value)).apply()
+
+    private const val KEY_PROTECTION_LAST_NOTIFIED = "protection_last_notified_at"
+
+    /** Epoch millis of the last "protection off" notification, for re-notify throttling. */
+    fun protectionLastNotifiedAt(context: Context): Long =
+        prefs(context).getLong(KEY_PROTECTION_LAST_NOTIFIED, 0L)
+
+    fun setProtectionLastNotifiedAt(context: Context, value: Long) =
+        prefs(context).edit().putLong(KEY_PROTECTION_LAST_NOTIFIED, value).apply()
+
+    /** Reset the moment the service is confirmed back on, so the next disable notifies at once. */
+    fun clearProtectionOffSince(context: Context) = setProtectionLastNotifiedAt(context, 0L)
 }

@@ -70,7 +70,7 @@ private sealed interface Overlay {
 }
 
 @Composable
-fun AppRoot() {
+fun AppRoot(openPermissionsOnStart: Boolean = false) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var overlay by remember { mutableStateOf<Overlay?>(null) }
     val focusVm: FocusViewModel = viewModel()
@@ -86,6 +86,12 @@ fun AppRoot() {
     LaunchedEffect(Unit) {
         if (!SettingsStore.setupSeen(context)) overlay = Overlay.Onboarding
         updateVm.checkOnLaunch()
+    }
+
+    // Tapping the "protection turned off" notification (cold start or, since MainActivity is
+    // singleTask, a fresh onNewIntent while already running) routes straight here.
+    LaunchedEffect(openPermissionsOnStart) {
+        if (openPermissionsOnStart) overlay = Overlay.Permissions
     }
 
     // System back closes an open editor overlay instead of exiting the app.

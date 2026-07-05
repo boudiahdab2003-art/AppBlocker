@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.58
+- Notifies you if the blocking service gets silently turned off, with a one-tap fix to turn it back on.
+
 ## v1.57
 - Editing a template now opens the same clean full-screen editor as Quick Block, with the app list hidden by default (tap Apps to expand, with search) and the extra options as proper labelled switches.
 
