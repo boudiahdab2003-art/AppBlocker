@@ -67,12 +67,11 @@ object ProtectionNotifier {
 
         val notification = build(
             context,
-            title = "Your protection just turned off",
-            collapsed = "AppBlocker can no longer block apps — tap to fix in seconds.",
-            expanded = "Android (or something on your device) turned off AppBlocker's " +
-                "Accessibility service, so your blocks and limits aren't being enforced right " +
-                "now. Tap to turn it back on — it only takes a second.",
-            action = "Turn back on",
+            title = "Protection is off",
+            collapsed = "Tap to turn blocking back on",
+            bannerHeadline = "PROTECTION OFF",
+            bannerSubtitle = "Blocking has stopped",
+            action = "Turn on",
         )
         manager.notify(NOTIF_ID, notification)
         // Stamp the cooldown only after actually posting, so a failed post never suppresses a
@@ -91,12 +90,11 @@ object ProtectionNotifier {
         if (!manager.areNotificationsEnabled()) return
         val notification = build(
             context,
-            title = "Test alert — notifications are working",
-            collapsed = "This is how you'll be warned if protection ever turns off.",
-            expanded = "Notifications are set up correctly. If AppBlocker's Accessibility service " +
-                "ever gets turned off, you'll get an alert like this one so you can turn it " +
-                "straight back on.",
-            action = "Open AppBlocker",
+            title = "Notifications are on",
+            collapsed = "You'll be warned if protection stops",
+            bannerHeadline = "NOTIFICATIONS ON",
+            bannerSubtitle = "Alerts are working",
+            action = "Open",
         )
         manager.notify(NOTIF_ID, notification)
     }
@@ -105,7 +103,8 @@ object ProtectionNotifier {
         context: Context,
         title: String,
         collapsed: String,
-        expanded: String,
+        bannerHeadline: String,
+        bannerSubtitle: String,
         action: String,
     ): android.app.Notification {
         val fixIntent = Intent(context, MainActivity::class.java).apply {
@@ -116,15 +115,22 @@ object ProtectionNotifier {
             context, 0, fixIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+        // Collapsed: small round badge. Expanded: the full-width branded banner instead — no wall
+        // of text. bigLargeIcon(null) drops the badge on expand so the banner owns the space.
         val largeIcon = ContextCompat.getDrawable(context, R.drawable.ic_notification_large)
             ?.toBitmap()
+        val banner = NotificationBanner.build(context, bannerHeadline, bannerSubtitle)
 
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setLargeIcon(largeIcon)
             .setContentTitle(title)
             .setContentText(collapsed)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(expanded))
+            .setStyle(
+                NotificationCompat.BigPictureStyle()
+                    .bigPicture(banner)
+                    .bigLargeIcon(null as android.graphics.Bitmap?),
+            )
             .setColor(ACCENT_COLOR)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_ERROR)

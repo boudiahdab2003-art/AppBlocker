@@ -13,6 +13,11 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.61", "Jul 6, 2026", "A protection alert you can't miss", listOf(
+        "If Android ever quietly switches off AppBlocker's Accessibility service — which stops all blocking — you now get a clear notification the moment it happens, so protection never lapses without you knowing.",
+        "The alert got a full redesign: a clean single line at a glance, and when you pull it down, a bold branded banner with the shield and just the words 'PROTECTION OFF'. No wall of text.",
+        "New 'Send a test alert' button in Setup & permissions — tap it any time to confirm alerts reach your phone and to see the new look.",
+    )),
     VersionLog("1.57", "Jul 4, 2026", "Templates get the full editor", listOf(
         "Editing a template now opens the same clean full-screen editor as Quick Block, instead of a cramped pop-up sheet.",
         "The app list is tucked away by default — tap 'Apps' to expand it, with a search box — so you're not scrolling past a long list to reach the options.",

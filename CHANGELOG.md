@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.61
+- Beautiful redesigned protection alert: a bold branded banner (shield + 'PROTECTION OFF') instead of a wall of text.
+
 ## v1.60
 - The protection alert now shows every time you open the app while accessibility is off (no longer silenced for hours), plus a new 'Send a test alert' button in Setup & permissions so you can check notifications reach your phone.
 

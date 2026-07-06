@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Plain white shield glyph (no background circle) for drawing onto the notification banner
+     bitmap in NotificationBanner.kt. Path lifted from ic_notification_large.xml, normalized to a
+     0..72 viewport so it can be scaled to any size on the Canvas. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="72dp"
+    android:height="72dp"
+    android:viewportWidth="72"
+    android:viewportHeight="72">
+
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M36,15.83 L51.33,21.17 L51.33,36.5 C51.33,46.5 44.67,52.83 36,56.17 C27.33,52.83 20.67,46.5 20.67,36.5 L20.67,21.17 Z" />
+</vector>
