@@ -100,7 +100,7 @@ fun AppRoot(openPermissionsOnStart: Boolean = false) {
     // posts/cancels the "protection turned off" notification the moment the user returns to the
     // app; the 15-min background worker is only the fallback when the app isn't opened at all.
     val protectionTick = resumeTick()
-    LaunchedEffect(protectionTick) { ProtectionWatchdog.checkAndNotify(context) }
+    LaunchedEffect(protectionTick) { ProtectionWatchdog.checkAndNotify(context, force = true) }
 
     // System back closes an open editor overlay instead of exiting the app.
     BackHandler(enabled = overlay != null) { overlay = null }

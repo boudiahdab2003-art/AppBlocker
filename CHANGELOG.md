@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.60
+- The protection alert now shows every time you open the app while accessibility is off (no longer silenced for hours), plus a new 'Send a test alert' button in Setup & permissions so you can check notifications reach your phone.
+
 ## v1.59
 - Protection-off alert now fires no matter which screen you open the app to (was only checking on some tabs), and the reminder cooldown no longer gets used up if notifications are turned off.
 

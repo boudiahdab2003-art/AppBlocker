@@ -26,12 +26,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.appblocker.service.ProtectionNotifier
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PermissionsScreen(onBack: () -> Unit) {
+    val context = LocalContext.current
     val perms = rememberPermissions()
     val remaining = perms.count { !it.granted && it.essential }
 
@@ -58,8 +61,27 @@ fun PermissionsScreen(onBack: () -> Unit) {
                     "“No restrictions” so it isn't killed.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp, bottom = 24.dp),
+                modifier = Modifier.padding(top = 4.dp, bottom = 16.dp),
             )
+            Text(
+                "Protection alert",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Spacer(Modifier.padding(top = 4.dp))
+            Text(
+                "AppBlocker warns you with a notification if the Accessibility service ever gets " +
+                    "turned off. Tap below to check the alert reaches your phone.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.padding(top = 12.dp))
+            GradientButton(
+                text = "Send a test alert",
+                onClick = { ProtectionNotifier.notifyTest(context) },
+            )
+            Spacer(Modifier.padding(top = 24.dp))
         }
     }
 }

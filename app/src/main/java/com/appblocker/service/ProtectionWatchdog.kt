@@ -9,12 +9,16 @@ import com.appblocker.data.SettingsStore
  * stay in sync on notifying/cancelling.
  */
 object ProtectionWatchdog {
-    fun checkAndNotify(context: Context) {
+    /**
+     * @param force pass true from the app-open/resume path so the alert always reflects the true
+     *   current state (bypasses the 4-hour throttle); the background worker uses the default false.
+     */
+    fun checkAndNotify(context: Context, force: Boolean = false) {
         if (AccessibilityUtil.isEnabled(context)) {
             SettingsStore.clearProtectionOffSince(context)
             ProtectionNotifier.cancel(context)
         } else {
-            ProtectionNotifier.notifyDisabled(context)
+            ProtectionNotifier.notifyDisabled(context, force)
         }
     }
 }
