@@ -18,7 +18,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -31,7 +30,6 @@ import androidx.lifecycle.LifecycleEventObserver
 import com.appblocker.Dist
 import com.appblocker.admin.AppBlockerAdminReceiver
 import com.appblocker.service.AccessibilityUtil
-import com.appblocker.service.ProtectionWatchdog
 
 /** One setup step the user may need to grant. */
 data class Perm(
@@ -95,9 +93,6 @@ private fun openAutostart(ctx: Context) {
 fun rememberPermissions(): List<Perm> {
     val ctx = LocalContext.current
     val tick = resumeTick()
-    // Free fast-path: every screen that calls this already re-evaluates on resume, so piggyback
-    // the "did accessibility silently turn off" check on the same signal.
-    LaunchedEffect(tick) { ProtectionWatchdog.checkAndNotify(ctx) }
     return remember(tick) {
         listOf(
             Perm(

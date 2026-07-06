@@ -44,13 +44,17 @@ object ProtectionNotifier {
         context.getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
-    @SuppressLint("MissingPermission") // NotificationManagerCompat.notify no-ops without the
-    // runtime POST_NOTIFICATIONS grant on API 33+ — nothing crashes, it just stays silent.
+    @SuppressLint("MissingPermission") // guarded by the areNotificationsEnabled() check below.
     fun notifyDisabled(context: Context) {
+        val manager = NotificationManagerCompat.from(context)
+        // If notifications are off (permission denied / channel blocked), bail WITHOUT consuming
+        // the cooldown — otherwise a check that couldn't actually post would still "use up" the
+        // 4-hour window and suppress the real notification later once notifications are allowed.
+        if (!manager.areNotificationsEnabled()) return
+
         val last = SettingsStore.protectionLastNotifiedAt(context)
         val now = System.currentTimeMillis()
         if (now - last < MIN_RENOTIFY_MS) return
-        SettingsStore.setProtectionLastNotifiedAt(context, now)
 
         val fixIntent = Intent(context, MainActivity::class.java).apply {
             putExtra(MainActivity.EXTRA_OPEN_PERMISSIONS, true)
@@ -83,7 +87,10 @@ object ProtectionNotifier {
             .addAction(R.drawable.ic_notification, "Turn back on", pendingIntent)
             .build()
 
-        NotificationManagerCompat.from(context).notify(NOTIF_ID, notification)
+        manager.notify(NOTIF_ID, notification)
+        // Stamp the cooldown only after actually posting, so a failed post never suppresses a
+        // later real one.
+        SettingsStore.setProtectionLastNotifiedAt(context, now)
     }
 
     fun cancel(context: Context) {

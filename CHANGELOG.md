@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.59
+- Protection-off alert now fires no matter which screen you open the app to (was only checking on some tabs), and the reminder cooldown no longer gets used up if notifications are turned off.
+
 ## v1.58
 - Notifies you if the blocking service gets silently turned off, with a one-tap fix to turn it back on.
 

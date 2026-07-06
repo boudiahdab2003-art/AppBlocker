@@ -45,6 +45,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.appblocker.data.Schedule
 import com.appblocker.data.ScheduleType
 import com.appblocker.data.SettingsStore
+import com.appblocker.service.ProtectionWatchdog
 import com.appblocker.ui.theme.AppGradients
 
 private data class Tab(val label: String, val icon: ImageVector)
@@ -93,6 +94,13 @@ fun AppRoot(openPermissionsOnStart: Boolean = false) {
     LaunchedEffect(openPermissionsOnStart) {
         if (openPermissionsOnStart) overlay = Overlay.Permissions
     }
+
+    // Check whether the accessibility service got silently turned off on EVERY app open/resume,
+    // no matter which tab is showing (resumeTick fires on ON_RESUME). This is the fast path that
+    // posts/cancels the "protection turned off" notification the moment the user returns to the
+    // app; the 15-min background worker is only the fallback when the app isn't opened at all.
+    val protectionTick = resumeTick()
+    LaunchedEffect(protectionTick) { ProtectionWatchdog.checkAndNotify(context) }
 
     // System back closes an open editor overlay instead of exiting the app.
     BackHandler(enabled = overlay != null) { overlay = null }
