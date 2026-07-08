@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.62
+- Blocked words now work in every app + a tougher Strict Mode (blocks the accessibility/uninstall escape hatches)
+
 ## v1.61
 - Beautiful redesigned protection alert: a bold branded banner (shield + 'PROTECTION OFF') instead of a wall of text.
 

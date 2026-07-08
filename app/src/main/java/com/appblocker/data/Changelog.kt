@@ -13,6 +13,13 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.62", "Jul 8, 2026", "Words everywhere + a tougher Strict Mode", listOf(
+        "Your blocked words are now caught in every app — not just browsers. The moment a word appears on screen, anywhere, the screen is blocked. No more picking apps one by one.",
+        "Built-in exceptions keep your phone usable: the home screen, the keyboard, the notification shade and Android's Settings are never blocked — so a word that's also an app's name can't lock you out of your own phone.",
+        "Prefer the old behaviour? A single switch on the Blocked words screen goes back to browser-only.",
+        "Strict Mode is now much harder to escape: while a Strict session is running, opening the Accessibility settings, the Device-admin page, or AppBlocker's own app-info page (where Force stop / Uninstall live) bounces you straight back to the home screen — you can't quietly switch protection off mid-session.",
+        "Turning off 'Prevent uninstall' now shows a warning reminding you Strict Mode is still locked.",
+    )),
     VersionLog("1.61", "Jul 6, 2026", "A protection alert you can't miss", listOf(
         "If Android ever quietly switches off AppBlocker's Accessibility service — which stops all blocking — you now get a clear notification the moment it happens, so protection never lapses without you knowing.",
         "The alert got a full redesign: a clean single line at a glance, and when you pull it down, a bold branded banner with the shield and just the words 'PROTECTION OFF'. No wall of text.",

@@ -210,7 +210,6 @@ fun BlockingScreen(
         // Blocked words card — its own discoverable entry point (the words were previously only
         // reachable buried inside the Quick Block editor).
         item {
-            val scanAppCount = SettingsStore.keywordScanApps(context).size
             Card(
                 Modifier.fillMaxWidth()
                     .softGlow(RoundedCornerShape(22.dp), elevation = 4.dp)
@@ -235,9 +234,8 @@ fun BlockingScreen(
                         Text("Blocked words", style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                         Text(
-                            if (keywords == 0) "Block words in browsers and chosen apps"
-                            else "$keywords ${if (keywords == 1) "word" else "words"}" +
-                                if (scanAppCount > 0) " · $scanAppCount ${if (scanAppCount == 1) "app" else "apps"}" else "",
+                            if (keywords == 0) "Block words everywhere on your phone"
+                            else "$keywords ${if (keywords == 1) "word" else "words"} · blocked in every app",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }

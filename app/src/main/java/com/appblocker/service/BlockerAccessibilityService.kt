@@ -26,6 +26,7 @@ import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.view.accessibility.AccessibilityWindowInfo
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.TextView
@@ -61,7 +62,8 @@ import kotlinx.coroutines.withContext
  * The watcher. Two jobs:
  *  - App blocking (M2/M4): on a foreground-app change, block per the app's rule.
  *  - Web/keyword filtering (Phase 2): on content/text changes, read the on-screen
- *    web address / search text and block adult sites or the user's keywords.
+ *    text and block adult sites (browsers) or the user's keywords (every app,
+ *    minus a small exclusion set that keeps the phone usable).
  */
 class BlockerAccessibilityService : AccessibilityService() {
 
@@ -78,13 +80,18 @@ class BlockerAccessibilityService : AccessibilityService() {
     @Volatile private var schedules: List<Schedule> = emptyList()
     // Browser packages installed on the device (for "Block unsupported browsers").
     @Volatile private var browserPackages: Set<String> = emptySet()
-    // Non-browser apps the user opted in to keyword scanning (from SettingsStore). Cached here
-    // and refreshed by a prefs listener so opt-in changes apply without restarting the service.
-    @Volatile private var keywordScanApps: Set<String> = emptySet()
+    // Home-screen (launcher) apps — never keyword-scanned, see findLauncherPackages().
+    @Volatile private var launcherPackages: Set<String> = emptySet()
+    // Whether blocked words are matched in every app (default) or browsers only. Cached here
+    // and refreshed by a prefs listener so the toggle applies without restarting the service.
+    @Volatile private var keywordsEverywhere: Boolean = true
     private var prefsListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
 
     private var lastBlockedPkg: String? = null
     private var lastBlockAt: Long = 0L
+    // Throttles the Strict-Mode settings-guard bounce so a burst of content events on the same
+    // dangerous page doesn't fire GLOBAL_ACTION_HOME over and over.
+    private var lastGuardBounceAt: Long = 0L
     // Read/written from the background web-scan coroutine as well as the main thread.
     @Volatile private var lastWebText: String? = null
 
@@ -155,12 +162,13 @@ class BlockerAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         browserPackages = findBrowserPackages()
-        keywordScanApps = SettingsStore.keywordScanApps(this)
-        // React to the user opting apps in/out on the Blocked-words screen without a restart.
+        launcherPackages = findLauncherPackages()
+        keywordsEverywhere = SettingsStore.keywordsEverywhere(this)
+        // React to the user flipping the toggle on the Blocked-words screen without a restart.
         val sp = getSharedPreferences("appblocker_prefs", Context.MODE_PRIVATE)
         prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == SettingsStore.KEY_KEYWORD_SCAN_APPS) {
-                keywordScanApps = SettingsStore.keywordScanApps(this)
+            if (key == SettingsStore.KEY_KEYWORDS_EVERYWHERE) {
+                keywordsEverywhere = SettingsStore.keywordsEverywhere(this)
             }
         }.also { sp.registerOnSharedPreferenceChangeListener(it) }
         registerPackageChangeReceiver()
@@ -205,8 +213,11 @@ class BlockerAccessibilityService : AccessibilityService() {
                     ensureLocationUpdates()
                 }
                 if (pkg != null) {
-                    // In-app purchase sheet takes priority; otherwise normal app blocking.
-                    if (!handlePurchaseBlock(pkg, event.className?.toString())) handleAppBlock(pkg)
+                    // Strict Mode escape-hatch guard first (Accessibility/device-admin/app-info
+                    // pages), then in-app purchase sheet, then normal app blocking.
+                    if (!handleStrictSettingsGuard(pkg, event.className?.toString()) &&
+                        !handlePurchaseBlock(pkg, event.className?.toString())
+                    ) handleAppBlock(pkg)
                 }
                 // (Re)arm the mid-use re-check for the new foreground app; a neutral app
                 // (no rules, no session, no cover) costs nothing.
@@ -218,23 +229,32 @@ class BlockerAccessibilityService : AccessibilityService() {
             }
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
             AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED -> {
+                // The dangerous Settings pages often fill in their title/labels on a content
+                // event after the window opens, so re-check the guard here too.
+                if (pkg != null) handleStrictSettingsGuard(pkg, event.className?.toString())
                 scheduleWebScan()
                 scheduleShortsScan()
             }
         }
     }
 
-    /** Packages whose on-screen text we scan for blocked words: always browsers, plus any apps
-     *  the user opted in — but only when there are words to look for (browsers still scan for
-     *  adult content even with no user words, so they stay in unconditionally). */
-    private fun scanTargets(): Set<String> =
-        if (userKeywords.isEmpty()) browserPackages else browserPackages + keywordScanApps
+    /** Whether [pkg]'s on-screen text should be scanned for blocked words. Browsers always
+     *  (adult filter runs even with no user words). With user words + "every app" on:
+     *  everywhere except ourselves, the launcher(s), System UI and Settings — a word matching
+     *  an app's label there would block Home/Settings and make the phone unusable. */
+    private fun shouldScanPkg(pkg: String?): Boolean {
+        if (pkg == null || pkg == packageName) return false
+        if (pkg in browserPackages) return true
+        if (userKeywords.isEmpty() || !keywordsEverywhere) return false
+        return pkg !in launcherPackages && pkg !in KEYWORD_SCAN_EXCLUDED
+    }
 
     /** Debounce: run the scan ~600ms after the last event, i.e. once the screen settles.
-     *  Only scheduled while a scan target (browser or an opted-in app) is foreground — the scan
-     *  would no-op anywhere else, and content/text events fire constantly in every app. */
+     *  Not scheduled for excluded packages (the launcher and System UI are the highest-churn
+     *  event sources) or when nothing would be scanned — the scan would no-op there, and
+     *  content/text events fire constantly in every app. */
     private fun scheduleWebScan() {
-        if (lastForegroundPkg !in scanTargets()) return
+        if (!shouldScanPkg(lastForegroundPkg)) return
         handler.removeCallbacks(webScanRunnable)
         handler.postDelayed(webScanRunnable, 600)
     }
@@ -269,6 +289,72 @@ class BlockerAccessibilityService : AccessibilityService() {
         lastBlockedPkg = pkg
         lastBlockAt = now
         showBlockScreen(title = "Blocked", message = null, packageName = pkg, counterKey = pkg)
+    }
+
+    /**
+     * While Strict Mode is active, stop the user from reaching the screens that would let them
+     * turn AppBlocker off: the Accessibility settings (disable the service = kill all blocking),
+     * the Device-admin page (deactivate = allow uninstall), and AppBlocker's own App-info page
+     * (force-stop / uninstall). We bounce them to the home screen the instant such a page opens —
+     * before they can reach the toggle. Returns true if it bounced.
+     *
+     * Detection is deliberately broad (like the purchase/Shorts matchers) because OEMs — Xiaomi
+     * especially — name these activities unpredictably: a className fast-path for AOSP's aliased
+     * activities, plus an on-screen-text fallback for MIUI's generic SubSettings/app-info screens.
+     */
+    private fun handleStrictSettingsGuard(pkg: String, className: String?): Boolean {
+        val strict = SessionClock.remaining(focusRealtimeStart, focusRealtimeEnd, focusWallEnd) > 0L
+        if (!strict) return false
+        if (pkg !in GUARD_PACKAGES) return false
+
+        val cn = className?.lowercase().orEmpty()
+        val byClass = STRICT_GUARD_HINTS.any { cn.contains(it) }
+        val danger = byClass || guardScreenIsDangerous()
+        if (!danger) return false
+
+        val now = System.currentTimeMillis()
+        if (now - lastGuardBounceAt < 1500) return true // already bouncing this page
+        lastGuardBounceAt = now
+        if (DEBUG) Log.d(TAG, "strict guard bounce: pkg=$pkg class=$className byClass=$byClass")
+
+        showBlockScreen(
+            title = "Locked during Strict Mode",
+            message = "You can't change this while Strict Mode is active.",
+            packageName = null,
+            counterKey = "strict_guard",
+        )
+        performGlobalAction(GLOBAL_ACTION_HOME)
+        // Safety net: a null-package cover has no owner to auto-remove it, so if HOME is slow or
+        // suppressed (MIUI), take it down anyway. The normal path is the launcher's window-state
+        // event → handleAppBlock → removeBlockOverlay.
+        handler.postDelayed({ if (!overlayIsAppBlock) removeBlockOverlay() }, 1500)
+        return true
+    }
+
+    /** Lowercased visible text of the current page (rootInActiveWindow only). Kept separate from
+     *  extractVisibleText(), which strips com.android.settings (it's in KEYWORD_SCAN_EXCLUDED). */
+    private fun guardScreenText(): String {
+        val root = rootInActiveWindow ?: return ""
+        val sb = StringBuilder()
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        var visited = 0
+        while (queue.isNotEmpty() && visited < 300 && sb.length < 3000) {
+            val node = queue.removeFirst()
+            visited++
+            node.text?.let { if (it.isNotBlank()) sb.append(it).append(' ') }
+            node.contentDescription?.let { if (it.isNotBlank()) sb.append(it).append(' ') }
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+        }
+        return sb.toString().lowercase()
+    }
+
+    /** True if the current page is a Strict-Mode danger page — our app's name next to an
+     *  accessibility / device-admin / uninstall / force-stop control. */
+    private fun guardScreenIsDangerous(): Boolean {
+        val text = guardScreenText()
+        if (!text.contains("appblocker")) return false
+        return GUARD_TEXT_MARKERS.any { text.contains(it) }
     }
 
     /**
@@ -337,6 +423,15 @@ class BlockerAccessibilityService : AccessibilityService() {
         return false
     }
 
+    /** All installed home-screen (launcher) apps — never keyword-scanned: a keyword matching an
+     *  app's label on the home screen would cover Home itself, and Close→home would loop forever. */
+    private fun findLauncherPackages(): Set<String> = runCatching {
+        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        packageManager.queryIntentActivities(intent, PackageManager.MATCH_ALL)
+            .mapNotNull { it.activityInfo?.packageName }
+            .toSet()
+    }.getOrDefault(emptySet())
+
     /** All packages that can handle an https:// link — i.e. the device's browsers. */
     private fun findBrowserPackages(): Set<String> = runCatching {
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com"))
@@ -354,7 +449,10 @@ class BlockerAccessibilityService : AccessibilityService() {
     private fun registerPackageChangeReceiver() {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
-                scope.launch { browserPackages = findBrowserPackages() }
+                scope.launch {
+                    browserPackages = findBrowserPackages()
+                    launcherPackages = findLauncherPackages()
+                }
             }
         }
         val filter = IntentFilter().apply {
@@ -492,11 +590,13 @@ class BlockerAccessibilityService : AccessibilityService() {
 
     /** Runs on a background dispatcher (the node-tree walk is heavy); only the block UI hops to main. */
     private suspend fun scanWebContent() {
-        // Scan browsers (word + adult + social-domain filtering) and any app the user explicitly
-        // opted in (its own words only). We never scan arbitrary apps, so typing a blocked word in
-        // Messages/Notes — or AppBlocker's own keyword field — can't trip a block.
-        val pkg = lastForegroundPkg
-        if (pkg == null || pkg !in scanTargets()) return
+        // Scan browsers (word + adult + social-domain filtering) and, when the user has blocked
+        // words with "every app" on, every other app too (user words only). The word appearing
+        // anywhere — including one the user types into another app's own text field — trips the
+        // block; that's the chosen behavior. Our own windows (e.g. the keyword-entry field) are
+        // skipped in extractVisibleText, and launcher/System UI/Settings are excluded.
+        val pkg = lastForegroundPkg ?: return
+        if (!shouldScanPkg(pkg)) return
         val isBrowser = pkg in browserPackages
         val text = extractVisibleText()
         if (DEBUG) Log.d(TAG, "scan[$pkg browser=$isBrowser]: ${text.length} chars: ${text.take(120)}")
@@ -596,17 +696,27 @@ class BlockerAccessibilityService : AccessibilityService() {
     private fun extractVisibleText(): String {
         val sb = StringBuilder()
         val roots = ArrayList<AccessibilityNodeInfo>()
-        windows?.forEach { it.root?.let(roots::add) }
+        windows?.forEach { w ->
+            // Skip the keyboard: its suggestion strip shows a blocked word while it's being
+            // typed. (windows is empty without flagRetrieveInteractiveWindows on stock builds,
+            // but some OEMs populate it — this keeps them safe too.)
+            if (w.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD) return@forEach
+            w.root?.let(roots::add)
+        }
         rootInActiveWindow?.let(roots::add)
         // Never scan our own windows (e.g. the block screen, whose message can itself
-        // contain the keyword) — that would re-trigger the block in a loop.
-        roots.removeAll { it.packageName == packageName }
+        // contain the keyword) — that would re-trigger the block in a loop. Same for
+        // launcher/System UI windows overlaying the scanned app on OEM builds.
+        roots.removeAll {
+            val p = it.packageName?.toString() ?: return@removeAll false
+            p == packageName || p in launcherPackages || p in KEYWORD_SCAN_EXCLUDED
+        }
         if (roots.isEmpty()) return ""
 
         val queue = ArrayDeque<AccessibilityNodeInfo>()
         roots.forEach(queue::add)
         var visited = 0
-        while (queue.isNotEmpty() && visited < 200 && sb.length < 2000) {
+        while (queue.isNotEmpty() && visited < 400 && sb.length < 4000) {
             val node = queue.removeFirst()
             visited++
             node.text?.let { if (it.isNotBlank()) sb.append(it).append(' ') }
@@ -738,8 +848,39 @@ class BlockerAccessibilityService : AccessibilityService() {
         // Browsers whose on-screen content the web filter can read; others are "unsupported".
         private val SUPPORTED_BROWSERS = setOf("com.android.chrome")
 
+        // Never keyword-scanned even with "every app" on: System UI (notification shade,
+        // recents — shows app labels) and Settings (Settings→Apps lists every app's name; a
+        // keyword that's also an app name would lock the user out of managing the phone).
+        private val KEYWORD_SCAN_EXCLUDED = setOf("com.android.systemui", "com.android.settings")
+
         // Activity-name fragments that identify the Google Play purchase/billing sheet.
         private val PURCHASE_HINTS = listOf("acquire", "purchase", "billing")
+
+        // Packages that host the Strict-Mode escape hatches (system Settings, MIUI's security
+        // center, and the package uninstaller flows).
+        private val GUARD_PACKAGES = setOf(
+            "com.android.settings",
+            "com.miui.securitycenter", "com.miui.securitycore",
+            "com.miui.packageinstaller", "com.android.packageinstaller",
+            "com.google.android.packageinstaller",
+        )
+
+        // Activity-name fragments for the dangerous Settings pages. The accessibility and
+        // device-admin ones are AOSP aliased activities (verified on the emulator). The app-info
+        // fragments are best-effort for the force-stop/uninstall page — specific enough not to
+        // over-match generic containers (AOSP's SPA app-info uses a shared SpaActivity we can't
+        // safely match, so on that build the text fallback / device-admin block cover it instead).
+        private val STRICT_GUARD_HINTS = listOf(
+            "accessibilit", "deviceadmin", "device_admin",
+            "installedappdetails", "appinfodashboard",
+        )
+
+        // On-screen-text markers (paired with our app label) for MIUI's generic SubSettings /
+        // app-info screens where the className alone doesn't identify the page. English only —
+        // fine for this device; add localized markers if needed.
+        private val GUARD_TEXT_MARKERS = listOf(
+            "accessibilit", "device admin", "deactivate", "uninstall", "force stop", "force-stop",
+        )
 
         private const val YOUTUBE_PKG = "com.google.android.youtube"
 
