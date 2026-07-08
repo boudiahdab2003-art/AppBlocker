@@ -185,8 +185,21 @@ fun DurationPickerDialog(
             Scaffold(
                 containerColor = Color.Transparent,
                 topBar = { EditorTopBar(title, onBack = onDismiss) },
+                // Pin Save to the bottom bar (like the schedule editor) so Scaffold insets it for
+                // the navigation bar and the 24dp keeps it clear of the gesture-swipe zone.
+                bottomBar = {
+                    GradientButton(
+                        text = "Save",
+                        enabled = minutes > 0,
+                        onClick = { onSave(minutes); onDismiss() },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp)
+                            .padding(top = 8.dp, bottom = 24.dp),
+                    )
+                },
             ) { padding ->
-                Column(Modifier.padding(padding).fillMaxSize().padding(20.dp)) {
+                Column(Modifier.padding(padding).fillMaxSize().padding(horizontal = 20.dp)) {
                     Spacer(Modifier.height(24.dp))
                     DurationWheel(initialMinutes) { minutes = it }
                     Spacer(Modifier.height(16.dp))
@@ -197,13 +210,6 @@ fun DurationPickerDialog(
                         modifier = Modifier.fillMaxWidth(),
                         textAlign = TextAlign.Center,
                     )
-                    Spacer(Modifier.weight(1f))
-                    GradientButton(
-                        text = "Save",
-                        enabled = minutes > 0,
-                        onClick = { onSave(minutes); onDismiss() },
-                    )
-                    Spacer(Modifier.height(8.dp))
                 }
             }
         }
