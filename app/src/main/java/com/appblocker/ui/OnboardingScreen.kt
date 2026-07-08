@@ -43,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.appblocker.ui.theme.AppGradients
+import com.appblocker.ui.theme.appBackground
 
 /**
  * First-run wizard: walks the user through the essential permissions one step at a time, then the
@@ -67,7 +68,7 @@ fun OnboardingScreen(onDone: () -> Unit) {
     // In-wizard back walks to the previous step; at the Welcome step let the host handle back.
     BackHandler(enabled = step > 0) { step-- }
 
-    Box(Modifier.fillMaxSize().background(AppGradients.background)) {
+    Box(Modifier.fillMaxSize().background(appBackground())) {
         Column(Modifier.fillMaxSize().padding(24.dp)) {
             if (step > 0) {
                 ProgressHeader(current = step, total = totalSteps)

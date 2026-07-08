@@ -52,7 +52,7 @@ fun KeywordsScreen(
     var everywhere by remember { mutableStateOf(SettingsStore.keywordsEverywhere(context)) }
     val ed = !strictActive // words can always be added; removal is locked during Strict Mode
 
-    Box(Modifier.fillMaxSize().background(com.appblocker.ui.theme.AppGradients.background)) {
+    Box(Modifier.fillMaxSize().background(com.appblocker.ui.theme.appBackground())) {
         Scaffold(
             containerColor = Color.Transparent,
             topBar = { EditorTopBar("Blocked words", onBack) },

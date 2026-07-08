@@ -65,7 +65,9 @@ class BlockScreenActivity : ComponentActivity() {
         })
 
         setContent {
-            AppBlockerTheme {
+            // The block cover always stays dark, regardless of the app's light/dark setting —
+            // it's a full-screen "stop" screen and reads best dark (matches the overlay layout).
+            AppBlockerTheme(darkTheme = true) {
                 BlockScreen(
                     appIcon = appIcon,
                     title = title,

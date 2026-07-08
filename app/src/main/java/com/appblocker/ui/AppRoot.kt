@@ -47,6 +47,7 @@ import com.appblocker.data.ScheduleType
 import com.appblocker.data.SettingsStore
 import com.appblocker.service.ProtectionWatchdog
 import com.appblocker.ui.theme.AppGradients
+import com.appblocker.ui.theme.appBackground
 
 private data class Tab(val label: String, val icon: ImageVector)
 
@@ -105,7 +106,7 @@ fun AppRoot(openPermissionsOnStart: Boolean = false) {
     // System back closes an open editor overlay instead of exiting the app.
     BackHandler(enabled = overlay != null) { overlay = null }
 
-    Box(Modifier.fillMaxSize().background(AppGradients.background)) {
+    Box(Modifier.fillMaxSize().background(appBackground())) {
     // Editor overlays slide up over the current tab; the main scaffold cross-fades back in.
     AnimatedContent(
         targetState = overlay,

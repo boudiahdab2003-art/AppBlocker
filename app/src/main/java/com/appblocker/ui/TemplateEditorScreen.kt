@@ -39,6 +39,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.appblocker.data.TemplateOptionsStore
 import com.appblocker.data.TemplateStore
 import com.appblocker.ui.theme.AppGradients
+import com.appblocker.ui.theme.appBackground
 
 /**
  * Full-screen editor for a template — same look and feel as the Quick Block editor: a
@@ -78,7 +79,7 @@ fun TemplateEditorScreen(
         onBack()
     }
 
-    Box(Modifier.fillMaxSize().background(AppGradients.background)) {
+    Box(Modifier.fillMaxSize().background(appBackground())) {
         Scaffold(
             containerColor = Color.Transparent,
             topBar = { EditorTopBar("Customise “${template.title}”", onBack) },

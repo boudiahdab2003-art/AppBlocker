@@ -1,5 +1,6 @@
 package com.appblocker.ui.theme
 
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
@@ -30,6 +31,13 @@ object AppGradients {
         1.0f to Color(0xFF06080F),
     )
 
+    /** Light-mode backdrop: a soft blue-grey wash, mirroring the dark gradient's subtlety. */
+    val backgroundLight: Brush = Brush.verticalGradient(
+        0.0f to Color(0xFFF4F7FC),
+        0.35f to Color(0xFFEDF1F8),
+        1.0f to Color(0xFFE6ECF5),
+    )
+
     /** Luminous cyan→blue→violet fill for chart bars. */
     val chartBar: Brush = Brush.verticalGradient(
         listOf(Color(0xFF5EE7FF), Color(0xFF3B82F6), Color(0xFF7C5CFF)),
@@ -40,6 +48,11 @@ object AppGradients {
         listOf(AccentStart.copy(alpha = alpha), Color.Transparent),
     )
 }
+
+/** The full-screen backdrop for the current theme (dark indigo→black, or the light wash). */
+@Composable
+fun appBackground(): Brush =
+    if (LocalAppDark.current) AppGradients.background else AppGradients.backgroundLight
 
 /** Lifts a card/button off the flat backdrop with a soft colored shadow (API 28+). */
 fun Modifier.softGlow(

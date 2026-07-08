@@ -8,16 +8,24 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
 import com.appblocker.data.InstalledAppsRepository
+import com.appblocker.data.SettingsStore
 import com.appblocker.service.ProtectionNotifier
 import com.appblocker.service.ProtectionScheduler
 import com.appblocker.ui.AppRoot
 import com.appblocker.ui.LockGate
 import com.appblocker.ui.theme.AppBlockerTheme
+import com.appblocker.ui.theme.LocalThemeController
+import com.appblocker.ui.theme.ThemeController
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -36,10 +44,27 @@ class MainActivity : ComponentActivity() {
         // Warm the installed-apps cache early so the first editor open is fast too.
         lifecycleScope.launch { InstalledAppsRepository.ensureLoaded(applicationContext) }
         setContent {
+            var themeMode by remember { mutableStateOf(SettingsStore.themeMode(this)) }
+            val dark = when (themeMode) {
+                "light" -> false
+                "dark" -> true
+                else -> isSystemInDarkTheme()
+            }
+            // Match the status-bar icon contrast to the theme (dark icons on light bg).
+            LaunchedEffect(dark) {
+                WindowCompat.getInsetsController(window, window.decorView)
+                    .isAppearanceLightStatusBars = !dark
+            }
+            val controller = ThemeController(themeMode) { newMode ->
+                themeMode = newMode
+                SettingsStore.setThemeMode(this, newMode)
+            }
             // If a PIN is set, the user must enter it before reaching the app.
             LockGate {
-                AppBlockerTheme {
-                    AppRoot(openPermissionsOnStart = openPermissions)
+                CompositionLocalProvider(LocalThemeController provides controller) {
+                    AppBlockerTheme(darkTheme = dark) {
+                        AppRoot(openPermissionsOnStart = openPermissions)
+                    }
                 }
             }
         }

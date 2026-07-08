@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#0A0E18</color>
+    <!-- Pre-Compose window background (light default; -night overrides to navy). Follows the
+         SYSTEM setting since the manifest theme is resolved before we read the app pref. -->
+    <color name="window_bg">#F5F7FB</color>
 </resources>

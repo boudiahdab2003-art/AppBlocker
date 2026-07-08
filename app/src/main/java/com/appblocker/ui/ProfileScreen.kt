@@ -24,6 +24,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
@@ -63,6 +65,7 @@ import com.appblocker.data.PinStore
 import com.appblocker.data.SettingsStore
 import com.appblocker.service.AccessibilityUtil
 import com.appblocker.ui.theme.AppGradients
+import com.appblocker.ui.theme.LocalThemeController
 import com.appblocker.ui.theme.softGlow
 
 @Composable
@@ -88,6 +91,8 @@ fun ProfileScreen(
     var showSetPin by remember { mutableStateOf(false) }
     var userName by remember(resumeTick) { mutableStateOf(SettingsStore.userName(context)) }
     var showRename by remember { mutableStateOf(false) }
+    var showTheme by remember { mutableStateOf(false) }
+    val themeController = LocalThemeController.current
     val locked = strictActive
 
     // Cap the content width on wide screens (tablets) so cards don't stretch edge-to-edge.
@@ -174,6 +179,18 @@ fun ProfileScreen(
             )
         }
 
+        SectionTitle("Appearance")
+        SettingCard {
+            ProfileRow(
+                icon = Icons.Filled.DarkMode,
+                title = "Appearance",
+                subtitle = "Theme: ${themeModeLabel(themeController.mode)}.",
+                chevron = true,
+                enabled = true, // cosmetic — allowed even during Strict
+                onClick = { showTheme = true },
+            )
+        }
+
         SectionTitle("Permissions")
         SettingCard {
             ProfileRow(
@@ -255,6 +272,57 @@ fun ProfileScreen(
             onDismiss = { showRename = false },
         )
     }
+    if (showTheme) {
+        ThemeDialog(
+            current = themeController.mode,
+            onSelect = { mode -> themeController.onChange(mode); showTheme = false },
+            onDismiss = { showTheme = false },
+        )
+    }
+}
+
+private fun themeModeLabel(mode: String): String = when (mode) {
+    "light" -> "Light"
+    "dark" -> "Dark"
+    else -> "System default"
+}
+
+/** Three-way theme picker: follow the phone, or force Light / Dark. */
+@Composable
+private fun ThemeDialog(current: String, onSelect: (String) -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        title = { Text("Appearance") },
+        text = {
+            Column {
+                listOf(
+                    "system" to "System default",
+                    "light" to "Light",
+                    "dark" to "Dark",
+                ).forEach { (mode, label) ->
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                            .clickable { onSelect(mode) }.padding(vertical = 14.dp, horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            label, Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        if (mode == current) {
+                            Icon(
+                                Icons.Filled.Check, contentDescription = "Selected",
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+                }
+            }
+        },
+    )
 }
 
 /** Gradient hero: the owner's identity (avatar + name) + live protection status + key numbers. */

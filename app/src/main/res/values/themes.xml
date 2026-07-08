@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Launch/window theme applied before Compose loads. The -night variant swaps to a dark
+         parent + background, so the cold-launch splash follows the system light/dark setting
+         (avoids a white/dark flash before the Compose UI appears). -->
+    <style name="Theme.AppBlocker" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/window_bg</item>
+    </style>
+</resources>

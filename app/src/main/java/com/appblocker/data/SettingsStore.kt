@@ -52,6 +52,15 @@ object SettingsStore {
     fun setUserName(context: Context, value: String) =
         prefs(context).edit().putString("user_name", value.trim()).apply()
 
+    const val KEY_THEME_MODE = "theme_mode"
+
+    /** App theme: "system" (follow the phone), "light", or "dark". Default follows the phone. */
+    fun themeMode(context: Context): String =
+        prefs(context).getString(KEY_THEME_MODE, "system") ?: "system"
+
+    fun setThemeMode(context: Context, value: String) =
+        prefs(context).edit().putString(KEY_THEME_MODE, value).apply()
+
     /** Whether the first-run setup screen has been shown once. */
     fun setupSeen(context: Context): Boolean =
         prefs(context).getBoolean("setup_seen", false)
