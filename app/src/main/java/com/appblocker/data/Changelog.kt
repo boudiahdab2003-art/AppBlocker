@@ -13,10 +13,12 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
-    VersionLog("1.63", "Jul 8, 2026", "Light mode is here", listOf(
+    VersionLog("1.63", "Jul 9, 2026", "Light mode + richer Insights", listOf(
         "AppBlocker now has a light theme. Choose it in Profile → Appearance: System default (follows your phone), Light, or Dark.",
         "System default automatically matches your phone — so if your phone switches to dark at night, the app does too.",
         "The block screen stays dark on purpose — it's a full-screen stop sign and reads best that way.",
+        "Insights gained three new cards: Balance (how much of your waking day was screen time), Peak time (your busiest hour), and a Productive / Distracting / Neutral split of your usage.",
+        "The dark background got a richer look — a soft glow up top fading to true black.",
     )),
     VersionLog("1.62", "Jul 8, 2026", "Words everywhere + a tougher Strict Mode", listOf(
         "Your blocked words are now caught in every app — not just browsers. The moment a word appears on screen, anywhere, the screen is blocked. No more picking apps one by one.",

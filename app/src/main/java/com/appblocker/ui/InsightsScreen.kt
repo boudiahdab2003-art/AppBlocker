@@ -35,13 +35,18 @@ import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Balance
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.PieChart
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material.icons.filled.TouchApp
+import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -135,6 +140,14 @@ fun InsightsScreen(
             Spacer(Modifier.padding(top = 20.dp))
         }
 
+        // Balance: screen time as a share of a 16h waking day.
+        if (state.usageAccess) {
+            item {
+                BalanceCard(tab, state)
+                Spacer(Modifier.padding(top = 24.dp))
+            }
+        }
+
         // Goals: measurable daily targets, tracked live with hit/miss history.
         item {
             GoalsCard(
@@ -188,6 +201,22 @@ fun InsightsScreen(
                 }
             }
             Spacer(Modifier.padding(top = 24.dp))
+        }
+
+        // Peak time (Day): the busiest hour of the day, as a labelled range.
+        if (tab == 0 && state.usageAccess && (state.hourly.maxOrNull() ?: 0) > 0) {
+            item {
+                PeakTimeCard(state)
+                Spacer(Modifier.padding(top = 24.dp))
+            }
+        }
+
+        // Usage (Day): a Productive / Distracting / Neutral split of today's screen time.
+        if (tab == 0 && state.categories.isNotEmpty()) {
+            item {
+                UsageRollupCard(state)
+                Spacer(Modifier.padding(top = 24.dp))
+            }
         }
 
         // AI Coach: Gemini's daily read of the numbers above.
@@ -534,6 +563,112 @@ private fun BarChart(
             Text(it, style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+    }
+}
+
+private const val AWAKE_MIN = 16 * 60 // a 16-hour waking day, the denominator for "% of awake time"
+
+/** Balance: screen time as a share of a 16h waking day (Day = today, Week/Trend = daily average). */
+@Composable
+private fun BalanceCard(tab: Int, state: InsightsState) {
+    val minutes = when (tab) {
+        0 -> state.screenMinutes
+        1 -> state.weekMinutes / 7
+        else -> state.monthAvg
+    }
+    val pct = (minutes * 100 / AWAKE_MIN).coerceIn(0, 100)
+    SectionCard("Balance", icon = Icons.Filled.Balance) {
+        Spacer(Modifier.padding(top = 4.dp))
+        Text("$pct % of awake time", style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+        Spacer(Modifier.padding(top = 10.dp))
+        Box(
+            Modifier.fillMaxWidth().height(12.dp).clip(RoundedCornerShape(50))
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            Box(
+                Modifier.fillMaxWidth((minutes.toFloat() / AWAKE_MIN).coerceIn(0f, 1f))
+                    .fillMaxHeight().clip(RoundedCornerShape(50))
+                    .background(MaterialTheme.colorScheme.primary),
+            )
+        }
+        Spacer(Modifier.padding(top = 12.dp))
+        Row(Modifier.fillMaxWidth().padding(bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.Smartphone, contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(InsightsViewModel.fmt(minutes), style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+            Spacer(Modifier.weight(1f))
+            Icon(Icons.Filled.WbSunny, contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("16h", style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+/** Peak time: the busiest hour of today, shown as a labelled range like "1 PM – 2 PM". */
+@Composable
+private fun PeakTimeCard(state: InsightsState) {
+    val peakIdx = state.hourly.indices.maxByOrNull { state.hourly[it] } ?: return
+    SectionCard("Peak time", icon = Icons.Filled.Schedule) {
+        Spacer(Modifier.padding(top = 4.dp))
+        Text("${hourLabel(peakIdx)} – ${hourLabel((peakIdx + 1) % 24)}",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+        Text("${InsightsViewModel.fmt(state.hourly[peakIdx])} of screen time",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 2.dp, bottom = 4.dp))
+    }
+}
+
+/** Usage: today's screen time split into Productive / Distracting / Neutral, derived from the
+ *  app categories (labels come from AppCategory.label). */
+@Composable
+private fun UsageRollupCard(state: InsightsState) {
+    var productive = 0; var distracting = 0; var neutral = 0
+    state.categories.forEach { c ->
+        when (c.label) {
+            "Productive" -> productive += c.minutes
+            "Social", "Video", "Games" -> distracting += c.minutes
+            else -> neutral += c.minutes
+        }
+    }
+    val total = productive + distracting + neutral
+    if (total <= 0) return
+    fun pct(m: Int) = (m * 100f / total).roundToInt()
+    SectionCard("Usage", icon = Icons.Filled.PieChart) {
+        Spacer(Modifier.padding(top = 4.dp))
+        UsageBucketRow("Productive", pct(productive), Color(0xFF22C55E))
+        UsageBucketRow("Distracting", pct(distracting), Color(0xFF7C5CFF))
+        UsageBucketRow("Neutral", pct(neutral), Color(0xFF3B82F6))
+        Spacer(Modifier.padding(top = 4.dp))
+    }
+}
+
+@Composable
+private fun UsageBucketRow(name: String, pct: Int, color: Color) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(10.dp).clip(CircleShape).background(color))
+        Spacer(Modifier.width(10.dp))
+        Text(name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface)
+        Spacer(Modifier.width(14.dp))
+        Box(
+            Modifier.weight(1f).height(10.dp).clip(RoundedCornerShape(50))
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            Box(
+                Modifier.fillMaxWidth((pct / 100f).coerceIn(0f, 1f)).fillMaxHeight()
+                    .clip(RoundedCornerShape(50)).background(color),
+            )
+        }
+        Spacer(Modifier.width(14.dp))
+        Text("$pct %", style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold, color = color)
     }
 }
 
