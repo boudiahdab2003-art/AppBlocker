@@ -3,9 +3,15 @@ package com.appblocker.ui.theme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RadialGradientShader
+import androidx.compose.ui.graphics.Shader
+import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -24,12 +30,22 @@ object AppGradients {
     /** Vertical variant (for tiles / vertical fills). */
     val accentVertical: Brush = Brush.verticalGradient(listOf(AccentStart, AccentEnd))
 
-    /** Full-screen backdrop: a faint indigo glow at the top fading to near-black. */
-    val background: Brush = Brush.verticalGradient(
-        0.0f to Color(0xFF141B3D),
-        0.35f to Color(0xFF0B1020),
-        1.0f to Color(0xFF06080F),
-    )
+    /** Full-screen backdrop: a radial indigo glow anchored to the top edge, radiating down and
+     *  fading to true black by the top third — richer depth than a flat vertical band. A
+     *  size-aware ShaderBrush so the glow's centre/radius track the actual screen. */
+    val background: Brush = object : ShaderBrush() {
+        override fun createShader(size: Size): Shader = RadialGradientShader(
+            center = Offset(size.width * 0.5f, 0f),
+            radius = size.height * 1.0f,
+            colors = listOf(
+                Color(0xFF1E2C63), // luminous indigo-blue glow
+                Color(0xFF0A0F20), // quick darkening
+                Color(0xFF000000), // true black base
+            ),
+            colorStops = listOf(0f, 0.32f, 0.8f),
+            tileMode = TileMode.Clamp,
+        )
+    }
 
     /** Light-mode backdrop: a soft blue-grey wash, mirroring the dark gradient's subtlety. */
     val backgroundLight: Brush = Brush.verticalGradient(
