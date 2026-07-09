@@ -30,6 +30,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import com.appblocker.Dist
 import com.appblocker.admin.AppBlockerAdminReceiver
 import com.appblocker.service.AccessibilityUtil
+import com.appblocker.service.NotificationCountListener
 
 /** One setup step the user may need to grant. */
 data class Perm(
@@ -66,6 +67,14 @@ fun hasUsageAccess(ctx: Context): Boolean {
 fun isIgnoringBattery(ctx: Context): Boolean {
     val pm = ctx.getSystemService(Context.POWER_SERVICE) as PowerManager
     return pm.isIgnoringBatteryOptimizations(ctx.packageName)
+}
+
+/** Whether our NotificationListenerService is enabled (Notification access granted). */
+fun isNotificationListenerEnabled(ctx: Context): Boolean {
+    val expected = ComponentName(ctx, NotificationCountListener::class.java).flattenToString()
+    val enabled = Settings.Secure.getString(ctx.contentResolver, "enabled_notification_listeners")
+        ?: return false
+    return enabled.split(':').any { it.equals(expected, ignoreCase = true) }
 }
 
 private fun open(ctx: Context, action: String, withPackage: Boolean = false) {
@@ -110,6 +119,11 @@ fun rememberPermissions(): List<Perm> {
                 "Needed for daily limits and Insights.",
                 hasUsageAccess(ctx), essential = false,
             ) { open(ctx, Settings.ACTION_USAGE_ACCESS_SETTINGS) },
+            Perm(
+                "notifications", "Notification access",
+                "Optional. Lets AppBlocker count your daily notifications for Insights.",
+                isNotificationListenerEnabled(ctx), essential = false,
+            ) { open(ctx, Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS) },
             Perm(
                 "battery", "Disable battery optimization",
                 "Keeps the blocker running so it can't be killed in the background.",

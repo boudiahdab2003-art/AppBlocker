@@ -175,6 +175,58 @@ object UsageTracker {
         }
     }
 
+    /** Today's phone-use session stats as (longestContinuousUseMin, longestFocusGapMin).
+     *  Reconstructs foreground sessions from the same event stream as [hourlyMinutesToday],
+     *  but merges every app's intervals into one phone-level timeline:
+     *   - continuous use = the longest single stretch the phone was in use,
+     *   - longest focus  = the longest gap between two uses (0 if fewer than 2 sessions;
+     *     the pre-first-use and after-last-use periods are ignored so sleep doesn't count). */
+    fun sessionStatsToday(context: Context): Pair<Int, Int> {
+        val usm = usageStatsManager(context) ?: return 0 to 0
+        val fgEvent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+            UsageEvents.Event.ACTIVITY_RESUMED
+        else @Suppress("DEPRECATION") UsageEvents.Event.MOVE_TO_FOREGROUND
+        val bgEvent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+            UsageEvents.Event.ACTIVITY_PAUSED
+        else @Suppress("DEPRECATION") UsageEvents.Event.MOVE_TO_BACKGROUND
+        val dayStart = startOfToday()
+        val now = System.currentTimeMillis()
+        val fgStart = HashMap<String, Long>()
+        val intervals = ArrayList<LongArray>() // each = [start, end]
+        val events = usm.queryEvents(dayStart, now)
+        val e = UsageEvents.Event()
+        while (events.getNextEvent(e)) {
+            when (e.eventType) {
+                fgEvent -> fgStart[e.packageName] = e.timeStamp
+                bgEvent -> {
+                    val s = fgStart.remove(e.packageName) ?: continue
+                    intervals.add(longArrayOf(max(s, dayStart), e.timeStamp))
+                }
+            }
+        }
+        for ((_, s) in fgStart) intervals.add(longArrayOf(max(s, dayStart), now))
+        if (intervals.isEmpty()) return 0 to 0
+
+        // Merge into a phone-level union timeline.
+        intervals.sortBy { it[0] }
+        val merged = ArrayList<LongArray>()
+        for (iv in intervals) {
+            val last = merged.lastOrNull()
+            if (last != null && iv[0] <= last[1]) {
+                last[1] = max(last[1], iv[1])
+            } else {
+                merged.add(longArrayOf(iv[0], iv[1]))
+            }
+        }
+
+        val longestUse = merged.maxOf { it[1] - it[0] }
+        var longestGap = 0L
+        for (i in 1 until merged.size) {
+            longestGap = max(longestGap, merged[i][0] - merged[i - 1][1])
+        }
+        return (longestUse / 60_000L).toInt() to (longestGap / 60_000L).toInt()
+    }
+
     // ---- History (multi-day) ----
 
     /** Total foreground minutes for each of the last [days] days (last index = today).

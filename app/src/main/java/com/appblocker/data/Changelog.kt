@@ -18,6 +18,8 @@ val changelog: List<VersionLog> = listOf(
         "System default automatically matches your phone — so if your phone switches to dark at night, the app does too.",
         "The block screen stays dark on purpose — it's a full-screen stop sign and reads best that way.",
         "Insights gained three new cards: Balance (how much of your waking day was screen time), Peak time (your busiest hour), and a Productive / Distracting / Neutral split of your usage.",
+        "Insights also added Focus (your longest phone-free stretch and longest single session), Distractions (notifications + pickups), a daily Mood check-in, and Trend rankings of the apps you spent more/less time on.",
+        "Counting notifications is optional — it asks for Notification access, and AppBlocker only counts them, never reads them.",
         "The dark background got a richer look — a soft glow up top fading to true black.",
     )),
     VersionLog("1.62", "Jul 8, 2026", "Words everywhere + a tougher Strict Mode", listOf(

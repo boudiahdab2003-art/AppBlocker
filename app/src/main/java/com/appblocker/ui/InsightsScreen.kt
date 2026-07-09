@@ -31,6 +31,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Assessment
@@ -39,8 +40,13 @@ import androidx.compose.material.icons.filled.Balance
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.CenterFocusStrong
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.Mood
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
@@ -55,12 +61,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -72,6 +81,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -81,6 +91,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.appblocker.data.moodLabel
 import com.appblocker.ui.theme.AppGradients
 import com.appblocker.ui.theme.softGlow
 import java.text.SimpleDateFormat
@@ -101,6 +112,7 @@ fun InsightsScreen(
     val context = LocalContext.current
     var tab by rememberSaveable { mutableIntStateOf(0) } // 0 Day, 1 Week, 2 Trend
     var showKeyDialog by remember { mutableStateOf(false) }
+    var showMood by remember { mutableStateOf(false) }
 
     // Rebuild the stats every time the tab is opened, so they're always current.
     LaunchedEffect(Unit) { vm.refresh() }
@@ -219,6 +231,42 @@ fun InsightsScreen(
             }
         }
 
+        // Focus + Distractions tiles + Mood check-in (Day).
+        if (tab == 0 && state.usageAccess) {
+            item {
+                Text("Focus", style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                Spacer(Modifier.padding(top = 8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    StatTile("Longest focus", InsightsViewModel.fmt(state.longestFocusMin),
+                        Icons.Filled.CenterFocusStrong, Modifier.weight(1f))
+                    StatTile("Continuous use", InsightsViewModel.fmt(state.continuousUseMin),
+                        Icons.Filled.Smartphone, Modifier.weight(1f))
+                }
+                Spacer(Modifier.padding(top = 24.dp))
+
+                Text("Distractions", style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                Spacer(Modifier.padding(top = 8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    StatTile(
+                        "Notifications",
+                        if (state.notificationAccess) "${state.notificationsToday}×" else "—",
+                        Icons.Filled.Notifications, Modifier.weight(1f),
+                        onClick = if (state.notificationAccess) null else {
+                            { openNotificationAccess(context) }
+                        },
+                    )
+                    StatTile("Pickups", "${state.unlocksToday}×",
+                        Icons.Filled.PhoneAndroid, Modifier.weight(1f))
+                }
+                Spacer(Modifier.padding(top = 24.dp))
+
+                MoodCard(state) { showMood = true }
+                Spacer(Modifier.padding(top = 24.dp))
+            }
+        }
+
         // AI Coach: Gemini's daily read of the numbers above.
         item {
             CoachCard(coach, state.goals.map { it.goal.label() },
@@ -238,6 +286,26 @@ fun InsightsScreen(
                 SectionCard("Trending this week", "How each app changed vs last week.",
                     icon = Icons.AutoMirrored.Filled.TrendingUp) {
                     StatRows(state.appTrends, vm)
+                }
+                Spacer(Modifier.padding(top = 24.dp))
+            }
+        }
+
+        // Trend podiums: apps that lost / gained the most time vs last week.
+        if (tab == 2 && state.biggestDrops.isNotEmpty()) {
+            item {
+                SectionCard("Top time-savers", "You spent less time here than last week.",
+                    icon = Icons.AutoMirrored.Filled.TrendingDown) {
+                    StatRows(state.biggestDrops, vm)
+                }
+                Spacer(Modifier.padding(top = 24.dp))
+            }
+        }
+        if (tab == 2 && state.biggestIncreases.isNotEmpty()) {
+            item {
+                SectionCard("Top increase", "These took more of your time — worth a look.",
+                    icon = Icons.AutoMirrored.Filled.TrendingUp) {
+                    StatRows(state.biggestIncreases, vm)
                 }
                 Spacer(Modifier.padding(top = 24.dp))
             }
@@ -305,6 +373,15 @@ fun InsightsScreen(
 
     val detail by vm.detail.collectAsState()
     detail?.let { AppDetailSheet(it, onDismiss = vm::clearDetail) }
+
+    if (showMood) {
+        MoodSheet(
+            initialRating = state.moodRating,
+            initialNote = state.moodNote,
+            onSave = { rating, note -> vm.saveMood(rating, note); showMood = false },
+            onDismiss = { showMood = false },
+        )
+    }
 
     if (showKeyDialog) {
         var keyText by remember { mutableStateOf("") }
@@ -670,6 +747,133 @@ private fun UsageBucketRow(name: String, pct: Int, color: Color) {
         Text("$pct %", style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold, color = color)
     }
+}
+
+/** A square-ish stat tile (label + big value + icon) for the Focus / Distractions rows. */
+@Composable
+private fun StatTile(
+    label: String,
+    value: String,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+) {
+    Column(
+        modifier
+            .softGlow(RoundedCornerShape(20.dp), elevation = 4.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), RoundedCornerShape(20.dp))
+            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
+            .padding(16.dp),
+    ) {
+        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(24.dp))
+        Spacer(Modifier.padding(top = 10.dp))
+        Text(label.uppercase(), style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+    }
+}
+
+/** Mood check-in summary card: today's self-rating + note, tap to (re)check in. */
+@Composable
+private fun MoodCard(state: InsightsState, onOpen: () -> Unit) {
+    val (label, color) = moodLabel(state.moodRating)
+    SectionCard("Mood check-in", icon = Icons.Filled.Mood) {
+        Row(
+            Modifier.fillMaxWidth().clickable { onOpen() }.padding(vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(if (state.moodRating < 0) "How did today feel?" else label,
+                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                    color = if (state.moodRating < 0) MaterialTheme.colorScheme.onSurface else color)
+                Text(
+                    when {
+                        state.moodRating < 0 -> "Tap to check in."
+                        state.moodNote.isBlank() -> "No note added…"
+                        else -> state.moodNote
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2,
+                )
+            }
+            Icon(Icons.Filled.Edit, contentDescription = "Edit",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+        }
+    }
+}
+
+/** Bottom sheet: rate how phone use felt today on a gradient slider + optional note. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MoodSheet(
+    initialRating: Int,
+    initialNote: String,
+    onSave: (Int, String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var rating by remember { mutableFloatStateOf(if (initialRating < 0) 50f else initialRating.toFloat()) }
+    var note by remember { mutableStateOf(initialNote) }
+    val (label, color) = moodLabel(rating.roundToInt())
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface) {
+        Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 28.dp)) {
+            Text("How did your phone use feel today?", style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+            Spacer(Modifier.padding(top = 12.dp))
+            Text(label, style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold, color = color)
+            Spacer(Modifier.padding(top = 10.dp))
+            // Gradient track (pink→violet→blue→green) behind a transparent-track slider.
+            Box(contentAlignment = Alignment.CenterStart) {
+                Box(
+                    Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(50))
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(Color(0xFFEC4899), Color(0xFF7C5CFF),
+                                    Color(0xFF3B82F6), Color(0xFF22C55E))
+                            )
+                        ),
+                )
+                Slider(
+                    value = rating, onValueChange = { rating = it }, valueRange = 0f..100f,
+                    colors = SliderDefaults.colors(
+                        thumbColor = Color.White,
+                        activeTrackColor = Color.Transparent,
+                        inactiveTrackColor = Color.Transparent,
+                    ),
+                )
+            }
+            Row(Modifier.fillMaxWidth()) {
+                Text("Very distracted", style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.weight(1f))
+                Text("In control", style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Spacer(Modifier.padding(top = 16.dp))
+            Text("Add a short note (optional)", style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.padding(top = 6.dp))
+            OutlinedTextField(
+                value = note, onValueChange = { note = it },
+                placeholder = { Text("Your thoughts…") },
+                modifier = Modifier.fillMaxWidth(), minLines = 2,
+                shape = RoundedCornerShape(16.dp),
+            )
+            Spacer(Modifier.padding(top = 16.dp))
+            GradientButton(text = "Save check-in",
+                onClick = { onSave(rating.roundToInt(), note) })
+        }
+    }
+}
+
+private fun openNotificationAccess(context: Context) {
+    context.startActivity(
+        Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    )
 }
 
 /** Extra at-a-glance stats: daily average, busiest day, vs-yesterday change, usage rating. */

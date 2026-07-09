@@ -17,6 +17,8 @@ import com.appblocker.data.AttemptCounter
 import com.appblocker.data.InstalledApp
 import com.appblocker.data.InstalledAppsRepository
 import com.appblocker.data.LaunchCounter
+import com.appblocker.data.MoodStore
+import com.appblocker.data.NotificationCounter
 import com.appblocker.data.StatsStore
 import com.appblocker.data.UnlockCounter
 import com.appblocker.service.UsageTracker
@@ -90,7 +92,15 @@ data class InsightsState(
     val weekdayAvg: Int = 0,
     val weekendAvg: Int = 0,
     val appTrends: List<StatRow> = emptyList(),
+    val biggestDrops: List<StatRow> = emptyList(),
+    val biggestIncreases: List<StatRow> = emptyList(),
     val unlocksToday: Int = 0,
+    val notificationsToday: Int = 0,
+    val notificationAccess: Boolean = false,
+    val continuousUseMin: Int = 0,
+    val longestFocusMin: Int = 0,
+    val moodRating: Int = -1,
+    val moodNote: String = "",
     val goals: List<GoalProgress> = emptyList(),
 )
 
@@ -246,6 +256,23 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
                 delta = delta, deltaGood = good)
         }
 
+        // Trend podiums: which apps gained or lost the most time this week vs last week.
+        val trendDeltas = (thisWeekApps.keys + lastWeekApps.keys).map { pkg ->
+            pkg to ((thisWeekApps[pkg] ?: 0) - (lastWeekApps[pkg] ?: 0))
+        }.filter { kotlin.math.abs(it.second) >= 15 } // ignore small wobble
+        val biggestDrops = trendDeltas.filter { it.second < 0 }
+            .sortedBy { it.second }.take(3).map { (pkg, delta) ->
+                StatRow(label(installed, pkg), icon(installed, pkg), "-${fmt(-delta)}",
+                    dotColor(pkg), pkg = pkg, delta = "▼", deltaGood = true)
+            }
+        val biggestIncreases = trendDeltas.filter { it.second > 0 }
+            .sortedByDescending { it.second }.take(3).map { (pkg, delta) ->
+                StatRow(label(installed, pkg), icon(installed, pkg), "+${fmt(delta)}",
+                    dotColor(pkg), pkg = pkg, delta = "▲", deltaGood = false)
+            }
+
+        val (continuousUse, longestFocus) = UsageTracker.sessionStatsToday(ctx)
+
         return InsightsState(
             loaded = true,
             usageAccess = hasUsageAccess(ctx),
@@ -268,7 +295,15 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
             weekdayAvg = if (weekdayVals.isNotEmpty()) weekdayVals.average().roundToInt() else 0,
             weekendAvg = if (weekendVals.isNotEmpty()) weekendVals.average().roundToInt() else 0,
             appTrends = appTrends,
+            biggestDrops = biggestDrops,
+            biggestIncreases = biggestIncreases,
             unlocksToday = UnlockCounter.unlocksToday(ctx),
+            notificationsToday = NotificationCounter.notificationsToday(ctx),
+            notificationAccess = isNotificationListenerEnabled(ctx),
+            continuousUseMin = continuousUse,
+            longestFocusMin = longestFocus,
+            moodRating = MoodStore.todayRating(ctx),
+            moodNote = MoodStore.todayNote(ctx),
             // Snapshot today's per-goal usage so finished days get judged hit/miss — the
             // day's last snapshot becomes its final record.
             goals = runCatching {
@@ -286,6 +321,12 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
 
     fun removeGoal(goal: Goal) {
         Goals.remove(getApplication(), goal.id)
+        refresh()
+    }
+
+    /** Save today's mood check-in and refresh so the card updates immediately. */
+    fun saveMood(rating: Int, note: String) {
+        MoodStore.setToday(getApplication(), rating, note)
         refresh()
     }
 
