@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.64
+- Adult content pack: hundreds of English + Arabic pornographic/fetish words (incl. cuckold + BNWO vocab) blocked out of the box - whole-word matching, Arabic normalization + glued-form coverage, toggle on Blocked words screen, Strict-locked
+
 ## v1.63
 - Light mode + a much richer Insights (Balance, Peak time, Focus, Distractions, Mood check-in, Trend rankings), nicer dark background, and a Strict-Mode fix
 
