@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.63
+- Light mode + a much richer Insights (Balance, Peak time, Focus, Distractions, Mood check-in, Trend rankings), nicer dark background, and a Strict-Mode fix
+
 ## v1.62
 - Blocked words now work in every app + a tougher Strict Mode (blocks the accessibility/uninstall escape hatches)
 
