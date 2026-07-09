@@ -4,22 +4,35 @@ import android.content.Context
 
 /**
  * Decides whether some on-screen text (a web address or search query) should be
- * blocked: user keywords first, then — if enabled — the bundled adult lists.
- * Lists are loaded once from assets.
+ * blocked: user keywords first, then the bundled adult word pack (if enabled),
+ * then — if enabled — the bundled adult site lists. Lists are loaded once from assets.
  */
 class WebContentFilter private constructor(
     private val adultDomains: List<String>,
     private val adultKeywords: List<String>,
+    private val packWords: List<String>,
 ) {
     data class Hit(val title: String, val message: String)
 
-    fun check(text: String, userKeywords: List<String>, blockAdult: Boolean): Hit? {
+    fun check(text: String, userKeywords: List<String>, adultPack: Boolean, blockAdult: Boolean): Hit? {
         if (text.isBlank()) return null
         val lower = text.lowercase()
 
         for (k in userKeywords) {
             if (k.isNotBlank() && lower.contains(k)) {
                 return Hit("Blocked word", "“$k” is on your blocked list.")
+            }
+        }
+        if (adultPack && packWords.isNotEmpty()) {
+            // Pack words match whole-word only (a short entry like "anal" or Arabic "كس" must
+            // not fire inside "analysis" or "كسر"), against Arabic-normalized text so spelling
+            // variants (alef forms, diacritics, tatweel) still match.
+            val norm = normalizeArabic(lower)
+            for (w in packWords) {
+                if (containsWord(norm, w)) {
+                    // Deliberately doesn't echo the matched word.
+                    return Hit("Adult content blocked", "This page contains blocked adult words.")
+                }
             }
         }
         if (blockAdult) {
@@ -45,6 +58,7 @@ class WebContentFilter private constructor(
                 INSTANCE ?: WebContentFilter(
                     readLines(context, "adult_domains.txt"),
                     readLines(context, "adult_keywords.txt"),
+                    readLines(context, "adult_words_pack.txt").map(::normalizeArabic),
                 ).also { INSTANCE = it }
             }
 
@@ -56,5 +70,37 @@ class WebContentFilter private constructor(
                         .toList()
                 }
             }.getOrDefault(emptyList())
+
+        /** Whole-word substring search: a match only counts when it isn't glued to another
+         *  letter/digit on either side (works for Latin and Arabic alike). */
+        private fun containsWord(text: String, word: String): Boolean {
+            if (word.isEmpty()) return false
+            var i = text.indexOf(word)
+            while (i >= 0) {
+                val beforeOk = i == 0 || !text[i - 1].isLetterOrDigit()
+                val end = i + word.length
+                val afterOk = end >= text.length || !text[end].isLetterOrDigit()
+                if (beforeOk && afterOk) return true
+                i = text.indexOf(word, i + 1)
+            }
+            return false
+        }
+
+        /** Folds common Arabic spelling variants so one stored form catches them all:
+         *  alef variants → ا, ة → ه, ى → ي; strips tatweel and harakat (diacritics). */
+        private fun normalizeArabic(s: String): String {
+            val sb = StringBuilder(s.length)
+            for (c in s) {
+                when (c) {
+                    'أ', 'إ', 'آ', 'ٱ' -> sb.append('ا')
+                    'ة' -> sb.append('ه')
+                    'ى' -> sb.append('ي')
+                    'ـ' -> {} // tatweel (elongation) — drop
+                    in 'ً'..'ٟ' -> {} // harakat/diacritics — drop
+                    else -> sb.append(c)
+                }
+            }
+            return sb.toString()
+        }
     }
 }

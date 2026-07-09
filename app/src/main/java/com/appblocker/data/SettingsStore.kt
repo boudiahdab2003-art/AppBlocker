@@ -75,6 +75,16 @@ object SettingsStore {
     fun setQuickBlockPaused(context: Context, value: Boolean) =
         prefs(context).edit().putBoolean("quick_block_paused", value).apply()
 
+    const val KEY_ADULT_WORDS_PACK = "adult_words_pack"
+
+    /** The built-in pack of pornographic words (English + Arabic), blocked like the user's own
+     *  words. On by default; turning it off is Strict-locked like other protective toggles. */
+    fun adultWordsPack(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_ADULT_WORDS_PACK, true)
+
+    fun setAdultWordsPack(context: Context, value: Boolean) =
+        prefs(context).edit().putBoolean(KEY_ADULT_WORDS_PACK, value).apply()
+
     const val KEY_KEYWORDS_EVERYWHERE = "keywords_everywhere"
 
     /** Match blocked words in every app (default), not just browsers. When off, only browsers

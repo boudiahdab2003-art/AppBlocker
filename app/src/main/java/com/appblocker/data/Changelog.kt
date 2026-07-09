@@ -13,6 +13,13 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.64", "Jul 9, 2026", "Built-in adult word pack", listOf(
+        "Blocked words now come with a built-in adult content pack: hundreds of pornographic and fetish words — in English AND Arabic — blocked out of the box, on top of your own list.",
+        "It's on by default. One switch on the Blocked words screen controls it, and like your other protections, it can't be switched off while Strict Mode is running.",
+        "The pack matches whole words only, so everyday words are never caught by accident — 'analysis' or كسر will never trigger a block.",
+        "Arabic matching is smart about spelling: different alef forms, diacritics and stretched letters (like سِكْس or سـكـس) are all caught the same.",
+        "The blocked screen never repeats the word it caught — it just says adult content was blocked.",
+    )),
     VersionLog("1.63", "Jul 9, 2026", "Light mode + richer Insights", listOf(
         "AppBlocker now has a light theme. Choose it in Profile → Appearance: System default (follows your phone), Light, or Dark.",
         "System default automatically matches your phone — so if your phone switches to dark at night, the app does too.",

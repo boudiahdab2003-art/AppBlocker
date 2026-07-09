@@ -1,0 +1,538 @@
+# Built-in adult content word pack (English + Arabic).
+# One entry per line; lines starting with # are ignored. Matched WHOLE-WORD
+# (letters/digits around a match break it) after lowercasing + Arabic
+# normalization, so "anal" never matches "analysis" and "fap" never matches
+# "nofap". Ambiguous everyday words appear only inside phrases.
+
+# --- porn sites & brands ---
+pornhub
+xvideos
+xnxx
+xhamster
+redtube
+youporn
+spankbang
+brazzers
+bangbros
+naughty america
+reality kings
+blacked.com
+tushy.com
+vixen.com
+onlyfans
+fansly
+justforfans
+manyvids
+clips4sale
+iwantclips
+chaturbate
+stripchat
+livejasmin
+bongacams
+myfreecams
+camsoda
+cam4
+flirt4free
+jerkmate
+rule34
+rule 34
+nhentai
+e-hentai
+ehentai
+hentaihaven
+fakku
+hanime
+javhd
+motherless
+efukt
+beeg
+tnaflix
+porntrex
+eporner
+hqporner
+youjizz
+tube8
+drtuber
+txxx
+upornia
+hclips
+thumbzilla
+keezmovies
+extremetube
+pornhat
+porndig
+4tube
+fapello
+erome
+literotica
+sexstories
+f95zone
+nutaku
+redgifs
+
+# --- porn, generic ---
+porn
+porno
+pornos
+pornography
+pornographic
+pornstar
+porn star
+porn video
+porn videos
+porn movie
+porn movies
+porn site
+porn sites
+porn clips
+porn gif
+porn gifs
+porn game
+porn games
+porn comics
+free porn
+watch porn
+hd porn
+4k porn
+vr porn
+amateur porn
+homemade porn
+teen porn
+mature porn
+granny porn
+ebony porn
+asian porn
+latina porn
+arab porn
+hijab porn
+desi porn
+indian porn
+japanese porn
+korean porn
+anime porn
+cartoon porn
+furry porn
+3d porn
+ai porn
+deepfake porn
+deepnude
+celebrity nudes
+leaked nudes
+revenge porn
+hardcore porn
+softcore porn
+taboo porn
+incest porn
+incest
+xxx
+xxx videos
+xxx movies
+x-rated
+nsfw
+smut
+erotic
+erotica
+eroge
+hentai
+hentai manga
+hentai game
+hentai games
+ecchi
+doujin
+doujinshi
+ahegao
+jav
+jav uncensored
+
+# --- cams, paid & live ---
+camgirl
+cam girl
+camboy
+camwhore
+sexcam
+sex cam
+camsex
+cam sex
+webcam sex
+live sex
+sex show
+striptease
+stripper
+strippers
+lap dance
+lapdance
+peep show
+onlyfans leak
+onlyfans leaks
+escort service
+escort girls
+escort agency
+call girl
+callgirl
+call girls
+prostitute
+prostitutes
+prostitution
+brothel
+hooker
+hookers
+red light district
+
+# --- acts ---
+blowjob
+blow job
+blowjobs
+handjob
+hand job
+rimjob
+rim job
+rimming
+footjob
+titjob
+titfuck
+deepthroat
+deep throat
+facefuck
+face fuck
+throatpie
+cumshot
+cum shot
+cumshots
+creampie
+cream pie
+creampies
+bukkake
+gokkun
+gangbang
+gang bang
+gangbangs
+orgy
+orgies
+threesome
+threesomes
+foursome
+group sex
+anal sex
+analsex
+anal porn
+anal creampie
+first anal
+double penetration
+double anal
+fisting
+pegging
+scissoring
+tribbing
+cunnilingus
+fellatio
+doggystyle
+doggy style
+reverse cowgirl
+dick riding
+pussy licking
+pussy eating
+eat pussy
+rough sex
+public sex
+sex position
+sex positions
+
+# --- anatomy & vulgar ---
+pussy
+pussies
+cunt
+cunts
+twat
+cock
+cocks
+big cock
+monster cock
+big dick
+dick pic
+dickpic
+dick pics
+tits
+titties
+big tits
+huge tits
+big boobs
+boobs
+clit
+clitoris
+nude
+nudes
+nudity
+naked girls
+naked women
+nude girls
+nude women
+nude pics
+nude photos
+nude selfie
+send nudes
+cameltoe
+camel toe
+nip slip
+nipslip
+
+# --- solo & arousal ---
+masturbate
+masturbating
+masturbation
+masturbator
+jerk off
+jerkoff
+jerking off
+jack off
+jacking off
+wank
+wanking
+fap
+fapping
+gooning
+edging porn
+cum
+cumming
+jizz
+precum
+squirting
+orgasm
+orgasms
+horny
+sexting
+sext
+dirty talk
+phone sex
+sex chat
+sexchat
+sex tape
+sextape
+sex video
+sex videos
+sex movie
+sex movies
+sex clip
+sex clips
+sex gif
+sex gifs
+sex scene
+sex scenes
+sex game
+sex games
+hot singles
+fuck buddy
+fuckbuddy
+booty call
+
+# --- adult industry phrasing ---
+adult content
+adult video
+adult videos
+adult movies
+adult film
+adult films
+adult site
+adult sites
+adult entertainment
+adult chat
+adult game
+adult games
+barely legal
+
+# --- fetish & kink ---
+fetish
+foot fetish
+feet pics
+foot worship
+femdom
+findom
+dominatrix
+bdsm
+bondage
+shibari
+sadomasochism
+erotic spanking
+spanking porn
+cuckold
+cuck
+hotwife
+swingers
+netorare
+voyeur
+voyeurism
+upskirt
+downblouse
+used panties
+golden shower
+watersports fetish
+piss play
+pissplay
+piss porn
+scat porn
+omorashi
+diaper fetish
+ddlg
+petplay
+latex fetish
+rubber fetish
+pantyhose fetish
+bbw porn
+bbw
+vore
+guro
+tentacle porn
+tentacle hentai
+breeding kink
+chastity cage
+gloryhole
+glory hole
+dogging
+bareback
+joi
+sissy porn
+sissy hypno
+femboy
+futanari
+futa
+shemale
+shemales
+tranny
+yaoi
+milf
+milfs
+gilf
+stepmom porn
+step mom porn
+stepsis
+stepsister porn
+lolicon
+loli hentai
+shotacon
+jailbait
+dildo
+dildos
+vibrator
+sex toy
+sex toys
+buttplug
+butt plug
+anal beads
+fleshlight
+strapon
+cockring
+cock ring
+pocket pussy
+onahole
+
+# --- arabic: porn & sex searches ---
+سكس
+سيكس
+سكسي
+سكسية
+افلام سكس
+فلم سكس
+فيلم سكس
+مقاطع سكس
+مقطع سكس
+صور سكس
+قصص سكس
+سكس عربي
+سكس مصري
+سكس خليجي
+سكس سوري
+سكس لبناني
+سكس مغربي
+سكس اجنبي
+سكس مترجم
+سكس محارم
+سكس امهات
+سكس حيوانات
+سكس عنيف
+سكس اغتصاب
+سكس ياباني
+سكس هندي
+افلام محارم
+نيك محارم
+بورن
+بورنو
+بورن هاب
+اباحي
+اباحية
+اباحيات
+افلام اباحية
+مواقع اباحية
+مقاطع اباحية
+قصص جنسية
+افلام جنس
+فيديو جنس
+فيديوهات جنسية
+مواقع جنسية
+العاب جنسية
+دردشة جنسية
+شات جنسي
+شات سكس
+ممارسة الجنس
+وضعيات جنسية
+مشاهد ساخنة
+مقاطع ساخنة
+فيديوهات ساخنة
+صور ساخنة
+للكبار فقط
+افلام للكبار
+
+# --- arabic: acts & vulgar ---
+نيك
+نياكة
+نيكني
+ينيك
+منيوك
+منيوكة
+متناك
+متناكة
+طيز
+طياز
+كس
+كساس
+كسها
+زب
+زبر
+ازبار
+قضيب
+مص زب
+مص الزب
+مص القضيب
+لحس كس
+لحس الكس
+بزاز
+نهود
+حلمات
+عارية
+عاريات
+صور عارية
+بنات عاريات
+ملط
+تعري
+متعرية
+عاهرة
+عاهرات
+قحبة
+قحاب
+شرموطة
+شراميط
+ممحون
+ممحونة
+ممحونات
+سحاق
+سحاقية
+سحاقيات
+لواط
+دعارة
+عادة سرية
+العادة السرية
+استمناء
+ورعان
+
+# --- transliteration ---
+sks
+arab sex
+sex arab

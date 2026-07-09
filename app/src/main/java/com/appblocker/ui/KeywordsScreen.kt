@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.NoAdultContent
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -50,6 +51,7 @@ fun KeywordsScreen(
     val saved by webVm.keywords.collectAsState()
     var newWord by remember { mutableStateOf("") }
     var everywhere by remember { mutableStateOf(SettingsStore.keywordsEverywhere(context)) }
+    var adultPack by remember { mutableStateOf(SettingsStore.adultWordsPack(context)) }
     val ed = !strictActive // words can always be added; removal is locked during Strict Mode
 
     Box(Modifier.fillMaxSize().background(com.appblocker.ui.theme.appBackground())) {
@@ -121,8 +123,21 @@ fun KeywordsScreen(
 
                 item {
                     Spacer(Modifier.padding(top = 20.dp))
-                    // Turning this OFF weakens the filter, so — like word removal — it's
-                    // locked during Strict Mode. Turning it back ON is always allowed.
+                    // Turning these OFF weakens the filter, so — like word removal — they're
+                    // locked during Strict Mode. Turning them back ON is always allowed.
+                    ToggleRow(
+                        icon = Icons.Filled.NoAdultContent,
+                        title = "Adult content pack",
+                        desc = "Hundreds of pornographic words — English and Arabic — blocked " +
+                            "automatically, on top of your own list.",
+                        checked = adultPack,
+                        enabled = ed || !adultPack,
+                        onChange = {
+                            adultPack = it
+                            SettingsStore.setAdultWordsPack(context, it)
+                        },
+                    )
+                    Spacer(Modifier.padding(top = 8.dp))
                     ToggleRow(
                         icon = Icons.Filled.Apps,
                         title = "Block these words in every app",

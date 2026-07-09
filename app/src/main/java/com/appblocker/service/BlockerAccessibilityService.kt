@@ -85,6 +85,9 @@ class BlockerAccessibilityService : AccessibilityService() {
     // Whether blocked words are matched in every app (default) or browsers only. Cached here
     // and refreshed by a prefs listener so the toggle applies without restarting the service.
     @Volatile private var keywordsEverywhere: Boolean = true
+    // Whether the built-in adult word pack (English + Arabic) is enforced. Same freshness
+    // mechanism as keywordsEverywhere.
+    @Volatile private var adultPackOn: Boolean = true
     private var prefsListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
 
     private var lastBlockedPkg: String? = null
@@ -164,11 +167,15 @@ class BlockerAccessibilityService : AccessibilityService() {
         browserPackages = findBrowserPackages()
         launcherPackages = findLauncherPackages()
         keywordsEverywhere = SettingsStore.keywordsEverywhere(this)
-        // React to the user flipping the toggle on the Blocked-words screen without a restart.
+        adultPackOn = SettingsStore.adultWordsPack(this)
+        // React to the user flipping the toggles on the Blocked-words screen without a restart.
         val sp = getSharedPreferences("appblocker_prefs", Context.MODE_PRIVATE)
         prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == SettingsStore.KEY_KEYWORDS_EVERYWHERE) {
-                keywordsEverywhere = SettingsStore.keywordsEverywhere(this)
+            when (key) {
+                SettingsStore.KEY_KEYWORDS_EVERYWHERE ->
+                    keywordsEverywhere = SettingsStore.keywordsEverywhere(this)
+                SettingsStore.KEY_ADULT_WORDS_PACK ->
+                    adultPackOn = SettingsStore.adultWordsPack(this)
             }
         }.also { sp.registerOnSharedPreferenceChangeListener(it) }
         registerPackageChangeReceiver()
@@ -239,13 +246,14 @@ class BlockerAccessibilityService : AccessibilityService() {
     }
 
     /** Whether [pkg]'s on-screen text should be scanned for blocked words. Browsers always
-     *  (adult filter runs even with no user words). With user words + "every app" on:
-     *  everywhere except ourselves, the launcher(s), System UI and Settings — a word matching
-     *  an app's label there would block Home/Settings and make the phone unusable. */
+     *  (adult filter runs even with no user words). With words to match (the user's own or the
+     *  built-in adult pack) + "every app" on: everywhere except ourselves, the launcher(s),
+     *  System UI and Settings — a word matching an app's label there would block Home/Settings
+     *  and make the phone unusable. */
     private fun shouldScanPkg(pkg: String?): Boolean {
         if (pkg == null || pkg == packageName) return false
         if (pkg in browserPackages) return true
-        if (userKeywords.isEmpty() || !keywordsEverywhere) return false
+        if ((userKeywords.isEmpty() && !adultPackOn) || !keywordsEverywhere) return false
         return pkg !in launcherPackages && pkg !in KEYWORD_SCAN_EXCLUDED
     }
 
@@ -416,7 +424,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         // Unsupported browsers — if web filtering is on, block browsers we can't read so they
         // can't be used to bypass website/keyword filtering (e.g. Brave). Chrome is filterable.
         if (SettingsStore.blockUnsupportedBrowsers(this) &&
-            (userKeywords.isNotEmpty() || SettingsStore.blockAdult(this)) &&
+            (userKeywords.isNotEmpty() || adultPackOn || SettingsStore.blockAdult(this)) &&
             pkg in browserPackages && pkg !in SUPPORTED_BROWSERS
         ) return true
 
@@ -615,13 +623,14 @@ class BlockerAccessibilityService : AccessibilityService() {
             return
         }
 
-        // Browsers get the full filter (user words + blocked apps' domains + adult). Opted-in apps
-        // match the user's own words only — adult domains/keywords are URL/heuristic lists that
-        // don't make sense against arbitrary app UI text.
+        // Browsers get the full filter (user words + adult word pack + blocked apps' domains +
+        // adult site list). Other apps match the user's own words + the adult word pack — the
+        // adult domains/keywords are URL/heuristic lists that don't make sense against arbitrary
+        // app UI text, but the pack is whole-word matched so it's safe everywhere.
         val hit = if (isBrowser) {
-            filter.check(text, userKeywords + autoSocialKeywords(), SettingsStore.blockAdult(applicationContext))
+            filter.check(text, userKeywords + autoSocialKeywords(), adultPackOn, SettingsStore.blockAdult(applicationContext))
         } else {
-            filter.check(text, userKeywords, blockAdult = false)
+            filter.check(text, userKeywords, adultPackOn, blockAdult = false)
         }
         if (hit == null) {
             lastWebText = null
