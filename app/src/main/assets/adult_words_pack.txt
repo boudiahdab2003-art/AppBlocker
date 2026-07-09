@@ -388,6 +388,19 @@ netorare
 netori
 ntr hentai
 ntr porn
+bnwo
+blacked raw
+blackedraw
+bbc porn
+big black cock
+interracial porn
+interracial sex
+black bull
+blackowned
+snowbunny
+queen of spades
+raceplay
+white boi
 voyeur
 voyeurism
 upskirt
@@ -454,11 +467,114 @@ cock ring
 pocket pussy
 onahole
 
-# --- arabic: porn & sex searches ---
+# --- arabic ---
+# NOTE: Arabic glues the definite article (ال) and pronoun suffixes (ها/ي/ك)
+# onto the word, which defeats whole-word matching — so core terms are listed
+# with their common glued forms too. Standalone terms make their phrases
+# redundant (سكس alone already catches "افلام سكس"), so phrases are only
+# listed when no word in them is blocked standalone.
+
+# core porn terms + glued forms
 سكس
+السكس
 سيكس
 سكسي
 سكسية
+بورن
+بورنو
+اباحي
+اباحية
+الاباحية
+الاباحي
+
+# vulgar core + glued forms
+نيك
+النيك
+نيكها
+ينيك
+تتناك
+نياكة
+منيوك
+منيوكة
+متناك
+متناكة
+كس
+الكس
+كسها
+كسي
+كسك
+زب
+الزب
+زبي
+زبك
+زبه
+زبر
+ازبار
+طيز
+الطيز
+طيزها
+طيزي
+طيزك
+طياز
+طبون
+بزاز
+البزاز
+نهود
+حلمات
+قضيب
+القضيب
+قحبة
+القحبة
+قحاب
+كحبة
+شرموطة
+الشرموطة
+شرموط
+شراميط
+عاهرة
+عاهرات
+ممحون
+ممحونة
+ممحونات
+عارية
+عاريات
+ملط
+تعري
+سحاق
+السحاق
+سحاقية
+سحاقيات
+لواط
+اللواط
+شيميل
+ورعان
+الورعان
+
+# phrases (no word in them is blocked standalone)
+قصص جنسية
+فيديوهات جنسية
+مواقع جنسية
+العاب جنسية
+وضعيات جنسية
+جنس فموي
+جنس شرجي
+ممارسة الجنس
+افلام محارم
+قصص محارم
+مشاهد ساخنة
+مقاطع ساخنة
+فيديوهات ساخنة
+صور ساخنة
+للكبار فقط
+افلام للكبار
+مقاطع للكبار
+افلام اغراء
+دردشة جنسية
+شات جنسي
+افلام جنس
+فيديو جنس
+
+# extra coverage (redundant with standalone terms, kept on purpose)
 افلام سكس
 فلم سكس
 فيلم سكس
@@ -481,93 +597,42 @@ onahole
 سكس اغتصاب
 سكس ياباني
 سكس هندي
-افلام محارم
+شات سكس
 نيك محارم
-بورن
-بورنو
+نيكني
 بورن هاب
-اباحي
-اباحية
 اباحيات
 افلام اباحية
 مواقع اباحية
 مقاطع اباحية
-قصص جنسية
-افلام جنس
-فيديو جنس
-فيديوهات جنسية
-مواقع جنسية
-العاب جنسية
-دردشة جنسية
-شات جنسي
-شات سكس
-ممارسة الجنس
-وضعيات جنسية
-مشاهد ساخنة
-مقاطع ساخنة
-فيديوهات ساخنة
-صور ساخنة
-للكبار فقط
-افلام للكبار
-
-# --- arabic: acts & vulgar ---
-نيك
-نياكة
-نيكني
-ينيك
-منيوك
-منيوكة
-متناك
-متناكة
-طيز
-طياز
-كس
-كساس
-كسها
-زب
-زبر
-ازبار
-قضيب
 مص زب
 مص الزب
 مص القضيب
 لحس كس
 لحس الكس
-بزاز
-نهود
-حلمات
-عارية
-عاريات
 صور عارية
 بنات عاريات
-ملط
-تعري
+زوجة شرموطة
+كساس
 متعرية
-عاهرة
-عاهرات
-قحبة
-قحاب
-شرموطة
-شراميط
-ممحون
-ممحونة
-ممحونات
-سحاق
-سحاقية
-سحاقيات
-لواط
 دعارة
 عادة سرية
 العادة السرية
 استمناء
-ورعان
+
+# arabic site names / arabized brands
+عرب نار
+اكس ان اكس اكس
+اكس فيديوز
+
+# cuckold
 ديوث
+الديوث
 دياثة
 تبادل زوجات
 تبادل الزوجات
 مشاركة الزوجة
 مشاركة زوجتي
-زوجة شرموطة
 
 # --- transliteration ---
 sks
