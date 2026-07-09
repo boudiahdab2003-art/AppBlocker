@@ -13,6 +13,12 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.65", "Jul 9, 2026", "A harder off-switch for the adult pack", listOf(
+        "Turning off the Adult content pack is now deliberately hard, so it can't happen on impulse. When you switch it off, AppBlocker asks you to type out a long paragraph of random words — exactly, by hand. Pasting is disabled.",
+        "There's also a 2-minute cooldown: even once you've typed the paragraph, the Turn-off button stays locked until the timer runs out.",
+        "The paragraph is different every time, so it can't be memorised, and turning the pack back ON is always instant.",
+        "This only affects switching the pack off outside Strict Mode — during a Strict session it stays fully locked as before.",
+    )),
     VersionLog("1.64", "Jul 9, 2026", "Built-in adult word pack", listOf(
         "Blocked words now come with a built-in adult content pack: hundreds of pornographic and fetish words — in English AND Arabic — blocked out of the box, on top of your own list.",
         "It's on by default. One switch on the Blocked words screen controls it, and like your other protections, it can't be switched off while Strict Mode is running.",
