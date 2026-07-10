@@ -40,6 +40,7 @@ import com.appblocker.data.BlockerDatabase
 import com.appblocker.data.InstalledAppsRepository
 import com.appblocker.data.LaunchCounter
 import com.appblocker.data.QuickSession
+import com.appblocker.data.Quotes
 import com.appblocker.data.SOCIAL_DOMAINS
 import com.appblocker.data.Schedule
 import com.appblocker.data.ScheduleType
@@ -796,6 +797,13 @@ class BlockerAccessibilityService : AccessibilityService() {
         v.findViewById<TextView>(R.id.overlay_title).text = title
         v.findViewById<TextView>(R.id.overlay_subtitle).text = message
         v.findViewById<TextView>(R.id.overlay_counts).text = "$today× today  ·  $total× total"
+        // Fresh motivation every time the cover appears (the view is reused across blocks).
+        val quote = Quotes.random()
+        v.findViewById<TextView>(R.id.overlay_quote).text = quote.text
+        v.findViewById<TextView>(R.id.overlay_quote_author).apply {
+            text = quote.author?.let { "— $it" }
+            visibility = if (quote.author != null) View.VISIBLE else View.GONE
+        }
         val iconView = v.findViewById<ImageView>(R.id.overlay_icon)
         val bmp = packageName?.let { loadIcon(it) }
         if (bmp != null) iconView.setImageBitmap(bmp)

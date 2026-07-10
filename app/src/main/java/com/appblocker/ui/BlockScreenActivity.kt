@@ -9,23 +9,20 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -34,12 +31,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
+import com.appblocker.data.Quote
+import com.appblocker.data.Quotes
 import com.appblocker.ui.theme.AppBlockerTheme
+import com.appblocker.ui.theme.AppGradients
+import com.appblocker.ui.theme.softGlow
 
 /** Full-screen page shown when a blocked app or web page is opened. */
 class BlockScreenActivity : ComponentActivity() {
@@ -57,6 +59,7 @@ class BlockScreenActivity : ComponentActivity() {
         val message = intent.getStringExtra(EXTRA_MESSAGE)
             ?: appLabel?.let { "$it is blocked" }
             ?: "This is blocked right now."
+        val quote = Quotes.random()
 
         // Leaving the block screen should go to the home screen, never back to
         // the blocked app sitting behind us.
@@ -74,6 +77,7 @@ class BlockScreenActivity : ComponentActivity() {
                     message = message,
                     today = today,
                     total = total,
+                    quote = quote,
                     onClose = ::goHome,
                 )
             }
@@ -116,83 +120,127 @@ private fun BlockScreen(
     message: String,
     today: Int,
     total: Int,
+    quote: Quote,
     onClose: () -> Unit,
 ) {
     val primary = MaterialTheme.colorScheme.primary
-    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Column(
-            Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 40.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            // App icon (or shield for web) on a soft glow, with a brand shield badge.
-            Box(Modifier.size(190.dp), contentAlignment = Alignment.Center) {
-                Box(
-                    Modifier
-                        .matchParentSize()
-                        .background(
-                            Brush.radialGradient(
-                                listOf(primary.copy(alpha = 0.20f), Color.Transparent)
-                            ),
-                            CircleShape,
-                        )
-                )
-                if (appIcon != null) {
-                    Image(
-                        bitmap = appIcon.asImageBitmap(),
-                        contentDescription = null,
-                        modifier = Modifier.size(108.dp).clip(RoundedCornerShape(26.dp)),
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(AppGradients.background)
+            .padding(horizontal = 28.dp, vertical = 40.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        // App icon (or shield for web) on a soft glow, with a brand shield badge.
+        Box(Modifier.size(176.dp), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .background(
+                        Brush.radialGradient(
+                            listOf(primary.copy(alpha = 0.24f), Color.Transparent)
+                        ),
+                        CircleShape,
                     )
-                } else {
-                    ShieldBadge(size = 108, primary = primary)
-                }
-                // Brand badge overlapping the top-start of the icon.
-                Box(
-                    Modifier.align(Alignment.TopStart).padding(start = 28.dp, top = 28.dp)
-                ) {
-                    ShieldBadge(size = 46, primary = primary)
-                }
+            )
+            if (appIcon != null) {
+                Image(
+                    bitmap = appIcon.asImageBitmap(),
+                    contentDescription = null,
+                    modifier = Modifier.size(104.dp).clip(RoundedCornerShape(26.dp)),
+                )
+            } else {
+                ShieldBadge(size = 104, primary = primary)
             }
+            // Brand badge overlapping the top-start of the icon.
+            Box(
+                Modifier.align(Alignment.TopStart).padding(start = 22.dp, top = 22.dp)
+            ) {
+                ShieldBadge(size = 44, primary = primary)
+            }
+        }
 
-            Text(
-                title,
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 28.dp),
-            )
-            Text(
-                message,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 12.dp),
-            )
+        Text(
+            title,
+            style = MaterialTheme.typography.headlineLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 20.dp),
+        )
+        Text(
+            message,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 8.dp),
+        )
 
+        // Attempts pill.
+        Column(
+            Modifier
+                .padding(top = 22.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(Color(0xFF181F2E))
+                .border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(24.dp))
+                .padding(horizontal = 24.dp, vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
             Text(
                 "You tried to open it",
-                style = MaterialTheme.typography.titleMedium,
+                fontSize = 17.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.padding(top = 28.dp),
             )
             Text(
                 "$today× today  ·  $total× total",
-                style = MaterialTheme.typography.bodyLarge,
+                fontSize = 16.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
+                modifier = Modifier.padding(top = 2.dp),
             )
+        }
 
-            Button(
-                onClick = onClose,
-                modifier = Modifier.padding(top = 40.dp).fillMaxWidth().height(54.dp),
-                shape = RoundedCornerShape(27.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = primary),
-            ) {
-                Text("Close", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+        // Motivational quote card.
+        Column(
+            Modifier
+                .padding(top = 24.dp)
+                .fillMaxWidth()
+                .softGlow(RoundedCornerShape(20.dp), elevation = 8.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(Color(0xFF181B22))
+                .border(1.dp, AppGradients.AccentEnd.copy(alpha = 0.25f), RoundedCornerShape(20.dp))
+                .padding(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 16.dp),
+        ) {
+            Text(
+                "“",
+                fontSize = 40.sp,
+                fontWeight = FontWeight.Bold,
+                color = AppGradients.AccentEnd,
+            )
+            Text(
+                quote.text,
+                fontSize = 20.sp,
+                fontStyle = FontStyle.Italic,
+                lineHeight = 28.sp,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
+            if (quote.author != null) {
+                Text(
+                    "— ${quote.author}",
+                    fontSize = 15.sp,
+                    color = Color(0xFF8A93A5),
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                )
             }
         }
+
+        GradientButton(
+            text = "Close",
+            onClick = onClose,
+            modifier = Modifier.padding(top = 28.dp),
+        )
     }
 }
 

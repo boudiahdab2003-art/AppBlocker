@@ -2,7 +2,7 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#0A0E18"
+    android:background="@drawable/overlay_bg"
     android:clickable="true"
     android:focusable="true">
 
@@ -12,60 +12,139 @@
         android:layout_gravity="center"
         android:orientation="vertical"
         android:gravity="center_horizontal"
-        android:paddingHorizontal="32dp">
+        android:paddingHorizontal="28dp">
 
-        <ImageView
-            android:id="@+id/overlay_icon"
-            android:layout_width="104dp"
-            android:layout_height="104dp"
-            android:contentDescription="@null" />
+        <!-- App icon on a soft blue halo, with the brand shield badge overlapping. -->
+        <FrameLayout
+            android:layout_width="168dp"
+            android:layout_height="168dp">
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/overlay_icon_glow" />
+
+            <ImageView
+                android:id="@+id/overlay_icon"
+                android:layout_width="104dp"
+                android:layout_height="104dp"
+                android:layout_gravity="center"
+                android:contentDescription="@null" />
+
+            <FrameLayout
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_gravity="top|start"
+                android:layout_marginStart="18dp"
+                android:layout_marginTop="18dp"
+                android:background="@drawable/overlay_badge">
+
+                <ImageView
+                    android:layout_width="26dp"
+                    android:layout_height="26dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_shield_white"
+                    android:contentDescription="@null" />
+            </FrameLayout>
+        </FrameLayout>
 
         <TextView
             android:id="@+id/overlay_title"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="28dp"
+            android:layout_marginTop="20dp"
             android:text="Blocked"
             android:textColor="#FFFFFF"
-            android:textSize="32sp"
+            android:textSize="34sp"
             android:textStyle="bold" />
 
         <TextView
             android:id="@+id/overlay_subtitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
+            android:layout_marginTop="8dp"
             android:gravity="center"
             android:textColor="#B9C2D0"
-            android:textSize="18sp" />
+            android:textSize="19sp" />
 
-        <TextView
+        <!-- Attempts pill -->
+        <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="28dp"
-            android:text="You tried to open it"
-            android:textColor="#FFFFFF"
-            android:textSize="18sp"
-            android:textStyle="bold" />
+            android:layout_marginTop="22dp"
+            android:orientation="vertical"
+            android:gravity="center_horizontal"
+            android:background="@drawable/overlay_pill"
+            android:paddingHorizontal="24dp"
+            android:paddingVertical="12dp">
 
-        <TextView
-            android:id="@+id/overlay_counts"
-            android:layout_width="wrap_content"
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="You tried to open it"
+                android:textColor="#FFFFFF"
+                android:textSize="17sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/overlay_counts"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:textColor="#B9C2D0"
+                android:textSize="16sp" />
+        </LinearLayout>
+
+        <!-- Motivational quote card -->
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:textColor="#B9C2D0"
-            android:textSize="16sp" />
+            android:layout_marginTop="24dp"
+            android:orientation="vertical"
+            android:background="@drawable/overlay_quote_bg"
+            android:paddingHorizontal="20dp"
+            android:paddingTop="10dp"
+            android:paddingBottom="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="“"
+                android:textColor="#7C5CFF"
+                android:textSize="40sp"
+                android:textStyle="bold"
+                android:includeFontPadding="false" />
+
+            <TextView
+                android:id="@+id/overlay_quote"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="#ECEFF4"
+                android:textSize="20sp"
+                android:textStyle="italic"
+                android:lineSpacingExtra="4dp" />
+
+            <TextView
+                android:id="@+id/overlay_quote_author"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:gravity="end"
+                android:textColor="#8A93A5"
+                android:textSize="15sp" />
+        </LinearLayout>
 
         <Button
             android:id="@+id/overlay_close"
             android:layout_width="match_parent"
             android:layout_height="54dp"
-            android:layout_marginTop="40dp"
+            android:layout_marginTop="28dp"
             android:background="@drawable/overlay_btn"
             android:text="Close"
             android:textAllCaps="false"
             android:textColor="#FFFFFF"
             android:textSize="16sp"
-            android:textStyle="bold" />
+            android:textStyle="bold"
+            android:stateListAnimator="@null" />
     </LinearLayout>
 </FrameLayout>

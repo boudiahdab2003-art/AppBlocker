@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Block-screen backdrop: indigo glow anchored to the top edge fading to true black,
+     matching AppGradients.background used across the app. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <gradient
+        android:type="radial"
+        android:centerX="0.5"
+        android:centerY="0"
+        android:gradientRadius="120%p"
+        android:startColor="#1E2C63"
+        android:centerColor="#0A0F20"
+        android:endColor="#000000" />
+</shape>
