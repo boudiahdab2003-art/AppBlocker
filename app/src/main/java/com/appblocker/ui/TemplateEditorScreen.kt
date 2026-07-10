@@ -66,11 +66,8 @@ fun TemplateEditorScreen(
     var query by remember { mutableStateOf("") }
     // Hidden by default — the app list is a preset you rarely touch, so keep it tidy.
     var appsOpen by rememberSaveable(template.id) { mutableStateOf(false) }
+    var expandedCats by rememberSaveable(template.id) { mutableStateOf(listOf<String>()) }
     val ed = !strictActive
-
-    val installedApps = remember(apps, query) {
-        apps.filter { it.installed && it.label.contains(query.trim(), ignoreCase = true) }
-    }
 
     fun save() {
         if (hasApps) TemplateStore.setPackages(context, template.id, selected.toList())
@@ -120,13 +117,28 @@ fun TemplateEditorScreen(
                         }
                     }
                     if (appsOpen) {
-                        items(installedApps, key = { it.packageName }) { app ->
-                            val isChecked = selected.contains(app.packageName)
-                            AppCheckRow(app, checked = isChecked, enabled = ed || !isChecked) { on ->
-                                if (strictActive && !on) return@AppCheckRow
+                        categorizedAppItems(
+                            apps = apps.filter { it.installed },
+                            selected = selected,
+                            expandedCats = expandedCats.toSet(),
+                            query = query,
+                            rowEnabled = { checked -> ed || !checked },
+                            onToggleExpand = { cat ->
+                                expandedCats = if (cat.name in expandedCats) expandedCats - cat.name
+                                else expandedCats + cat.name
+                            },
+                            onToggle = { app, on ->
+                                if (strictActive && !on) return@categorizedAppItems
                                 if (on) selected.add(app.packageName) else selected.remove(app.packageName)
-                            }
-                        }
+                            },
+                            onSelectAll = { catApps ->
+                                catApps.forEach { if (!selected.contains(it.packageName)) selected.add(it.packageName) }
+                            },
+                            onClearAll = { catApps ->
+                                if (strictActive) return@categorizedAppItems
+                                catApps.forEach { selected.remove(it.packageName) }
+                            },
+                        )
                     }
                 }
 

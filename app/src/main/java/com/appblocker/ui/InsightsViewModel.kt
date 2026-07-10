@@ -213,11 +213,11 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
             StatRow(label(installed, pkg), icon(installed, pkg), opensText(n), dotColor(pkg), pkg = pkg,
                 fraction = if (maxOpens > 0) n.toFloat() / maxOpens else null)
         }
-        val categories = UsageTracker.categoryMinutesToday(snapshot).mapNotNull { (name, mins) ->
-            runCatching { AppCategory.valueOf(name) }.getOrNull()?.let {
-                CatSlice(it.label, Color(it.color), mins)
-            }
-        }
+        // parse() maps legacy slice names (VIDEO/CHAT/PRODUCTIVE) onto the new categories;
+        // group in case a legacy and a new name land on the same category.
+        val categories = UsageTracker.categoryMinutesToday(snapshot)
+            .entries.groupBy { AppCategories.parse(it.key) }
+            .map { (cat, slices) -> CatSlice(cat.label, Color(cat.color), slices.sumOf { it.value }) }
         // 30-day history powers the Trend tab, week-vs-week and weekday/weekend patterns.
         val monthly = UsageTracker.dailyMinutes(ctx, 30)
         val weekly = monthly.copyOfRange(23, 30) // last 7 days

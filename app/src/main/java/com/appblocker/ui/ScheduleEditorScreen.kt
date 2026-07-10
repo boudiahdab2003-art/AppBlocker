@@ -105,6 +105,8 @@ fun ScheduleEditorScreen(
     var locCaptured by remember { mutableStateOf((existing?.latitude ?: 0.0) != 0.0) }
     val selected = remember { (existing?.packages ?: emptyList()).toMutableStateList() }
     var appsOpen by rememberSaveable { mutableStateOf(true) } // collapsible Apps list
+    var appQuery by remember { mutableStateOf("") }
+    var expandedCats by rememberSaveable { mutableStateOf(listOf<String>()) } // open categories
 
     // A NEW schedule can always be created (adding protection is allowed during Strict Mode);
     // an EXISTING one stays locked while Strict is active so it can't be weakened.
@@ -326,14 +328,40 @@ fun ScheduleEditorScreen(
 
             item {
                 CollapsibleHeader(Icons.Filled.Apps, "Apps", selected.size, appsOpen) { appsOpen = !appsOpen }
+                if (appsOpen) {
+                    OutlinedTextField(
+                        value = appQuery, onValueChange = { appQuery = it },
+                        placeholder = { Text("Search apps") },
+                        singleLine = true, enabled = editable,
+                        shape = RoundedCornerShape(28.dp),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                    )
+                }
                 Spacer(Modifier.padding(top = 4.dp))
             }
             if (appsOpen) {
-                items(apps.filter { it.installed }, key = { it.packageName }) { app ->
-                    AppCheckRow(app, checked = selected.contains(app.packageName), enabled = editable) { on ->
+                categorizedAppItems(
+                    apps = apps.filter { it.installed },
+                    selected = selected,
+                    expandedCats = expandedCats.toSet(),
+                    query = appQuery,
+                    rowEnabled = { editable },
+                    onToggleExpand = { cat ->
+                        expandedCats = if (cat.name in expandedCats) expandedCats - cat.name
+                        else expandedCats + cat.name
+                    },
+                    onToggle = { app, on ->
                         if (on) selected.add(app.packageName) else selected.remove(app.packageName)
-                    }
-                }
+                    },
+                    onSelectAll = { catApps ->
+                        if (editable) catApps.forEach {
+                            if (!selected.contains(it.packageName)) selected.add(it.packageName)
+                        }
+                    },
+                    onClearAll = { catApps ->
+                        if (editable) catApps.forEach { selected.remove(it.packageName) }
+                    },
+                )
             }
 
             item { Spacer(Modifier.padding(top = 8.dp)) }

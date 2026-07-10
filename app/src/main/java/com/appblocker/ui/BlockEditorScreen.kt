@@ -98,6 +98,8 @@ fun BlockEditorScreen(
     var query by remember { mutableStateOf("") }
     // Collapsible sections (default open; remembered across rotation / tab switches).
     var appsOpen by rememberSaveable { mutableStateOf(true) }
+    // Which app categories are expanded (collapsed by default, AppBlock-style).
+    var expandedCats by rememberSaveable { mutableStateOf(listOf<String>()) }
     var preBlockOpen by rememberSaveable { mutableStateOf(false) }
     var webOpen by rememberSaveable { mutableStateOf(true) }
     var adult by remember { mutableStateOf(SettingsStore.blockAdult(context)) }
@@ -166,22 +168,44 @@ fun BlockEditorScreen(
                     item { Text("Loading apps…", color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(8.dp)) }
                 } else {
-                    items(installedApps, key = { it.packageName }) { app ->
-                        val isChecked = selected.contains(app.packageName)
+                    // Apps grouped into collapsible categories (flat filtered list while searching).
+                    categorizedAppItems(
+                        apps = apps.filter { it.installed },
+                        selected = selected,
+                        expandedCats = expandedCats.toSet(),
+                        query = query,
                         // During Strict you can check (add) an app, but not uncheck (remove) one.
-                        AppCheckRow(app, checked = isChecked, enabled = ed || !isChecked) { on ->
-                            if (strictActive && !on) return@AppCheckRow
+                        rowEnabled = { checked -> ed || !checked },
+                        onToggleExpand = { cat ->
+                            expandedCats = if (cat.name in expandedCats) expandedCats - cat.name
+                            else expandedCats + cat.name
+                        },
+                        onToggle = { app, on ->
+                            if (strictActive && !on) return@categorizedAppItems
                             editedApps = true
                             if (on) selected.add(app.packageName) else selected.remove(app.packageName)
-                        }
-                        // Nested "Shorts" sub-row right under YouTube (blocks only the Shorts feed).
-                        if (app.packageName == "com.google.android.youtube") {
-                            ShortsSubRow(icon = app.icon, checked = ytShorts, enabled = ed || !ytShorts) { on ->
-                                if (strictActive && !on) return@ShortsSubRow
-                                ytShorts = on
-                            }
-                        }
-                    }
+                        },
+                        onSelectAll = { catApps ->
+                            editedApps = true
+                            catApps.forEach { if (!selected.contains(it.packageName)) selected.add(it.packageName) }
+                        },
+                        onClearAll = { catApps ->
+                            if (strictActive) return@categorizedAppItems
+                            editedApps = true
+                            catApps.forEach { selected.remove(it.packageName) }
+                        },
+                        extraUnder = { app ->
+                            // Nested "Shorts" sub-row right under YouTube (blocks only the Shorts feed).
+                            if (app.packageName == "com.google.android.youtube") {
+                                {
+                                    ShortsSubRow(icon = app.icon, checked = ytShorts, enabled = ed || !ytShorts) { on ->
+                                        if (strictActive && !on) return@ShortsSubRow
+                                        ytShorts = on
+                                    }
+                                }
+                            } else null
+                        },
+                    )
                 }
             }
 

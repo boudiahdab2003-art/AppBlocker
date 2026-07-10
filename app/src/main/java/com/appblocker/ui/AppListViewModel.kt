@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.appblocker.data.AppCategories
+import com.appblocker.data.AppCategory
 import com.appblocker.data.AppRule
 import com.appblocker.data.BlockMode
 import com.appblocker.data.BlockerDatabase
@@ -29,6 +30,7 @@ data class AppItem(
     val installed: Boolean = true,
     // Brand colour for a coloured-initial badge when there's no real icon (not-installed apps).
     val accentColor: Long? = null,
+    val category: AppCategory = AppCategory.OTHER,
 )
 
 class AppListViewModel(app: Application) : AndroidViewModel(app) {
@@ -57,6 +59,7 @@ class AppListViewModel(app: Application) : AndroidViewModel(app) {
                     mode = r?.mode ?: BlockMode.HARD,
                     dailyLimitMinutes = r?.dailyLimitMinutes ?: -1,
                     installed = true,
+                    category = app.category,
                 )
             }
             // Curated popular apps that aren't installed yet, so they can be pre-blocked.
@@ -74,6 +77,7 @@ class AppListViewModel(app: Application) : AndroidViewModel(app) {
                         dailyLimitMinutes = r?.dailyLimitMinutes ?: -1,
                         installed = false,
                         accentColor = p.color,
+                        category = AppCategories.categoryOf(p.packageName),
                     )
                 }
             (installedItems + preBlockItems).sortedWith(

@@ -13,6 +13,12 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.67", "Jul 11, 2026", "Apps organized into categories", listOf(
+        "The app lists in Quick Block, schedules and templates are now organized into 12 categories — Social media, Entertainment, Games, News & Books, Shopping & Food, Creativity, Travel, Utilities, Education, Health & Fitness, Productivity and Other — just tap a category to open it.",
+        "Block a whole category with one tap: every category has its own checkbox. A dash on the checkbox means some (but not all) of its apps are selected.",
+        "AI sorted over 270 well-known apps into the right categories — including the apps popular in Germany and the Arabic world — and any app it doesn't know is placed using the category its developer declared.",
+        "Searching still works exactly as before: type a name and you get a simple flat list of matches.",
+    )),
     VersionLog("1.66", "Jul 10, 2026", "Choose your icon", listOf(
         "The app icon's shield is now a little smaller, so it sits beautifully inside the round icon shape instead of touching the edges.",
         "New: Profile → Appearance → App icon — pick your favourite from six AI-designed icons: Halo glow, Violet night, Pure black, Daylight, Bold silhouette, and Shield & lock.",

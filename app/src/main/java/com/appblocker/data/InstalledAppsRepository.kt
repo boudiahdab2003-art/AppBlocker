@@ -15,8 +15,13 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-/** An installed launchable app: package, display name, and its (cached) icon bitmap. */
-data class InstalledApp(val packageName: String, val label: String, val icon: Bitmap?)
+/** An installed launchable app: package, display name, cached icon, and resolved category. */
+data class InstalledApp(
+    val packageName: String,
+    val label: String,
+    val icon: Bitmap?,
+    val category: AppCategory = AppCategory.OTHER,
+)
 
 /**
  * Process-wide cache of the installed launchable apps.
@@ -81,7 +86,12 @@ object InstalledAppsRepository {
                 val icon = runCatching {
                     pm.getApplicationIcon(info.packageName).toBitmap(96, 96)
                 }.getOrNull()
-                InstalledApp(info.packageName, pm.getApplicationLabel(info).toString(), icon)
+                InstalledApp(
+                    info.packageName,
+                    pm.getApplicationLabel(info).toString(),
+                    icon,
+                    AppCategories.resolve(info.packageName, info.category),
+                )
             }
             .toList()
     }

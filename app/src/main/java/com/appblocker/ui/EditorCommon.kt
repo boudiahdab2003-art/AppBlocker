@@ -16,10 +16,25 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.Flight
+import androidx.compose.material.icons.filled.Forum
+import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.School
+import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.SportsEsports
+import androidx.compose.material.icons.filled.Widgets
+import androidx.compose.material.icons.filled.Work
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.TriStateCheckbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -35,8 +50,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.appblocker.data.AppCategory
 
 /** A selectable app row (icon + label + checkbox) shared by the Quick Block & schedule editors.
  *  [subtitle], when set, shows a small line under the label (e.g. "Not installed yet"). */
@@ -118,6 +135,129 @@ fun CollapsibleHeader(
             contentDescription = if (expanded) "Collapse" else "Expand",
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+/** UI icon for each app category (kept out of the enum — data layer stays Compose-free). */
+fun categoryIcon(category: AppCategory): ImageVector = when (category) {
+    AppCategory.SOCIAL -> Icons.Filled.Forum
+    AppCategory.ENTERTAINMENT -> Icons.Filled.Movie
+    AppCategory.GAMES -> Icons.Filled.SportsEsports
+    AppCategory.NEWS_BOOKS -> Icons.Filled.MenuBook
+    AppCategory.SHOPPING_FOOD -> Icons.Filled.ShoppingCart
+    AppCategory.CREATIVITY -> Icons.Filled.Palette
+    AppCategory.TRAVEL -> Icons.Filled.Flight
+    AppCategory.UTILITIES -> Icons.Filled.Widgets
+    AppCategory.EDUCATION -> Icons.Filled.School
+    AppCategory.HEALTH_FITNESS -> Icons.Filled.FitnessCenter
+    AppCategory.PRODUCTIVITY -> Icons.Filled.Work
+    AppCategory.OTHER -> Icons.Filled.MoreHoriz
+}
+
+/**
+ * AppBlock-style category row: color-tinted icon tile, name, blue selected-count, tri-state
+ * checkbox (whole-category select) and a chevron. Tapping the row expands/collapses.
+ */
+@Composable
+fun CategoryHeaderRow(
+    category: AppCategory,
+    selectedCount: Int,
+    expanded: Boolean,
+    state: ToggleableState,
+    enabled: Boolean,
+    onToggleExpand: () -> Unit,
+    onToggleAll: () -> Unit,
+) {
+    val tint = Color(category.color)
+    Row(
+        Modifier.fillMaxWidth().clickable { onToggleExpand() }.padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(tint.copy(alpha = 0.16f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(categoryIcon(category), contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
+        }
+        Spacer(Modifier.width(12.dp))
+        Text(
+            category.label, Modifier.weight(1f),
+            style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+        if (selectedCount > 0) {
+            Text("$selectedCount", style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+        }
+        TriStateCheckbox(state = state, onClick = onToggleAll, enabled = enabled)
+        Icon(
+            if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+            contentDescription = if (expanded) "Collapse" else "Expand",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
+ * The shared categorized app list used by every picker (Quick Block / Schedule / Template).
+ * No search query -> apps grouped under collapsible [CategoryHeaderRow]s (enum order, empty
+ * categories hidden, collapsed by default). With a query -> a flat filtered list, no headers.
+ * [extraUnder] lets a caller append a sub-row under a specific app (YouTube's Shorts row).
+ */
+fun LazyListScope.categorizedAppItems(
+    apps: List<AppItem>,
+    selected: List<String>,
+    expandedCats: Set<String>,
+    query: String,
+    rowEnabled: (checked: Boolean) -> Boolean,
+    onToggleExpand: (AppCategory) -> Unit,
+    onToggle: (AppItem, Boolean) -> Unit,
+    onSelectAll: (List<AppItem>) -> Unit,
+    onClearAll: (List<AppItem>) -> Unit,
+    extraUnder: (AppItem) -> (@Composable () -> Unit)? = { null },
+) {
+    val q = query.trim()
+    if (q.isNotEmpty()) {
+        val shown = apps.filter { it.label.contains(q, ignoreCase = true) }
+        items(shown, key = { it.packageName }) { app ->
+            val checked = selected.contains(app.packageName)
+            Column {
+                AppCheckRow(app, checked = checked, enabled = rowEnabled(checked)) { onToggle(app, it) }
+                extraUnder(app)?.invoke()
+            }
+        }
+        return
+    }
+    AppCategory.entries.forEach { cat ->
+        val catApps = apps.filter { it.category == cat }
+        if (catApps.isEmpty()) return@forEach
+        val selCount = catApps.count { selected.contains(it.packageName) }
+        val state = when (selCount) {
+            0 -> ToggleableState.Off
+            catApps.size -> ToggleableState.On
+            else -> ToggleableState.Indeterminate
+        }
+        item(key = "cat-${cat.name}") {
+            CategoryHeaderRow(
+                category = cat,
+                selectedCount = selCount,
+                expanded = cat.name in expandedCats,
+                state = state,
+                // The tri-state can always ADD; whether it may clear is the caller's rule.
+                enabled = rowEnabled(false) || state != ToggleableState.On,
+                onToggleExpand = { onToggleExpand(cat) },
+                onToggleAll = { if (state == ToggleableState.On) onClearAll(catApps) else onSelectAll(catApps) },
+            )
+        }
+        if (cat.name in expandedCats) {
+            items(catApps, key = { it.packageName }) { app ->
+                val checked = selected.contains(app.packageName)
+                Column {
+                    AppCheckRow(app, checked = checked, enabled = rowEnabled(checked)) { onToggle(app, it) }
+                    extraUnder(app)?.invoke()
+                }
+            }
+        }
     }
 }
 
