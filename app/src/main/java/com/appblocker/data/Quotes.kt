@@ -21,6 +21,13 @@ object Quotes {
         return ALL[i]
     }
 
+    /** Poster-style text size: short quotes go huge, long ones stay readable. */
+    fun sizeSpFor(text: String): Float = when {
+        text.length <= 60 -> 38f
+        text.length <= 100 -> 32f
+        else -> 28f
+    }
+
     private val ALL = listOf(
         // Stoics & classics
         Quote("It is not that we have a short time to live, but that we waste a lot of it.", "Seneca"),

@@ -14,8 +14,8 @@ data class VersionLog(
  */
 val changelog: List<VersionLog> = listOf(
     VersionLog("1.65", "Jul 10, 2026", "A beautiful new block screen", listOf(
-        "The block screen got a full redesign: a glowing backdrop, your shield badge on the app's icon, a cleaner attempts chip, and a blue→violet Close button — it finally looks as premium as the rest of the app.",
-        "Every block now shows a motivational quote — 50 hand-picked lines about focus, discipline and time, from Marcus Aurelius and Seneca to punchy one-liners. A fresh one every time, right at the moment of temptation.",
+        "The block screen is completely reimagined as an editorial poster: a huge, beautiful serif quote owns the screen — 50 hand-picked lines about focus, discipline and time, from Marcus Aurelius and Seneca to your coach's own words. A fresh one every time, right at the moment of temptation.",
+        "Everything else steps back: a small BLOCKED badge up top, the blocked app with its attempt counts in a quiet footer, studio-light glows on a near-black backdrop, and a blue→violet 'Got it' button.",
         "Turning off the Adult content pack is now deliberately hard, so it can't happen on impulse. When you switch it off, AppBlocker asks you to type out a long paragraph of random words — exactly, by hand. Pasting is disabled.",
         "There's also a 2-minute cooldown: even once you've typed the paragraph, the Turn-off button stays locked until the timer runs out.",
         "The paragraph is different every time, so it can't be memorised, and turning the pack back ON is always instant.",

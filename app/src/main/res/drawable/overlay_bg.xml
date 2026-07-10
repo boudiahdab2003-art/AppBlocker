@@ -1,13 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Block-screen backdrop: indigo glow anchored to the top edge fading to true black,
-     matching AppGradients.background used across the app. -->
-<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-    <gradient
-        android:type="radial"
-        android:centerX="0.5"
-        android:centerY="0"
-        android:gradientRadius="120%p"
-        android:startColor="#1E2C63"
-        android:centerColor="#0A0F20"
-        android:endColor="#000000" />
-</shape>
+<!-- Block-screen backdrop: deepest navy with two soft studio-light glows —
+     brand blue from the top, violet from the bottom corner. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#090B10" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:type="radial"
+                android:centerX="0.35"
+                android:centerY="0"
+                android:gradientRadius="95%p"
+                android:startColor="#3D2E7BFF"
+                android:endColor="#00090B10" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:type="radial"
+                android:centerX="0.9"
+                android:centerY="1"
+                android:gradientRadius="75%p"
+                android:startColor="#2E7C5CFF"
+                android:endColor="#00090B10" />
+        </shape>
+    </item>
+</layer-list>

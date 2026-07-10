@@ -8,7 +8,9 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
+import android.graphics.LinearGradient
 import android.graphics.PixelFormat
+import android.graphics.Shader
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
@@ -21,6 +23,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
+import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.WindowManager
@@ -799,8 +802,19 @@ class BlockerAccessibilityService : AccessibilityService() {
         v.findViewById<TextView>(R.id.overlay_counts).text = "$today× today  ·  $total× total"
         // Fresh motivation every time the cover appears (the view is reused across blocks).
         val quote = Quotes.random()
-        v.findViewById<TextView>(R.id.overlay_quote).text = quote.text
-        v.findViewById<TextView>(R.id.overlay_quote_author).text = "— ${quote.author}"
+        v.findViewById<TextView>(R.id.overlay_quote).apply {
+            text = quote.text
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, Quotes.sizeSpFor(quote.text))
+        }
+        v.findViewById<TextView>(R.id.overlay_quote_author).apply {
+            text = "— ${quote.author}"
+            // Brand blue→violet sweep across the author line.
+            val width = paint.measureText(text.toString()).coerceAtLeast(1f)
+            paint.shader = LinearGradient(
+                0f, 0f, width, 0f,
+                0xFF2E7BFF.toInt(), 0xFF7C5CFF.toInt(), Shader.TileMode.CLAMP,
+            )
+        }
         val iconView = v.findViewById<ImageView>(R.id.overlay_icon)
         val bmp = packageName?.let { loadIcon(it) }
         if (bmp != null) iconView.setImageBitmap(bmp)
