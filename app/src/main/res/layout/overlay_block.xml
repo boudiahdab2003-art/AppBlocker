@@ -47,6 +47,28 @@
                 android:textSize="15sp" />
         </LinearLayout>
 
+        <!-- Masthead: today's win, giant editorial serif. -->
+        <TextView
+            android:id="@+id/overlay_stat_number"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="28dp"
+            android:fontFamily="serif"
+            android:textColor="#FFFFFF"
+            android:textSize="120sp"
+            android:includeFontPadding="false" />
+
+        <TextView
+            android:id="@+id/overlay_stat_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Minutes reclaimed today"
+            android:textAllCaps="true"
+            android:letterSpacing="0.15"
+            android:fontFamily="sans-serif-black"
+            android:textColor="#7C5CFF"
+            android:textSize="15sp" />
+
         <!-- The hero: the quote owns the screen, editorial serif. -->
         <LinearLayout
             android:layout_width="match_parent"
@@ -104,14 +126,6 @@
                     android:fontFamily="sans-serif-medium"
                     android:textColor="#FFFFFF"
                     android:textSize="17sp" />
-
-                <TextView
-                    android:id="@+id/overlay_counts"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
-                    android:textColor="#8A93A5"
-                    android:textSize="15sp" />
             </LinearLayout>
         </LinearLayout>
 

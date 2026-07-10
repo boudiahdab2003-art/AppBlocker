@@ -38,6 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
+import com.appblocker.data.AttemptCounter
 import com.appblocker.data.Quote
 import com.appblocker.data.Quotes
 import com.appblocker.ui.theme.AppBlockerTheme
@@ -50,8 +51,8 @@ class BlockScreenActivity : ComponentActivity() {
 
         val pkg = intent.getStringExtra(EXTRA_PACKAGE)
         val title = intent.getStringExtra(EXTRA_TITLE) ?: "Blocked"
-        val today = intent.getIntExtra(EXTRA_TODAY, 0)
-        val total = intent.getIntExtra(EXTRA_TOTAL, 0)
+        // Every dodged open counts as ~3 minutes of life back (mirrors the overlay).
+        val reclaimedMinutes = AttemptCounter.totalToday(this) * 3
 
         // For an app block, load its icon + label so we can show "{App} is blocked".
         val appLabel = pkg?.let { loadLabel(it) }
@@ -75,8 +76,7 @@ class BlockScreenActivity : ComponentActivity() {
                     appIcon = appIcon,
                     title = title,
                     message = message,
-                    today = today,
-                    total = total,
+                    reclaimedMinutes = reclaimedMinutes,
                     quote = quote,
                     onClose = ::goHome,
                 )
@@ -119,8 +119,7 @@ private fun BlockScreen(
     appIcon: Bitmap?,
     title: String,
     message: String,
-    today: Int,
-    total: Int,
+    reclaimedMinutes: Int,
     quote: Quote,
     onClose: () -> Unit,
 ) {
@@ -154,6 +153,23 @@ private fun BlockScreen(
                 modifier = Modifier.padding(start = 12.dp),
             )
         }
+
+        // Masthead: today's win, giant editorial serif.
+        Text(
+            reclaimedMinutes.toString(),
+            fontSize = 120.sp,
+            lineHeight = 120.sp,
+            fontFamily = FontFamily.Serif,
+            color = Color.White,
+            modifier = Modifier.padding(top = 28.dp),
+        )
+        Text(
+            "MINUTES RECLAIMED TODAY",
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 2.2.sp,
+            color = AppGradients.AccentEnd,
+        )
 
         // The hero quote.
         Column(
@@ -202,20 +218,12 @@ private fun BlockScreen(
                 }
             }
             Spacer(Modifier.width(14.dp))
-            Column {
-                Text(
-                    message,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Color.White,
-                )
-                Text(
-                    "$today× today  ·  $total× total",
-                    fontSize = 15.sp,
-                    color = Color(0xFF8A93A5),
-                    modifier = Modifier.padding(top = 2.dp),
-                )
-            }
+            Text(
+                message,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.White,
+            )
         }
 
         GradientButton(text = "Got it", onClick = onClose)

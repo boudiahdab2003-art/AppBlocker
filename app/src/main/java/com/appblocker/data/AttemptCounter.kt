@@ -31,6 +31,10 @@ object AttemptCounter {
             .sortedByDescending { it.total }
     }
 
+    /** Sum of today's attempts across every blocked target — the block screen's
+     *  "minutes reclaimed" masthead multiplies this by an average session estimate. */
+    fun totalToday(context: Context): Int = summary(context).sumOf { it.today }
+
     /** Records one open attempt for [key] and returns (todayCount, totalCount). */
     fun record(context: Context, key: String): Pair<Int, Int> {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)

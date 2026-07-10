@@ -799,7 +799,9 @@ class BlockerAccessibilityService : AccessibilityService() {
         }
         v.findViewById<TextView>(R.id.overlay_title).text = title
         v.findViewById<TextView>(R.id.overlay_subtitle).text = message
-        v.findViewById<TextView>(R.id.overlay_counts).text = "$today× today  ·  $total× total"
+        // Masthead: every dodged open counts as ~3 minutes of life back.
+        v.findViewById<TextView>(R.id.overlay_stat_number).text =
+            (AttemptCounter.totalToday(applicationContext) * MINUTES_PER_DODGE).toString()
         // Fresh motivation every time the cover appears (the view is reused across blocks).
         val quote = Quotes.random()
         v.findViewById<TextView>(R.id.overlay_quote).apply {
@@ -869,6 +871,10 @@ class BlockerAccessibilityService : AccessibilityService() {
     companion object {
         private const val TAG = "AppBlocker"
         private const val DEBUG = false // flip to true to log scans/blocks for debugging
+
+        // Average minutes of scrolling one dodged open would have cost — powers the
+        // "minutes reclaimed today" masthead on the block screen.
+        private const val MINUTES_PER_DODGE = 3
 
         // How often to re-check the app the user is currently inside (mid-use enforcement).
         private const val RECHECK_MS = 30_000L
