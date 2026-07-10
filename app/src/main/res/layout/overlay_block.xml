@@ -130,8 +130,9 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:gravity="end"
-                android:textColor="#8A93A5"
-                android:textSize="15sp" />
+                android:textColor="#B9C2D0"
+                android:textSize="16sp"
+                android:textStyle="bold" />
         </LinearLayout>
 
         <Button

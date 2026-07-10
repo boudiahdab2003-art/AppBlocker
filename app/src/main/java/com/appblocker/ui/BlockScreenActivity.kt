@@ -225,15 +225,14 @@ private fun BlockScreen(
                 lineHeight = 28.sp,
                 color = MaterialTheme.colorScheme.onBackground,
             )
-            if (quote.author != null) {
-                Text(
-                    "— ${quote.author}",
-                    fontSize = 15.sp,
-                    color = Color(0xFF8A93A5),
-                    textAlign = TextAlign.End,
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                )
-            }
+            Text(
+                "— ${quote.author}",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.End,
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            )
         }
 
         GradientButton(

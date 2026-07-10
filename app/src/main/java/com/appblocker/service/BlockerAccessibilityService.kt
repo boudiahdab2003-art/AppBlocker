@@ -800,10 +800,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         // Fresh motivation every time the cover appears (the view is reused across blocks).
         val quote = Quotes.random()
         v.findViewById<TextView>(R.id.overlay_quote).text = quote.text
-        v.findViewById<TextView>(R.id.overlay_quote_author).apply {
-            text = quote.author?.let { "— $it" }
-            visibility = if (quote.author != null) View.VISIBLE else View.GONE
-        }
+        v.findViewById<TextView>(R.id.overlay_quote_author).text = "— ${quote.author}"
         val iconView = v.findViewById<ImageView>(R.id.overlay_icon)
         val bmp = packageName?.let { loadIcon(it) }
         if (bmp != null) iconView.setImageBitmap(bmp)
