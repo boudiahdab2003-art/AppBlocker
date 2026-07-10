@@ -61,6 +61,13 @@ object SettingsStore {
     fun setThemeMode(context: Context, value: String) =
         prefs(context).edit().putString(KEY_THEME_MODE, value).apply()
 
+    /** Which launcher icon is active (Profile ▸ App icon). Ids defined in [AppIcons]. */
+    fun appIcon(context: Context): String =
+        prefs(context).getString("app_icon", "halo") ?: "halo"
+
+    fun setAppIcon(context: Context, value: String) =
+        prefs(context).edit().putString("app_icon", value).apply()
+
     /** Whether the first-run setup screen has been shown once. */
     fun setupSeen(context: Context): Boolean =
         prefs(context).getBoolean("setup_seen", false)

@@ -13,6 +13,11 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.66", "Jul 10, 2026", "Choose your icon", listOf(
+        "The app icon's shield is now a little smaller, so it sits beautifully inside the round icon shape instead of touching the edges.",
+        "New: Profile → Appearance → App icon — pick your favourite from six AI-designed icons: Halo glow, Violet night, Pure black, Daylight, Bold silhouette, and Shield & lock.",
+        "Your home screen may take a few seconds to show the new icon after switching — that's your phone's launcher refreshing, not a bug.",
+    )),
     VersionLog("1.65", "Jul 10, 2026", "A beautiful new block screen", listOf(
         "The block screen is completely reimagined as an editorial poster: a huge, beautiful serif quote owns the screen — 50 hand-picked lines about focus, discipline and time, from Marcus Aurelius and Seneca to your coach's own words. A fresh one every time, right at the moment of temptation.",
         "A giant 'minutes reclaimed today' counter crowns the screen — every blocked open counts as ~3 minutes of your life back, so the number grows with every temptation you dodge.",

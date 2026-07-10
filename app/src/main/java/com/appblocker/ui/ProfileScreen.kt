@@ -3,6 +3,8 @@ package com.appblocker.ui
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
+import android.widget.Toast
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -32,6 +34,7 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Tune
@@ -55,11 +58,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.appblocker.Dist
+import com.appblocker.data.AppIcons
 import com.appblocker.data.AttemptCounter
 import com.appblocker.data.PinStore
 import com.appblocker.data.SettingsStore
@@ -92,6 +97,8 @@ fun ProfileScreen(
     var userName by remember(resumeTick) { mutableStateOf(SettingsStore.userName(context)) }
     var showRename by remember { mutableStateOf(false) }
     var showTheme by remember { mutableStateOf(false) }
+    var showIconPicker by remember { mutableStateOf(false) }
+    var currentIcon by remember { mutableStateOf(AppIcons.current(context)) }
     val themeController = LocalThemeController.current
     val locked = strictActive
 
@@ -189,6 +196,15 @@ fun ProfileScreen(
                 enabled = true, // cosmetic — allowed even during Strict
                 onClick = { showTheme = true },
             )
+            Divider()
+            ProfileRow(
+                icon = Icons.Filled.Palette,
+                title = "App icon",
+                subtitle = "Current: ${currentIcon.label}. Choose from your icon collection.",
+                chevron = true,
+                enabled = true, // cosmetic — allowed even during Strict
+                onClick = { showIconPicker = true },
+            )
         }
 
         SectionTitle("Permissions")
@@ -279,6 +295,76 @@ fun ProfileScreen(
             onDismiss = { showTheme = false },
         )
     }
+    if (showIconPicker) {
+        IconPickerDialog(
+            current = currentIcon,
+            onSelect = { option ->
+                AppIcons.apply(context, option)
+                currentIcon = option
+                showIconPicker = false
+                Toast.makeText(
+                    context,
+                    "Icon changed — your home screen may take a moment to refresh",
+                    Toast.LENGTH_LONG,
+                ).show()
+            },
+            onDismiss = { showIconPicker = false },
+        )
+    }
+}
+
+/** Grid of the Gemini-designed launcher icons; tapping one moves the launcher entry to it. */
+@Composable
+private fun IconPickerDialog(
+    current: AppIcons.IconOption,
+    onSelect: (AppIcons.IconOption) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        title = { Text("App icon") },
+        text = {
+            Column {
+                AppIcons.OPTIONS.chunked(3).forEach { rowOptions ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                        rowOptions.forEach { option ->
+                            val selected = option.id == current.id
+                            Column(
+                                Modifier
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .clickable { onSelect(option) }
+                                    .padding(8.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                Image(
+                                    painter = painterResource(option.previewRes),
+                                    contentDescription = option.label,
+                                    modifier = Modifier
+                                        .size(64.dp)
+                                        .clip(CircleShape)
+                                        .then(
+                                            if (selected) Modifier.border(
+                                                3.dp, MaterialTheme.colorScheme.primary, CircleShape,
+                                            ) else Modifier
+                                        ),
+                                )
+                                Text(
+                                    option.label,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = if (selected) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                    modifier = Modifier.padding(top = 6.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+    )
 }
 
 private fun themeModeLabel(mode: String): String = when (mode) {
