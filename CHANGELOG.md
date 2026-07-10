@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.66
+- The app icon's shield is now smaller so it fits beautifully in the round icon shape, and you can pick your favourite icon in Profile > Appearance > App icon - six AI-designed choices: Halo glow, Violet night, Pure black, Daylight, Bold silhouette, and Shield & lock.
+
 ## v1.65
 - A beautiful new block screen - giant motivational quotes, a minutes-reclaimed-today counter, calmer poster design. Brand-new AI-designed app icon (glowing hourglass shield). Adult content pack now has a much harder off-switch.
 
