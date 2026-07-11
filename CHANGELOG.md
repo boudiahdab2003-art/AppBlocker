@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.67
+- App lists are now organized into 12 categories with one-tap whole-category blocking, and Gemini automatically categorizes every app on YOUR phone. The AI Coach got a big upgrade: a newer faster Gemini model, much richer knowledge of your day (busiest hour, temptations, phone-free stretches, mood check-ins), and tips that refresh every hour.
+
 ## v1.66
 - The app icon's shield is now smaller so it fits beautifully in the round icon shape, and you can pick your favourite icon in Profile > Appearance > App icon - six AI-designed choices: Halo glow, Violet night, Pure black, Daylight, Bold silhouette, and Shield & lock.
 
