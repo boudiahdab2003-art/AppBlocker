@@ -376,8 +376,9 @@ object AiCoach {
         return parseTips(post(key, body))
     }
 
-    /** POSTs [body] to Gemini and returns the model's text part (throws on any failure). */
-    private fun post(key: String, body: String): String {
+    /** POSTs [body] to Gemini and returns the model's text part (throws on any failure).
+     *  Internal so other Gemini-backed features (e.g. [AiCategorizer]) reuse the same pipe. */
+    internal fun post(key: String, body: String): String {
         val conn = (URL(ENDPOINT).openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             setRequestProperty("Content-Type", "application/json")

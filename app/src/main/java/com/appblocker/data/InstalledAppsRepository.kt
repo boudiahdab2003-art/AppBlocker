@@ -57,6 +57,7 @@ object InstalledAppsRepository {
             _usage.value = withContext(Dispatchers.IO) { UsageTracker.minutesByPackageToday(appContext) }
             loaded = true
         }
+        requestAiCategories(appContext)
     }
 
     /** Recomputes the usage snapshot in the background (keeps the order current). */
@@ -73,11 +74,31 @@ object InstalledAppsRepository {
                 _apps.value = loadLaunchableApps(appContext)
                 loaded = true
             }
+            requestAiCategories(appContext)
+        }
+    }
+
+    /**
+     * Sends any not-yet-categorized apps to Gemini (via the coach's on-device key) and, when
+     * answers arrive, re-emits the list with the AI's categories applied. Fire-and-forget:
+     * no key / no new apps / network failure all silently keep the current grouping.
+     */
+    private fun requestAiCategories(context: Context) {
+        scope.launch {
+            val answers = AiCategorizer.categorizeAll(context, _apps.value) ?: return@launch
+            mutex.withLock {
+                _apps.value = _apps.value.map { app ->
+                    answers[app.packageName]?.let { app.copy(category = it) } ?: app
+                }
+            }
         }
     }
 
     private fun loadLaunchableApps(context: Context): List<InstalledApp> {
         val pm = context.packageManager
+        // Gemini's verdict (cached per package) wins; baked map + system category cover the
+        // rest (and users without a coach key).
+        val aiCategories = AiCategorizer.cached(context)
         return pm.getInstalledApplications(PackageManager.GET_META_DATA)
             .asSequence()
             .filter { pm.getLaunchIntentForPackage(it.packageName) != null }
@@ -90,7 +111,8 @@ object InstalledAppsRepository {
                     info.packageName,
                     pm.getApplicationLabel(info).toString(),
                     icon,
-                    AppCategories.resolve(info.packageName, info.category),
+                    aiCategories[info.packageName]
+                        ?: AppCategories.resolve(info.packageName, info.category),
                 )
             }
             .toList()
