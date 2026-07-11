@@ -231,42 +231,6 @@ fun InsightsScreen(
             }
         }
 
-        // Focus + Distractions tiles + Mood check-in (Day).
-        if (tab == 0 && state.usageAccess) {
-            item {
-                Text("Focus", style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-                Spacer(Modifier.padding(top = 8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    StatTile("Longest focus", InsightsViewModel.fmt(state.longestFocusMin),
-                        Icons.Filled.CenterFocusStrong, Modifier.weight(1f))
-                    StatTile("Continuous use", InsightsViewModel.fmt(state.continuousUseMin),
-                        Icons.Filled.Smartphone, Modifier.weight(1f))
-                }
-                Spacer(Modifier.padding(top = 24.dp))
-
-                Text("Distractions", style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-                Spacer(Modifier.padding(top = 8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    StatTile(
-                        "Notifications",
-                        if (state.notificationAccess) "${state.notificationsToday}×" else "—",
-                        Icons.Filled.Notifications, Modifier.weight(1f),
-                        onClick = if (state.notificationAccess) null else {
-                            { openNotificationAccess(context) }
-                        },
-                    )
-                    StatTile("Pickups", "${state.unlocksToday}×",
-                        Icons.Filled.PhoneAndroid, Modifier.weight(1f))
-                }
-                Spacer(Modifier.padding(top = 24.dp))
-
-                MoodCard(state) { showMood = true }
-                Spacer(Modifier.padding(top = 24.dp))
-            }
-        }
-
         // AI Coach: Gemini's daily read of the numbers above.
         item {
             CoachCard(coach, state.goals.map { it.goal.label() },
@@ -366,6 +330,42 @@ fun InsightsScreen(
                     InsetDivider()
                     StatRows(state.attempts, vm)
                 }
+            }
+        }
+
+        // Focus + Distractions tiles + Mood check-in close out the page (Day).
+        if (tab == 0 && state.usageAccess) {
+            item {
+                Spacer(Modifier.padding(top = 24.dp))
+                Text("Focus", style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                Spacer(Modifier.padding(top = 8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    StatTile("Longest focus", InsightsViewModel.fmt(state.longestFocusMin),
+                        Icons.Filled.CenterFocusStrong, Modifier.weight(1f))
+                    StatTile("Continuous use", InsightsViewModel.fmt(state.continuousUseMin),
+                        Icons.Filled.Smartphone, Modifier.weight(1f))
+                }
+                Spacer(Modifier.padding(top = 24.dp))
+
+                Text("Distractions", style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                Spacer(Modifier.padding(top = 8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    StatTile(
+                        "Notifications",
+                        if (state.notificationAccess) "${state.notificationsToday}×" else "—",
+                        Icons.Filled.Notifications, Modifier.weight(1f),
+                        onClick = if (state.notificationAccess) null else {
+                            { openNotificationAccess(context) }
+                        },
+                    )
+                    StatTile("Pickups", "${state.unlocksToday}×",
+                        Icons.Filled.PhoneAndroid, Modifier.weight(1f))
+                }
+                Spacer(Modifier.padding(top = 24.dp))
+
+                MoodCard(state) { showMood = true }
             }
         }
         item { Spacer(Modifier.padding(top = 24.dp)) }

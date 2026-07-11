@@ -13,6 +13,9 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.68", "Jul 12, 2026", "Insights reordered", listOf(
+        "The Insights page flows better now: your AI Coach moved up right after the usage cards, and Focus, Distractions and the Mood check-in close out the page at the bottom.",
+    )),
     VersionLog("1.67", "Jul 11, 2026", "Apps organized into categories", listOf(
         "The app lists in Quick Block, schedules and templates are now organized into 12 categories — Social media, Entertainment, Games, News & Books, Shopping & Food, Creativity, Travel, Utilities, Education, Health & Fitness, Productivity and Other — just tap a category to open it.",
         "Block a whole category with one tap: every category has its own checkbox. A dash on the checkbox means some (but not all) of its apps are selected.",
