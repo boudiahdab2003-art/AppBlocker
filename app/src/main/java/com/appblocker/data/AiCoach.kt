@@ -32,11 +32,17 @@ data class CoachReply(val reply: String, val suggestions: List<String>)
  */
 object AiCoach {
     private const val PREFS = "ai_coach"
-    private const val MODEL = "gemini-2.5-flash"
-    private const val ENDPOINT =
-        "https://generativelanguage.googleapis.com/v1beta/models/$MODEL:generateContent"
-    private const val MAX_HISTORY = 40 // persisted chat turns; also caps the prompt size
+    // Newest flash model first; if the user's key doesn't serve it yet, one automatic
+    // fallback to the previous generation (remembered for a week, then re-probed).
+    private const val PRIMARY_MODEL = "gemini-3.5-flash"
+    private const val FALLBACK_MODEL = "gemini-2.5-flash"
+    private const val MODEL_REPROBE_MS = 7L * 24 * 60 * 60 * 1000
+    private const val MAX_HISTORY_STORED = 40 // persisted chat turns
+    private const val MAX_HISTORY_SENT = 16 // turns sent per request (keeps replies fast)
     private const val TIPS_TTL_MS = 3 * 60 * 60 * 1000L // tips refresh every ~3 hours
+
+    private fun endpoint(model: String) =
+        "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent"
 
     /** What the app can do, so the coach recommends real features with concrete settings
      *  instead of generic advice. */
@@ -72,7 +78,7 @@ object AiCoach {
         } ?: emptyList()
 
     fun saveChat(ctx: Context, msgs: List<ChatMsg>) {
-        val keep = msgs.filter { it.role == "user" || it.role == "model" }.takeLast(MAX_HISTORY)
+        val keep = msgs.filter { it.role == "user" || it.role == "model" }.takeLast(MAX_HISTORY_STORED)
         val arr = JSONArray()
         keep.forEach { arr.put(JSONObject().put("r", it.role).put("t", it.text)) }
         p(ctx).edit().putString("chat", arr.toString()).apply()
@@ -119,7 +125,7 @@ object AiCoach {
             // One retry to ride out transient blips, same as the updater.
             repeat(2) {
                 runCatching {
-                    fetchTips(key, summary, setup, goals, profile, name)
+                    fetchTips(ctx, key, summary, setup, goals, profile, name)
                 }.getOrNull()?.let { tips ->
                     prefs.edit().putString(
                         "tips", "$today|${System.currentTimeMillis()}|${JSONArray(tips)}").apply()
@@ -173,8 +179,11 @@ object AiCoach {
             }
 
             // Gemini wants contents to start with a user turn; drop any leading model greeting.
+            // Only the most recent turns are sent — the system prompt carries the durable
+            // context (profile, goals, setup, usage), so older turns just add latency.
             val turns = (history + ChatMsg("user", userMsg))
                 .filter { it.role == "user" || it.role == "model" }
+                .takeLast(MAX_HISTORY_SENT)
                 .dropWhile { it.role != "user" }
             val contents = JSONArray()
             turns.forEach { m ->
@@ -187,11 +196,10 @@ object AiCoach {
                     .put("parts", JSONArray().put(JSONObject().put("text", system))))
                 .put("contents", contents)
                 .put("generationConfig", JSONObject().put("responseMimeType", "application/json"))
-                .toString()
 
             repeat(2) {
                 runCatching {
-                    val obj = JSONObject(post(key, body))
+                    val obj = JSONObject(callGemini(ctx, key, body))
                     val reply = obj.getString("reply").trim()
                     obj.optJSONArray("goals")?.let { g -> applyGoalUpdate(ctx, g) }
                     obj.optJSONObject("profile")?.let { pr ->
@@ -346,6 +354,7 @@ object AiCoach {
     }.getOrNull()?.takeIf { it.isNotEmpty() }
 
     private fun fetchTips(
+        ctx: Context,
         key: String,
         summary: String,
         setup: String,
@@ -372,22 +381,72 @@ object AiCoach {
             .put("contents", JSONArray().put(JSONObject()
                 .put("parts", JSONArray().put(JSONObject().put("text", prompt)))))
             .put("generationConfig", JSONObject().put("responseMimeType", "application/json"))
-            .toString()
-        return parseTips(post(key, body))
+        return parseTips(callGemini(ctx, key, body))
     }
 
-    /** POSTs [body] to Gemini and returns the model's text part (throws on any failure).
-     *  Internal so other Gemini-backed features (e.g. [AiCategorizer]) reuse the same pipe. */
-    internal fun post(key: String, body: String): String {
-        val conn = (URL(ENDPOINT).openConnection() as HttpURLConnection).apply {
+    /**
+     * Sends [body] (WITHOUT a thinkingConfig — it's injected per model here) to the best
+     * available Gemini model and returns the text part. Primary model first with low
+     * thinking (fast replies); on a model-not-available error, falls back one generation
+     * and remembers that for a week. Internal so other Gemini-backed features (e.g.
+     * [AiCategorizer]) reuse the same pipe. Throws on total failure.
+     */
+    internal fun callGemini(ctx: Context, key: String, body: JSONObject): String {
+        val prefs = p(ctx)
+        val useFallbackFirst = prefs.getString("model_ok", null) == FALLBACK_MODEL &&
+            System.currentTimeMillis() - prefs.getLong("model_ok_at", 0) < MODEL_REPROBE_MS
+        val first = if (useFallbackFirst) FALLBACK_MODEL else PRIMARY_MODEL
+        return try {
+            postWithThinking(key, body, first)
+        } catch (e: Exception) {
+            val modelMissing = (e.message ?: "").let {
+                it.contains("HTTP 404") || it.contains("NOT_FOUND") || it.contains("not found")
+            }
+            if (first == PRIMARY_MODEL && modelMissing) {
+                val out = postWithThinking(key, body, FALLBACK_MODEL)
+                prefs.edit().putString("model_ok", FALLBACK_MODEL)
+                    .putLong("model_ok_at", System.currentTimeMillis()).apply()
+                out
+            } else throw e
+        }
+    }
+
+    /** Adds the model-appropriate low-thinking config (the silent "thinking" pause is the main
+     *  latency cost); if the server rejects the field (400), retries once without it. */
+    private fun postWithThinking(key: String, body: JSONObject, model: String): String {
+        val tuned = JSONObject(body.toString())
+        val gen = tuned.optJSONObject("generationConfig")
+            ?: JSONObject().also { tuned.put("generationConfig", it) }
+        gen.put(
+            "thinkingConfig",
+            if (model.startsWith("gemini-2.")) JSONObject().put("thinkingBudget", 0)
+            else JSONObject().put("thinkingLevel", "low"),
+        )
+        return try {
+            post(key, tuned.toString(), model)
+        } catch (e: Exception) {
+            if ((e.message ?: "").contains("HTTP 400")) post(key, body.toString(), model)
+            else throw e
+        }
+    }
+
+    /** POSTs [body] to one Gemini [model] and returns the text part (throws with the HTTP
+     *  code + error body in the message on failure, so callers can route fallbacks). */
+    private fun post(key: String, body: String, model: String): String {
+        val conn = (URL(endpoint(model)).openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             setRequestProperty("Content-Type", "application/json")
             setRequestProperty("x-goog-api-key", key)
             connectTimeout = 15_000
-            readTimeout = 20_000
+            readTimeout = 30_000
             doOutput = true
         }
         conn.outputStream.use { it.write(body.toByteArray()) }
+        val code = conn.responseCode
+        if (code !in 200..299) {
+            val err = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+            throw java.io.IOException("HTTP $code: ${err.take(300)}")
+        }
         val response = conn.inputStream.bufferedReader().use { it.readText() }
         return JSONObject(response)
             .getJSONArray("candidates").getJSONObject(0)

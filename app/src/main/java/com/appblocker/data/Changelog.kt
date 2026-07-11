@@ -19,6 +19,7 @@ val changelog: List<VersionLog> = listOf(
         "AI sorted over 270 well-known apps into the right categories — including the apps popular in Germany and the Arabic world — and any app it doesn't know is placed using the category its developer declared.",
         "Even better: if you've connected the AI Coach, YOUR phone's own apps are sent to Gemini once and it files every single one into the right category automatically — the answer is remembered forever, and newly installed apps get categorized the same way.",
         "Searching still works exactly as before: type a name and you get a simple flat list of matches.",
+        "The AI Coach got a brain upgrade: it now runs on a much newer Gemini model, answers noticeably faster (it no longer silently 'thinks' for seconds before replying), and long chats stay quick.",
     )),
     VersionLog("1.66", "Jul 10, 2026", "Choose your icon", listOf(
         "The app icon's shield is now a little smaller, so it sits beautifully inside the round icon shape instead of touching the edges.",

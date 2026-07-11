@@ -55,10 +55,9 @@ object AiCategorizer {
                 .put("contents", JSONArray().put(JSONObject()
                     .put("parts", JSONArray().put(JSONObject().put("text", prompt)))))
                 .put("generationConfig", JSONObject().put("responseMimeType", "application/json"))
-                .toString()
 
             runCatching {
-                val answer = JSONObject(AiCoach.post(key, body))
+                val answer = JSONObject(AiCoach.callGemini(ctx, key, body))
                 val editor = prefs.edit()
                 val result = mutableMapOf<String, AppCategory>()
                 val askedPkgs = pending.mapTo(HashSet()) { it.packageName }
