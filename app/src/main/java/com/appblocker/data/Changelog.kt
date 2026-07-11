@@ -21,6 +21,7 @@ val changelog: List<VersionLog> = listOf(
         "Searching still works exactly as before: type a name and you get a simple flat list of matches.",
         "The AI Coach got a brain upgrade: it now runs on a much newer Gemini model, answers noticeably faster (it no longer silently 'thinks' for seconds before replying), and long chats stay quick.",
         "The coach also sees much more of your day now: your busiest hour, time per category, most-opened apps, which blocked apps tempted you (and how often), your longest phone-free stretch, notifications, minutes reclaimed — and your daily mood check-ins, so it knows how the day actually FELT.",
+        "Coach tips refresh every hour now (was every 3), so the advice keeps up with your day as it happens.",
     )),
     VersionLog("1.66", "Jul 10, 2026", "Choose your icon", listOf(
         "The app icon's shield is now a little smaller, so it sits beautifully inside the round icon shape instead of touching the edges.",

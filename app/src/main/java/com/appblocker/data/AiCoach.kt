@@ -39,7 +39,7 @@ object AiCoach {
     private const val MODEL_REPROBE_MS = 7L * 24 * 60 * 60 * 1000
     private const val MAX_HISTORY_STORED = 40 // persisted chat turns
     private const val MAX_HISTORY_SENT = 16 // turns sent per request (keeps replies fast)
-    private const val TIPS_TTL_MS = 3 * 60 * 60 * 1000L // tips refresh every ~3 hours
+    private const val TIPS_TTL_MS = 60 * 60 * 1000L // tips refresh every hour
 
     private fun endpoint(model: String) =
         "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent"
