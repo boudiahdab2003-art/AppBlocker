@@ -51,8 +51,12 @@ object AiCoach {
         - Quick Block: instantly blocks a chosen set of apps; also auto-blocks those apps' websites in browsers. Has a "Shorts" sub-option that blocks only YouTube Shorts while the rest of YouTube keeps working.
         - Schedules (Blocking tab > New schedule): Time (block apps during a daily time window, e.g. 22:00-07:00, with chosen weekdays), Usage limit (allow N minutes per day per schedule, then block, e.g. 45 min), Launch count (allow N opens per day, then block), Wi-Fi (block when on a chosen network), Location (block within a radius of a saved place).
         - Strict tab: Pomodoro focus sessions (work/break cycles that block apps during work) and unstoppable strict sessions; "Prevent uninstall" protection.
-        - Web filter: blocks adult content, custom keywords, and in-app purchases in browsers.
+        - Blocked words (Blocking tab > Blocked words): blocks any chosen word or site in browsers — or in EVERY app with one toggle; includes a built-in adult-content word pack (English + Arabic, on by default) that is deliberately hard to switch off.
+        - Web filter also blocks in-app purchases in browsers.
+        - App lists are grouped into 12 categories (Social media, Entertainment, Games...) — a whole category can be blocked with ONE tap on its checkbox in Quick Block or any schedule.
         - Hypothetical apps: pre-block popular social apps (TikTok, Instagram...) even before they are installed.
+        - The block screen itself motivates: every blocked open shows a giant "minutes reclaimed today" counter (3 min per dodged open) and a motivational quote.
+        - Insights tab: screen time charts, balance vs awake time, focus/distraction stats, a daily mood check-in, and the user's goals with live progress bars and streaks.
     """.trimIndent()
 
     private fun p(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -295,6 +299,7 @@ object AiCoach {
         return buildString {
             appendLine("Screen time today: ${fmt(UsageTracker.totalMinutesToday(snapshot))}")
             appendLine("7-day daily average: ${fmt(if (weekly.isNotEmpty()) weekly.sum() / weekly.size else 0)}")
+            appendLine("30-day daily average: ${fmt(avg(monthly.toList()))}")
             appendLine("Yesterday: ${fmt(weekly.getOrElse(5) { 0 })}")
             appendLine("Last 7 days (oldest first, ending today): $last7")
             appendLine("Weekday average: ${fmt(avg(weekdayVals))}, weekend average: ${fmt(avg(weekendVals))}")
@@ -304,8 +309,65 @@ object AiCoach {
                     top.joinToString { "${label(it.packageName)} (${fmt(it.minutes)})" })
             }
             if (trends.isNotBlank()) appendLine("This week vs last week: $trends")
-            appendLine("Blocked-app open attempts today: ${AttemptCounter.summary(ctx).sumOf { it.today }}")
+
+            // --- Rich context: patterns, behavior and how the user FEELS about it. Every
+            // block is wrapped so one missing permission never breaks the whole summary. ---
+            runCatching {
+                val hourly = UsageTracker.hourlyMinutesToday(ctx)
+                val peak = hourly.indices.maxByOrNull { hourly[it] } ?: return@runCatching
+                if (hourly[peak] >= 10) {
+                    appendLine("Busiest hour today: $peak:00-${peak + 1}:00 (${fmt(hourly[peak])})")
+                }
+            }
+            runCatching {
+                val cats = UsageTracker.categoryMinutesToday(snapshot)
+                    .entries.sortedByDescending { it.value }.take(4)
+                if (cats.isNotEmpty()) {
+                    appendLine("Time by category today: " +
+                        cats.joinToString { "${AppCategories.parse(it.key).label} ${fmt(it.value)}" })
+                }
+            }
+            runCatching {
+                val opens = LaunchCounter.opensTodayByApp(ctx)
+                    .entries.sortedByDescending { it.value }.take(3)
+                if (opens.isNotEmpty()) {
+                    appendLine("Most-opened apps today: " +
+                        opens.joinToString { "${label(it.key)} (${it.value} opens)" })
+                }
+            }
+            runCatching {
+                val (longestUse, longestGap) = UsageTracker.sessionStatsToday(ctx)
+                if (longestUse > 0) appendLine(
+                    "Longest continuous phone use today: ${fmt(longestUse)}; " +
+                        "longest phone-free stretch: ${fmt(longestGap)}")
+            }
+            val attempts = AttemptCounter.summary(ctx).filter { it.today > 0 }
+            appendLine("Blocked-app open attempts today: ${attempts.sumOf { it.today }}" +
+                if (attempts.isEmpty()) "" else " (" + attempts.take(4).joinToString {
+                    val name = when (it.key) {
+                        "web" -> "websites"; "shorts" -> "YouTube Shorts"
+                        "strict_guard" -> "settings during Strict"
+                        else -> label(it.key)
+                    }
+                    "$name ${it.today}x"
+                } + ")")
+            appendLine("Estimated minutes reclaimed today (3 min per blocked open): " +
+                attempts.sumOf { it.today } * 3)
             appendLine("Phone unlocks today: ${UnlockCounter.unlocksToday(ctx)}")
+            runCatching {
+                val n = NotificationCounter.notificationsToday(ctx)
+                if (n > 0) appendLine("Notifications received today: $n")
+            }
+            runCatching {
+                val moods = MoodStore.history(ctx, 7)
+                if (moods.isNotEmpty()) {
+                    appendLine("The user's own daily check-ins, 0=very distracted 100=in control (IMPORTANT: this is how they FEEL — acknowledge it):")
+                    moods.take(4).forEach { (ago, rating, note) ->
+                        val day = if (ago == 0) "today" else if (ago == 1) "yesterday" else "$ago days ago"
+                        appendLine("- $day: $rating/100" + if (note.isBlank()) "" else " — \"$note\"")
+                    }
+                }
+            }
         }
     }
 
@@ -328,6 +390,12 @@ object AiCoach {
             if (SettingsStore.blockYoutubeShorts(ctx)) appendLine("YouTube Shorts blocking: on")
             appendLine("Web filter: adult content ${onOff(SettingsStore.blockAdult(ctx))}, " +
                 "purchases ${onOff(SettingsStore.blockPurchases(ctx))}")
+            runCatching {
+                val words = db.blockedKeywordDao().getAll().first().size
+                appendLine("Blocked words: $words custom" +
+                    ", adult word pack ${onOff(SettingsStore.adultWordsPack(ctx))}" +
+                    ", blocked ${if (SettingsStore.keywordsEverywhere(ctx)) "in every app" else "in browsers only"}")
+            }
             if (schedules.isEmpty()) {
                 appendLine("Schedules: none set up yet")
             } else {

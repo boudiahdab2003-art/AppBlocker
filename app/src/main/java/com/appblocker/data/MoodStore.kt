@@ -18,6 +18,18 @@ object MoodStore {
     fun todayNote(context: Context): String =
         prefs(context).getString("note_${todayStamp()}", "") ?: ""
 
+    /** Check-ins for the last [days] days as (daysAgo, rating, note), newest first —
+     *  only days that were actually rated. Feeds the AI Coach's context. */
+    fun history(context: Context, days: Int = 7): List<Triple<Int, Int, String>> {
+        val prefs = prefs(context)
+        val today = todayStamp()
+        return (0 until days).mapNotNull { ago ->
+            val rating = prefs.getInt("rating_${today - ago}", -1)
+            if (rating < 0) null
+            else Triple(ago, rating, prefs.getString("note_${today - ago}", "") ?: "")
+        }
+    }
+
     /** Save today's check-in (rating 0..100 + optional note), pruning stale days. */
     fun setToday(context: Context, rating: Int, note: String) {
         val prefs = prefs(context)
