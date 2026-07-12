@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.68
+- Calm updates: after every update, blocking pauses until you tap Reactivate - and updating now ends a running Strict Mode session (a new version is a clean slate). Fixed a sneaky bug where a finished Strict session could switch itself back ON after a phone restart with a briefly-wrong clock. Insights reordered: AI Coach up top, Focus/Distractions/Mood at the bottom.
+
 ## v1.67
 - App lists are now organized into 12 categories with one-tap whole-category blocking, and Gemini automatically categorizes every app on YOUR phone. The AI Coach got a big upgrade: a newer faster Gemini model, much richer knowledge of your day (busiest hour, temptations, phone-free stretches, mood check-ins), and tips that refresh every hour.
 
