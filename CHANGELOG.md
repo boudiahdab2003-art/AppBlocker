@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.69
+- This update ends your running Strict Mode session - the 1.67 to 1.68 hop could not (1.67 was too old to leave the note 1.68 needed), this one can. Ending the session is also retried until it truly lands, so Android cutting the first attempt short can never leave Strict stuck again.
+
 ## v1.68
 - Calm updates: after every update, blocking pauses until you tap Reactivate - and updating now ends a running Strict Mode session (a new version is a clean slate). Fixed a sneaky bug where a finished Strict session could switch itself back ON after a phone restart with a briefly-wrong clock. Insights reordered: AI Coach up top, Focus/Distractions/Mood at the bottom.
 
