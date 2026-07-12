@@ -13,7 +13,9 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
-    VersionLog("1.68", "Jul 12, 2026", "Insights reordered", listOf(
+    VersionLog("1.68", "Jul 12, 2026", "Calm updates + Insights reordered", listOf(
+        "After every app update, ALL blocking now pauses until you're ready: a banner on the Blocking tab waits for your tap on 'Reactivate blocking'. Explore what's new first, then switch protection back on.",
+        "Two things never pause, on purpose: a running Strict Mode session (updating must never be a way out), and the adult content pack (its off-switch stays the deliberate one).",
         "The Insights page flows better now: your AI Coach moved up right after the usage cards, and Focus, Distractions and the Mood check-in close out the page at the bottom.",
     )),
     VersionLog("1.67", "Jul 11, 2026", "Apps organized into categories", listOf(

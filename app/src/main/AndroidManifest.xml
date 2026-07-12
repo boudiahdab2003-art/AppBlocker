@@ -162,12 +162,14 @@
             </intent-filter>
         </receiver>
 
-        <!-- Re-arms the protection watchdog and re-checks immediately after a reboot. -->
+        <!-- Re-arms the protection watchdog after a reboot, and arms the after-update
+             blocking pause the moment the app is updated. -->
         <receiver
             android:name=".service.BootReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
 

@@ -70,6 +70,30 @@ internal fun UpdateBanner(version: String, onClick: () -> Unit) {
     }
 }
 
+/** After an app update, all blocking waits for this tap. Amber = needs attention. */
+@Composable
+internal fun UpdatePausedBanner(onReactivate: () -> Unit) {
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+            .background(Color(0xFF3A2A12)).padding(16.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.Warning, contentDescription = null, tint = Color(0xFFFFB020),
+                modifier = Modifier.size(26.dp))
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Blocking is paused after the update", style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                Text("Nothing is blocked right now. Tap below when you're ready.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        Spacer(Modifier.padding(top = 12.dp))
+        GradientButton(text = "Reactivate blocking", onClick = onReactivate)
+    }
+}
+
 @Composable
 internal fun ShieldMark() {
     Box(

@@ -61,6 +61,22 @@ object SettingsStore {
     fun setThemeMode(context: Context, value: String) =
         prefs(context).edit().putString(KEY_THEME_MODE, value).apply()
 
+    const val KEY_UPDATE_PAUSED = "update_paused"
+
+    /** True after an app update, until the user reactivates blocking (Blocking-tab banner). */
+    fun updatePaused(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_UPDATE_PAUSED, false)
+
+    fun setUpdatePaused(context: Context, value: Boolean) =
+        prefs(context).edit().putBoolean(KEY_UPDATE_PAUSED, value).apply()
+
+    /** The versionCode last seen running — a change means the app was just updated. */
+    fun lastSeenVersionCode(context: Context): Long =
+        prefs(context).getLong("last_seen_version", -1L)
+
+    fun setLastSeenVersionCode(context: Context, value: Long) =
+        prefs(context).edit().putLong("last_seen_version", value).apply()
+
     /** Which launcher icon is active (Profile ▸ App icon). Ids defined in [AppIcons]. */
     fun appIcon(context: Context): String =
         prefs(context).getString("app_icon", "halo") ?: "halo"

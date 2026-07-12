@@ -50,6 +50,7 @@ import com.appblocker.data.ScheduleType
 import com.appblocker.data.SessionClock
 import com.appblocker.data.SettingsStore
 import com.appblocker.data.UnlockCounter
+import com.appblocker.data.UpdatePause
 import com.appblocker.ui.BlockScreenActivity
 import java.util.Calendar
 import kotlinx.coroutines.CoroutineScope
@@ -92,7 +93,15 @@ class BlockerAccessibilityService : AccessibilityService() {
     // Whether the built-in adult word pack (English + Arabic) is enforced. Same freshness
     // mechanism as keywordsEverywhere.
     @Volatile private var adultPackOn: Boolean = true
+    // Blocking paused after an app update, until the user reactivates (Blocking-tab banner).
+    @Volatile private var updatePaused: Boolean = false
     private var prefsListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
+
+    /** True while the after-update pause suspends blocking. A running Strict session overrides
+     *  it — updating the app must never be a way out of Strict Mode. */
+    private fun updatePauseActive(): Boolean =
+        updatePaused &&
+            SessionClock.remaining(focusRealtimeStart, focusRealtimeEnd, focusWallEnd) <= 0L
 
     private var lastBlockedPkg: String? = null
     private var lastBlockAt: Long = 0L
@@ -168,10 +177,14 @@ class BlockerAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        // The service is rebound right after an update installs, so detect it here too —
+        // the pause arms even if the app itself isn't opened.
+        UpdatePause.checkVersionChange(this)
         browserPackages = findBrowserPackages()
         launcherPackages = findLauncherPackages()
         keywordsEverywhere = SettingsStore.keywordsEverywhere(this)
         adultPackOn = SettingsStore.adultWordsPack(this)
+        updatePaused = SettingsStore.updatePaused(this)
         // React to the user flipping the toggles on the Blocked-words screen without a restart.
         val sp = getSharedPreferences("appblocker_prefs", Context.MODE_PRIVATE)
         prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
@@ -180,6 +193,8 @@ class BlockerAccessibilityService : AccessibilityService() {
                     keywordsEverywhere = SettingsStore.keywordsEverywhere(this)
                 SettingsStore.KEY_ADULT_WORDS_PACK ->
                     adultPackOn = SettingsStore.adultWordsPack(this)
+                SettingsStore.KEY_UPDATE_PAUSED ->
+                    updatePaused = SettingsStore.updatePaused(this)
             }
         }.also { sp.registerOnSharedPreferenceChangeListener(it) }
         registerPackageChangeReceiver()
@@ -256,6 +271,11 @@ class BlockerAccessibilityService : AccessibilityService() {
      *  and make the phone unusable. */
     private fun shouldScanPkg(pkg: String?): Boolean {
         if (pkg == null || pkg == packageName) return false
+        // After-update pause: only the adult layer keeps scanning (its off-switch is
+        // deliberately hard — an update must not become the easy one), browsers only.
+        if (updatePauseActive()) {
+            return pkg in browserPackages && (adultPackOn || SettingsStore.blockAdult(this))
+        }
         if (pkg in browserPackages) return true
         if ((userKeywords.isEmpty() && !adultPackOn) || !keywordsEverywhere) return false
         return pkg !in launcherPackages && pkg !in KEYWORD_SCAN_EXCLUDED
@@ -375,6 +395,7 @@ class BlockerAccessibilityService : AccessibilityService() {
      * blocking normal Play Store browsing. Returns true if it blocked.
      */
     private fun handlePurchaseBlock(pkg: String, className: String?): Boolean {
+        if (updatePauseActive()) return false
         if (!SettingsStore.blockPurchases(this)) return false
         if (pkg != "com.android.vending") return false
         val cn = className?.lowercase() ?: return false
@@ -390,6 +411,9 @@ class BlockerAccessibilityService : AccessibilityService() {
     }
 
     private fun shouldBlock(pkg: String): Boolean {
+        // After an update: nothing blocks until the user reactivates (Strict excepted —
+        // updatePauseActive() is false while a Strict session runs).
+        if (updatePauseActive()) return false
         val now = System.currentTimeMillis()
         val strict = SessionClock.remaining(focusRealtimeStart, focusRealtimeEnd, focusWallEnd) > 0L
 
@@ -586,6 +610,7 @@ class BlockerAccessibilityService : AccessibilityService() {
      *  not paused) — mirrors the gating used for app blocking in [shouldBlock]. */
     private fun quickBlockActive(): Boolean {
         if (SessionClock.remaining(focusRealtimeStart, focusRealtimeEnd, focusWallEnd) > 0L) return true
+        if (updatePaused) return false // after-update pause (strict handled above)
         val session = QuickSession.state(this)
         return if (session.active) session.blockingNow else !SettingsStore.quickBlockPaused(this)
     }
@@ -631,10 +656,13 @@ class BlockerAccessibilityService : AccessibilityService() {
         // adult site list). Other apps match the user's own words + the adult word pack — the
         // adult domains/keywords are URL/heuristic lists that don't make sense against arbitrary
         // app UI text, but the pack is whole-word matched so it's safe everywhere.
+        // After-update pause: the user's own words pause with everything else; only the
+        // adult layer (pack + adult sites) keeps matching.
+        val ownWords = if (updatePauseActive()) emptyList() else userKeywords
         val hit = if (isBrowser) {
-            filter.check(text, userKeywords + autoSocialKeywords(), adultPackOn, SettingsStore.blockAdult(applicationContext))
+            filter.check(text, ownWords + autoSocialKeywords(), adultPackOn, SettingsStore.blockAdult(applicationContext))
         } else {
-            filter.check(text, userKeywords, adultPackOn, blockAdult = false)
+            filter.check(text, ownWords, adultPackOn, blockAdult = false)
         }
         if (hit == null) {
             lastWebText = null

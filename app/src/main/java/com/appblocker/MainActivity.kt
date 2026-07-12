@@ -19,6 +19,7 @@ import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
 import com.appblocker.data.InstalledAppsRepository
 import com.appblocker.data.SettingsStore
+import com.appblocker.data.UpdatePause
 import com.appblocker.service.ProtectionNotifier
 import com.appblocker.service.ProtectionScheduler
 import com.appblocker.ui.AppRoot
@@ -38,6 +39,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         ProtectionNotifier.createChannel(applicationContext)
         ProtectionScheduler.ensureScheduled(applicationContext)
+        UpdatePause.checkVersionChange(applicationContext)
         requestNotificationPermissionIfNeeded()
         openPermissions = intent.getBooleanExtra(EXTRA_OPEN_PERMISSIONS, false)
 

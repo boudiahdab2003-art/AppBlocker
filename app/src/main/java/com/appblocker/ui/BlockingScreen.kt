@@ -121,6 +121,17 @@ fun BlockingScreen(
                 SetupBanner(essentialMissing, onOpenPermissions)
                 Spacer(Modifier.padding(top = 16.dp))
             }
+            // After an app update, blocking waits here for the user's go.
+            var updatePausedUi by remember { mutableStateOf(SettingsStore.updatePaused(context)) }
+            LaunchedEffect(perms) { updatePausedUi = SettingsStore.updatePaused(context) }
+            if (updatePausedUi) {
+                UpdatePausedBanner {
+                    SettingsStore.setUpdatePaused(context, false)
+                    updatePausedUi = false
+                    Toast.makeText(context, "Blocking is back on 💪", Toast.LENGTH_SHORT).show()
+                }
+                Spacer(Modifier.padding(top = 16.dp))
+            }
             (updateState as? UpdateState.Available)?.let { avail ->
                 UpdateBanner(avail.release.version) { updateVm.downloadAndInstall(avail.release) }
                 Spacer(Modifier.padding(top = 16.dp))
