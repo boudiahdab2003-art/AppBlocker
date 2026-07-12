@@ -15,7 +15,7 @@ data class VersionLog(
 val changelog: List<VersionLog> = listOf(
     VersionLog("1.68", "Jul 12, 2026", "Calm updates + Insights reordered", listOf(
         "After every app update, ALL blocking now pauses until you're ready: a banner on the Blocking tab waits for your tap on 'Reactivate blocking'. Explore what's new first, then switch protection back on.",
-        "Two things never pause, on purpose: a running Strict Mode session (updating must never be a way out), and the adult content pack (its off-switch stays the deliberate one).",
+        "An update is a clean slate: a running Strict Mode session ends together with the pause, so you restart fresh on the new version. Only the adult content pack never pauses (its off-switch stays the deliberate one).",
         "The Insights page flows better now: your AI Coach moved up right after the usage cards, and Focus, Distractions and the Mood check-in close out the page at the bottom.",
         "Fixed a sneaky bug where Strict Mode could switch itself back ON: after a phone restart, if the clock was briefly wrong, an old finished Strict session could come back to life. Finished sessions are now erased the moment they end, and an impossible clock can't revive them. A restart DURING a real session still keeps you locked, exactly as intended.",
     )),

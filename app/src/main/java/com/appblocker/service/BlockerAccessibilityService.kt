@@ -99,8 +99,9 @@ class BlockerAccessibilityService : AccessibilityService() {
     @Volatile private var updatePaused: Boolean = false
     private var prefsListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
 
-    /** True while the after-update pause suspends blocking. A running Strict session overrides
-     *  it — updating the app must never be a way out of Strict Mode. */
+    /** True while the after-update pause suspends blocking. An update also ENDS any running
+     *  Strict session (UpdatePause zeroes the row); the strictRemaining() guard here only
+     *  covers the brief moment before that async clear lands. */
     private fun updatePauseActive(): Boolean =
         updatePaused && strictRemaining() <= 0L
 
@@ -433,8 +434,8 @@ class BlockerAccessibilityService : AccessibilityService() {
     }
 
     private fun shouldBlock(pkg: String): Boolean {
-        // After an update: nothing blocks until the user reactivates (Strict excepted —
-        // updatePauseActive() is false while a Strict session runs).
+        // After an update: nothing blocks until the user reactivates (the update also ends
+        // any Strict session — see UpdatePause).
         if (updatePauseActive()) return false
         val now = System.currentTimeMillis()
         val strict = strictRemaining() > 0L
