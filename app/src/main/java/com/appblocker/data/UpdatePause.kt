@@ -16,7 +16,9 @@ import kotlinx.coroutines.launch
 object UpdatePause {
 
     /** Call at every app/service start: detects a version change and arms the pause.
-     *  The very first run just records the version — a fresh install has nothing to pause. */
+     *  The very first run just records the version — a fresh install has nothing to pause
+     *  (which also means the update INTO the first version carrying this feature is
+     *  invisible: the old version left no record to compare against). */
     fun checkVersionChange(context: Context) {
         val current = runCatching {
             PackageInfoCompat.getLongVersionCode(
@@ -24,14 +26,25 @@ object UpdatePause {
             )
         }.getOrNull() ?: return
         val last = SettingsStore.lastSeenVersionCode(context)
-        if (last == current) return
-        SettingsStore.setLastSeenVersionCode(context, current)
-        if (last != -1L) {
-            SettingsStore.setUpdatePaused(context, true)
-            // End any running Strict session along with the pause.
+        if (last != current) {
+            SettingsStore.setLastSeenVersionCode(context, current)
+            if (last != -1L) {
+                SettingsStore.setUpdatePaused(context, true)
+                // Durable intent to end any running Strict session, set BEFORE attempting:
+                // prefs writes survive a broadcast receiver's process teardown, the DB
+                // coroutine below may not.
+                SettingsStore.setStrictClearPending(context, true)
+            }
+        }
+        // Runs on EVERY call (app open, service reconnect, install broadcast) — a clear
+        // whose process died mid-write is retried until it actually lands. The flag is
+        // consumed only after the write returns, so a Strict session the user starts
+        // later is never touched.
+        if (SettingsStore.strictClearPending(context)) {
             val appContext = context.applicationContext
             CoroutineScope(Dispatchers.IO).launch {
                 BlockerDatabase.get(appContext).focusDao().set(FocusState(id = 0))
+                SettingsStore.setStrictClearPending(appContext, false)
             }
         }
     }

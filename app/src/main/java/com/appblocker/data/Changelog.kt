@@ -13,6 +13,10 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.69", "Jul 12, 2026", "Update-ends-Strict, now for real", listOf(
+        "THIS is the update that ends your running Strict Mode session. The 1.67 → 1.68 update couldn't do it: 1.67 was too old to leave the note that 1.68 needed to recognize an update had happened — so nothing fired, not even the Reactivate banner. From 1.68 onward the note exists, which makes this the first update the feature can actually see.",
+        "Also made it bulletproof: ending the session is now remembered as an unfinished job and retried on every app open until it truly lands — so even if Android cuts the first attempt short (it can, right after an install), the session still ends.",
+    )),
     VersionLog("1.68", "Jul 12, 2026", "Calm updates + Insights reordered", listOf(
         "After every app update, ALL blocking now pauses until you're ready: a banner on the Blocking tab waits for your tap on 'Reactivate blocking'. Explore what's new first, then switch protection back on.",
         "An update is a clean slate: a running Strict Mode session ends together with the pause, so you restart fresh on the new version. Only the adult content pack never pauses (its off-switch stays the deliberate one).",

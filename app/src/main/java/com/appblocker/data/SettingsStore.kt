@@ -77,6 +77,14 @@ object SettingsStore {
     fun setLastSeenVersionCode(context: Context, value: Long) =
         prefs(context).edit().putLong("last_seen_version", value).apply()
 
+    /** True while an update-triggered Strict-session clear hasn't landed in the DB yet —
+     *  the durable intent that lets UpdatePause retry a clear whose process was killed. */
+    fun strictClearPending(context: Context): Boolean =
+        prefs(context).getBoolean("strict_clear_pending", false)
+
+    fun setStrictClearPending(context: Context, value: Boolean) =
+        prefs(context).edit().putBoolean("strict_clear_pending", value).apply()
+
     /** Which launcher icon is active (Profile ▸ App icon). Ids defined in [AppIcons]. */
     fun appIcon(context: Context): String =
         prefs(context).getString("app_icon", "halo") ?: "halo"
