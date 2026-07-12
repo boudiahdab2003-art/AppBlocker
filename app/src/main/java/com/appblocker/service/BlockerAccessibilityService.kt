@@ -40,6 +40,7 @@ import com.appblocker.data.AppRule
 import com.appblocker.data.AttemptCounter
 import com.appblocker.data.BlockMode
 import com.appblocker.data.BlockerDatabase
+import com.appblocker.data.FocusState
 import com.appblocker.data.InstalledAppsRepository
 import com.appblocker.data.LaunchCounter
 import com.appblocker.data.QuickSession
@@ -80,6 +81,7 @@ class BlockerAccessibilityService : AccessibilityService() {
     // wall-clock fallback. See SessionClock.
     @Volatile private var focusRealtimeStart: Long = 0L
     @Volatile private var focusRealtimeEnd: Long = 0L
+    @Volatile private var focusWallStart: Long = 0L
     @Volatile private var focusWallEnd: Long = 0L
     @Volatile private var userKeywords: List<String> = emptyList()
     @Volatile private var schedules: List<Schedule> = emptyList()
@@ -100,8 +102,21 @@ class BlockerAccessibilityService : AccessibilityService() {
     /** True while the after-update pause suspends blocking. A running Strict session overrides
      *  it — updating the app must never be a way out of Strict Mode. */
     private fun updatePauseActive(): Boolean =
-        updatePaused &&
-            SessionClock.remaining(focusRealtimeStart, focusRealtimeEnd, focusWallEnd) <= 0L
+        updatePaused && strictRemaining() <= 0L
+
+    private fun strictRemaining(): Long =
+        SessionClock.remaining(focusRealtimeStart, focusRealtimeEnd, focusWallStart, focusWallEnd)
+
+    // Zeroes the focus row once the session it describes has expired, so a stale deadline
+    // can never resurrect after a reboot with a wrong wall clock. Re-checks at fire time:
+    // only a genuinely expired session is cleared — Strict stays un-stoppable while active.
+    private val focusClearRunnable = Runnable {
+        if (strictRemaining() <= 0L && (focusWallEnd > 0L || focusRealtimeEnd > 0L)) {
+            scope.launch {
+                BlockerDatabase.get(applicationContext).focusDao().set(FocusState(id = 0))
+            }
+        }
+    }
 
     private var lastBlockedPkg: String? = null
     private var lastBlockAt: Long = 0L
@@ -209,7 +224,14 @@ class BlockerAccessibilityService : AccessibilityService() {
             rules = ruleList.associateBy { it.packageName }
             focusRealtimeStart = focus?.realtimeStartMillis ?: 0L
             focusRealtimeEnd = focus?.realtimeEndMillis ?: 0L
+            focusWallStart = focus?.startTimeMillis ?: 0L
             focusWallEnd = focus?.endTimeMillis ?: 0L
+            // Arm a one-shot clear for when this session expires (fires immediately for a
+            // session that already expired, e.g. while the phone was off). See the runnable.
+            handler.removeCallbacks(focusClearRunnable)
+            if (focusWallEnd > 0L || focusRealtimeEnd > 0L) {
+                handler.postDelayed(focusClearRunnable, strictRemaining() + 2_000L)
+            }
             userKeywords = keywords.map { it.keyword }
             schedules = scheduleList
             // Location plumbing follows *enabled* location schedules only — and shuts down
@@ -335,7 +357,7 @@ class BlockerAccessibilityService : AccessibilityService() {
      * activities, plus an on-screen-text fallback for MIUI's generic SubSettings/app-info screens.
      */
     private fun handleStrictSettingsGuard(pkg: String, className: String?): Boolean {
-        val strict = SessionClock.remaining(focusRealtimeStart, focusRealtimeEnd, focusWallEnd) > 0L
+        val strict = strictRemaining() > 0L
         if (!strict) return false
         if (pkg !in GUARD_PACKAGES) return false
 
@@ -415,7 +437,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         // updatePauseActive() is false while a Strict session runs).
         if (updatePauseActive()) return false
         val now = System.currentTimeMillis()
-        val strict = SessionClock.remaining(focusRealtimeStart, focusRealtimeEnd, focusWallEnd) > 0L
+        val strict = strictRemaining() > 0L
 
         // Quick Block — enforced when Strict, or a running Timer/Pomodoro says "block now",
         // or (no session) when not paused.
@@ -609,7 +631,7 @@ class BlockerAccessibilityService : AccessibilityService() {
     /** True when Quick Block is currently enforcing (Strict on, a session says block now, or
      *  not paused) — mirrors the gating used for app blocking in [shouldBlock]. */
     private fun quickBlockActive(): Boolean {
-        if (SessionClock.remaining(focusRealtimeStart, focusRealtimeEnd, focusWallEnd) > 0L) return true
+        if (strictRemaining() > 0L) return true
         if (updatePaused) return false // after-update pause (strict handled above)
         val session = QuickSession.state(this)
         return if (session.active) session.blockingNow else !SettingsStore.quickBlockPaused(this)
@@ -879,6 +901,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         handler.removeCallbacks(webScanRunnable)
         handler.removeCallbacks(shortsScanRunnable)
         handler.removeCallbacks(recheckRunnable)
+        handler.removeCallbacks(focusClearRunnable)
         // Stop location updates so they don't leak past the service (battery + privacy).
         stopLocationUpdates()
         prefsListener?.let {

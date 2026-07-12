@@ -17,6 +17,7 @@ val changelog: List<VersionLog> = listOf(
         "After every app update, ALL blocking now pauses until you're ready: a banner on the Blocking tab waits for your tap on 'Reactivate blocking'. Explore what's new first, then switch protection back on.",
         "Two things never pause, on purpose: a running Strict Mode session (updating must never be a way out), and the adult content pack (its off-switch stays the deliberate one).",
         "The Insights page flows better now: your AI Coach moved up right after the usage cards, and Focus, Distractions and the Mood check-in close out the page at the bottom.",
+        "Fixed a sneaky bug where Strict Mode could switch itself back ON: after a phone restart, if the clock was briefly wrong, an old finished Strict session could come back to life. Finished sessions are now erased the moment they end, and an impossible clock can't revive them. A restart DURING a real session still keeps you locked, exactly as intended.",
     )),
     VersionLog("1.67", "Jul 11, 2026", "Apps organized into categories", listOf(
         "The app lists in Quick Block, schedules and templates are now organized into 12 categories — Social media, Entertainment, Games, News & Books, Shopping & Food, Creativity, Travel, Utilities, Education, Health & Fitness, Productivity and Other — just tap a category to open it.",

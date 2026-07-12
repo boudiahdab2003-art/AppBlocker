@@ -25,7 +25,7 @@ class Converters {
 @Database(
     entities = [AppRule::class, FocusState::class, BlockedKeyword::class, Schedule::class,
         SavedPlace::class],
-    version = 7,
+    version = 8,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -62,6 +62,17 @@ abstract class BlockerDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v7 -> v8: add a wall-clock start anchor to focus_state so the post-reboot fallback
+         * can reject an impossible device clock — without it, a long-finished Strict session
+         * could resurrect after a reboot whose clock briefly read earlier than the old deadline.
+         */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE focus_state ADD COLUMN startTimeMillis INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun get(context: Context): BlockerDatabase =
             INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -69,7 +80,7 @@ abstract class BlockerDatabase : RoomDatabase() {
                     BlockerDatabase::class.java,
                     "appblocker.db"
                 )
-                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7)
+                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
                     // Only wipe on a downgrade (installing an older APK) — never on upgrade.
                     .fallbackToDestructiveMigrationOnDowngrade()
                     .build().also { INSTANCE = it }

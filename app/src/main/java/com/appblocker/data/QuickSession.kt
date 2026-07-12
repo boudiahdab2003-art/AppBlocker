@@ -29,11 +29,13 @@ object QuickSession {
     fun startTimer(ctx: Context, minutes: Int) {
         val duration = minutes * 60_000L
         val nowRt = SystemClock.elapsedRealtime()
+        val nowWall = System.currentTimeMillis()
         p(ctx).edit().clear()
             .putInt("mode", MODE_TIMER)
             .putLong("rtStart", nowRt)
             .putLong("rtEnd", nowRt + duration)
-            .putLong("wallEnd", System.currentTimeMillis() + duration)
+            .putLong("wallStart", nowWall)
+            .putLong("wallEnd", nowWall + duration)
             .apply()
     }
 
@@ -56,6 +58,7 @@ object QuickSession {
                 val remaining = SessionClock.remaining(
                     prefs.getLong("rtStart", 0L),
                     prefs.getLong("rtEnd", 0L),
+                    prefs.getLong("wallStart", 0L),
                     prefs.getLong("wallEnd", 0L),
                 )
                 if (remaining <= 0L) { stop(ctx); return idle() }

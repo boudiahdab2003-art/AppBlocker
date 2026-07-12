@@ -14,14 +14,24 @@ import android.os.SystemClock
  */
 object SessionClock {
 
-    /** Remaining millis for a session; 0 means expired/inactive. */
-    fun remaining(realtimeStart: Long, realtimeEnd: Long, wallEnd: Long): Long {
+    /**
+     * Remaining millis for a session; 0 means expired/inactive.
+     *
+     * On the wall-clock (post-reboot) path, [wallStart] guards against a wrong device clock
+     * resurrecting an old session: a clock reading *before* the session even started is
+     * impossible, so the session is treated as inactive, and remaining can never exceed the
+     * session's original duration. wallStart == 0 means a legacy record with no start anchor.
+     */
+    fun remaining(realtimeStart: Long, realtimeEnd: Long, wallStart: Long, wallEnd: Long): Long {
         val nowRt = SystemClock.elapsedRealtime()
-        return if (realtimeEnd > 0L && nowRt >= realtimeStart) {
-            (realtimeEnd - nowRt).coerceAtLeast(0L)
-        } else {
-            (wallEnd - System.currentTimeMillis()).coerceAtLeast(0L)
+        if (realtimeEnd > 0L && nowRt >= realtimeStart) {
+            return (realtimeEnd - nowRt).coerceAtLeast(0L)
         }
+        val nowWall = System.currentTimeMillis()
+        val raw = (wallEnd - nowWall).coerceAtLeast(0L)
+        if (wallStart <= 0L) return raw
+        if (nowWall < wallStart) return 0L
+        return raw.coerceAtMost(wallEnd - wallStart)
     }
 
     /**

@@ -18,4 +18,6 @@ data class FocusState(
     val endTimeMillis: Long = 0L,        // wall-clock deadline (reboot/legacy fallback)
     val realtimeStartMillis: Long = 0L,  // SystemClock.elapsedRealtime() at session start
     val realtimeEndMillis: Long = 0L,    // monotonic deadline (clock-change-proof)
+    val startTimeMillis: Long = 0L,      // wall clock at session start (0 = legacy/none);
+                                         // lets the reboot fallback reject impossible clocks
 )
