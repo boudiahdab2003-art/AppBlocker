@@ -1,21 +1,20 @@
 # Adult keyword heuristics (one per line, lowercase). If any appears in a URL or
 # search text while "Block adult sites" is on, the page is blocked. Catches the
 # long tail of adult sites/searches beyond the curated domain list.
+# NOTE: matched as a plain SUBSTRING (so glued domain forms like freeporntube
+# still hit) — every entry must be unambiguous even inside innocent text. Bare
+# "xxx" (XXXL sizes), "escort" (escorted), "oral/anal sex" (health pages) and
+# "adult video" (parental-control UIs) were removed as false positives.
 porn
 porno
 pornography
-xxx
 xvideos
 xnxx
 hentai
-nsfw
 camgirl
 camsex
 sexcam
-nudes
 nude girls
-escort
-milf
 gangbang
 blowjob
 handjob
@@ -23,13 +22,7 @@ deepthroat
 cumshot
 creampie
 hardcore sex
-anal sex
-oral sex
 fetish porn
 bdsm porn
 onlyfans leak
-sex video
-sex videos
 free sex
-adult video
-adult videos
