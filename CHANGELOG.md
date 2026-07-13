@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.70
+- Fewer false adult-word blocks: only real porn vocabulary blocks now - everyday words (adult content, queen of spades, cream pie...) no longer trigger it. And the AI Coach now knows the time of day, so no more 'goal hit!' at 9am or praising your night's sleep as phone-free time.
+
 ## v1.69
 - This update ends your running Strict Mode session - the 1.67 to 1.68 hop could not (1.67 was too old to leave the note 1.68 needed), this one can. Ending the session is also retried until it truly lands, so Android cutting the first attempt short can never leave Strict stuck again.
 
