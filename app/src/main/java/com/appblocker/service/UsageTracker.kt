@@ -227,6 +227,36 @@ object UsageTracker {
         return (longestUse / 60_000L).toInt() to (longestGap / 60_000L).toInt()
     }
 
+    /** Total foreground minutes across exactly [start]..[end], reconstructed from events —
+     *  the bucket-based queries can't trim a partial day, which is what the coach's
+     *  "by this same time yesterday" comparison needs. Sessions already in progress at
+     *  [start] are missed (their resume event is outside the range), same as the other
+     *  event walks; events older than a few days may be gone — callers treat 0 as unknown. */
+    fun totalMinutesInRange(context: Context, start: Long, end: Long): Int {
+        val usm = usageStatsManager(context) ?: return 0
+        val fgEvent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+            UsageEvents.Event.ACTIVITY_RESUMED
+        else @Suppress("DEPRECATION") UsageEvents.Event.MOVE_TO_FOREGROUND
+        val bgEvent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+            UsageEvents.Event.ACTIVITY_PAUSED
+        else @Suppress("DEPRECATION") UsageEvents.Event.MOVE_TO_BACKGROUND
+        val fgStart = HashMap<String, Long>()
+        var total = 0L
+        val events = usm.queryEvents(start, end)
+        val e = UsageEvents.Event()
+        while (events.getNextEvent(e)) {
+            when (e.eventType) {
+                fgEvent -> fgStart[e.packageName] = e.timeStamp
+                bgEvent -> {
+                    val s = fgStart.remove(e.packageName) ?: continue
+                    total += e.timeStamp - max(s, start)
+                }
+            }
+        }
+        for ((_, s) in fgStart) total += end - max(s, start)
+        return (total / 60_000L).toInt()
+    }
+
     // ---- History (multi-day) ----
 
     /** Total foreground minutes for each of the last [days] days (last index = today).
