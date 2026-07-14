@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.72
+- Polish for Android 15 phones: the AI Coach chat, What's new page and PIN lock screen no longer draw behind the status bar, and the PIN screen's Unlock button stays above the keyboard.
+
 ## v1.71
 - Fixed: on phones with larger text or display size, the setup wizard could hide its Continue button below the screen with no way forward - steps now scroll and the button is always visible, and the wizard no longer draws behind the status bar on Android 15.
 
