@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.71
+- Fixed: on phones with larger text or display size, the setup wizard could hide its Continue button below the screen with no way forward - steps now scroll and the button is always visible, and the wizard no longer draws behind the status bar on Android 15.
+
 ## v1.70
 - Fewer false adult-word blocks: only real porn vocabulary blocks now - everyday words (adult content, queen of spades, cream pie...) no longer trigger it. And the AI Coach now knows the time of day, so no more 'goal hit!' at 9am or praising your night's sleep as phone-free time.
 
