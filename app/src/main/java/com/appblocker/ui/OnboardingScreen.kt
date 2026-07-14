@@ -5,14 +5,18 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -68,7 +72,9 @@ fun OnboardingScreen(onDone: () -> Unit) {
     // In-wizard back walks to the previous step; at the Welcome step let the host handle back.
     BackHandler(enabled = step > 0) { step-- }
 
-    Box(Modifier.fillMaxSize().background(appBackground())) {
+    // background BEFORE safeDrawingPadding so the app color still paints behind the system bars
+    // (targetSdk 35 = forced edge-to-edge on Android 15+); padding is 0 on older devices.
+    Box(Modifier.fillMaxSize().background(appBackground()).safeDrawingPadding()) {
         Column(Modifier.fillMaxSize().padding(24.dp)) {
             if (step > 0) {
                 ProgressHeader(current = step, total = totalSteps)
@@ -115,6 +121,28 @@ private fun ProgressHeader(current: Int, total: Int) {
     }
 }
 
+/** Shared step layout: the step's content scrolls, the action button(s) stay pinned below it —
+ *  so the button is always reachable even when a large font/display size makes the content
+ *  taller than the screen (a weight-spacer-to-bottom layout left the button off-screen there,
+ *  hard-stuck with nothing to press). */
+@Composable
+private fun StepScaffold(
+    footer: @Composable ColumnScope.() -> Unit,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(Modifier.fillMaxSize()) {
+        Column(
+            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            content = content,
+        )
+        Spacer(Modifier.height(16.dp))
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+            footer()
+        }
+    }
+}
+
 /** Big circular icon used at the top of each step. */
 @Composable
 private fun StepIcon(icon: ImageVector, granted: Boolean = false) {
@@ -137,7 +165,7 @@ private fun StepIcon(icon: ImageVector, granted: Boolean = false) {
 
 @Composable
 private fun WelcomeStep(onNext: () -> Unit) {
-    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+    StepScaffold(footer = { GradientButton(text = "Get started", onClick = onNext) }) {
         Spacer(Modifier.height(24.dp))
         StepIcon(Icons.Filled.Shield)
         Spacer(Modifier.height(28.dp))
@@ -156,8 +184,6 @@ private fun WelcomeStep(onNext: () -> Unit) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
-        Spacer(Modifier.weight(1f))
-        GradientButton(text = "Get started", onClick = onNext)
     }
 }
 
@@ -165,7 +191,7 @@ private fun WelcomeStep(onNext: () -> Unit) {
  *  before the permission chores. Pure showcase — nothing to grant here. */
 @Composable
 private fun CoachStep(onNext: () -> Unit) {
-    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+    StepScaffold(footer = { GradientButton(text = "Continue", onClick = onNext) }) {
         Spacer(Modifier.height(8.dp))
         StepIcon(Icons.Filled.AutoAwesome)
         Spacer(Modifier.height(24.dp))
@@ -199,8 +225,6 @@ private fun CoachStep(onNext: () -> Unit) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
-        Spacer(Modifier.weight(1f))
-        GradientButton(text = "Continue", onClick = onNext)
     }
 }
 
@@ -226,7 +250,17 @@ private fun CoachFeatureRow(icon: ImageVector, title: String, desc: String) {
 @Composable
 private fun EssentialStep(perm: Perm, onContinue: () -> Unit, onSkip: () -> Unit) {
     val icon = if (perm.key == "accessibility") Icons.Filled.Shield else Icons.Filled.Visibility
-    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+    StepScaffold(footer = {
+        if (perm.granted) {
+            GradientButton(text = "Continue", onClick = onContinue)
+        } else {
+            GradientButton(text = "Grant", onClick = rememberGatedFix(perm))
+            Spacer(Modifier.height(8.dp))
+            TextButton(onClick = onSkip) {
+                Text("Skip for now", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }) {
         Spacer(Modifier.height(8.dp))
         StepIcon(icon, granted = perm.granted)
         Spacer(Modifier.height(24.dp))
@@ -246,22 +280,12 @@ private fun EssentialStep(perm: Perm, onContinue: () -> Unit, onSkip: () -> Unit
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
-        Spacer(Modifier.weight(1f))
-        if (perm.granted) {
-            GradientButton(text = "Continue", onClick = onContinue)
-        } else {
-            GradientButton(text = "Grant", onClick = rememberGatedFix(perm))
-            Spacer(Modifier.height(8.dp))
-            TextButton(onClick = onSkip) {
-                Text("Skip for now", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
     }
 }
 
 @Composable
 private fun RecommendedStep(perms: List<Perm>, onContinue: () -> Unit) {
-    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+    StepScaffold(footer = { GradientButton(text = "Continue", onClick = onContinue) }) {
         Spacer(Modifier.height(8.dp))
         StepIcon(Icons.Filled.BatteryChargingFull)
         Spacer(Modifier.height(24.dp))
@@ -284,8 +308,6 @@ private fun RecommendedStep(perms: List<Perm>, onContinue: () -> Unit) {
             RecommendedRow(p)
             Spacer(Modifier.height(12.dp))
         }
-        Spacer(Modifier.weight(1f))
-        GradientButton(text = "Continue", onClick = onContinue)
     }
 }
 
@@ -326,7 +348,7 @@ private fun RecommendedRow(p: Perm) {
 @Composable
 private fun DoneStep(grantedEssentials: Int, totalEssentials: Int, onFinish: () -> Unit) {
     val allEssential = grantedEssentials == totalEssentials
-    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+    StepScaffold(footer = { GradientButton(text = "Start blocking", onClick = onFinish) }) {
         Spacer(Modifier.height(24.dp))
         StepIcon(Icons.Filled.Shield, granted = allEssential)
         Spacer(Modifier.height(28.dp))
@@ -352,8 +374,6 @@ private fun DoneStep(grantedEssentials: Int, totalEssentials: Int, onFinish: () 
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
-        Spacer(Modifier.weight(1f))
-        GradientButton(text = "Start blocking", onClick = onFinish)
     }
 }
 
