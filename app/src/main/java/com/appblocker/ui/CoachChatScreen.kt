@@ -15,7 +15,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -83,7 +83,10 @@ fun CoachChatScreen(onBack: () -> Unit, vm: CoachChatViewModel = viewModel()) {
         if (count > 0) listState.animateScrollToItem(count - 1)
     }
 
-    Column(Modifier.fillMaxSize().imePadding()) {
+    // safeDrawing = status bar + nav bar + keyboard: the screen has no Scaffold of its own, and
+    // targetSdk 35 forces edge-to-edge on Android 15+ (imePadding alone left the top bar under
+    // the status bar there).
+    Column(Modifier.fillMaxSize().safeDrawingPadding()) {
         EditorTopBar(title = "AI Coach", onBack = onBack) {
             IconButton(onClick = { showProfile = true }) {
                 Icon(Icons.Filled.Person, contentDescription = "What your coach knows")

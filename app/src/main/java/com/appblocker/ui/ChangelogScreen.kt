@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -38,7 +39,8 @@ fun ChangelogScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val current = remember { Updater.current(context) }
 
-    Column(Modifier.fillMaxSize()) {
+    // No Scaffold here, so pad the system bars ourselves (edge-to-edge is forced on Android 15+).
+    Column(Modifier.fillMaxSize().safeDrawingPadding()) {
         EditorTopBar(title = "What's new", onBack = onBack)
         LazyColumn(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
             item {
