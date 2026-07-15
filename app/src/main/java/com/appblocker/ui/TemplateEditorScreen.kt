@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -81,7 +82,8 @@ fun TemplateEditorScreen(
             containerColor = Color.Transparent,
             topBar = { EditorTopBar("Customise “${template.title}”", onBack) },
             bottomBar = {
-                GradientButton(text = "Save", onClick = ::save, modifier = Modifier.padding(16.dp))
+                GradientButton(text = "Save", onClick = ::save,
+                    modifier = Modifier.navigationBarsPadding().padding(16.dp))
             },
         ) { padding ->
             LazyColumn(Modifier.padding(padding).fillMaxSize().padding(horizontal = 16.dp)) {

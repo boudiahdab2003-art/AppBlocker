@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -131,7 +132,8 @@ fun BlockEditorScreen(
         topBar = { EditorTopBar("Quick Block", onBack) },
         bottomBar = {
             // Save is allowed during Strict — you can add blocks, just not remove them.
-            GradientButton(text = "Save", onClick = ::save, modifier = Modifier.padding(16.dp))
+            GradientButton(text = "Save", onClick = ::save,
+                modifier = Modifier.navigationBarsPadding().padding(16.dp))
         },
     ) { padding ->
         LazyColumn(Modifier.padding(padding).fillMaxSize().padding(horizontal = 16.dp)) {

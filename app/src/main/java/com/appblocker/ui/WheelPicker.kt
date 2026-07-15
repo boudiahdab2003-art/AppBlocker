@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -185,8 +186,8 @@ fun DurationPickerDialog(
             Scaffold(
                 containerColor = Color.Transparent,
                 topBar = { EditorTopBar(title, onBack = onDismiss) },
-                // Pin Save to the bottom bar (like the schedule editor) so Scaffold insets it for
-                // the navigation bar and the 24dp keeps it clear of the gesture-swipe zone.
+                // Scaffold does NOT inset the bottomBar slot (only built-in bars like
+                // NavigationBar pad themselves), so clear the nav bar / gesture zone here.
                 bottomBar = {
                     GradientButton(
                         text = "Save",
@@ -194,8 +195,9 @@ fun DurationPickerDialog(
                         onClick = { onSave(minutes); onDismiss() },
                         modifier = Modifier
                             .fillMaxWidth()
+                            .navigationBarsPadding()
                             .padding(horizontal = 20.dp)
-                            .padding(top = 8.dp, bottom = 24.dp),
+                            .padding(top = 8.dp, bottom = 32.dp),
                     )
                 },
             ) { padding ->
