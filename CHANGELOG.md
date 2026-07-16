@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.73
+- Fixed: the Save button in the Strict Mode timer picker (and the schedule, template and Quick Block editors) sat too low, inside the gesture-navigation area - it now sits clearly above it.
+
 ## v1.72
 - Polish for Android 15 phones: the AI Coach chat, What's new page and PIN lock screen no longer draw behind the status bar, and the PIN screen's Unlock button stays above the keyboard.
 
