@@ -19,8 +19,12 @@ class WebContentFilter private constructor(
         val lower = text.lowercase()
 
         for (k in userKeywords) {
-            if (k.isNotBlank() && lower.contains(k)) {
-                return Hit("Blocked word", "“$k” is on your blocked list.")
+            // Whole-word like the pack below: a bare keyword ("instagram") must not fire on
+            // loose UI text that merely contains it ("instagrammer", icon labels). '.' and '/'
+            // are boundaries, so it still matches inside "instagram.com/reels".
+            val kw = k.trim().lowercase()
+            if (kw.isNotEmpty() && containsWord(lower, kw)) {
+                return Hit("Blocked word", "“$kw” is on your blocked list.")
             }
         }
         if (adultPack && packWords.isNotEmpty()) {
