@@ -6,6 +6,10 @@ import android.content.Context
  * Decides whether some on-screen text (a web address or search query) should be
  * blocked: user keywords first, then the bundled adult word pack (if enabled),
  * then — if enabled — the bundled adult site lists. Lists are loaded once from assets.
+ *
+ * [check]'s optional `url` is the browser's omnibox text: when present, user keywords
+ * match the site/search the user is ON rather than anything the page happens to
+ * mention. The adult layers always match the full text — never weaker on purpose.
  */
 class WebContentFilter private constructor(
     private val adultDomains: List<String>,
@@ -14,16 +18,21 @@ class WebContentFilter private constructor(
 ) {
     data class Hit(val title: String, val message: String)
 
-    fun check(text: String, userKeywords: List<String>, adultPack: Boolean, blockAdult: Boolean): Hit? {
+    fun check(text: String, url: String?, userKeywords: List<String>, adultPack: Boolean, blockAdult: Boolean): Hit? {
         if (text.isBlank()) return null
         val lower = text.lowercase()
 
+        // User keywords match the URL when the caller could read one (so a page merely
+        // MENTIONING "instagram" doesn't block — only being on instagram.com or searching
+        // for it does), and fall back to the whole visible text when it couldn't
+        // (fullscreen video, non-browser app) so a hidden omnibox is never a bypass.
+        val keywordHay = url?.lowercase()?.takeIf { it.isNotBlank() } ?: lower
         for (k in userKeywords) {
             // Whole-word like the pack below: a bare keyword ("instagram") must not fire on
             // loose UI text that merely contains it ("instagrammer", icon labels). '.' and '/'
             // are boundaries, so it still matches inside "instagram.com/reels".
             val kw = k.trim().lowercase()
-            if (kw.isNotEmpty() && containsWord(lower, kw)) {
+            if (kw.isNotEmpty() && containsWord(keywordHay, kw)) {
                 return Hit("Blocked word", "“$kw” is on your blocked list.")
             }
         }

@@ -88,8 +88,9 @@ fun KeywordsScreen(
             ) {
                 item {
                     Text(
-                        "Add words you never want to see. The moment one shows up on screen — " +
-                            "in your browser or in any other app — the screen is blocked.",
+                        "Add words you never want to see. In your browser they block matching " +
+                            "sites and searches; in any other app, the moment one shows up " +
+                            "on screen it's blocked.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 8.dp, bottom = 12.dp),
