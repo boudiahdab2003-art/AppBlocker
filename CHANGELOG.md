@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.75
+- Fixed: one blocked attempt was being counted (and re-shown) many times - a single block now records exactly one entry, the quote stays put while the block screen is up, and tapping Got it no longer re-triggers the same block on the way home.
+
 ## v1.74
 - Smarter, more precise blocking: no more false blocks on the home screen; the block screen now explains WHY (schedule name, daily limit, Quick Block, Strict Mode, or the matched word); blocked words match the site you're on in Chrome instead of any page that mentions them; blocked apps get covered faster; and blocking YouTube or a social app now covers its website and short links too (youtube.com, youtu.be, t.co, redd.it, fb.watch...).
 
