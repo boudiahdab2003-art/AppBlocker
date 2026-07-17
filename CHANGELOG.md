@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.77
+- New: Profile > Instructions - a built-in guide explaining every feature in detail, in thirteen expandable topics: protection setup, Quick Block, templates, all five schedule types, Strict Mode, blocked words and websites, the block screen, YouTube Shorts, the full Insights tab, goals/mood/AI Coach, PIN lock, updates, and personalization.
+
 ## v1.76
 - The block screen now shows the app icon you actually picked in the icon switcher (it used to show the default logo), and its quotes got a quality pass - cliches cut, misattributions fixed, and stronger lines from William James, Mary Oliver, Seneca, Pascal and James Clear added.
 
