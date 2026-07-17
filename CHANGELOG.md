@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.74
+- Smarter, more precise blocking: no more false blocks on the home screen; the block screen now explains WHY (schedule name, daily limit, Quick Block, Strict Mode, or the matched word); blocked words match the site you're on in Chrome instead of any page that mentions them; blocked apps get covered faster; and blocking YouTube or a social app now covers its website and short links too (youtube.com, youtu.be, t.co, redd.it, fb.watch...).
+
 ## v1.73
 - Fixed: the Save button in the Strict Mode timer picker (and the schedule, template and Quick Block editors) sat too low, inside the gesture-navigation area - it now sits clearly above it.
 
