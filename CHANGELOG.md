@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.79
+- Fixed for real: the Save button in the timer picker (Strict Mode and Quick Block) now measures the navigation bar from the app's main window - the popup was reporting it as zero, which is why earlier fixes didn't stick. Also: Instructions topic pages got a cleaner layout with titled point cards instead of plain text.
+
 ## v1.78
 - Smoother settings: Instructions topics now open as their own full page (easier to read than the old expanding cards), and the app-icon chooser is a clean full-page grid instead of the cramped popup.
 
