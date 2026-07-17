@@ -116,6 +116,23 @@ object SettingsStore {
     fun setAdultWordsPack(context: Context, value: Boolean) =
         prefs(context).edit().putBoolean(KEY_ADULT_WORDS_PACK, value).apply()
 
+    private const val KEY_REMOVED_KEYWORDS = "removed_keywords"
+
+    /** Words the user explicitly deleted from Blocked words. Re-applying a template must not
+     *  resurrect them (templates silently re-added their word sets on every Apply, which read
+     *  as "4 words I didn't set appear after every update"). Manually re-adding a word takes
+     *  it off this list — the user changed their mind. */
+    fun removedKeywords(context: Context): Set<String> =
+        prefs(context).getStringSet(KEY_REMOVED_KEYWORDS, emptySet()) ?: emptySet()
+
+    fun addRemovedKeyword(context: Context, word: String) =
+        prefs(context).edit()
+            .putStringSet(KEY_REMOVED_KEYWORDS, removedKeywords(context) + word).apply()
+
+    fun clearRemovedKeyword(context: Context, word: String) =
+        prefs(context).edit()
+            .putStringSet(KEY_REMOVED_KEYWORDS, removedKeywords(context) - word).apply()
+
     const val KEY_KEYWORDS_EVERYWHERE = "keywords_everywhere"
 
     /** Match blocked words in every app (default), not just browsers. When off, only browsers

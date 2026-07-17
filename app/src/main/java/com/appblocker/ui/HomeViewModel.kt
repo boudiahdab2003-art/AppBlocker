@@ -7,6 +7,7 @@ import com.appblocker.data.BlockedKeyword
 import com.appblocker.data.BlockerDatabase
 import com.appblocker.data.Schedule
 import com.appblocker.data.ScheduleType
+import com.appblocker.data.SettingsStore
 import com.appblocker.data.TemplateStore
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -50,7 +51,12 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                     )
                 )
             }
-            t.keywords.forEach { db.blockedKeywordDao().insert(BlockedKeyword(it.lowercase().trim())) }
+            // Words the user explicitly deleted stay deleted — re-applying a template
+            // (a common ritual after updates) must not resurrect them.
+            val removed = SettingsStore.removedKeywords(getApplication())
+            t.keywords.map { it.lowercase().trim() }
+                .filter { it !in removed }
+                .forEach { db.blockedKeywordDao().insert(BlockedKeyword(it)) }
             // Switch on the template's Quick Block extra options (additive — never turns any off).
             t.effectiveOptions(getApplication()).forEach { it.turnOn(getApplication()) }
         }

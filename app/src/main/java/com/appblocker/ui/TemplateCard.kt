@@ -119,7 +119,10 @@ internal fun templateSummary(t: Template, context: Context): String {
     if (appCount > 0) {
         parts += "$appCount apps" + if (t.timeLabel.isNotEmpty()) " (${t.timeLabel})" else ""
     }
-    if (t.keywords.isNotEmpty()) parts += "${t.keywords.size} words"
+    if (t.keywords.isNotEmpty()) {
+        // Name the words — a bare "4 words" read as words appearing out of nowhere.
+        parts += "${t.keywords.size} words (${t.keywords.joinToString(", ")})"
+    }
     val summary = if (parts.isEmpty()) "" else "This will block " + parts.joinToString(", ") + "."
     val opts = t.effectiveOptions(context)
     val optLine = if (opts.isEmpty()) ""
