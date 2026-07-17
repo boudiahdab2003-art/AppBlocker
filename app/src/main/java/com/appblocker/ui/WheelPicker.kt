@@ -13,8 +13,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -38,12 +36,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.compose.ui.window.DialogProperties
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -182,17 +184,24 @@ fun DurationPickerDialog(
     onSave: (Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    // The dialog's own window reports ZERO insets on some OEMs (HyperOS) even though it is
-    // drawn edge-to-edge, so inset modifiers INSIDE the dialog are no-ops — that's why the
-    // Save button kept landing in the gesture zone across several fixes. Capture the real
-    // insets here, in the ACTIVITY window's composition scope (always correct), and apply
-    // them manually inside the dialog.
-    val safeInsets = WindowInsets.safeDrawing.asPaddingValues()
+    // History of this button: (1) the dialog's own window reports ZERO insets on HyperOS
+    // even though it draws edge-to-edge, so inset modifiers inside the dialog are no-ops;
+    // (2) reading WindowInsets.safeDrawing HERE is also zero-bottom, because this composes
+    // inside MainScaffold's content, which CONSUMES the bottom inset for its nav bar.
+    // The only source neither trap can zero out: the raw insets on the activity's root
+    // view, read below Compose's inset accounting entirely.
+    val view = LocalView.current
+    val density = LocalDensity.current
+    val (topPad, bottomPad) = remember(view) {
+        val bars = ViewCompat.getRootWindowInsets(view)
+            ?.getInsets(WindowInsetsCompat.Type.systemBars())
+        with(density) { ((bars?.top ?: 0).toDp()) to ((bars?.bottom ?: 0).toDp()) }
+    }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         var minutes by remember { mutableIntStateOf(initialMinutes) }
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Scaffold(
-                modifier = Modifier.padding(safeInsets),
+                modifier = Modifier.padding(top = topPad, bottom = bottomPad),
                 containerColor = Color.Transparent,
                 contentWindowInsets = WindowInsets(0),
                 topBar = { EditorTopBar(title, onBack = onDismiss) },
