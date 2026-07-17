@@ -26,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Palette
@@ -285,15 +286,56 @@ private val TOPICS = listOf(
     ),
     Topic(
         icon = Icons.Filled.BarChart,
-        title = "Insights, goals & AI Coach",
-        summary = "Your numbers, your goals, and a coach who knows both.",
+        title = "Insights: your numbers",
+        summary = "Everything the Insights tab shows, view by view.",
         paragraphs = listOf(
-            "The Insights tab tracks screen time, app opens, phone unlocks, notifications " +
-                "and blocked attempts, and lets you set goals (daily screen time, an app " +
-                "limit, unlocks) plus a quick daily mood check-in.",
-            "The AI Coach reads those numbers and writes you a short daily take — and you " +
-                "can chat with it. It runs on Google's Gemini and needs an API key; " +
-                "everything else in the app works without one.",
+            "The Insights tab needs Usage Access (a one-time system permission — the tab " +
+                "prompts you, and the gear icon reopens that settings page). It has three " +
+                "views: Day, Week and Trend (the last 30 days). What you'll find:",
+        ),
+        bullets = listOf(
+            "The hero card: screen time for the view — today, the week's total, or your " +
+                "30-day average — with a comparison against the previous period, plus " +
+                "today's unlocks, blocks and Strict Mode time.",
+            "The activity chart: tap or drag across the bars to inspect any hour (Day) or " +
+                "day (Week/Trend); the busiest bar gets a \"peak\" badge, and Day/Week add a " +
+                "category breakdown (Social, Video, Games…).",
+            "Day view extras: how much of a 16-hour waking day went to the phone, your " +
+                "busiest hour, a productive/distracting/neutral split, your longest focus " +
+                "stretch and longest continuous use.",
+            "Distractions: notification count (needs Notification access — tap the tile to " +
+                "grant it) and pickups.",
+            "Week & Trend extras: weekday vs weekend pattern, apps trending up or down " +
+                "week-over-week, your biggest time-savers and biggest increases, and a " +
+                "summary card — daily average, busiest day, vs yesterday, and a usage " +
+                "rating from Light to Very heavy.",
+            "Most used and most opened apps, plus every blocked attempt (\"N× today · N× " +
+                "all time\") — tap any app row for its detail sheet.",
+        ),
+    ),
+    Topic(
+        icon = Icons.Filled.Flag,
+        title = "Goals, mood & AI Coach",
+        summary = "Set targets, track streaks, and get coached on your data.",
+        paragraphs = listOf(
+            "Goals live at the top of the Insights tab; the mood check-in sits at the " +
+                "bottom of the Day view; the AI Coach card is in between.",
+        ),
+        bullets = listOf(
+            "Goals come in three kinds: total screen time under X per day, one app under X " +
+                "per day, or fewer than N unlocks per day. Each shows a live progress bar, " +
+                "a streak flame, and dots for the last 7 days (hit or missed). You hit a " +
+                "goal by finishing the day under its target.",
+            "\"Enforce with a schedule\" turns a time goal into a real daily-limit schedule " +
+                "— the app then blocks when the time is up instead of just reporting it.",
+            "There's no goal editing — remove it (this clears its history) and add it again.",
+            "Mood check-in: once a day, slide from \"Very distracted\" to \"In control\" and " +
+                "optionally add a note. Your last week of moods feeds the coach's context.",
+            "The AI Coach writes short daily tips from your stats, goals and moods, and " +
+                "you can chat with it. It runs on Google's Gemini: add a free API key " +
+                "(aistudio.google.com/apikey) via the card's \"Add key\" button — the key " +
+                "stays on your phone. \"New tips\" fetches a fresh take; without a key or " +
+                "offline, everything else in the app works normally.",
         ),
     ),
     Topic(
