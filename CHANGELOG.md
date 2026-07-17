@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.76
+- The block screen now shows the app icon you actually picked in the icon switcher (it used to show the default logo), and its quotes got a quality pass - cliches cut, misattributions fixed, and stronger lines from William James, Mary Oliver, Seneca, Pascal and James Clear added.
+
 ## v1.75
 - Fixed: one blocked attempt was being counted (and re-shown) many times - a single block now records exactly one entry, the quote stays put while the block screen is up, and tapping Got it no longer re-triggers the same block on the way home.
 
