@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.82
+- Schedules can now be deleted right from the list (trash icon with a confirm - hidden during Strict Mode), and two labels no longer break mid-word on larger font sizes (the Active badge on templates and the Location schedule tile).
+
 ## v1.81
 - The timer picker's Save button now keeps a guaranteed fixed distance from the bottom of the screen - no more depending on the phone reporting its gesture-bar height (some phones report zero, which defeated every measured fix).
 
