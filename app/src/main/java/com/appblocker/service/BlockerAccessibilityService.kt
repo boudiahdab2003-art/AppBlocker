@@ -89,6 +89,9 @@ class BlockerAccessibilityService : AccessibilityService() {
     @Volatile private var browserPackages: Set<String> = emptySet()
     // Home-screen (launcher) apps — never keyword-scanned, see findLauncherPackages().
     @Volatile private var launcherPackages: Set<String> = emptySet()
+    // Negative cache for isLauncherPkg, so its throttled re-detection only runs on new packages.
+    @Volatile private var knownNonLauncherPkgs: Set<String> = emptySet()
+    @Volatile private var lastLauncherRefreshAt = 0L
     // Whether blocked words are matched in every app (default) or browsers only. Cached here
     // and refreshed by a prefs listener so the toggle applies without restarting the service.
     @Volatile private var keywordsEverywhere: Boolean = true
@@ -130,6 +133,9 @@ class BlockerAccessibilityService : AccessibilityService() {
     // Instant block screen drawn as an overlay window (no Activity-launch lag).
     private val windowManager by lazy { getSystemService(WINDOW_SERVICE) as WindowManager }
     private var overlayView: View? = null
+    // Inflated-but-not-attached overlay, warmed at service connect and re-stashed on
+    // removal, so no block ever pays layout inflation while the blocked app is visible.
+    private var preInflatedOverlay: View? = null
     // Whether the current overlay is an app-rule block (vs web/purchase/Shorts, which are
     // owned by their own scans and must not be taken down by the periodic re-check).
     private var overlayIsAppBlock = false
@@ -168,7 +174,27 @@ class BlockerAccessibilityService : AccessibilityService() {
     // Pomodoro break starting/ending, a Timer or Strict session running out.
     private val recheckRunnable = object : Runnable {
         override fun run() {
-            val pkg = lastForegroundPkg ?: return
+            var pkg = lastForegroundPkg ?: return
+            // Gesture-nav Home can arrive without a window-state event, leaving the cache on
+            // the app the user already left — reconcile with the real active window first so
+            // a stale package is never (re-)blocked over the home screen. (Our own overlay
+            // window may report as the active window; never "reconcile" to ourselves.)
+            val actual = rootInActiveWindow?.packageName?.toString()
+            if (actual != null && actual != packageName && actual != pkg) {
+                lastForegroundPkg = actual
+                pkg = actual
+            }
+            if (isLauncherPkg(pkg)) {
+                // On Home nothing should stay covered — this also releases the web/purchase/
+                // guard covers (packageName == null) that no other path takes down when the
+                // launcher window-state event went missing. Shorts covers stay owned by their
+                // scan. The next window-state event re-arms this loop.
+                if (overlayView != null && !shortsCovering) {
+                    lastBlockedPkg = null
+                    removeBlockOverlay()
+                }
+                return
+            }
             if (overlayView == null) {
                 // May block now (limit just crossed, schedule started, break ended…).
                 handleAppBlock(pkg)
@@ -244,6 +270,11 @@ class BlockerAccessibilityService : AccessibilityService() {
                 handler.post { stopLocationUpdates() }
             }
         }.launchIn(scope)
+        // Warm the block overlay off the connect path (inflate only, NOT addView), so the
+        // very first block doesn't pay layout inflation while the blocked app is visible.
+        handler.post {
+            if (overlayView == null && preInflatedOverlay == null) preInflatedOverlay = newOverlayView()
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -252,39 +283,58 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (pkg == packageName) return // never act on ourselves
 
         when (event.eventType) {
-            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
-                if (pkg != null && pkg != lastForegroundPkg) {
-                    lastForegroundPkg = pkg
-                    LaunchCounter.recordOpen(applicationContext, pkg) // for LAUNCH_COUNT
-                }
-                // Keep the location fix current (and recover after a late permission grant).
-                if (schedules.any { it.enabled && it.type == ScheduleType.LOCATION }) {
-                    ensureLocationUpdates()
-                }
-                if (pkg != null) {
-                    // Strict Mode escape-hatch guard first (Accessibility/device-admin/app-info
-                    // pages), then in-app purchase sheet, then normal app blocking.
-                    if (!handleStrictSettingsGuard(pkg, event.className?.toString()) &&
-                        !handlePurchaseBlock(pkg, event.className?.toString())
-                    ) handleAppBlock(pkg)
-                }
-                // (Re)arm the mid-use re-check for the new foreground app; a neutral app
-                // (no rules, no session, no cover) costs nothing.
-                handler.removeCallbacks(recheckRunnable)
-                if (pkg != null && recheckMatters(pkg)) handler.postDelayed(recheckRunnable, RECHECK_MS)
-                lastWebText = null // new page/app: force a fresh re-check
-                scheduleWebScan()
-                scheduleShortsScan()
-            }
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ->
+                onForegroundChanged(pkg, event.className?.toString())
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
             AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED -> {
-                // The dangerous Settings pages often fill in their title/labels on a content
-                // event after the window opens, so re-check the guard here too.
-                if (pkg != null) handleStrictSettingsGuard(pkg, event.className?.toString())
-                scheduleWebScan()
-                scheduleShortsScan()
+                // Fast path: a NEW app's content events usually beat its window-state event,
+                // so acting here covers a blocked app sooner (less visible flash). Confirm
+                // with the real active window before trusting the event's package, so a
+                // background repaint (widget host, notification) can't hijack the cache —
+                // the binder call only happens on a package change, not per content event.
+                if (pkg != null && pkg != lastForegroundPkg &&
+                    rootInActiveWindow?.packageName?.toString() == pkg
+                ) {
+                    onForegroundChanged(pkg, event.className?.toString())
+                } else {
+                    // The dangerous Settings pages often fill in their title/labels on a
+                    // content event after the window opens, so re-check the guard here too.
+                    if (pkg != null) handleStrictSettingsGuard(pkg, event.className?.toString())
+                    scheduleWebScan()
+                    scheduleShortsScan()
+                }
             }
         }
+    }
+
+    /** Everything that runs when the foreground app changes: launch counting, location
+     *  freshness, the guard→purchase→app-block chain, re-check re-arm and the web/Shorts
+     *  scan scheduling. Called from the window-state branch and from the content-changed
+     *  fast path; the `pkg != lastForegroundPkg` guard keeps recordOpen at exactly one
+     *  count per open regardless of which event type wins the race. */
+    private fun onForegroundChanged(pkg: String?, className: String?) {
+        if (pkg != null && pkg != lastForegroundPkg) {
+            lastForegroundPkg = pkg
+            LaunchCounter.recordOpen(applicationContext, pkg) // for LAUNCH_COUNT
+        }
+        // Keep the location fix current (and recover after a late permission grant).
+        if (schedules.any { it.enabled && it.type == ScheduleType.LOCATION }) {
+            ensureLocationUpdates()
+        }
+        if (pkg != null) {
+            // Strict Mode escape-hatch guard first (Accessibility/device-admin/app-info
+            // pages), then in-app purchase sheet, then normal app blocking.
+            if (!handleStrictSettingsGuard(pkg, className) &&
+                !handlePurchaseBlock(pkg, className)
+            ) handleAppBlock(pkg)
+        }
+        // (Re)arm the mid-use re-check for the new foreground app; a neutral app
+        // (no rules, no session, no cover) costs nothing.
+        handler.removeCallbacks(recheckRunnable)
+        if (pkg != null && recheckMatters(pkg)) handler.postDelayed(recheckRunnable, RECHECK_MS)
+        lastWebText = null // new page/app: force a fresh re-check
+        scheduleWebScan()
+        scheduleShortsScan()
     }
 
     /** Whether [pkg]'s on-screen text should be scanned for blocked words. Browsers always
@@ -301,7 +351,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         }
         if (pkg in browserPackages) return true
         if ((userKeywords.isEmpty() && !adultPackOn) || !keywordsEverywhere) return false
-        return pkg !in launcherPackages && pkg !in KEYWORD_SCAN_EXCLUDED
+        return !isLauncherPkg(pkg) && pkg !in KEYWORD_SCAN_EXCLUDED
     }
 
     /** Debounce: run the scan ~600ms after the last event, i.e. once the screen settles.
@@ -309,8 +359,13 @@ class BlockerAccessibilityService : AccessibilityService() {
      *  event sources) or when nothing would be scanned — the scan would no-op there, and
      *  content/text events fire constantly in every app. */
     private fun scheduleWebScan() {
-        if (!shouldScanPkg(lastForegroundPkg)) return
         handler.removeCallbacks(webScanRunnable)
+        if (!shouldScanPkg(lastForegroundPkg)) {
+            // Leaving a scannable app: a scan queued there (or already running) must not
+            // put its cover up over Home/Settings.
+            webScanJob?.cancel()
+            return
+        }
         handler.postDelayed(webScanRunnable, 600)
     }
 
@@ -331,7 +386,8 @@ class BlockerAccessibilityService : AccessibilityService() {
     // --- App blocking (unchanged behaviour) ---
 
     private fun handleAppBlock(pkg: String) {
-        if (!shouldBlock(pkg)) {
+        val reason = blockReason(pkg)
+        if (reason == null) {
             // Keep a Shorts cover up even though the whole app isn't blocked — the shorts
             // scan owns adding/removing it as the user moves in and out of Shorts.
             if (pkg == YOUTUBE_PKG && shortsCovering) { lastBlockedPkg = null; return }
@@ -343,7 +399,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (pkg == lastBlockedPkg && now - lastBlockAt < 1500) return
         lastBlockedPkg = pkg
         lastBlockAt = now
-        showBlockScreen(title = "Blocked", message = null, packageName = pkg, counterKey = pkg)
+        showBlockScreen(title = reason.title, message = reason.message, packageName = pkg, counterKey = pkg)
     }
 
     /**
@@ -433,10 +489,17 @@ class BlockerAccessibilityService : AccessibilityService() {
         return true
     }
 
-    private fun shouldBlock(pkg: String): Boolean {
+    private fun shouldBlock(pkg: String): Boolean = blockReason(pkg) != null
+
+    /** Why an app is blocked right now — the block screen's title kicker + short human message. */
+    private data class BlockReason(val title: String, val message: String)
+
+    /** The reason [pkg] is blocked right now, or null when it's allowed. Checked in order —
+     *  Strict/Quick Block, then schedules (first match wins), then unsupported browsers. */
+    private fun blockReason(pkg: String): BlockReason? {
         // After an update: nothing blocks until the user reactivates (the update also ends
         // any Strict session — see UpdatePause).
-        if (updatePauseActive()) return false
+        if (updatePauseActive()) return null
         val now = System.currentTimeMillis()
         val strict = strictRemaining() > 0L
 
@@ -444,32 +507,58 @@ class BlockerAccessibilityService : AccessibilityService() {
         // or (no session) when not paused.
         val rule = rules[pkg]
         if (rule != null && rule.isBlocked) {
-            if (strict) return true // Strict Mode blocks every chosen app outright.
+            if (strict) { // Strict Mode blocks every chosen app outright.
+                return BlockReason("Strict Mode", "Blocked until your Strict session ends.")
+            }
             val session = QuickSession.state(this)
             val quickOn = if (session.active) session.blockingNow else !SettingsStore.quickBlockPaused(this)
             if (quickOn) when (rule.mode) {
-                BlockMode.HARD, BlockMode.SCHEDULE -> return true
+                BlockMode.HARD, BlockMode.SCHEDULE ->
+                    return BlockReason("Blocked", "Quick Block is on for this app.")
                 BlockMode.LIMIT ->
                     if (rule.dailyLimitMinutes >= 0 &&
                         UsageTracker.usedMinutesToday(this, pkg) >= rule.dailyLimitMinutes
-                    ) return true
+                    ) return BlockReason(
+                        "Daily limit reached",
+                        if (rule.dailyLimitMinutes > 0)
+                            "You've used your ${rule.dailyLimitMinutes} min for today."
+                        else "This app is blocked for today.",
+                    )
             }
         }
 
-        // Schedules — block when the schedule's condition is currently met.
-        if (DEBUG) Log.d(TAG, "shouldBlock $pkg schedules=${schedules.size} opens=${LaunchCounter.opensToday(this, pkg)}")
+        // Schedules — block when the schedule's condition is currently met. First match wins.
+        if (DEBUG) Log.d(TAG, "blockReason $pkg schedules=${schedules.size} opens=${LaunchCounter.opensToday(this, pkg)}")
         for (s in schedules) {
             if (!s.enabled || pkg !in s.packages) continue
-            val hit = when (s.type) {
-                ScheduleType.TIME -> inTimeWindow(s, now)
-                ScheduleType.USAGE_LIMIT ->
+            val reason = when (s.type) {
+                ScheduleType.TIME -> if (inTimeWindow(s, now)) BlockReason(
+                    "Blocked by schedule",
+                    "${schedLabel(s)} is on until ${hm(s.endMinutes)}.",
+                ) else null
+                ScheduleType.USAGE_LIMIT -> if (
                     UsageTracker.usedMinutesToday(this, pkg) >= s.limitMinutes
-                ScheduleType.LAUNCH_COUNT ->
+                ) BlockReason(
+                    "Daily limit reached",
+                    "${s.limitMinutes} min used today — the limit set by ${schedLabel(s)}.",
+                ) else null
+                ScheduleType.LAUNCH_COUNT -> if (
                     LaunchCounter.opensToday(this, pkg) >= s.limitCount
-                ScheduleType.WIFI -> onMatchingWifi(s.wifiSsid)
-                ScheduleType.LOCATION -> inLocation(s)
+                ) BlockReason(
+                    "Open limit reached",
+                    "Opened ${s.limitCount} times today — the limit set by ${schedLabel(s)}.",
+                ) else null
+                ScheduleType.WIFI -> if (onMatchingWifi(s.wifiSsid)) BlockReason(
+                    "Blocked on this Wi-Fi",
+                    if (s.wifiSsid.isBlank()) "This app is blocked while you're on Wi-Fi."
+                    else "This app is blocked on “${s.wifiSsid}”.",
+                ) else null
+                ScheduleType.LOCATION -> if (inLocation(s)) BlockReason(
+                    "Blocked at this location",
+                    "This app is blocked here by ${schedLabel(s)}.",
+                ) else null
             }
-            if (hit) return true
+            if (reason != null) return reason
         }
 
         // Unsupported browsers — if web filtering is on, block browsers we can't read so they
@@ -477,19 +566,49 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (SettingsStore.blockUnsupportedBrowsers(this) &&
             (userKeywords.isNotEmpty() || adultPackOn || SettingsStore.blockAdult(this)) &&
             pkg in browserPackages && pkg !in SUPPORTED_BROWSERS
-        ) return true
+        ) return BlockReason(
+            "Browser blocked",
+            "This browser can't be filtered, so it's blocked while word blocking is on.",
+        )
 
-        return false
+        return null
     }
 
+    /** "your “Work” schedule", or just "your schedule" when it has no name. */
+    private fun schedLabel(s: Schedule): String =
+        if (s.name.isBlank()) "your schedule" else "your “${s.name.trim()}” schedule"
+
+    /** Minutes-from-midnight → "9:00" / "17:30". */
+    private fun hm(m: Int): String = "%d:%02d".format(m / 60, m % 60)
+
     /** All installed home-screen (launcher) apps — never keyword-scanned: a keyword matching an
-     *  app's label on the home screen would cover Home itself, and Close→home would loop forever. */
+     *  app's label on the home screen would cover Home itself, and Close→home would loop forever.
+     *  The *current default* home is also resolved explicitly — MATCH_ALL has missed it on some
+     *  OEM builds, and a missed launcher means false blocks on the home screen. */
     private fun findLauncherPackages(): Set<String> = runCatching {
         val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
-        packageManager.queryIntentActivities(intent, PackageManager.MATCH_ALL)
+        val all = packageManager.queryIntentActivities(intent, PackageManager.MATCH_ALL)
             .mapNotNull { it.activityInfo?.packageName }
-            .toSet()
+        val default = packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
+            ?.activityInfo?.packageName
+        (all + listOfNotNull(default)).toSet()
     }.getOrDefault(emptySet())
+
+    /** Launcher check that self-heals after a default-launcher change: the set is built at
+     *  service start, so on an unknown package it re-detects (throttled) before declaring it
+     *  not-a-launcher, caching negatives to keep the hot paths cheap. Thread-safe. */
+    private fun isLauncherPkg(pkg: String): Boolean {
+        if (pkg in launcherPackages) return true
+        if (pkg in knownNonLauncherPkgs) return false
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastLauncherRefreshAt >= LAUNCHER_REFRESH_MS) {
+            lastLauncherRefreshAt = now
+            launcherPackages = findLauncherPackages()
+            if (pkg in launcherPackages) return true
+        }
+        knownNonLauncherPkgs = knownNonLauncherPkgs + pkg
+        return false
+    }
 
     /** All packages that can handle an https:// link — i.e. the device's browsers. */
     private fun findBrowserPackages(): Set<String> = runCatching {
@@ -511,6 +630,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                 scope.launch {
                     browserPackages = findBrowserPackages()
                     launcherPackages = findLauncherPackages()
+                    knownNonLauncherPkgs = emptySet() // a new install may be a launcher
                 }
             }
         }
@@ -662,30 +782,37 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (DEBUG) Log.d(TAG, "scan[$pkg browser=$isBrowser]: ${text.length} chars: ${text.take(120)}")
         if (text.isBlank()) return
         if (text == lastWebText) return
+        // The site the user is actually ON (browsers only) — keyword matching prefers it
+        // over the page text so a page merely mentioning a blocked word doesn't block.
+        val url = if (isBrowser) extractBrowserUrl(pkg) else null
 
         // YouTube Shorts opened in a browser (youtube.com/shorts) — while Quick Block is active.
         if (isBrowser && SettingsStore.blockYoutubeShorts(applicationContext) && quickBlockActive() &&
-            text.lowercase().contains("youtube.com/shorts")
+            (url ?: text.lowercase()).contains("youtube.com/shorts")
         ) {
             lastWebText = text
             withContext(Dispatchers.Main) {
-                showBlockScreen(title = "Shorts blocked",
-                    message = "YouTube Shorts is blocked.", packageName = null, counterKey = "shorts")
+                if (lastForegroundPkg == pkg && stillOnScreen(pkg)) {
+                    showBlockScreen(title = "Shorts blocked",
+                        message = "YouTube Shorts is blocked.", packageName = null, counterKey = "shorts")
+                } else lastWebText = null // left during the scan — don't cover what's there now
             }
             return
         }
 
         // Browsers get the full filter (user words + adult word pack + blocked apps' domains +
-        // adult site list). Other apps match the user's own words + the adult word pack — the
-        // adult domains/keywords are URL/heuristic lists that don't make sense against arbitrary
-        // app UI text, but the pack is whole-word matched so it's safe everywhere.
+        // adult site list); user + social keywords match the omnibox URL when one was read
+        // (page text otherwise), while the adult layers always match the page text. Other
+        // apps match the user's own words + the adult word pack — the adult domains/keywords
+        // are URL/heuristic lists that don't make sense against arbitrary app UI text, but
+        // the pack is whole-word matched so it's safe everywhere.
         // After-update pause: the user's own words pause with everything else; only the
         // adult layer (pack + adult sites) keeps matching.
         val ownWords = if (updatePauseActive()) emptyList() else userKeywords
         val hit = if (isBrowser) {
-            filter.check(text, ownWords + autoSocialKeywords(), adultPackOn, SettingsStore.blockAdult(applicationContext))
+            filter.check(text, url, ownWords + autoSocialKeywords(), adultPackOn, SettingsStore.blockAdult(applicationContext))
         } else {
-            filter.check(text, ownWords, adultPackOn, blockAdult = false)
+            filter.check(text, url = null, ownWords, adultPackOn, blockAdult = false)
         }
         if (hit == null) {
             lastWebText = null
@@ -697,8 +824,18 @@ class BlockerAccessibilityService : AccessibilityService() {
         // the main thread. (No GLOBAL_ACTION_BACK — it races with the just-launched activity and
         // dismisses it, same as the GLOBAL_ACTION_HOME race removed in M2. Close goes home.)
         withContext(Dispatchers.Main) {
-            showBlockScreen(title = hit.title, message = hit.message, packageName = null, counterKey = "web")
+            if (lastForegroundPkg == pkg && stillOnScreen(pkg)) {
+                showBlockScreen(title = hit.title, message = hit.message, packageName = null, counterKey = "web")
+            } else lastWebText = null // left during the scan — don't cover what's there now
         }
+    }
+
+    /** Best-effort "is [pkg] still what the user sees" — guards covers fired from cached state
+     *  (the debounced scan) after a gesture-nav Home that produced no window-state event. An
+     *  unreadable root counts as yes, and so does our own overlay window. Main thread only. */
+    private fun stillOnScreen(pkg: String): Boolean {
+        val actual = rootInActiveWindow?.packageName?.toString() ?: return true
+        return actual == pkg || actual == packageName
     }
 
     /**
@@ -753,6 +890,32 @@ class BlockerAccessibilityService : AccessibilityService() {
     }
 
     /**
+     * The browser's omnibox text (trimmed, lowercased), or null when no omnibox is on
+     * screen (fullscreen video, a browser UI change) — callers must then fall back to
+     * page-text matching so fullscreen can't become a bypass. Chromium browsers expose
+     * the omnibox as <pkg>:id/url_bar (flagReportViewIds is set in our service config).
+     */
+    private fun extractBrowserUrl(pkg: String): String? {
+        val urlBarId = "$pkg:id/url_bar"
+        val roots = ArrayList<AccessibilityNodeInfo>()
+        rootInActiveWindow?.let(roots::add) // the omnibox the user sees wins
+        windows?.forEach { w ->
+            if (w.type != AccessibilityWindowInfo.TYPE_INPUT_METHOD) w.root?.let(roots::add)
+        }
+        for (root in roots) {
+            if (root.packageName?.toString() != pkg) continue
+            // Nodes can be recycled under us mid page-churn — treat failures as "not found".
+            val nodes = runCatching { root.findAccessibilityNodeInfosByViewId(urlBarId) }
+                .getOrNull() ?: continue
+            for (n in nodes) {
+                val t = n.text?.toString()?.trim()?.lowercase()
+                if (!t.isNullOrBlank()) return t
+            }
+        }
+        return null
+    }
+
+    /**
      * Collects on-screen text (URL bar, search fields, page) across all windows — not
      * just the active one, since Chrome's omnibox/page can sit in a non-active window
      * (suggestion popup, dialog). Capped for battery.
@@ -773,7 +936,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         // launcher/System UI windows overlaying the scanned app on OEM builds.
         roots.removeAll {
             val p = it.packageName?.toString() ?: return@removeAll false
-            p == packageName || p in launcherPackages || p in KEYWORD_SCAN_EXCLUDED
+            p == packageName || isLauncherPkg(p) || p in KEYWORD_SCAN_EXCLUDED
         }
         if (roots.isEmpty()) return ""
 
@@ -827,12 +990,8 @@ class BlockerAccessibilityService : AccessibilityService() {
     private fun showBlockOverlay(
         packageName: String?, title: String, message: String, today: Int, total: Int,
     ): Boolean = try {
-        val v = overlayView ?: LayoutInflater.from(this).inflate(R.layout.overlay_block, null).also {
-            it.findViewById<Button>(R.id.overlay_close).setOnClickListener {
-                lastBlockedPkg = null
-                removeBlockOverlay()
-                performGlobalAction(GLOBAL_ACTION_HOME)
-            }
+        val v = overlayView ?: (preInflatedOverlay ?: newOverlayView()).also {
+            preInflatedOverlay = null
             val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             else @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE
@@ -869,17 +1028,36 @@ class BlockerAccessibilityService : AccessibilityService() {
             )
         }
         val iconView = v.findViewById<ImageView>(R.id.overlay_icon)
-        val bmp = packageName?.let { loadIcon(it) }
-        if (bmp != null) iconView.setImageBitmap(bmp)
-        else iconView.setImageResource(R.mipmap.ic_launcher)
+        iconView.setImageResource(R.mipmap.ic_launcher)
+        if (packageName != null) {
+            // The icon can need a PackageManager decode (cache miss) — keep it off the
+            // first frame so the cover lands instantly; guard against a torn-down cover.
+            handler.post {
+                if (overlayView == v) loadIcon(packageName)?.let(iconView::setImageBitmap)
+            }
+        }
         true
     } catch (e: Exception) {
         Log.w(TAG, "overlay failed, falling back to activity", e)
         false
     }
 
+    /** Inflates the block overlay and wires its Close button (not yet attached). */
+    private fun newOverlayView(): View =
+        LayoutInflater.from(this).inflate(R.layout.overlay_block, null).also {
+            it.findViewById<Button>(R.id.overlay_close).setOnClickListener {
+                lastBlockedPkg = null
+                removeBlockOverlay()
+                performGlobalAction(GLOBAL_ACTION_HOME)
+            }
+        }
+
     private fun removeBlockOverlay() {
-        overlayView?.let { runCatching { windowManager.removeView(it) } }
+        overlayView?.let {
+            runCatching { windowManager.removeView(it) }
+            // Keep the detached view for the next block (every field is rewritten per show).
+            preInflatedOverlay = it
+        }
         overlayView = null
     }
 
@@ -930,6 +1108,9 @@ class BlockerAccessibilityService : AccessibilityService() {
 
         // How often to re-check the app the user is currently inside (mid-use enforcement).
         private const val RECHECK_MS = 30_000L
+
+        // Throttle for isLauncherPkg's on-miss launcher re-detection.
+        private const val LAUNCHER_REFRESH_MS = 30_000L
 
         // Browsers whose on-screen content the web filter can read; others are "unsupported".
         private val SUPPORTED_BROWSERS = setOf("com.android.chrome")
