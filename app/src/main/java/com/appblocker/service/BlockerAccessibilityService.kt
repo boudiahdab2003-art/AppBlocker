@@ -139,6 +139,13 @@ class BlockerAccessibilityService : AccessibilityService() {
     // Whether the current overlay is an app-rule block (vs web/purchase/Shorts, which are
     // owned by their own scans and must not be taken down by the periodic re-check).
     private var overlayIsAppBlock = false
+    // What the current cover is counting (package name or "web"/"shorts"/...): one cover =
+    // one recorded attempt, so a re-show for the same key must not re-record or re-draw.
+    private var overlayCounterKey: String? = null
+    // The just-dismissed cover's key + time: "Got it" goes HOME, but events from the still-
+    // visible app during that transition must not instantly re-block/re-count the same entry.
+    private var dismissedKey: String? = null
+    private var dismissedAt = 0L
 
     @Volatile private var lastForegroundPkg: String? = null
     @Volatile private var lastLocation: Location? = null
@@ -777,6 +784,11 @@ class BlockerAccessibilityService : AccessibilityService() {
         // skipped in extractVisibleText, and launcher/System UI/Settings are excluded.
         val pkg = lastForegroundPkg ?: return
         if (!shouldScanPkg(pkg)) return
+        // A full block cover is already up — everything beneath it is unreachable, so there
+        // is nothing new to block; scanning behind it would only re-fire on the covered
+        // page's churn (or on a keyword in the covered app's own UI) and re-count the entry.
+        // Shorts covers stay with their own scan, which adds/removes them as the user scrolls.
+        if (overlayView != null && !shortsCovering) return
         val isBrowser = pkg in browserPackages
         val text = extractVisibleText()
         if (DEBUG) Log.d(TAG, "scan[$pkg browser=$isBrowser]: ${text.length} chars: ${text.take(120)}")
@@ -961,7 +973,19 @@ class BlockerAccessibilityService : AccessibilityService() {
         packageName: String?,
         counterKey: String,
     ) {
+        // One cover = one recorded entry. The page/app behind a cover keeps emitting events
+        // (feeds churn, activities transition), and each used to re-record an "attempt" and
+        // re-roll the quote — so a cover already up for this key means there's nothing to do.
+        if (overlayView != null && overlayCounterKey == counterKey) return
+        // Same guard for the entry the user JUST dismissed: Close goes HOME, but the blocked
+        // app stays on screen for the transition and would re-block/re-count immediately.
+        // (Shorts covers are exempt — their scan tracks covering state in shortsCovering, and
+        // suppressing a show here would desync it and leave Shorts uncovered.)
+        if (counterKey != "shorts" && counterKey == dismissedKey &&
+            System.currentTimeMillis() - dismissedAt < 2500
+        ) return
         val (today, total) = AttemptCounter.record(applicationContext, counterKey)
+        overlayCounterKey = counterKey
         // Only app-rule blocks pass a package; web/purchase/Shorts covers are managed by
         // their own scans and the periodic re-check must leave them alone.
         overlayIsAppBlock = packageName != null
@@ -1046,6 +1070,8 @@ class BlockerAccessibilityService : AccessibilityService() {
     private fun newOverlayView(): View =
         LayoutInflater.from(this).inflate(R.layout.overlay_block, null).also {
             it.findViewById<Button>(R.id.overlay_close).setOnClickListener {
+                dismissedKey = overlayCounterKey
+                dismissedAt = System.currentTimeMillis()
                 lastBlockedPkg = null
                 removeBlockOverlay()
                 performGlobalAction(GLOBAL_ACTION_HOME)
@@ -1059,6 +1085,7 @@ class BlockerAccessibilityService : AccessibilityService() {
             preInflatedOverlay = it
         }
         overlayView = null
+        overlayCounterKey = null
     }
 
     // Launch-warmed cache first (label + icon already decoded); PackageManager fallback for
