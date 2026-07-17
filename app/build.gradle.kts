@@ -21,8 +21,8 @@ android {
         applicationId = "com.appblocker"
         minSdk = 24
         targetSdk = 35 // Google Play requires 35+ for new app submissions
-        versionCode = 78
-        versionName = "1.77"
+        versionCode = 79
+        versionName = "1.78"
     }
 
     // Two distribution channels, same app: "github" = the original sideloaded build with the

@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.78
+- Smoother settings: Instructions topics now open as their own full page (easier to read than the old expanding cards), and the app-icon chooser is a clean full-page grid instead of the cramped popup.
+
 ## v1.77
 - New: Profile > Instructions - a built-in guide explaining every feature in detail, in thirteen expandable topics: protection setup, Quick Block, templates, all five schedule types, Strict Mode, blocked words and websites, the block screen, YouTube Shorts, the full Insights tab, goals/mood/AI Coach, PIN lock, updates, and personalization.
 
