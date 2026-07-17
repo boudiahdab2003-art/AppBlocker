@@ -318,6 +318,7 @@ fun BlockingScreen(
                     strictActive = focusActive,
                     onToggle = { scheduleVm.setEnabled(s, it) },
                     onClick = { onEditSchedule(s) },
+                    onDelete = { scheduleVm.delete(s) },
                 )
                 Spacer(Modifier.padding(top = 10.dp))
             }

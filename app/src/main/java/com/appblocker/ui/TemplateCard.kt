@@ -78,8 +78,11 @@ internal fun TemplateCard(
                     Icon(Icons.Filled.Check, contentDescription = null, tint = Color.White,
                         modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(3.dp))
-                    Text("Active", style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold, color = Color.White)
+                    // One line, always — at larger system fonts the header row gets tight and
+                    // the word used to wrap letter-by-letter ("Ac/tiv/e").
+                    Text("Active", style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold, color = Color.White,
+                        maxLines = 1, softWrap = false)
                 }
             }
         }

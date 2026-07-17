@@ -18,17 +18,25 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -70,7 +78,9 @@ internal fun ScheduleTile(
                 RoundedCornerShape(20.dp),
             )
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(16.dp),
+            // Slim side padding: at larger system fonts a one-word label ("Location") needs
+            // the extra width or it breaks mid-word ("Locatio/n").
+            .padding(vertical = 16.dp, horizontal = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -106,10 +116,12 @@ internal fun ScheduleCard(
     strictActive: Boolean,
     onToggle: (Boolean) -> Unit,
     onClick: () -> Unit,
+    onDelete: (() -> Unit)? = null,
 ) {
     // During Strict you may turn a schedule ON (strengthen) but not OFF; the card still opens
     // (the editor itself stays read-only for an existing schedule during Strict).
     val toggleEnabled = !strictActive || !schedule.enabled
+    var confirmDelete by remember { mutableStateOf(false) }
     Card(
         Modifier.fillMaxWidth().clickable(onClick = onClick),
         shape = RoundedCornerShape(20.dp),
@@ -130,8 +142,31 @@ internal fun ScheduleCard(
                 Text(scheduleSummary(schedule), style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            // Deleting weakens blocking, so the shortcut disappears during Strict Mode
+            // (mirrors the editor, which goes read-only for existing schedules then).
+            if (onDelete != null && !strictActive) {
+                IconButton(onClick = { confirmDelete = true }) {
+                    Icon(Icons.Filled.Delete, contentDescription = "Delete ${schedule.name}",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
             Switch(checked = schedule.enabled, enabled = toggleEnabled, onCheckedChange = onToggle)
         }
+    }
+    if (confirmDelete && onDelete != null) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("Delete this schedule?") },
+            text = { Text("“${schedule.name}” — ${scheduleSummary(schedule)}. This can't be undone.") },
+            confirmButton = {
+                TextButton(onClick = { confirmDelete = false; onDelete() }) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDelete = false }) { Text("Cancel") }
+            },
+        )
     }
 }
 
