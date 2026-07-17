@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.81
+- The timer picker's Save button now keeps a guaranteed fixed distance from the bottom of the screen - no more depending on the phone reporting its gesture-bar height (some phones report zero, which defeated every measured fix).
+
 ## v1.80
 - The timer picker's Save button now reads the navigation-bar height directly from Android's root window - the deepest possible source, immune to the popup-window and layout-accounting issues that defeated the earlier fixes.
 
