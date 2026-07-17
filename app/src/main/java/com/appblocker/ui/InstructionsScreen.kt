@@ -1,11 +1,12 @@
 package com.appblocker.ui
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.expandVertically
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,9 +24,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Block
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lock
@@ -47,7 +48,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -63,9 +63,35 @@ private data class Topic(
     val bullets: List<String> = emptyList(),
 )
 
-/** Profile ▸ Instructions: every feature explained in detail, one expandable topic each. */
+/** Profile ▸ Instructions: an index of topics; each opens as its own full page. */
 @Composable
 fun InstructionsScreen(onBack: () -> Unit) {
+    var openTopic by rememberSaveable { mutableStateOf<Int?>(null) }
+    // System back walks topic → index → Profile. Composed inside the overlay, this handler
+    // registers after AppRoot's close-overlay one, so it wins while a topic is open.
+    BackHandler(enabled = openTopic != null) { openTopic = null }
+
+    AnimatedContent(
+        targetState = openTopic,
+        transitionSpec = {
+            if (targetState != null) {
+                (slideInHorizontally { it / 4 } + fadeIn()) togetherWith fadeOut()
+            } else {
+                fadeIn() togetherWith (slideOutHorizontally { it / 4 } + fadeOut())
+            }
+        },
+        label = "topic",
+    ) { open ->
+        if (open == null) {
+            TopicIndex(onBack = onBack, onOpen = { openTopic = it })
+        } else {
+            TopicPage(TOPICS[open], onBack = { openTopic = null })
+        }
+    }
+}
+
+@Composable
+private fun TopicIndex(onBack: () -> Unit, onOpen: (Int) -> Unit) {
     // No Scaffold here, so pad the system bars ourselves (edge-to-edge is forced on Android 15+).
     Column(Modifier.fillMaxSize().safeDrawingPadding()) {
         EditorTopBar(title = "Instructions", onBack = onBack)
@@ -78,14 +104,14 @@ fun InstructionsScreen(onBack: () -> Unit) {
                     color = MaterialTheme.colorScheme.onBackground,
                 )
                 Text(
-                    "Every feature, explained in detail. Tap a topic to unfold it.",
+                    "Every feature, explained in detail. Tap a topic to read it.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 2.dp, bottom = 16.dp),
                 )
             }
             items(TOPICS.size) { i ->
-                TopicCard(TOPICS[i])
+                TopicRow(TOPICS[i]) { onOpen(i) }
                 Spacer(Modifier.padding(top = 12.dp))
             }
         }
@@ -93,60 +119,73 @@ fun InstructionsScreen(onBack: () -> Unit) {
 }
 
 @Composable
-private fun TopicCard(topic: Topic) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
+private fun TopicRow(topic: Topic, onClick: () -> Unit) {
     val shape = RoundedCornerShape(20.dp)
-    val chevron by animateFloatAsState(if (expanded) 180f else 0f, label = "chevron")
-    Column(
+    Row(
         Modifier.fillMaxWidth()
             .clip(shape)
             .background(MaterialTheme.colorScheme.surface)
             .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), shape)
-            .clickable { expanded = !expanded }
+            .clickable(onClick = onClick)
             .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(AppGradients.accent),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(topic.icon, contentDescription = null, tint = Color.White,
-                    modifier = Modifier.size(19.dp))
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(topic.title, style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                Text(topic.summary, style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Icon(Icons.Filled.ExpandMore, contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.rotate(chevron))
-        }
-        AnimatedVisibility(
-            visible = expanded,
-            enter = expandVertically() + fadeIn(),
-            exit = shrinkVertically() + fadeOut(),
+        Box(
+            Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(AppGradients.accent),
+            contentAlignment = Alignment.Center,
         ) {
-            Column(Modifier.padding(top = 12.dp)) {
-                topic.paragraphs.forEach { p ->
-                    Text(p, style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(top = 6.dp))
-                }
-                topic.bullets.forEach { point ->
-                    Row(Modifier.padding(top = 8.dp)) {
-                        Box(
-                            Modifier.padding(top = 7.dp).size(6.dp).clip(CircleShape)
-                                .background(AppGradients.accent)
-                        )
-                        Spacer(Modifier.width(10.dp))
-                        Text(point, style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface)
+            Icon(topic.icon, contentDescription = null, tint = Color.White,
+                modifier = Modifier.size(19.dp))
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(topic.title, style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+            Text(topic.summary, style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun TopicPage(topic: Topic, onBack: () -> Unit) {
+    Column(Modifier.fillMaxSize().safeDrawingPadding()) {
+        EditorTopBar(title = topic.title, onBack = onBack)
+        LazyColumn(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier.size(44.dp).clip(RoundedCornerShape(13.dp))
+                            .background(AppGradients.accent),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(topic.icon, contentDescription = null, tint = Color.White,
+                            modifier = Modifier.size(24.dp))
                     }
+                    Spacer(Modifier.width(14.dp))
+                    Text(topic.summary, style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
+            items(topic.paragraphs.size) { i ->
+                Text(topic.paragraphs[i], style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(top = 16.dp))
+            }
+            items(topic.bullets.size) { i ->
+                Row(Modifier.padding(top = 14.dp)) {
+                    Box(
+                        Modifier.padding(top = 9.dp).size(6.dp).clip(CircleShape)
+                            .background(AppGradients.accent)
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text(topic.bullets[i], style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface)
+                }
+            }
+            item { Spacer(Modifier.padding(top = 28.dp)) }
         }
     }
 }
