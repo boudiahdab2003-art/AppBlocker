@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.80
+- The timer picker's Save button now reads the navigation-bar height directly from Android's root window - the deepest possible source, immune to the popup-window and layout-accounting issues that defeated the earlier fixes.
+
 ## v1.79
 - Fixed for real: the Save button in the timer picker (Strict Mode and Quick Block) now measures the navigation bar from the app's main window - the popup was reporting it as zero, which is why earlier fixes didn't stick. Also: Instructions topic pages got a cleaner layout with titled point cards instead of plain text.
 
