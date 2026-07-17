@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Delete
@@ -79,6 +80,7 @@ fun ProfileScreen(
     onOpenPermissions: () -> Unit = {},
     onOpenChangelog: () -> Unit = {},
     onOpenKeywords: () -> Unit = {},
+    onOpenInstructions: () -> Unit = {},
     updateVm: UpdateViewModel = viewModel(),
     vm: HomeViewModel = viewModel(),
     scheduleVm: ScheduleViewModel = viewModel(),
@@ -243,6 +245,15 @@ fun ProfileScreen(
                         else -> updateVm.check()
                     }
                 },
+            )
+            Divider()
+            ProfileRow(
+                icon = Icons.AutoMirrored.Filled.MenuBook,
+                title = "Instructions",
+                subtitle = "How every feature works, explained in detail.",
+                chevron = true,
+                enabled = true,
+                onClick = onOpenInstructions,
             )
             Divider()
             ProfileRow(
