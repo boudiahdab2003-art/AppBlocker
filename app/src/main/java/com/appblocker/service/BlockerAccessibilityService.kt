@@ -9,6 +9,7 @@ import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.graphics.LinearGradient
+import android.graphics.Outline
 import android.graphics.PixelFormat
 import android.graphics.Shader
 import android.location.Location
@@ -26,6 +27,7 @@ import android.util.Log
 import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewOutlineProvider
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -36,6 +38,7 @@ import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
 import com.appblocker.R
+import com.appblocker.data.AppIcons
 import com.appblocker.data.AppRule
 import com.appblocker.data.AttemptCounter
 import com.appblocker.data.BlockMode
@@ -1052,7 +1055,9 @@ class BlockerAccessibilityService : AccessibilityService() {
             )
         }
         val iconView = v.findViewById<ImageView>(R.id.overlay_icon)
-        iconView.setImageResource(R.mipmap.ic_launcher)
+        // Our own mark must be the launcher icon the user actually picked (icon switcher),
+        // not the hardcoded default that stops matching the moment they change it.
+        iconView.setImageResource(AppIcons.current(this).previewRes)
         if (packageName != null) {
             // The icon can need a PackageManager decode (cache miss) — keep it off the
             // first frame so the cover lands instantly; guard against a torn-down cover.
@@ -1075,6 +1080,16 @@ class BlockerAccessibilityService : AccessibilityService() {
                 lastBlockedPkg = null
                 removeBlockOverlay()
                 performGlobalAction(GLOBAL_ACTION_HOME)
+            }
+            // Clip the footer icon to a circle — the icon-art PNGs are full-bleed squares,
+            // and this matches how the icon picker (and most launchers) present icons.
+            it.findViewById<ImageView>(R.id.overlay_icon).apply {
+                clipToOutline = true
+                outlineProvider = object : ViewOutlineProvider() {
+                    override fun getOutline(view: View, outline: Outline) {
+                        outline.setOval(0, 0, view.width, view.height)
+                    }
+                }
             }
         }
 

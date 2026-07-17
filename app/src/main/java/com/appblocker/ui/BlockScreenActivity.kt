@@ -32,12 +32,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
+import com.appblocker.data.AppIcons
 import com.appblocker.data.AttemptCounter
 import com.appblocker.data.Quote
 import com.appblocker.data.Quotes
@@ -205,17 +208,13 @@ private fun BlockScreen(
                     modifier = Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)),
                 )
             } else {
-                Box(
-                    Modifier.size(48.dp).clip(CircleShape).background(primary),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        Icons.Filled.Shield,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(28.dp),
-                    )
-                }
+                // Our own mark: the launcher icon the user actually picked (icon switcher),
+                // clipped round like the picker preview — not a generic stand-in.
+                Image(
+                    painter = painterResource(AppIcons.current(LocalContext.current).previewRes),
+                    contentDescription = null,
+                    modifier = Modifier.size(48.dp).clip(CircleShape),
+                )
             }
             Spacer(Modifier.width(14.dp))
             Text(
