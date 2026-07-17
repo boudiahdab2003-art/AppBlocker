@@ -12,7 +12,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -180,14 +182,22 @@ fun DurationPickerDialog(
     onSave: (Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    // The dialog's own window reports ZERO insets on some OEMs (HyperOS) even though it is
+    // drawn edge-to-edge, so inset modifiers INSIDE the dialog are no-ops — that's why the
+    // Save button kept landing in the gesture zone across several fixes. Capture the real
+    // insets here, in the ACTIVITY window's composition scope (always correct), and apply
+    // them manually inside the dialog.
+    val safeInsets = WindowInsets.safeDrawing.asPaddingValues()
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         var minutes by remember { mutableIntStateOf(initialMinutes) }
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Scaffold(
+                modifier = Modifier.padding(safeInsets),
                 containerColor = Color.Transparent,
+                contentWindowInsets = WindowInsets(0),
                 topBar = { EditorTopBar(title, onBack = onDismiss) },
-                // Scaffold does NOT inset the bottomBar slot (only built-in bars like
-                // NavigationBar pad themselves), so clear the nav bar / gesture zone here.
+                // The activity-window insets above already clear the nav bar; the 24dp is
+                // extra comfort above the gesture area. (Scaffold never insets bottomBar.)
                 bottomBar = {
                     GradientButton(
                         text = "Save",
@@ -195,9 +205,8 @@ fun DurationPickerDialog(
                         onClick = { onSave(minutes); onDismiss() },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .navigationBarsPadding()
                             .padding(horizontal = 20.dp)
-                            .padding(top = 8.dp, bottom = 32.dp),
+                            .padding(top = 8.dp, bottom = 24.dp),
                     )
                 },
             ) { padding ->
