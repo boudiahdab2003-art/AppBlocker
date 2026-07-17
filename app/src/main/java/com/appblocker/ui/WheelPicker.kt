@@ -184,18 +184,21 @@ fun DurationPickerDialog(
     onSave: (Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    // History of this button: (1) the dialog's own window reports ZERO insets on HyperOS
-    // even though it draws edge-to-edge, so inset modifiers inside the dialog are no-ops;
-    // (2) reading WindowInsets.safeDrawing HERE is also zero-bottom, because this composes
-    // inside MainScaffold's content, which CONSUMES the bottom inset for its nav bar.
-    // The only source neither trap can zero out: the raw insets on the activity's root
-    // view, read below Compose's inset accounting entirely.
+    // History of this button: (1) the dialog's own window reports ZERO insets on HyperOS;
+    // (2) WindowInsets.safeDrawing read here is zero-bottom too (MainScaffold's content
+    // consumes it for the nav bar); (3) even the RAW root-view insets report bottom = 0 —
+    // HyperOS in gesture-nav mode genuinely claims the gesture area has no height
+    // (screenshot-verified across five fixes). Conclusion: on this device the bottom
+    // inset is unmeasurable. So: read the raw values as an upper bound where they DO
+    // exist, but FLOOR the bottom clearance at a fixed 40dp that no OEM can zero out.
     val view = LocalView.current
     val density = LocalDensity.current
     val (topPad, bottomPad) = remember(view) {
         val bars = ViewCompat.getRootWindowInsets(view)
             ?.getInsets(WindowInsetsCompat.Type.systemBars())
-        with(density) { ((bars?.top ?: 0).toDp()) to ((bars?.bottom ?: 0).toDp()) }
+        with(density) {
+            ((bars?.top ?: 0).toDp()) to maxOf((bars?.bottom ?: 0).toDp(), 40.dp)
+        }
     }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         var minutes by remember { mutableIntStateOf(initialMinutes) }
