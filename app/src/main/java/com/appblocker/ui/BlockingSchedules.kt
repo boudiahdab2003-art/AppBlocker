@@ -70,7 +70,9 @@ internal fun ScheduleTile(
                 RoundedCornerShape(20.dp),
             )
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(16.dp),
+            // Slim side padding: at larger system fonts a one-word label ("Location") needs
+            // the extra width or it breaks mid-word ("Locatio/n").
+            .padding(vertical = 16.dp, horizontal = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
