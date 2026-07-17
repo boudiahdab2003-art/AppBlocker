@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -52,15 +51,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.appblocker.ui.theme.AppGradients
 
-/** One expandable help topic: a title + one-line summary, unfolding into the full story. */
+/** One help topic: a title + one-line summary, opening as a full page of intro prose
+ *  followed by titled point cards. */
 private data class Topic(
     val icon: ImageVector,
     val title: String,
     val summary: String,
     val paragraphs: List<String>,
-    val bullets: List<String> = emptyList(),
+    val points: List<Pair<String, String>> = emptyList(),
 )
 
 /** Profile ▸ Instructions: an index of topics; each opens as its own full page. */
@@ -155,14 +156,15 @@ private fun TopicPage(topic: Topic, onBack: () -> Unit) {
         EditorTopBar(title = topic.title, onBack = onBack)
         LazyColumn(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
             item {
+                // Hero: big badge + the summary as a lead-in line.
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
-                        Modifier.size(44.dp).clip(RoundedCornerShape(13.dp))
+                        Modifier.size(52.dp).clip(RoundedCornerShape(16.dp))
                             .background(AppGradients.accent),
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(topic.icon, contentDescription = null, tint = Color.White,
-                            modifier = Modifier.size(24.dp))
+                            modifier = Modifier.size(28.dp))
                     }
                     Spacer(Modifier.width(14.dp))
                     Text(topic.summary, style = MaterialTheme.typography.titleMedium,
@@ -170,23 +172,52 @@ private fun TopicPage(topic: Topic, onBack: () -> Unit) {
                 }
             }
             items(topic.paragraphs.size) { i ->
-                Text(topic.paragraphs[i], style = MaterialTheme.typography.bodyLarge,
+                Text(
+                    topic.paragraphs[i],
+                    style = MaterialTheme.typography.bodyLarge,
+                    lineHeight = 26.sp,
                     color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(top = 16.dp))
+                    modifier = Modifier.padding(top = 18.dp),
+                )
             }
-            items(topic.bullets.size) { i ->
-                Row(Modifier.padding(top = 14.dp)) {
-                    Box(
-                        Modifier.padding(top = 9.dp).size(6.dp).clip(CircleShape)
-                            .background(AppGradients.accent)
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Text(topic.bullets[i], style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface)
-                }
+            items(topic.points.size) { i ->
+                PointCard(
+                    title = topic.points[i].first,
+                    body = topic.points[i].second,
+                    modifier = Modifier.padding(top = if (i == 0) 18.dp else 10.dp),
+                )
             }
             item { Spacer(Modifier.padding(top = 28.dp)) }
         }
+    }
+}
+
+/** One titled point on a topic page, in the app's card language. */
+@Composable
+private fun PointCard(title: String, body: String, modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(16.dp)
+    Column(
+        modifier.fillMaxWidth()
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), shape)
+            .padding(14.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(7.dp).clip(RoundedCornerShape(50)).background(AppGradients.accent)
+            )
+            Spacer(Modifier.width(9.dp))
+            Text(title, style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+        }
+        Text(
+            body,
+            style = MaterialTheme.typography.bodyMedium,
+            lineHeight = 21.sp,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
+            modifier = Modifier.padding(top = 6.dp),
+        )
     }
 }
 
@@ -198,18 +229,18 @@ private val TOPICS = listOf(
         paragraphs = listOf(
             "AppBlocker watches which app or page is on screen and covers it with a block " +
                 "screen the moment something you've blocked appears. That needs two special " +
-                "permissions, both requested in the setup wizard:",
+                "permissions, both requested in the setup wizard.",
         ),
-        bullets = listOf(
-            "Accessibility service — the engine. It's how the app sees which app is in front " +
-                "and reads browser pages for blocked words. Nothing is sent anywhere; it all " +
-                "stays on your phone.",
-            "Device admin (\"Prevent uninstall\") — optional but recommended: it stops the app " +
-                "from being uninstalled in a weak moment, and Strict Mode turns it on " +
-                "automatically.",
-            "If protection is ever switched off, a banner appears in the app and a " +
-                "notification is posted so you can turn it back on. Profile ▸ Setup & " +
-                "permissions re-checks everything.",
+        points = listOf(
+            "Accessibility service" to
+                "The engine. It's how the app sees which app is in front and reads browser " +
+                "pages for blocked words. Nothing is sent anywhere; it all stays on your phone.",
+            "Prevent uninstall (device admin)" to
+                "Optional but recommended: it stops the app from being uninstalled in a weak " +
+                "moment, and Strict Mode turns it on automatically.",
+            "If protection turns off" to
+                "A banner appears in the app and a notification is posted so you can turn it " +
+                "back on. Profile ▸ Setup & permissions re-checks everything.",
         ),
     ),
     Topic(
@@ -220,16 +251,20 @@ private val TOPICS = listOf(
             "Quick Block is one list of apps that are blocked whenever it's on. Edit the list " +
                 "from the Blocking tab; opening any app on it shows the block screen instead.",
         ),
-        bullets = listOf(
-            "Sessions — start a Timer (block for a set duration) or a Pomodoro (blocked focus " +
-                "rounds with unblocked breaks) from the Quick Block card.",
-            "Pause — Quick Block can be paused when no session is running. Pausing also lifts " +
-                "the websites that were auto-blocked with your apps.",
-            "Extra options — block in-app purchase popups, and auto-add newly installed apps " +
-                "to the block list so a fresh install can't sidestep you.",
-            "Blocking a popular social app also blocks its website and short links in Chrome " +
-                "automatically (Instagram → instagram.com, YouTube → youtube.com and youtu.be, " +
-                "X → x.com and t.co…).",
+        points = listOf(
+            "Sessions" to
+                "Start a Timer (block for a set duration) or a Pomodoro (blocked focus rounds " +
+                "with unblocked breaks) from the Quick Block card.",
+            "Pause" to
+                "Quick Block can be paused when no session is running. Pausing also lifts the " +
+                "websites that were auto-blocked with your apps.",
+            "Extra options" to
+                "Block in-app purchase popups, and auto-add newly installed apps to the block " +
+                "list so a fresh install can't sidestep you.",
+            "Websites come along" to
+                "Blocking a popular social app also blocks its website and short links in " +
+                "Chrome automatically — Instagram → instagram.com, YouTube → youtube.com and " +
+                "youtu.be, X → x.com and t.co…",
         ),
     ),
     Topic(
@@ -252,12 +287,13 @@ private val TOPICS = listOf(
             "A schedule blocks its chosen apps only while its condition is met — so the same " +
                 "app can be free at lunch and blocked all evening. The five types:",
         ),
-        bullets = listOf(
-            "Time — blocked during a daily time window, on the weekdays you pick.",
-            "Daily limit — a minutes-per-day allowance; once it's used up, blocked till midnight.",
-            "Open limit — a number of opens per day; past it, blocked till midnight.",
-            "Wi-Fi — blocked while you're on a chosen network (or any Wi-Fi).",
-            "Location — blocked within a radius of a place you pick (school, office…).",
+        points = listOf(
+            "Time" to "Blocked during a daily time window, on the weekdays you pick.",
+            "Daily limit" to
+                "A minutes-per-day allowance; once it's used up, blocked till midnight.",
+            "Open limit" to "A number of opens per day; past it, blocked till midnight.",
+            "Wi-Fi" to "Blocked while you're on a chosen network (or any Wi-Fi).",
+            "Location" to "Blocked within a radius of a place you pick (school, office…).",
         ),
     ),
     Topic(
@@ -268,10 +304,14 @@ private val TOPICS = listOf(
             "Strict Mode is for when you don't trust future-you. Set a timer and every app on " +
                 "your block list is blocked outright until it runs out — no stopping early, " +
                 "that's the point.",
-            "While it's active you can add blocks but not remove them, the app's dangerous " +
-                "settings pages (accessibility, device admin, app info) bounce you straight " +
-                "back out, uninstalling is prevented, and turning off the built-in adult " +
+        ),
+        points = listOf(
+            "While it's active" to
+                "You can add blocks but not remove them, and turning off the built-in adult " +
                 "filter is locked.",
+            "Escape hatches sealed" to
+                "The dangerous settings pages (accessibility, device admin, the app's own " +
+                "App info) bounce you straight back out, and uninstalling is prevented.",
         ),
     ),
     Topic(
@@ -285,14 +325,17 @@ private val TOPICS = listOf(
                 "app (when \"block in every app\" is on), the word appearing on screen blocks " +
                 "immediately.",
         ),
-        bullets = listOf(
-            "Adult filter — a built-in adult site list plus a word pack (English + Arabic) " +
-                "that works everywhere, on by default. Turning the pack off is deliberately " +
-                "hard and impossible during Strict Mode.",
-            "Unsupported browsers — AppBlocker can only read pages in Chrome. Turn on " +
-                "\"Block unsupported browsers\" so other browsers can't be used as a loophole.",
-            "Auto site blocking — blocking a social app adds its domains and short links " +
-                "(fb.watch, redd.it, pin.it, t.co…) without you typing anything.",
+        points = listOf(
+            "Adult filter" to
+                "A built-in adult site list plus a word pack (English + Arabic) that works " +
+                "everywhere, on by default. Turning the pack off is deliberately hard and " +
+                "impossible during Strict Mode.",
+            "Unsupported browsers" to
+                "AppBlocker can only read pages in Chrome. Turn on \"Block unsupported " +
+                "browsers\" so other browsers can't be used as a loophole.",
+            "Auto site blocking" to
+                "Blocking a social app adds its domains and short links (fb.watch, redd.it, " +
+                "pin.it, t.co…) without you typing anything.",
         ),
     ),
     Topic(
@@ -304,12 +347,15 @@ private val TOPICS = listOf(
                 "always tells you exactly why: which schedule (by name), which limit you hit, " +
                 "Quick Block, Strict Mode, or the matched word.",
         ),
-        bullets = listOf(
-            "\"Minutes reclaimed today\" counts every blocked attempt as roughly three " +
-                "minutes of scrolling you didn't do.",
-            "Each attempt is counted once — sitting on the block screen doesn't inflate " +
+        points = listOf(
+            "Minutes reclaimed" to
+                "The big number counts every blocked attempt as roughly three minutes of " +
+                "scrolling you didn't do.",
+            "Honest counting" to
+                "Each attempt is counted once — sitting on the block screen doesn't inflate " +
                 "your stats.",
-            "\"Got it\" takes you to your home screen, never back into the blocked app.",
+            "\"Got it\"" to
+                "Takes you to your home screen, never back into the blocked app.",
         ),
     ),
     Topic(
@@ -330,26 +376,32 @@ private val TOPICS = listOf(
         paragraphs = listOf(
             "The Insights tab needs Usage Access (a one-time system permission — the tab " +
                 "prompts you, and the gear icon reopens that settings page). It has three " +
-                "views: Day, Week and Trend (the last 30 days). What you'll find:",
+                "views: Day, Week and Trend (the last 30 days).",
         ),
-        bullets = listOf(
-            "The hero card: screen time for the view — today, the week's total, or your " +
-                "30-day average — with a comparison against the previous period, plus " +
-                "today's unlocks, blocks and Strict Mode time.",
-            "The activity chart: tap or drag across the bars to inspect any hour (Day) or " +
-                "day (Week/Trend); the busiest bar gets a \"peak\" badge, and Day/Week add a " +
-                "category breakdown (Social, Video, Games…).",
-            "Day view extras: how much of a 16-hour waking day went to the phone, your " +
-                "busiest hour, a productive/distracting/neutral split, your longest focus " +
-                "stretch and longest continuous use.",
-            "Distractions: notification count (needs Notification access — tap the tile to " +
-                "grant it) and pickups.",
-            "Week & Trend extras: weekday vs weekend pattern, apps trending up or down " +
-                "week-over-week, your biggest time-savers and biggest increases, and a " +
-                "summary card — daily average, busiest day, vs yesterday, and a usage " +
-                "rating from Light to Very heavy.",
-            "Most used and most opened apps, plus every blocked attempt (\"N× today · N× " +
-                "all time\") — tap any app row for its detail sheet.",
+        points = listOf(
+            "The hero card" to
+                "Screen time for the view — today, the week's total, or your 30-day average " +
+                "— with a comparison against the previous period, plus today's unlocks, " +
+                "blocks and Strict Mode time.",
+            "The activity chart" to
+                "Tap or drag across the bars to inspect any hour (Day) or day (Week/Trend); " +
+                "the busiest bar gets a \"peak\" badge, and Day/Week add a category breakdown " +
+                "(Social, Video, Games…).",
+            "Day view extras" to
+                "How much of a 16-hour waking day went to the phone, your busiest hour, a " +
+                "productive/distracting/neutral split, your longest focus stretch and " +
+                "longest continuous use.",
+            "Distractions" to
+                "Notification count (needs Notification access — tap the tile to grant it) " +
+                "and pickups.",
+            "Week & Trend extras" to
+                "Weekday vs weekend pattern, apps trending up or down week-over-week, your " +
+                "biggest time-savers and biggest increases, and a summary card — daily " +
+                "average, busiest day, vs yesterday, and a usage rating from Light to Very " +
+                "heavy.",
+            "The app lists" to
+                "Most used and most opened apps, plus every blocked attempt (\"N× today · " +
+                "N× all time\") — tap any app row for its detail sheet.",
         ),
     ),
     Topic(
@@ -360,18 +412,23 @@ private val TOPICS = listOf(
             "Goals live at the top of the Insights tab; the mood check-in sits at the " +
                 "bottom of the Day view; the AI Coach card is in between.",
         ),
-        bullets = listOf(
-            "Goals come in three kinds: total screen time under X per day, one app under X " +
-                "per day, or fewer than N unlocks per day. Each shows a live progress bar, " +
-                "a streak flame, and dots for the last 7 days (hit or missed). You hit a " +
-                "goal by finishing the day under its target.",
-            "\"Enforce with a schedule\" turns a time goal into a real daily-limit schedule " +
-                "— the app then blocks when the time is up instead of just reporting it.",
-            "There's no goal editing — remove it (this clears its history) and add it again.",
-            "Mood check-in: once a day, slide from \"Very distracted\" to \"In control\" and " +
-                "optionally add a note. Your last week of moods feeds the coach's context.",
-            "The AI Coach writes short daily tips from your stats, goals and moods, and " +
-                "you can chat with it. It runs on Google's Gemini: add a free API key " +
+        points = listOf(
+            "Three kinds of goal" to
+                "Total screen time under X per day, one app under X per day, or fewer than " +
+                "N unlocks per day. Each shows a live progress bar, a streak flame, and dots " +
+                "for the last 7 days (hit or missed). You hit a goal by finishing the day " +
+                "under its target.",
+            "Enforce with a schedule" to
+                "Turns a time goal into a real daily-limit schedule — the app then blocks " +
+                "when the time is up instead of just reporting it.",
+            "No editing" to
+                "Remove a goal (this clears its history) and add it again.",
+            "Mood check-in" to
+                "Once a day, slide from \"Very distracted\" to \"In control\" and optionally " +
+                "add a note. Your last week of moods feeds the coach's context.",
+            "AI Coach" to
+                "Writes short daily tips from your stats, goals and moods, and you can chat " +
+                "with it. It runs on Google's Gemini: add a free API key " +
                 "(aistudio.google.com/apikey) via the card's \"Add key\" button — the key " +
                 "stays on your phone. \"New tips\" fetches a fresh take; without a key or " +
                 "offline, everything else in the app works normally.",
