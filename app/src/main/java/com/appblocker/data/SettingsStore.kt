@@ -126,6 +126,14 @@ object SettingsStore {
     fun setKeywordsEverywhere(context: Context, value: Boolean) =
         prefs(context).edit().putBoolean(KEY_KEYWORDS_EVERYWHERE, value).apply()
 
+    /** Epoch millis when the owner passed the adult-pack turn-off gate (0 = no pending
+     *  request). The pack keeps filtering through the cooling-off; see KeywordsScreen. */
+    fun adultPackOffRequestedAt(context: Context): Long =
+        prefs(context).getLong("adult_pack_off_requested_at", 0L)
+
+    fun setAdultPackOffRequestedAt(context: Context, value: Long) =
+        prefs(context).edit().putLong("adult_pack_off_requested_at", value).apply()
+
     private const val KEY_KEYWORD_LOCKOUTS = "keyword_lockouts"
 
     /** Apps under a keyword lockout (a blocked word was caught in them), as package →

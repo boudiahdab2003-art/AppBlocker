@@ -71,6 +71,25 @@ fun KeywordsScreen(
     var showDisableGate by remember { mutableStateOf(false) }
     val ed = !strictActive // words can always be added; removal is locked during Strict Mode
 
+    // 24-hour cooling-off on turning the adult pack off: passing the gate only REQUESTS the
+    // off. The pack keeps filtering for OFF_DELAY_MS; then the switch works for OFF_WINDOW_MS,
+    // after which the request expires and the gate starts over. Cancelling is always allowed.
+    var offRequestAt by remember { mutableStateOf(SettingsStore.adultPackOffRequestedAt(context)) }
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(offRequestAt) {
+        while (offRequestAt > 0L) {
+            now = System.currentTimeMillis()
+            if (now >= offRequestAt + OFF_DELAY_MS + OFF_WINDOW_MS) {
+                offRequestAt = 0L
+                SettingsStore.setAdultPackOffRequestedAt(context, 0L)
+                break
+            }
+            delay(30_000)
+        }
+    }
+    val offUnlockAt = offRequestAt + OFF_DELAY_MS
+    val offReady = offRequestAt > 0L && now >= offUnlockAt
+
     Box(Modifier.fillMaxSize().background(com.appblocker.ui.theme.appBackground())) {
         Scaffold(
             containerColor = Color.Transparent,
@@ -152,16 +171,50 @@ fun KeywordsScreen(
                         enabled = ed || !adultPack,
                         onChange = { turnOn ->
                             if (turnOn) {
-                                // Turning protection ON is always instant.
+                                // Turning protection ON is always instant — and wipes any
+                                // pending turn-off request.
                                 adultPack = true
                                 SettingsStore.setAdultWordsPack(context, true)
-                            } else {
-                                // Turning it OFF must pass the type-and-wait gate. Don't flip the
-                                // switch yet — it stays visibly ON until the dialog is confirmed.
+                                offRequestAt = 0L
+                                SettingsStore.setAdultPackOffRequestedAt(context, 0L)
+                            } else if (offReady) {
+                                // Gate passed AND the 24-hour cooling-off served — the off
+                                // finally happens.
+                                adultPack = false
+                                SettingsStore.setAdultWordsPack(context, false)
+                                offRequestAt = 0L
+                                SettingsStore.setAdultPackOffRequestedAt(context, 0L)
+                            } else if (offRequestAt == 0L) {
+                                // Turning it OFF starts at the type-and-wait gate. The switch
+                                // stays visibly ON; confirming only starts the cooling-off.
                                 showDisableGate = true
                             }
+                            // else: request pending — the row below shows the remaining wait.
                         },
                     )
+                    if (offRequestAt > 0L) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(top = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                if (offReady) {
+                                    "You can turn the pack off now — tap the switch. This " +
+                                        "unlock expires in ${fmtHm(offRequestAt + OFF_DELAY_MS + OFF_WINDOW_MS - now)}."
+                                } else {
+                                    "Turn-off requested. The pack keeps protecting you for " +
+                                        "another ${fmtHm(offUnlockAt - now)}."
+                                },
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.weight(1f),
+                            )
+                            TextButton(onClick = {
+                                offRequestAt = 0L
+                                SettingsStore.setAdultPackOffRequestedAt(context, 0L)
+                            }) { Text("Cancel") }
+                        }
+                    }
                     Spacer(Modifier.padding(top = 8.dp))
                     ToggleRow(
                         icon = Icons.Filled.Apps,
@@ -187,13 +240,27 @@ fun KeywordsScreen(
             DisablePackGate(
                 onDismiss = { showDisableGate = false },
                 onConfirm = {
-                    adultPack = false
-                    SettingsStore.setAdultWordsPack(context, false)
+                    // Passing the gate does NOT turn the pack off — it starts the 24-hour
+                    // cooling-off. The pack keeps filtering until it's served and the owner
+                    // flips the switch within the follow-up window.
+                    offRequestAt = System.currentTimeMillis()
+                    SettingsStore.setAdultPackOffRequestedAt(context, offRequestAt)
                     showDisableGate = false
                 },
             )
         }
     }
+}
+
+/** Cooling-off after passing the gate before the pack can actually be switched off, and the
+ *  window to do it in afterwards — miss it and the request expires, gate and all. */
+private const val OFF_DELAY_MS = 24 * 60 * 60_000L
+private const val OFF_WINDOW_MS = 24 * 60 * 60_000L
+
+/** "23h 40m" / "35m" for countdown rows (rounded up so it never shows 0m while pending). */
+private fun fmtHm(ms: Long): String {
+    val m = (ms.coerceAtLeast(0L) + 59_999) / 60_000
+    return if (m >= 60) "${m / 60}h ${m % 60}m" else "${m}m"
 }
 
 /** Length of the random paragraph you must type, and the wait before Confirm unlocks. */
@@ -214,7 +281,8 @@ private val CHALLENGE_WORDS = listOf(
 /**
  * Friction gate for switching the Adult content pack off outside Strict Mode: type a fresh random
  * ~60-word paragraph (pasting disabled) AND wait out a 2-minute countdown before Confirm unlocks.
- * Regenerates the paragraph and resets the timer every time it opens.
+ * Regenerates the paragraph and resets the timer every time it opens. Confirming doesn't turn the
+ * pack off — it starts the 24-hour cooling-off (see OFF_DELAY_MS in KeywordsScreen).
  *
  * A full screen in the activity window, deliberately NOT a Dialog: dialog windows report zero
  * insets on the owner's device (see DurationPickerDialog in WheelPicker.kt), which left the
@@ -246,7 +314,9 @@ private fun DisablePackGate(onDismiss: () -> Unit, onConfirm: () -> Unit) {
         ) {
             Text(
                 "This lowers your guard. To be sure it's really you and really deliberate, " +
-                    "type the paragraph below — you can't paste it — and wait for the timer.",
+                    "type the paragraph below — you can't paste it — and wait for the timer. " +
+                    "Even then the pack stays on for another 24 hours; only after that can " +
+                    "you flip the switch off.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -288,7 +358,7 @@ private fun DisablePackGate(onDismiss: () -> Unit, onConfirm: () -> Unit) {
         GradientButton(
             text = if (remaining > 0) {
                 "Wait ${remaining / 60}:${(remaining % 60).toString().padStart(2, '0')}…"
-            } else "Turn it off",
+            } else "Start the 24-hour wait",
             enabled = ready,
             onClick = onConfirm,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 8.dp),
