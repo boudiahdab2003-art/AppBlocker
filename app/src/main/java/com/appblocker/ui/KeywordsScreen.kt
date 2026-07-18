@@ -1,5 +1,6 @@
 package com.appblocker.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,17 +10,19 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.NoAdultContent
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -44,6 +47,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalTextToolbar
 import androidx.compose.ui.platform.TextToolbar
 import androidx.compose.ui.platform.TextToolbarStatus
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.appblocker.data.SettingsStore
@@ -66,17 +70,6 @@ fun KeywordsScreen(
     var adultPack by remember { mutableStateOf(SettingsStore.adultWordsPack(context)) }
     var showDisableGate by remember { mutableStateOf(false) }
     val ed = !strictActive // words can always be added; removal is locked during Strict Mode
-
-    if (showDisableGate) {
-        DisablePackDialog(
-            onDismiss = { showDisableGate = false },
-            onConfirm = {
-                adultPack = false
-                SettingsStore.setAdultWordsPack(context, false)
-                showDisableGate = false
-            },
-        )
-    }
 
     Box(Modifier.fillMaxSize().background(com.appblocker.ui.theme.appBackground())) {
         Scaffold(
@@ -185,6 +178,21 @@ fun KeywordsScreen(
                 }
             }
         }
+
+        // Drawn on top of the whole screen. NOT a Dialog: dialog windows report zero insets
+        // on this device (see DurationPickerDialog in WheelPicker.kt), so the keyboard would
+        // cover the challenge field with no way to detect it. In the activity window,
+        // safeDrawingPadding keeps the field above the keyboard (CoachChatScreen pattern).
+        if (showDisableGate) {
+            DisablePackGate(
+                onDismiss = { showDisableGate = false },
+                onConfirm = {
+                    adultPack = false
+                    SettingsStore.setAdultWordsPack(context, false)
+                    showDisableGate = false
+                },
+            )
+        }
     }
 }
 
@@ -205,68 +213,93 @@ private val CHALLENGE_WORDS = listOf(
 
 /**
  * Friction gate for switching the Adult content pack off outside Strict Mode: type a fresh random
- * ~60-word paragraph exactly (pasting disabled) AND wait out a 2-minute countdown before Confirm
- * unlocks. Regenerates the paragraph and resets the timer every time it opens.
+ * ~60-word paragraph (pasting disabled) AND wait out a 2-minute countdown before Confirm unlocks.
+ * Regenerates the paragraph and resets the timer every time it opens.
+ *
+ * A full screen in the activity window, deliberately NOT a Dialog: dialog windows report zero
+ * insets on the owner's device (see DurationPickerDialog in WheelPicker.kt), which left the
+ * keyboard sitting on top of the challenge field — typing was invisible.
  */
 @Composable
-private fun DisablePackDialog(onDismiss: () -> Unit, onConfirm: () -> Unit) {
+private fun DisablePackGate(onDismiss: () -> Unit, onConfirm: () -> Unit) {
     val phrase = remember { (1..CHALLENGE_LEN).joinToString(" ") { CHALLENGE_WORDS.random() } }
     var input by remember { mutableStateOf("") }
     var remaining by remember { mutableStateOf(GATE_SECONDS) }
     LaunchedEffect(Unit) {
         while (remaining > 0) { delay(1000); remaining-- }
     }
-    val matched = input.trimEnd() == phrase
+    // Forgiving compare: a capital letter or stray double space must not silently keep the
+    // button locked — typing all 60 words is the friction, not transcription perfection.
+    val matched = input.trim().replace(Regex("\\s+"), " ").equals(phrase, ignoreCase = true)
     val ready = matched && remaining == 0
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Turn off adult protection?") },
-        text = {
-            Column {
+    BackHandler { onDismiss() }
+    // Background BEFORE safeDrawingPadding so the app color still paints behind the system
+    // bars; safeDrawing includes the keyboard, keeping the field and buttons above it.
+    Column(
+        Modifier.fillMaxSize().background(com.appblocker.ui.theme.appBackground())
+            .safeDrawingPadding(),
+    ) {
+        EditorTopBar("Turn off adult protection", onBack = onDismiss)
+        Column(
+            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+        ) {
+            Text(
+                "This lowers your guard. To be sure it's really you and really deliberate, " +
+                    "type the paragraph below — you can't paste it — and wait for the timer.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.padding(top = 12.dp))
+            Box(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant).padding(12.dp),
+            ) {
+                Text(phrase, style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface)
+            }
+            Spacer(Modifier.padding(top = 12.dp))
+            // A no-op text toolbar removes the cut/copy/paste popup entirely, so the paragraph
+            // must be hand-typed (soft keyboards have no paste key).
+            CompositionLocalProvider(LocalTextToolbar provides NoPasteToolbar) {
+                OutlinedTextField(
+                    value = input, onValueChange = { input = it },
+                    placeholder = { Text("Type the paragraph here") },
+                    singleLine = false,
+                    keyboardOptions = KeyboardOptions(
+                        autoCorrect = false,
+                        capitalization = KeyboardCapitalization.None,
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 96.dp),
+                )
+            }
+            if (input.isNotBlank()) {
                 Text(
-                    "This lowers your guard. To be sure it's really you and really deliberate, " +
-                        "type the paragraph below exactly — you can't paste it — and wait for the timer.",
+                    if (matched) "Matches ✓" else "Doesn't match yet — keep going",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.padding(top = 12.dp))
-                Box(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant).padding(12.dp),
-                ) {
-                    Text(phrase, style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface)
-                }
-                Spacer(Modifier.padding(top = 12.dp))
-                // A no-op text toolbar removes the cut/copy/paste popup entirely, so the paragraph
-                // must be hand-typed (soft keyboards have no paste key).
-                CompositionLocalProvider(LocalTextToolbar provides NoPasteToolbar) {
-                    OutlinedTextField(
-                        value = input, onValueChange = { input = it },
-                        placeholder = { Text("Type the paragraph here") },
-                        singleLine = false,
-                        keyboardOptions = KeyboardOptions(autoCorrect = false),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 96.dp),
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(enabled = ready, onClick = onConfirm) {
-                Text(
-                    when {
-                        remaining > 0 -> "Wait ${remaining / 60}:${(remaining % 60).toString().padStart(2, '0')}…"
-                        else -> "Turn it off"
-                    },
+                    color = if (matched) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp),
                 )
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Keep it on") }
-        },
-    )
+            Spacer(Modifier.padding(top = 16.dp))
+        }
+        GradientButton(
+            text = if (remaining > 0) {
+                "Wait ${remaining / 60}:${(remaining % 60).toString().padStart(2, '0')}…"
+            } else "Turn it off",
+            enabled = ready,
+            onClick = onConfirm,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 8.dp),
+        )
+        TextButton(
+            onClick = onDismiss,
+            modifier = Modifier
+                .align(Alignment.CenterHorizontally)
+                .padding(top = 4.dp, bottom = 12.dp),
+        ) { Text("Keep it on") }
+    }
 }
 
 /** Text toolbar that shows nothing — used to block paste (and copy/cut) on the challenge field. */
