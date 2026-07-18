@@ -220,94 +220,76 @@ private fun CravingCard() {
 // ---- Content (pure data — edit freely) ----
 
 private val SECTIONS: List<Pair<String, List<Pair<String, String>>>> = listOf(
-    "Phone & screens" to listOf(
+    // Every rule earns its place by attacking the scroll-reward loop directly:
+    // cut the supply, seal the moments it sneaks in, break the reflex, or
+    // replace the fake hit with a real one. No generic health advice.
+    "Block the sources" to listOf(
         "Feeds stay blocked" to
-            "Social feeds, Shorts, stories — blocked, with no end date. Apply the Social " +
+            "Social feeds, Shorts, stories — blocked with no end date. Apply the Social " +
             "Detox template or Quick Block your own list, and leave it on.",
         "Notifications: humans only" to
-            "Turn off every notification that isn't a live person talking to you. " +
-            "Apps don't get to tap you on the shoulder.",
+            "Every app notification is a slot-machine lever pulled for you. Turn off " +
+            "everything that isn't a live person.",
         "Home screen: tools only" to
-            "Clock, camera, maps, messages. Everything else lives in the drawer, " +
-            "out of sight.",
-        "The phone sleeps outside the bedroom" to
-            "It charges in another room, at the same time every night. Get an alarm clock.",
-        "The first 30 minutes are yours" to
-            "No phone from waking until half an hour has passed — no exceptions.",
-        "No phone at meals, no phone in the bathroom" to
-            "Eat at a table and taste the food. The two easiest scroll holes in the day — " +
-            "sealed.",
+            "Clock, camera, maps, messages. An icon you see is a hit you'll crave — " +
+            "everything else goes in the drawer.",
+        "Log out everywhere" to
+            "Sign out of the blocked apps' websites too, and let word blocking catch " +
+            "the back doors. A logged-in account is an open tap.",
+        "Turn off autoplay" to
+            "The \"next video\" reflex IS the loop. Kill autoplay in every app and " +
+            "player that has the switch.",
+    ),
+    "Seal the openings" to listOf(
+        "The bed" to
+            "The phone charges in another room — scrolling in bed is the deepest hook " +
+            "of all, and it ends today. Get an alarm clock.",
+        "The first 30 minutes" to
+            "No phone after waking. Give your brain its first hit of the day and it " +
+            "chases that hit until midnight.",
+        "The last hour" to
+            "Screens off an hour before sleep. End the day off the drip, or the feed " +
+            "is the last voice you hear every night.",
+        "Meals and the bathroom" to
+            "The two easiest scroll holes in the day — sealed. The phone stays in " +
+            "another room for both.",
+        "Waiting" to
+            "Lines, elevators, red lights. The itch to reach for the pocket is the " +
+            "detox working — wait it out, every time.",
+        "With people" to
+            "Phone off the table, always. Half-presence is the feed winning while " +
+            "you're not even scrolling.",
+    ),
+    "Break the reflex" to listOf(
         "One screen at a time" to
-            "Watching something? Watch it. Working? Work. No second screen in your hand, ever.",
+            "The second screen exists to feed you hits during the slow parts. Watching? " +
+            "Watch. Working? Work. Nothing in your hand.",
         "Boredom stays unfilled" to
-            "Lines, elevators, quiet minutes — don't reach for the pocket. The itch fades " +
-            "faster every day you let it.",
+            "Boredom is the withdrawal symptom — filling it resets the clock. Sit in " +
+            "it and it fades faster every day.",
+        "Work in timed blocks, phone in another room" to
+            "A reachable phone drips micro-hits all day. Start a Pomodoro session and " +
+            "put it physically out of reach until the timer says done.",
     ),
-    "Sleep" to listOf(
-        "Same time, every night" to
-            "Fixed sleep and wake time, weekends included. The schedule is the medicine.",
-        "Screens off an hour before bed" to
-            "The last hour belongs to paper, people, or silence — never a glowing rectangle.",
-        "A dark, cool room" to
-            "Blackout the light, drop the temperature, and keep the bed for sleeping only.",
-        "Caffeine stops after lunch" to
-            "No coffee, tea, or energy drinks after mid-afternoon. Bad sleep is where " +
-            "cravings breed.",
-    ),
-    "Morning" to listOf(
-        "Water before anything" to
-            "A full glass before the first task, the first coffee, the first word.",
-        "Daylight within 30 minutes" to
-            "Step outside or stand at a bright window. Real light starts the clock properly.",
-        "Ten minutes of movement" to
-            "Stretch, walk, push-ups — anything. The body wakes the head.",
-        "Make the bed" to
-            "First win of the day, done before the world gets a vote.",
-        "Hardest task first" to
-            "Do the thing you're avoiding before noon, while your discipline is freshest.",
-    ),
-    "Body" to listOf(
+    "Replace the hit" to listOf(
         "Train every day" to
-            "Thirty minutes minimum: walk, run, lift, swim. Non-negotiable — weather is " +
-            "not an excuse.",
-        "One walk with nothing in your ears" to
-            "No podcast, no music. Let your head be quiet once a day.",
-        "Get sun" to
-            "Outside daily, even briefly. Skin in daylight beats a screen's glow every time.",
-        "Eat real food, at a table" to
-            "Meals are cooked, sat down for, and finished. Never eat from boredom — " +
-            "that's scrolling with a spoon.",
-        "End the shower cold" to
-            "Thirty seconds of cold at the end. A free, honest jolt — the real version of " +
-            "what the feed fakes.",
-    ),
-    "Work & mind" to listOf(
-        "Work in timed blocks" to
-            "Set a Pomodoro session, put the phone in another room, and go. The block ends " +
-            "when the timer says so, not when you feel like it.",
-        "One thing at a time" to
-            "One tab, one task, one goal per block. Half-attention is no attention.",
-        "Plan tomorrow on paper" to
-            "Three tasks, written the night before. You wake up already knowing.",
-        "Read paper" to
-            "Books and print, twenty minutes a day. Long attention is a muscle — this is " +
-            "its gym.",
+            "Exercise is the strongest clean hit there is — the real version of the " +
+            "rush the feed fakes. Thirty minutes minimum.",
+        "Walk with empty ears" to
+            "One walk a day, no podcast, no music. A quiet head is how your brain " +
+            "relearns slow rewards.",
         "Finish something daily" to
-            "One task fully done beats five half-done. Completion is the reward that " +
-            "actually pays.",
-    ),
-    "People & world" to listOf(
-        "One real conversation a day" to
-            "Face to face or a call — not text. Minimum one, no hiding behind emojis.",
-        "Phones off the table" to
-            "When you're with people, the phone is in a pocket or another room. Presence " +
-            "is the gift.",
-        "One phone-free outing a week" to
-            "Errand, hike, gym, visit — leave the phone at home. Feel the empty pocket " +
-            "and keep walking.",
+            "Completion is a real hit the feed can never give you — it only ever " +
+            "promises the next thing. Finish one thing fully, every day.",
+        "Read paper, twenty minutes" to
+            "Long attention is exactly what the feed dismantled. A paper book is the " +
+            "gym where it grows back.",
+        "See people for real" to
+            "One face-to-face conversation or call a day. The feed is a substitute " +
+            "for this — take the original instead.",
         "Keep a hands hobby" to
-            "Something your hands do: cook, draw, fix, build, garden. Skills compound; " +
-            "scrolling doesn't.",
+            "Cook, draw, fix, build. Slow reward, real skill, visible progress — " +
+            "everything the scroll pretends to be.",
     ),
 )
 
