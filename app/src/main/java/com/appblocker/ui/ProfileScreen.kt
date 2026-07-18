@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.SelfImprovement
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lock
@@ -79,6 +80,7 @@ fun ProfileScreen(
     onOpenChangelog: () -> Unit = {},
     onOpenKeywords: () -> Unit = {},
     onOpenInstructions: () -> Unit = {},
+    onOpenDetox: () -> Unit = {},
     onOpenIconPicker: () -> Unit = {},
     updateVm: UpdateViewModel = viewModel(),
     vm: HomeViewModel = viewModel(),
@@ -252,6 +254,15 @@ fun ProfileScreen(
                 chevron = true,
                 enabled = true,
                 onClick = onOpenInstructions,
+            )
+            Divider()
+            ProfileRow(
+                icon = Icons.Filled.SelfImprovement,
+                title = "Dopamine detox guide",
+                subtitle = "A 7-day plan to reset your brain's reward system.",
+                chevron = true,
+                enabled = true,
+                onClick = onOpenDetox,
             )
             Divider()
             ProfileRow(

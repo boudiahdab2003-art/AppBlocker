@@ -44,10 +44,14 @@
         <!-- The launcher entry lives on exactly ONE of the icon aliases below (Profile ▸ App icon
              switches them via PackageManager). MainActivity itself stays enabled so explicit
              intents (notification deep-links, updater) keep working regardless of chosen icon. -->
+        <!-- adjustResize: the keyboard must never PAN the window (HyperOS's fallback without
+             this) — panning shoves the top bar off-screen and fights the Compose inset
+             layouts (safeDrawingPadding) every text-entry screen relies on. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:launchMode="singleTask" />
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize" />
 
         <activity-alias
             android:name=".alias.IconHalo"

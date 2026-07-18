@@ -42,6 +42,7 @@ import com.appblocker.data.AppIcons
 import com.appblocker.data.AppRule
 import com.appblocker.data.AttemptCounter
 import com.appblocker.data.BlockMode
+import com.appblocker.data.BlockedKeyword
 import com.appblocker.data.BlockerDatabase
 import com.appblocker.data.FocusState
 import com.appblocker.data.InstalledAppsRepository
@@ -261,6 +262,21 @@ class BlockerAccessibilityService : AccessibilityService() {
         }
     }
 
+    /** One-shot: templates used to inject app-name words (e.g. "youtube", "twitter") into the
+     *  blocked-words table, where innocent mentions tripped blocks everywhere. Templates no
+     *  longer carry words; this removes the historic nine once. Re-added words stay (flag). */
+    private fun purgeTemplateWordsOnce() {
+        if (SettingsStore.templateWordsPurged(this)) return
+        scope.launch {
+            val dao = BlockerDatabase.get(applicationContext).blockedKeywordDao()
+            listOf(
+                "youtube", "instagram", "tiktok", "facebook", "twitter",
+                "reddit", "snapchat", "netflix", "twitch",
+            ).forEach { dao.delete(BlockedKeyword(it)) }
+            SettingsStore.setTemplateWordsPurged(applicationContext)
+        }
+    }
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         // The service is rebound right after an update installs, so detect it here too —
@@ -290,6 +306,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         }.also { sp.registerOnSharedPreferenceChangeListener(it) }
         registerPackageChangeReceiver()
         registerUnlockReceiver()
+        purgeTemplateWordsOnce()
         val db = BlockerDatabase.get(applicationContext)
         combine(
             db.appRuleDao().getAll(),
