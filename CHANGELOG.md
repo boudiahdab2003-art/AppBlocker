@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.84
+- Three fixes: the typing challenge for turning off the adult content pack now works properly (full-screen, keyboard can't hide it, capitals and extra spaces don't matter). Turning the pack off is also much harder now — after the typing challenge the pack keeps protecting you for 24 more hours before the switch actually works. And the block screen no longer flashes over your home screen or right after pressing "Got it".
+
 ## v1.83
 - Word blocking is much stronger now: pressing "Got it" no longer lets you go back and keep reading — the app where the blocked word appeared locks completely for 30 minutes. Scanning is also much faster and now catches words while you scroll. After updating, turn the AppBlocker accessibility service off and on once in your phone's settings.
 
