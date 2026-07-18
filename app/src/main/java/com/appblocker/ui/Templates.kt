@@ -37,7 +37,6 @@ data class Template(
     val icon: ImageVector,
     val colors: List<Color>,
     val packages: List<Pair<String, String>> = emptyList(), // package to label
-    val keywords: List<String> = emptyList(),
     val options: Set<QuickOption> = emptySet(),
     // Time window applied when this template's apps are scheduled (0/0 = none).
     val startMinutes: Int = 0,
@@ -108,14 +107,12 @@ val appTemplates: List<Template> = listOf(
         "social", "Social Detox", "Block the social feeds",
         Icons.Filled.Groups, listOf(Color(0xFFF0598A), Color(0xFFB5179E)),
         packages = SOCIAL,
-        keywords = listOf("instagram", "tiktok", "facebook", "twitter", "reddit", "snapchat"),
         startMinutes = 9 * 60, endMinutes = 17 * 60, daysMask = WEEKDAYS,
     ),
     Template(
         "focus", "Deep Focus", "Social + video, gone",
         Icons.Filled.Bolt, listOf(Color(0xFF2E7BFF), Color(0xFF7C5CFF)),
         packages = SOCIAL + VIDEO,
-        keywords = listOf("youtube", "netflix", "instagram", "tiktok", "reddit", "twitch"),
         options = setOf(QuickOption.UNSUPPORTED),
         startMinutes = 9 * 60, endMinutes = 12 * 60,
     ),
@@ -128,14 +125,12 @@ val appTemplates: List<Template> = listOf(
         "sleep", "Sleep Well", "Wind down, no scrolling",
         Icons.Filled.Bedtime, listOf(Color(0xFF6366F1), Color(0xFF8B5CF6)),
         packages = VIDEO + SOCIAL.take(2),
-        keywords = listOf("youtube", "tiktok", "instagram", "netflix"),
         startMinutes = 22 * 60, endMinutes = 7 * 60,
     ),
     Template(
         "study", "Study Mode", "Block fun, keep tools",
         Icons.Filled.School, listOf(Color(0xFF14B8A6), Color(0xFF22C55E)),
         packages = SOCIAL + VIDEO + GAMES,
-        keywords = listOf("youtube", "tiktok", "instagram", "reddit"),
         options = setOf(QuickOption.UNSUPPORTED),
         startMinutes = 8 * 60, endMinutes = 16 * 60, daysMask = WEEKDAYS,
     ),

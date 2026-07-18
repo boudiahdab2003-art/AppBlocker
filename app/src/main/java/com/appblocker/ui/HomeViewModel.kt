@@ -3,7 +3,6 @@ package com.appblocker.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.appblocker.data.BlockedKeyword
 import com.appblocker.data.BlockerDatabase
 import com.appblocker.data.Schedule
 import com.appblocker.data.ScheduleType
@@ -29,7 +28,9 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * Apply a one-tap preset: create a Time schedule for its apps (so they block within the
-     * template's window), add its keywords globally, and set the adult filter if asked.
+     * template's window) and set the adult filter if asked. Templates deliberately do NOT
+     * touch the blocked-words list — app-name words injected there caused innocent mentions
+     * (e.g. "twitter" in an article) to trip blocks everywhere.
      */
     fun applyTemplate(t: Template) {
         viewModelScope.launch {
@@ -50,7 +51,6 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                     )
                 )
             }
-            t.keywords.forEach { db.blockedKeywordDao().insert(BlockedKeyword(it.lowercase().trim())) }
             // Switch on the template's Quick Block extra options (additive — never turns any off).
             t.effectiveOptions(getApplication()).forEach { it.turnOn(getApplication()) }
         }

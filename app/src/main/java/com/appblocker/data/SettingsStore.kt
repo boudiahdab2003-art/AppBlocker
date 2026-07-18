@@ -126,6 +126,14 @@ object SettingsStore {
     fun setKeywordsEverywhere(context: Context, value: Boolean) =
         prefs(context).edit().putBoolean(KEY_KEYWORDS_EVERYWHERE, value).apply()
 
+    /** Whether the one-time purge of template-injected app-name words has run (see
+     *  BlockerAccessibilityService.purgeTemplateWordsOnce). */
+    fun templateWordsPurged(context: Context): Boolean =
+        prefs(context).getBoolean("template_words_purged", false)
+
+    fun setTemplateWordsPurged(context: Context) =
+        prefs(context).edit().putBoolean("template_words_purged", true).apply()
+
     /** Epoch millis when the owner passed the adult-pack turn-off gate (0 = no pending
      *  request). The pack keeps filtering through the cooling-off; see KeywordsScreen. */
     fun adultPackOffRequestedAt(context: Context): Long =
