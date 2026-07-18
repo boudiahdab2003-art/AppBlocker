@@ -329,6 +329,11 @@ private fun DisablePackGate(onDismiss: () -> Unit, onConfirm: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurface)
             }
             Spacer(Modifier.padding(top = 12.dp))
+        }
+        // Pinned below the scrollable paragraph: with the keyboard open, the paragraph area
+        // above shrinks (and scrolls on its own) while the field, hint and buttons stay
+        // visible just over the keyboard — type and read at the same time.
+        Column(Modifier.padding(horizontal = 16.dp)) {
             // A no-op text toolbar removes the cut/copy/paste popup entirely, so the paragraph
             // must be hand-typed (soft keyboards have no paste key).
             CompositionLocalProvider(LocalTextToolbar provides NoPasteToolbar) {
@@ -341,7 +346,7 @@ private fun DisablePackGate(onDismiss: () -> Unit, onConfirm: () -> Unit) {
                         capitalization = KeyboardCapitalization.None,
                     ),
                     shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 96.dp),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
                 )
             }
             if (input.isNotBlank()) {
@@ -353,7 +358,6 @@ private fun DisablePackGate(onDismiss: () -> Unit, onConfirm: () -> Unit) {
                     modifier = Modifier.padding(top = 8.dp),
                 )
             }
-            Spacer(Modifier.padding(top = 16.dp))
         }
         GradientButton(
             text = if (remaining > 0) {
