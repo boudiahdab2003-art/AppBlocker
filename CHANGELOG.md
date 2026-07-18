@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.85
+- New: a full Dopamine Detox guide on the Profile page — what scrolling does to your brain and a 7-day reset plan. Fixes: templates no longer add app-name words (like "youtube") to your blocked words, and the ones added before are cleaned up once; the turn-off typing challenge now works properly with the keyboard open; and the challenge uses longer words.
+
 ## v1.84
 - Three fixes: the typing challenge for turning off the adult content pack now works properly (full-screen, keyboard can't hide it, capitals and extra spaces don't matter). Turning the pack off is also much harder now — after the typing challenge the pack keeps protecting you for 24 more hours before the switch actually works. And the block screen no longer flashes over your home screen or right after pressing "Got it".
 
