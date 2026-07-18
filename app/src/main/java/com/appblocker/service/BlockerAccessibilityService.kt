@@ -149,6 +149,9 @@ class BlockerAccessibilityService : AccessibilityService() {
     // visible app during that transition must not instantly re-block/re-count the same entry.
     // (Volatile: also read by the background web-scan coroutine.)
     @Volatile private var dismissedKey: String? = null
+    // The app that was BEHIND the dismissed cover, so its lockout re-show (keyed by package,
+    // not by the dismissed counterKey) is suppressed for the same transition window.
+    @Volatile private var dismissedPkg: String? = null
     @Volatile private var dismissedAt = 0L
 
     // Apps where a blocked word was caught: the whole app stays locked — any page, any
@@ -216,8 +219,12 @@ class BlockerAccessibilityService : AccessibilityService() {
                 return
             }
             if (overlayView == null) {
-                // May block now (limit just crossed, schedule started, break ended…).
-                handleAppBlock(pkg)
+                // Draw a NEW cover only when the foreground is positively identified as the
+                // cached app (post-reconcile that means a readable root that isn't our own
+                // UI). With an unreadable root the cache may be stale (missed gesture-nav
+                // Home event), and blocking blind used to flash the cover over the home
+                // screen — wait for a tick that can actually see what's on screen.
+                if (actual != null && actual != packageName) handleAppBlock(pkg)
             } else if (overlayIsAppBlock && !shouldBlock(pkg)) {
                 // The condition ended while the cover was up → release without an app switch.
                 // (Acting only on this transition also avoids re-recording an "attempt" every
@@ -841,12 +848,21 @@ class BlockerAccessibilityService : AccessibilityService() {
         // page's churn (or on a keyword in the covered app's own UI) and re-count the entry.
         // Shorts covers stay with their own scan, which adds/removes them as the user scrolls.
         if (overlayView != null && !shortsCovering) return
+        // Just dismissed a cover ("Got it" → HOME): the page stays on screen during the
+        // transition. Skip everything — including the lockout fast path below, which used to
+        // redraw the cover over the departing app (a visible flash) — WITHOUT touching
+        // lastWebText, so detection re-arms the moment the window ends.
+        if (dismissedKey != null && System.currentTimeMillis() - dismissedAt < 2500) return
         // Under a keyword lockout the app is blocked outright — cover it on any content
-        // event, no text matching. This path doesn't depend on window-state events, so a
-        // gesture-nav re-entry that produced none still gets covered.
+        // event, no text matching. This path fires from cached state, so it demands positive
+        // confirmation that the locked app is REALLY the visible one (an unreadable root is
+        // NOT enough — after a missed gesture-nav Home event the cache goes stale and this
+        // used to flash the cover over the home screen).
         if (keywordLockoutRemaining(pkg) > 0L) {
             withContext(Dispatchers.Main) {
-                if (lastForegroundPkg == pkg && stillOnScreen(pkg)) handleAppBlock(pkg)
+                if (lastForegroundPkg == pkg &&
+                    rootInActiveWindow?.packageName?.toString() == pkg
+                ) handleAppBlock(pkg)
             }
             return
         }
@@ -855,11 +871,6 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (DEBUG) Log.d(TAG, "scan[$pkg browser=$isBrowser]: ${text.length} chars: ${text.take(120)}")
         if (text.isBlank()) return
         if (text == lastWebText) return
-        // Just dismissed a cover ("Got it" → HOME): the page stays on screen during the
-        // transition. Skip WITHOUT touching lastWebText — recording the text here used to
-        // permanently disarm re-blocking for this page (the show below would be suppressed
-        // by the same guard, leaving the dedup pinned to the offending text).
-        if (dismissedKey != null && System.currentTimeMillis() - dismissedAt < 2500) return
         // The site the user is actually ON (browsers only) — keyword matching prefers it
         // over the page text so a page merely mentioning a blocked word doesn't block.
         val url = if (isBrowser) extractBrowserUrl(pkg) else null
@@ -1046,11 +1057,15 @@ class BlockerAccessibilityService : AccessibilityService() {
         // (feeds churn, activities transition), and each used to re-record an "attempt" and
         // re-roll the quote — so a cover already up for this key means there's nothing to do.
         if (overlayView != null && overlayCounterKey == counterKey) return
-        // Same guard for the entry the user JUST dismissed: Close goes HOME, but the blocked
-        // app stays on screen for the transition and would re-block/re-count immediately.
+        // Same guard for a JUST-dismissed cover: Close goes HOME, but the blocked app stays
+        // on screen for the transition and would re-block/re-count immediately. Also matches
+        // the dismissed app's own package — a "web" dismissal must suppress the lockout
+        // re-show keyed by that package (and vice versa), or the cover flashes during the
+        // trip Home. A DIFFERENT app opened right after still blocks instantly.
         // (Shorts covers are exempt — their scan tracks covering state in shortsCovering, and
         // suppressing a show here would desync it and leave Shorts uncovered.)
-        if (counterKey != "shorts" && counterKey == dismissedKey &&
+        if (counterKey != "shorts" &&
+            (counterKey == dismissedKey || counterKey == dismissedPkg) &&
             System.currentTimeMillis() - dismissedAt < 2500
         ) return
         val (today, total) = AttemptCounter.record(applicationContext, counterKey)
@@ -1146,6 +1161,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         LayoutInflater.from(this).inflate(R.layout.overlay_block, null).also {
             it.findViewById<Button>(R.id.overlay_close).setOnClickListener {
                 dismissedKey = overlayCounterKey
+                dismissedPkg = lastForegroundPkg
                 dismissedAt = System.currentTimeMillis()
                 lastBlockedPkg = null
                 // Re-arm word detection: coming back to the page that was just blocked must
