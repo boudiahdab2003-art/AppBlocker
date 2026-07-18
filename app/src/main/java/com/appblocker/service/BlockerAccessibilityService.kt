@@ -171,7 +171,11 @@ class BlockerAccessibilityService : AccessibilityService() {
     // The scan itself runs off the main thread; only showing the block UI hops back to main.
     private val handler = Handler(Looper.getMainLooper())
     @Volatile private var webScanJob: Job? = null
+    // When the current pending burst's first event arrived (0 = none pending) — lets the
+    // debounce cap how long a never-quiet page can keep postponing the scan.
+    private var webScanQueuedAt = 0L
     private val webScanRunnable = Runnable {
+        webScanQueuedAt = 0L
         webScanJob?.cancel()
         webScanJob = scope.launch { scanWebContent() }
     }
@@ -324,7 +328,10 @@ class BlockerAccessibilityService : AccessibilityService() {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ->
                 onForegroundChanged(pkg, event.className?.toString())
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
-            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED -> {
+            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED,
+            // Scrolling doesn't emit content-change events in every app — listen to the
+            // scroll itself so new text coming into view is scanned while the user scrolls.
+            AccessibilityEvent.TYPE_VIEW_SCROLLED -> {
                 // Fast path: a NEW app's content events usually beat its window-state event,
                 // so acting here covers a blocked app sooner (less visible flash). Confirm
                 // with the real active window before trusting the event's package, so a
@@ -392,7 +399,9 @@ class BlockerAccessibilityService : AccessibilityService() {
         return !isLauncherPkg(pkg) && pkg !in KEYWORD_SCAN_EXCLUDED
     }
 
-    /** Debounce: run the scan ~600ms after the last event, i.e. once the screen settles.
+    /** Debounce: run the scan once events pause, but never later than the max-wait cap —
+     *  a page that never goes quiet (animations, video, continuous scrolling) used to
+     *  postpone the scan indefinitely because every event restarted the timer.
      *  Not scheduled for excluded packages (the launcher and System UI are the highest-churn
      *  event sources) or when nothing would be scanned — the scan would no-op there, and
      *  content/text events fire constantly in every app. */
@@ -402,9 +411,14 @@ class BlockerAccessibilityService : AccessibilityService() {
             // Leaving a scannable app: a scan queued there (or already running) must not
             // put its cover up over Home/Settings.
             webScanJob?.cancel()
+            webScanQueuedAt = 0L
             return
         }
-        handler.postDelayed(webScanRunnable, 600)
+        val now = System.currentTimeMillis()
+        if (webScanQueuedAt == 0L) webScanQueuedAt = now
+        val delay =
+            if (now - webScanQueuedAt >= WEB_SCAN_MAX_WAIT_MS) 0L else WEB_SCAN_DEBOUNCE_MS
+        handler.postDelayed(webScanRunnable, delay)
     }
 
     /** Debounced YouTube-Shorts check (quicker than the web scan so Shorts is caught fast).
@@ -1209,6 +1223,10 @@ class BlockerAccessibilityService : AccessibilityService() {
 
         // How often to re-check the app the user is currently inside (mid-use enforcement).
         private const val RECHECK_MS = 30_000L
+        // Web scan pacing: run once events pause for the debounce, but a churning page that
+        // never pauses is still scanned at least every max-wait.
+        private const val WEB_SCAN_DEBOUNCE_MS = 250L
+        private const val WEB_SCAN_MAX_WAIT_MS = 700L
         // How long an app stays fully locked after a blocked word was caught in it.
         private const val KEYWORD_LOCKOUT_MS = 30 * 60_000L
 
