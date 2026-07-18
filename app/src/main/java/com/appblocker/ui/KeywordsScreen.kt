@@ -267,15 +267,21 @@ private fun fmtHm(ms: Long): String {
 private const val CHALLENGE_LEN = 60
 private const val GATE_SECONDS = 120
 
+// Long everyday words on purpose: transcribing sixty of these takes real effort,
+// which is the point of the gate.
 private val CHALLENGE_WORDS = listOf(
-    "river", "table", "green", "stone", "quiet", "paper", "cloud", "light", "grass", "under",
-    "north", "chair", "water", "bread", "sugar", "plant", "field", "house", "music", "night",
-    "ocean", "candle", "window", "yellow", "orange", "purple", "garden", "silver", "planet",
-    "forest", "bridge", "pocket", "shadow", "mirror", "pencil", "button", "ticket", "engine",
-    "market", "letter", "circle", "square", "handle", "corner", "pillow", "carpet", "basket",
-    "kitchen", "morning", "evening", "picture", "journey", "weather", "compass", "lantern",
-    "harbor", "meadow", "valley", "pebble", "willow", "copper", "cotton", "ember", "maple",
-    "ripple", "sparrow", "cedar", "pewter", "amber", "flint", "thistle", "clover", "birch",
+    "wheelbarrow", "watermelon", "grasshopper", "candlestick", "thunderstorm", "countryside",
+    "grandmother", "grandfather", "typewriter", "helicopter", "lighthouse", "caterpillar",
+    "watercolor", "skyscraper", "playground", "toothbrush", "basketball", "strawberry",
+    "blackboard", "sunflowers", "windmills", "cobblestone", "candlelight", "riverbank",
+    "mountainside", "thunderbolt", "wintergreen", "summertime", "afternoon", "wilderness",
+    "waterfall", "farmhouse", "fireplace", "bookshelves", "chalkboard", "clockmaker",
+    "shopkeeper", "carpenter", "gardener", "landscape", "horizon", "telescope",
+    "microscope", "keyboard", "notebook", "backpack", "raincoat", "umbrella",
+    "staircase", "doorframe", "windowsill", "tablecloth", "silverware", "chandelier",
+    "wallpaper", "floorboard", "greenhouse", "birdhouse", "treehouse", "footbridge",
+    "crossroads", "signpost", "milestone", "cornerstone", "stepladder", "workbench",
+    "toolboxes", "paintbrush", "sandcastle", "seashells", "driftwood", "riverbed",
 )
 
 /**
