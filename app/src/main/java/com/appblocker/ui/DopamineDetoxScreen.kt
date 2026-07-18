@@ -21,6 +21,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -36,6 +37,13 @@ fun DopamineDetoxScreen(onBack: () -> Unit) {
         EditorTopBar(title = "Dopamine detox", onBack = onBack)
         LazyColumn(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
             item { HeroPanel() }
+
+            // The philosophical frame: Buddhism's three marks of existence, each tied to
+            // the rules it powers. Deliberately unnumbered — truths, not rules.
+            item { SectionLabel("Three truths to hold") }
+            items(MARKS.size) { i ->
+                MarkCard(MARKS[i], top = if (i == 0) 14.dp else 10.dp)
+            }
 
             // One continuous numbering across every domain — a single rulebook.
             var number = 1
@@ -190,6 +198,45 @@ private fun RuleCard(number: Int, rule: Pair<String, String>, top: Dp) {
 }
 
 @Composable
+private fun MarkCard(mark: Triple<String, String, String>, top: Dp) {
+    val shape = RoundedCornerShape(20.dp)
+    Column(
+        Modifier.fillMaxWidth()
+            .padding(top = top)
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), shape)
+            .padding(16.dp),
+    ) {
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(
+                mark.first,
+                fontSize = 22.sp,
+                fontFamily = FontFamily.Serif,
+                fontStyle = FontStyle.Italic,
+                style = TextStyle(brush = AppGradients.accent),
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                mark.second.uppercase(),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 1.5.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 3.dp),
+            )
+        }
+        Text(
+            mark.third,
+            style = MaterialTheme.typography.bodyMedium,
+            lineHeight = 21.sp,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
+            modifier = Modifier.padding(top = 8.dp),
+        )
+    }
+}
+
+@Composable
 private fun CravingCard() {
     Card(top = 14.dp) {
         SOS.forEachIndexed { i, step ->
@@ -218,6 +265,26 @@ private fun CravingCard() {
 }
 
 // ---- Content (pure data — edit freely) ----
+
+/** Buddhism's three marks of existence, each tied to the rules it explains. */
+private val MARKS = listOf(
+    Triple("Anicca", "Nothing lasts",
+        "Everything that arises passes — including every craving and every urge. That's " +
+            "the whole trick behind \"Ten minutes\": you don't defeat the wave, you watch " +
+            "it end on its own. The feed hides this truth by always dangling a next " +
+            "thing; sit still and you'll see every feeling close by itself."),
+    Triple("Dukkha", "Chasing never satisfies",
+        "Grasping at quick pleasure can't fill you, because wanting is the engine — the " +
+            "scroll is unsatisfying by design, not because you found the wrong feed. So " +
+            "the rules don't chase a better hit: they stop the chase. Feeds blocked, " +
+            "autoplay off, boredom left unfilled — and the slow real rewards in " +
+            "\"Replace the hit\" are the ones that actually land."),
+    Triple("Anattā", "The craving is not you",
+        "Thoughts and urges are passing events in your awareness, not orders from your " +
+            "true self. That's why \"Name it\" works: the moment you say \"this is a " +
+            "craving\", you're the one watching it instead of the one obeying it. And " +
+            "it's why a slip never defines you — get up clean, restart the day."),
+)
 
 private val SECTIONS: List<Pair<String, List<Pair<String, String>>>> = listOf(
     // Every rule earns its place by attacking the scroll-reward loop directly:
