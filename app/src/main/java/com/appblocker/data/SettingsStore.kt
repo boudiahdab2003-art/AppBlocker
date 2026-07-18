@@ -126,6 +126,26 @@ object SettingsStore {
     fun setKeywordsEverywhere(context: Context, value: Boolean) =
         prefs(context).edit().putBoolean(KEY_KEYWORDS_EVERYWHERE, value).apply()
 
+    private const val KEY_KEYWORD_LOCKOUTS = "keyword_lockouts"
+
+    /** Apps under a keyword lockout (a blocked word was caught in them), as package →
+     *  expiry epoch millis. Persisted so a service or phone restart doesn't lift the lock. */
+    fun keywordLockouts(context: Context): Map<String, Long> =
+        prefs(context).getStringSet(KEY_KEYWORD_LOCKOUTS, emptySet()).orEmpty()
+            .mapNotNull { entry ->
+                val split = entry.lastIndexOf('|')
+                if (split <= 0) return@mapNotNull null
+                val until = entry.substring(split + 1).toLongOrNull() ?: return@mapNotNull null
+                entry.substring(0, split) to until
+            }.toMap()
+
+    fun setKeywordLockouts(context: Context, value: Map<String, Long>) =
+        prefs(context).edit().putStringSet(
+            KEY_KEYWORD_LOCKOUTS,
+            value.filterValues { it > System.currentTimeMillis() }
+                .map { (pkg, until) -> "$pkg|$until" }.toSet(),
+        ).apply()
+
     private const val KEY_PROTECTION_LAST_NOTIFIED = "protection_last_notified_at"
 
     /** Epoch millis of the last "protection off" notification, for re-notify throttling. */

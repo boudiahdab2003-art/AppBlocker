@@ -147,8 +147,14 @@ class BlockerAccessibilityService : AccessibilityService() {
     private var overlayCounterKey: String? = null
     // The just-dismissed cover's key + time: "Got it" goes HOME, but events from the still-
     // visible app during that transition must not instantly re-block/re-count the same entry.
-    private var dismissedKey: String? = null
-    private var dismissedAt = 0L
+    // (Volatile: also read by the background web-scan coroutine.)
+    @Volatile private var dismissedKey: String? = null
+    @Volatile private var dismissedAt = 0L
+
+    // Apps where a blocked word was caught: the whole app stays locked — any page, any
+    // text — until the expiry time. Guarded by its own lock (written from the background
+    // scan, read from the main thread); mirrored to prefs so restarts don't lift it.
+    private val keywordLockouts = mutableMapOf<String, Long>()
 
     @Volatile private var lastForegroundPkg: String? = null
     @Volatile private var lastLocation: Location? = null
@@ -165,7 +171,11 @@ class BlockerAccessibilityService : AccessibilityService() {
     // The scan itself runs off the main thread; only showing the block UI hops back to main.
     private val handler = Handler(Looper.getMainLooper())
     @Volatile private var webScanJob: Job? = null
+    // When the current pending burst's first event arrived (0 = none pending) — lets the
+    // debounce cap how long a never-quiet page can keep postponing the scan.
+    private var webScanQueuedAt = 0L
     private val webScanRunnable = Runnable {
+        webScanQueuedAt = 0L
         webScanJob?.cancel()
         webScanJob = scope.launch { scanWebContent() }
     }
@@ -220,12 +230,29 @@ class BlockerAccessibilityService : AccessibilityService() {
     }
 
     /** Whether a later re-check of [pkg] could change the blocking outcome — i.e. the app is
-     *  covered by any rule/schedule, a session is running, or a block cover is up. */
+     *  covered by any rule/schedule, a session is running, a keyword lockout is ticking, or
+     *  a block cover is up. */
     private fun recheckMatters(pkg: String): Boolean =
         overlayView != null ||
+            keywordLockoutRemaining(pkg) > 0L ||
             rules[pkg]?.isBlocked == true ||
             QuickSession.state(this).active ||
             schedules.any { it.enabled && pkg in it.packages }
+
+    /** Millis left on [pkg]'s keyword lockout, or 0 when it isn't locked. */
+    private fun keywordLockoutRemaining(pkg: String): Long = synchronized(keywordLockouts) {
+        ((keywordLockouts[pkg] ?: 0L) - System.currentTimeMillis()).coerceAtLeast(0L)
+    }
+
+    /** Locks [pkg] for [KEYWORD_LOCKOUT_MS] after a blocked word was caught in it. */
+    private fun addKeywordLockout(pkg: String) {
+        val now = System.currentTimeMillis()
+        synchronized(keywordLockouts) {
+            keywordLockouts.entries.removeAll { it.value <= now }
+            keywordLockouts[pkg] = now + KEYWORD_LOCKOUT_MS
+            SettingsStore.setKeywordLockouts(applicationContext, keywordLockouts.toMap())
+        }
+    }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -237,6 +264,11 @@ class BlockerAccessibilityService : AccessibilityService() {
         keywordsEverywhere = SettingsStore.keywordsEverywhere(this)
         adultPackOn = SettingsStore.adultWordsPack(this)
         updatePaused = SettingsStore.updatePaused(this)
+        // Restore unexpired keyword lockouts — a service rebind must not unlock an app early.
+        val now = System.currentTimeMillis()
+        synchronized(keywordLockouts) {
+            keywordLockouts.putAll(SettingsStore.keywordLockouts(this).filterValues { it > now })
+        }
         // React to the user flipping the toggles on the Blocked-words screen without a restart.
         val sp = getSharedPreferences("appblocker_prefs", Context.MODE_PRIVATE)
         prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
@@ -296,7 +328,10 @@ class BlockerAccessibilityService : AccessibilityService() {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ->
                 onForegroundChanged(pkg, event.className?.toString())
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
-            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED -> {
+            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED,
+            // Scrolling doesn't emit content-change events in every app — listen to the
+            // scroll itself so new text coming into view is scanned while the user scrolls.
+            AccessibilityEvent.TYPE_VIEW_SCROLLED -> {
                 // Fast path: a NEW app's content events usually beat its window-state event,
                 // so acting here covers a blocked app sooner (less visible flash). Confirm
                 // with the real active window before trusting the event's package, so a
@@ -364,7 +399,9 @@ class BlockerAccessibilityService : AccessibilityService() {
         return !isLauncherPkg(pkg) && pkg !in KEYWORD_SCAN_EXCLUDED
     }
 
-    /** Debounce: run the scan ~600ms after the last event, i.e. once the screen settles.
+    /** Debounce: run the scan once events pause, but never later than the max-wait cap —
+     *  a page that never goes quiet (animations, video, continuous scrolling) used to
+     *  postpone the scan indefinitely because every event restarted the timer.
      *  Not scheduled for excluded packages (the launcher and System UI are the highest-churn
      *  event sources) or when nothing would be scanned — the scan would no-op there, and
      *  content/text events fire constantly in every app. */
@@ -374,9 +411,14 @@ class BlockerAccessibilityService : AccessibilityService() {
             // Leaving a scannable app: a scan queued there (or already running) must not
             // put its cover up over Home/Settings.
             webScanJob?.cancel()
+            webScanQueuedAt = 0L
             return
         }
-        handler.postDelayed(webScanRunnable, 600)
+        val now = System.currentTimeMillis()
+        if (webScanQueuedAt == 0L) webScanQueuedAt = now
+        val delay =
+            if (now - webScanQueuedAt >= WEB_SCAN_MAX_WAIT_MS) 0L else WEB_SCAN_DEBOUNCE_MS
+        handler.postDelayed(webScanRunnable, delay)
     }
 
     /** Debounced YouTube-Shorts check (quicker than the web scan so Shorts is caught fast).
@@ -510,6 +552,13 @@ class BlockerAccessibilityService : AccessibilityService() {
         // After an update: nothing blocks until the user reactivates (the update also ends
         // any Strict session — see UpdatePause).
         if (updatePauseActive()) return null
+        // Keyword lockout: a blocked word was caught in this app recently, so the whole app
+        // stays locked — no page inside it is reachable until the lockout runs out.
+        val lockLeft = keywordLockoutRemaining(pkg)
+        if (lockLeft > 0L) return BlockReason(
+            "Locked",
+            "A blocked word was found here. Locked for ${(lockLeft + 59_999L) / 60_000L} more min.",
+        )
         val now = System.currentTimeMillis()
         val strict = strictRemaining() > 0L
 
@@ -792,11 +841,25 @@ class BlockerAccessibilityService : AccessibilityService() {
         // page's churn (or on a keyword in the covered app's own UI) and re-count the entry.
         // Shorts covers stay with their own scan, which adds/removes them as the user scrolls.
         if (overlayView != null && !shortsCovering) return
+        // Under a keyword lockout the app is blocked outright — cover it on any content
+        // event, no text matching. This path doesn't depend on window-state events, so a
+        // gesture-nav re-entry that produced none still gets covered.
+        if (keywordLockoutRemaining(pkg) > 0L) {
+            withContext(Dispatchers.Main) {
+                if (lastForegroundPkg == pkg && stillOnScreen(pkg)) handleAppBlock(pkg)
+            }
+            return
+        }
         val isBrowser = pkg in browserPackages
         val text = extractVisibleText()
         if (DEBUG) Log.d(TAG, "scan[$pkg browser=$isBrowser]: ${text.length} chars: ${text.take(120)}")
         if (text.isBlank()) return
         if (text == lastWebText) return
+        // Just dismissed a cover ("Got it" → HOME): the page stays on screen during the
+        // transition. Skip WITHOUT touching lastWebText — recording the text here used to
+        // permanently disarm re-blocking for this page (the show below would be suppressed
+        // by the same guard, leaving the dedup pinned to the offending text).
+        if (dismissedKey != null && System.currentTimeMillis() - dismissedAt < 2500) return
         // The site the user is actually ON (browsers only) — keyword matching prefers it
         // over the page text so a page merely mentioning a blocked word doesn't block.
         val url = if (isBrowser) extractBrowserUrl(pkg) else null
@@ -840,6 +903,9 @@ class BlockerAccessibilityService : AccessibilityService() {
         // dismisses it, same as the GLOBAL_ACTION_HOME race removed in M2. Close goes home.)
         withContext(Dispatchers.Main) {
             if (lastForegroundPkg == pkg && stillOnScreen(pkg)) {
+                // The catch also locks the whole app for a while — "Got it" must not be
+                // a free pass back into the same page.
+                addKeywordLockout(pkg)
                 showBlockScreen(title = hit.title, message = hit.message, packageName = null, counterKey = "web")
             } else lastWebText = null // left during the scan — don't cover what's there now
         }
@@ -1011,6 +1077,10 @@ class BlockerAccessibilityService : AccessibilityService() {
                 }
             )
         }
+        // (Re)arm the mid-use re-check whenever a cover goes up: after a dismissal it
+        // re-blocks a locked-out app even when the page is static and emits no events.
+        handler.removeCallbacks(recheckRunnable)
+        handler.postDelayed(recheckRunnable, RECHECK_MS)
     }
 
     /** Draws/updates the full-screen block overlay instantly. Returns false if it can't. */
@@ -1078,6 +1148,9 @@ class BlockerAccessibilityService : AccessibilityService() {
                 dismissedKey = overlayCounterKey
                 dismissedAt = System.currentTimeMillis()
                 lastBlockedPkg = null
+                // Re-arm word detection: coming back to the page that was just blocked must
+                // block again, not read as "already handled" via the text dedup.
+                lastWebText = null
                 removeBlockOverlay()
                 performGlobalAction(GLOBAL_ACTION_HOME)
             }
@@ -1150,6 +1223,12 @@ class BlockerAccessibilityService : AccessibilityService() {
 
         // How often to re-check the app the user is currently inside (mid-use enforcement).
         private const val RECHECK_MS = 30_000L
+        // Web scan pacing: run once events pause for the debounce, but a churning page that
+        // never pauses is still scanned at least every max-wait.
+        private const val WEB_SCAN_DEBOUNCE_MS = 250L
+        private const val WEB_SCAN_MAX_WAIT_MS = 700L
+        // How long an app stays fully locked after a blocked word was caught in it.
+        private const val KEYWORD_LOCKOUT_MS = 30 * 60_000L
 
         // Throttle for isLauncherPkg's on-miss launcher re-detection.
         private const val LAUNCHER_REFRESH_MS = 30_000L
