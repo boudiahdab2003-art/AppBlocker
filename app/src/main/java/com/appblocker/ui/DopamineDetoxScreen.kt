@@ -271,6 +271,27 @@ private val SECTIONS: List<Pair<String, List<Pair<String, String>>>> = listOf(
             "A reachable phone drips micro-hits all day. Start a Pomodoro session and " +
             "put it physically out of reach until the timer says done.",
     ),
+    "Porn & urges" to listOf(
+        "The pack stays on" to
+            "Porn is the strongest artificial hit there is — the loop's final boss. " +
+            "The adult content pack stays on, guarded by Strict Mode, with no end date.",
+        "Close it at the first step" to
+            "Relapses don't start at the end — they start with \"just browsing\". The " +
+            "moment you notice yourself drifting toward the edge, close the app and " +
+            "leave the room. The first step is the cheapest one to refuse.",
+        "An urge is a wave, not an order" to
+            "Treat it exactly like a craving: name it, hold ten minutes, move your " +
+            "body — push-ups, a walk, a cold face wash. It passes whether or not you " +
+            "obey it, and every wave you ride out makes the next one smaller.",
+        "Never bored, alone and in bed" to
+            "That combination is where almost every relapse happens. If the urge hits " +
+            "at night: lights on, out of bed, phone in the other room where it " +
+            "already sleeps. Change the scene and the urge loses its stage.",
+        "If you fall, get up clean" to
+            "No spiral, no \"the day is ruined anyway\". Restart the day, note what " +
+            "opened the door — tiredness, the hour, the app — and close that door " +
+            "tomorrow. Shame feeds the loop; a plan starves it.",
+    ),
     "Replace the hit" to listOf(
         "Train every day" to
             "Exercise is the strongest clean hit there is — the real version of the " +
