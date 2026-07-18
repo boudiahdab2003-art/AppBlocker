@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.83
+- Word blocking is much stronger now: pressing "Got it" no longer lets you go back and keep reading — the app where the blocked word appeared locks completely for 30 minutes. Scanning is also much faster and now catches words while you scroll. After updating, turn the AppBlocker accessibility service off and on once in your phone's settings.
+
 ## v1.82
 - Schedules can now be deleted right from the list (trash icon with a confirm - hidden during Strict Mode), and two labels no longer break mid-word on larger font sizes (the Active badge on templates and the Location schedule tile).
 
