@@ -259,7 +259,7 @@ fun ProfileScreen(
             ProfileRow(
                 icon = Icons.Filled.SelfImprovement,
                 title = "Dopamine detox guide",
-                subtitle = "7 days. Clear rules. Your whole life, not just the phone.",
+                subtitle = "Clear rules for your phone, sleep, body, work and people.",
                 chevron = true,
                 enabled = true,
                 onClick = onOpenDetox,

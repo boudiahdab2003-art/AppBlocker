@@ -2,28 +2,16 @@ package com.appblocker.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bedtime
-import androidx.compose.material.icons.filled.MenuBook
-import androidx.compose.material.icons.filled.WbSunny
-import androidx.compose.material.icons.filled.WorkOutline
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,7 +19,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -41,8 +28,8 @@ import androidx.compose.ui.unit.sp
 import com.appblocker.ui.theme.AppGradients
 import com.appblocker.ui.theme.softGlow
 
-/** Profile ▸ Dopamine detox: a rulebook, not a lecture — whole-life orders in the block
- *  screen's editorial poster language (serif numerals, uppercase kickers, gradient panels). */
+/** Profile ▸ Dopamine detox: a permanent rulebook — no program, no lecture. Standing
+ *  orders across life domains, in the block screen's editorial poster language. */
 @Composable
 fun DopamineDetoxScreen(onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().safeDrawingPadding()) {
@@ -50,23 +37,19 @@ fun DopamineDetoxScreen(onBack: () -> Unit) {
         LazyColumn(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
             item { HeroPanel() }
 
-            item { SectionLabel("The 10 rules") }
-            items(RULES.size) { i ->
-                RuleCard(number = i + 1, rule = RULES[i], top = if (i == 0) 14.dp else 10.dp)
-            }
-
-            item { SectionLabel("Every day, same skeleton") }
-            items(DAY_SHAPE.size) { i ->
-                DayShapeCard(DAY_SHAPE[i], top = if (i == 0) 14.dp else 10.dp)
-            }
-
-            item { SectionLabel("The 7 days") }
-            item {
-                Column(Modifier.padding(top = 14.dp)) {
-                    PLAN.forEachIndexed { i, day ->
-                        TimelineDay(day = i + 1, entry = day, last = i == PLAN.lastIndex)
-                    }
+            // One continuous numbering across every domain — a single rulebook.
+            var number = 1
+            SECTIONS.forEach { (label, rules) ->
+                item { SectionLabel(label) }
+                val first = number
+                items(rules.size) { i ->
+                    RuleCard(
+                        number = first + i,
+                        rule = rules[i],
+                        top = if (i == 0) 14.dp else 10.dp,
+                    )
                 }
+                number += rules.size
             }
 
             item { SectionLabel("When a craving hits") }
@@ -76,10 +59,10 @@ fun DopamineDetoxScreen(onBack: () -> Unit) {
             item {
                 Card(top = 14.dp) {
                     Text(
-                        "Restart the day, never the week. One bad hour doesn't cancel " +
-                            "three good days — note what opened the door, close it " +
-                            "tomorrow, and carry on. Quitting the reset because it wasn't " +
-                            "perfect is the only real failure.",
+                        "Restart the day, never the streak. One bad hour doesn't cancel " +
+                            "the good days behind it — note what opened the door, close it " +
+                            "tomorrow, and carry on. Quitting because it wasn't perfect is " +
+                            "the only real failure.",
                         style = MaterialTheme.typography.bodyMedium,
                         lineHeight = 21.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
@@ -128,7 +111,7 @@ private fun HeroPanel() {
             .padding(24.dp),
     ) {
         Text(
-            "7 DAYS · CLEAR RULES",
+            "CLEAR RULES · NO END DATE",
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Black,
             letterSpacing = 2.sp,
@@ -143,7 +126,7 @@ private fun HeroPanel() {
             modifier = Modifier.padding(top = 6.dp),
         )
         Text(
-            "Follow the rules. Don't negotiate with yourself.",
+            "Not a program. A way to live. Start now.",
             style = MaterialTheme.typography.bodyLarge,
             color = Color.White.copy(alpha = 0.85f),
             modifier = Modifier.padding(top = 8.dp),
@@ -207,79 +190,6 @@ private fun RuleCard(number: Int, rule: Pair<String, String>, top: Dp) {
 }
 
 @Composable
-private fun DayShapeCard(entry: Triple<ImageVector, String, String>, top: Dp) {
-    val shape = RoundedCornerShape(20.dp)
-    Row(
-        Modifier.fillMaxWidth()
-            .padding(top = top)
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), shape)
-            .padding(16.dp),
-    ) {
-        Box(
-            Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(AppGradients.accent),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(entry.first, contentDescription = null, tint = Color.White,
-                modifier = Modifier.size(19.dp))
-        }
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(entry.second, style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-            Text(entry.third, style = MaterialTheme.typography.bodyMedium,
-                lineHeight = 21.sp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
-                modifier = Modifier.padding(top = 4.dp))
-        }
-    }
-}
-
-@Composable
-private fun TimelineDay(day: Int, entry: Pair<String, List<String>>, last: Boolean) {
-    // IntrinsicSize.Min lets the left rail match the day's content height, so the
-    // connector line can stretch between the numbered circles.
-    Row(Modifier.height(IntrinsicSize.Min)) {
-        // Left rail: numbered gradient circle + connector to the next day.
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.width(34.dp).fillMaxHeight(),
-        ) {
-            Box(
-                Modifier.size(34.dp).clip(CircleShape).background(AppGradients.accent),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("$day", style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold, color = Color.White)
-            }
-            if (!last) {
-                Box(
-                    Modifier.width(2.dp).weight(1f)
-                        .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
-                )
-            }
-        }
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f).padding(bottom = if (last) 0.dp else 18.dp)) {
-            Text(entry.first, style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(top = 5.dp))
-            entry.second.forEach { order ->
-                Row(Modifier.padding(top = 6.dp)) {
-                    Text("•", style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary)
-                    Spacer(Modifier.width(8.dp))
-                    Text(order, style = MaterialTheme.typography.bodyMedium,
-                        lineHeight = 21.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f))
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun CravingCard() {
     Card(top = 14.dp) {
         SOS.forEachIndexed { i, step ->
@@ -309,79 +219,95 @@ private fun CravingCard() {
 
 // ---- Content (pure data — edit freely) ----
 
-private val RULES = listOf(
-    "No feeds for 7 days" to
-        "Social feeds, Shorts, stories — blocked today, all week. No exceptions, no \"just checking\".",
-    "The phone sleeps outside the bedroom" to
-        "It charges in another room. Get an alarm clock if you need one.",
-    "The first 30 minutes are yours" to
-        "No phone from waking until half an hour has passed. Water, light, movement first.",
-    "No phone at meals" to
-        "Eat. Taste the food. Talk to whoever is there. The phone stays in another room.",
-    "Walk without headphones" to
-        "At least one walk a day with nothing in your ears. Let your head be quiet.",
-    "One screen at a time" to
-        "Watching something? Then watch it. No second screen in your hand, ever.",
-    "Boredom stays unfilled" to
-        "Waiting in line, sitting on the toilet, a quiet minute — don't reach for the phone. Wait it out.",
-    "Move every day" to
-        "Thirty minutes minimum: walk, run, lift, swim. Non-negotiable, weather is not an excuse.",
-    "Only real rewards" to
-        "Sun, training, people, finished work, a good meal. If it comes from a screen, it doesn't count this week.",
-    "Weekends are not a loophole" to
-        "Same rules on Saturday and Sunday. The reset doesn't take days off, and neither do the apps.",
-)
-
-private val DAY_SHAPE = listOf(
-    Triple(Icons.Filled.WbSunny, "Morning",
-        "Water, daylight, and movement before any screen. Make the bed. Then — and only " +
-            "then — the phone, standing up, for essentials only."),
-    Triple(Icons.Filled.WorkOutline, "Day",
-        "Work in timed blocks with the phone in another room. Between blocks: stand up, " +
-            "stretch, look out a window — not at a screen."),
-    Triple(Icons.Filled.MenuBook, "Evening",
-        "Screens off one hour before bed. Paper book, conversation, stretching, tomorrow's " +
-            "plan on real paper."),
-    Triple(Icons.Filled.Bedtime, "Night",
-        "Phone on the charger — in the other room — at the same time every night. Sleep is " +
-            "the strongest reset there is."),
-)
-
-private val PLAN = listOf(
-    "Block and strip" to listOf(
-        "Apply the Social Detox template (or Quick Block your own worst apps).",
-        "Turn on YouTube Shorts blocking and word blocking.",
-        "Turn off every notification that isn't a live human being.",
-        "Home screen: tools only — clock, maps, camera, messages.",
-        "Tell one person you're doing this week.",
+private val SECTIONS: List<Pair<String, List<Pair<String, String>>>> = listOf(
+    "Phone & screens" to listOf(
+        "Feeds stay blocked" to
+            "Social feeds, Shorts, stories — blocked, with no end date. Apply the Social " +
+            "Detox template or Quick Block your own list, and leave it on.",
+        "Notifications: humans only" to
+            "Turn off every notification that isn't a live person talking to you. " +
+            "Apps don't get to tap you on the shoulder.",
+        "Home screen: tools only" to
+            "Clock, camera, maps, messages. Everything else lives in the drawer, " +
+            "out of sight.",
+        "The phone sleeps outside the bedroom" to
+            "It charges in another room, at the same time every night. Get an alarm clock.",
+        "The first 30 minutes are yours" to
+            "No phone from waking until half an hour has passed — no exceptions.",
+        "No phone at meals, no phone in the bathroom" to
+            "Eat at a table and taste the food. The two easiest scroll holes in the day — " +
+            "sealed.",
+        "One screen at a time" to
+            "Watching something? Watch it. Working? Work. No second screen in your hand, ever.",
+        "Boredom stays unfilled" to
+            "Lines, elevators, quiet minutes — don't reach for the pocket. The itch fades " +
+            "faster every day you let it.",
     ),
-    "Take the morning" to listOf(
-        "Alarm clock bought or borrowed; phone charges outside the bedroom tonight.",
-        "First 30 minutes: water, daylight, ten minutes of movement.",
-        "No phone before you've done all three.",
+    "Sleep" to listOf(
+        "Same time, every night" to
+            "Fixed sleep and wake time, weekends included. The schedule is the medicine.",
+        "Screens off an hour before bed" to
+            "The last hour belongs to paper, people, or silence — never a glowing rectangle.",
+        "A dark, cool room" to
+            "Blackout the light, drop the temperature, and keep the bed for sleeping only.",
+        "Caffeine stops after lunch" to
+            "No coffee, tea, or energy drinks after mid-afternoon. Bad sleep is where " +
+            "cravings breed.",
     ),
-    "Silence the gaps" to listOf(
-        "All meals phone-free, starting with breakfast.",
-        "One walk, no headphones.",
-        "Every wait — line, elevator, toilet — stays phone-free. Count them if it helps.",
+    "Morning" to listOf(
+        "Water before anything" to
+            "A full glass before the first task, the first coffee, the first word.",
+        "Daylight within 30 minutes" to
+            "Step outside or stand at a bright window. Real light starts the clock properly.",
+        "Ten minutes of movement" to
+            "Stretch, walk, push-ups — anything. The body wakes the head.",
+        "Make the bed" to
+            "First win of the day, done before the world gets a vote.",
+        "Hardest task first" to
+            "Do the thing you're avoiding before noon, while your discipline is freshest.",
     ),
-    "Go strict" to listOf(
-        "Start a Strict Mode session covering the rest of the week — decide once, stop deciding.",
-        "One hard task today inside a Pomodoro session: study, work, or training.",
+    "Body" to listOf(
+        "Train every day" to
+            "Thirty minutes minimum: walk, run, lift, swim. Non-negotiable — weather is " +
+            "not an excuse.",
+        "One walk with nothing in your ears" to
+            "No podcast, no music. Let your head be quiet once a day.",
+        "Get sun" to
+            "Outside daily, even briefly. Skin in daylight beats a screen's glow every time.",
+        "Eat real food, at a table" to
+            "Meals are cooked, sat down for, and finished. Never eat from boredom — " +
+            "that's scrolling with a spoon.",
+        "End the shower cold" to
+            "Thirty seconds of cold at the end. A free, honest jolt — the real version of " +
+            "what the feed fakes.",
     ),
-    "Rebuild the evening" to listOf(
-        "Screens off one hour before bed, starting tonight.",
-        "Replace with a paper book, people, or stretching.",
-        "Write tomorrow's plan on paper before sleep.",
+    "Work & mind" to listOf(
+        "Work in timed blocks" to
+            "Set a Pomodoro session, put the phone in another room, and go. The block ends " +
+            "when the timer says so, not when you feel like it.",
+        "One thing at a time" to
+            "One tab, one task, one goal per block. Half-attention is no attention.",
+        "Plan tomorrow on paper" to
+            "Three tasks, written the night before. You wake up already knowing.",
+        "Read paper" to
+            "Books and print, twenty minutes a day. Long attention is a muscle — this is " +
+            "its gym.",
+        "Finish something daily" to
+            "One task fully done beats five half-done. Completion is the reward that " +
+            "actually pays.",
     ),
-    "Leave it home" to listOf(
-        "Half a day out — errand, hike, visit, gym — with the phone left at home.",
-        "Notice the reflex reaches for a pocket that's empty. Let it.",
-    ),
-    "Lock it in" to listOf(
-        "Open Insights and compare with Day 1.",
-        "Decide what returns and on what terms: daily limits, schedules, launch counts.",
-        "Keep the blocks, the phone-free mornings and meals, and the bedroom rule — permanently.",
+    "People & world" to listOf(
+        "One real conversation a day" to
+            "Face to face or a call — not text. Minimum one, no hiding behind emojis.",
+        "Phones off the table" to
+            "When you're with people, the phone is in a pocket or another room. Presence " +
+            "is the gift.",
+        "One phone-free outing a week" to
+            "Errand, hike, gym, visit — leave the phone at home. Feel the empty pocket " +
+            "and keep walking.",
+        "Keep a hands hobby" to
+            "Something your hands do: cook, draw, fix, build, garden. Skills compound; " +
+            "scrolling doesn't.",
     ),
 )
 
