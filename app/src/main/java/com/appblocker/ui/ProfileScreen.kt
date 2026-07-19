@@ -79,7 +79,7 @@ fun ProfileScreen(
     onOpenChangelog: () -> Unit = {},
     onOpenKeywords: () -> Unit = {},
     onOpenInstructions: () -> Unit = {},
-    onOpenDetox: () -> Unit = {},
+    onOpenScenarios: () -> Unit = {},
     onOpenIconPicker: () -> Unit = {},
     updateVm: UpdateViewModel = viewModel(),
     vm: HomeViewModel = viewModel(),
@@ -245,11 +245,11 @@ fun ProfileScreen(
             Divider()
             ProfileRow(
                 icon = Icons.Filled.SelfImprovement,
-                title = "Dopamine detox guide",
-                subtitle = "Clear rules for your phone, sleep, body, work and people.",
+                title = "Scenarios",
+                subtitle = "Guides for the hard moments — detox, relapse, focus, and more.",
                 chevron = true,
                 enabled = true,
-                onClick = onOpenDetox,
+                onClick = onOpenScenarios,
             )
             Divider()
             ProfileRow(
