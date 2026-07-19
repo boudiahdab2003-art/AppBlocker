@@ -5,7 +5,6 @@ import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.School
-import androidx.compose.material.icons.filled.SelfImprovement
 import androidx.compose.material.icons.filled.Spa
 import androidx.compose.material.icons.filled.Waves
 import androidx.compose.ui.graphics.Color
@@ -36,73 +35,12 @@ data class Scenario(
 
 private fun rule(title: String, body: String) = GuideItem(title, body)
 
+// NOTE: The Dopamine detox guide is deliberately kept OUTSIDE this hub, as its own
+// standalone screen (DopamineDetoxScreen.kt) reached from its own Profile row. This list
+// holds the situational guides only.
 val SCENARIOS: List<Scenario> = listOf(
 
-    // 1 ─────────────────────────────────────────────────────────── Dopamine detox
-    Scenario(
-        id = "detox",
-        hubTitle = "Dopamine detox",
-        hubSubtitle = "Reset your brain's reward system.",
-        icon = Icons.Filled.SelfImprovement,
-        colors = listOf(Color(0xFF2E7BFF), Color(0xFF7C5CFF)),
-        kicker = "CLEAR RULES · NO END DATE",
-        title = "The Reset",
-        subtitle = "Not a program. A way to live. Start now.",
-        sections = listOf(
-            GuideSection("Three truths to hold", GuideKind.TRUTHS, listOf(
-                GuideItem("Nothing lasts", "Everything that arises passes — including every craving and every urge. That's the whole trick behind “Ten minutes”: you don't defeat the wave, you watch it end on its own. The feed hides this truth by always dangling a next thing; sit still and you'll see every feeling close by itself.", term = "Anicca"),
-                GuideItem("Chasing never satisfies", "Grasping at quick pleasure can't fill you, because wanting is the engine — the scroll is unsatisfying by design, not because you found the wrong feed. So the rules don't chase a better hit: they stop the chase. Feeds blocked, autoplay off, boredom left unfilled — and the slow real rewards below are the ones that actually land.", term = "Dukkha"),
-                GuideItem("The craving is not you", "Thoughts and urges are passing events in your awareness, not orders from your true self. That's why “Name it” works: the moment you say “this is a craving”, you're the one watching it instead of the one obeying it. And it's why a slip never defines you — get up clean, restart the day.", term = "Anattā"),
-            )),
-            GuideSection("Block the sources", GuideKind.RULES, listOf(
-                rule("Feeds stay blocked", "Social feeds, Shorts, stories — blocked with no end date. Apply the Social Detox template or Quick Block your own list, and leave it on."),
-                rule("Notifications: humans only", "Every app notification is a slot-machine lever pulled for you. Turn off everything that isn't a live person."),
-                rule("Home screen: tools only", "Clock, camera, maps, messages. An icon you see is a hit you'll crave — everything else goes in the drawer."),
-                rule("Log out everywhere", "Sign out of the blocked apps' websites too, and let word blocking catch the back doors. A logged-in account is an open tap."),
-                rule("Turn off autoplay", "The “next video” reflex IS the loop. Kill autoplay in every app and player that has the switch."),
-            )),
-            GuideSection("Seal the openings", GuideKind.RULES, listOf(
-                rule("The bed", "The phone charges in another room — scrolling in bed is the deepest hook of all, and it ends today. Get an alarm clock."),
-                rule("The first 30 minutes", "No phone after waking. Give your brain its first hit of the day and it chases that hit until midnight."),
-                rule("The last hour", "Screens off an hour before sleep. End the day off the drip, or the feed is the last voice you hear every night."),
-                rule("Meals and the bathroom", "The two easiest scroll holes in the day — sealed. The phone stays in another room for both."),
-                rule("Waiting", "Lines, elevators, red lights. The itch to reach for the pocket is the detox working — wait it out, every time."),
-                rule("With people", "Phone off the table, always. Half-presence is the feed winning while you're not even scrolling."),
-            )),
-            GuideSection("Break the reflex", GuideKind.RULES, listOf(
-                rule("One screen at a time", "The second screen exists to feed you hits during the slow parts. Watching? Watch. Working? Work. Nothing in your hand."),
-                rule("Boredom stays unfilled", "Boredom is the withdrawal symptom — filling it resets the clock. Sit in it and it fades faster every day."),
-                rule("Work in timed blocks, phone in another room", "A reachable phone drips micro-hits all day. Start a Pomodoro session and put it physically out of reach until the timer says done."),
-            )),
-            GuideSection("Porn & urges", GuideKind.RULES, listOf(
-                rule("The pack stays on", "Porn is the strongest artificial hit there is — the loop's final boss. The adult content pack stays on, guarded by Strict Mode, with no end date."),
-                rule("Close it at the first step", "Relapses don't start at the end — they start with “just browsing”. The moment you notice yourself drifting toward the edge, close the app and leave the room. The first step is the cheapest one to refuse."),
-                rule("An urge is a wave, not an order", "Treat it exactly like a craving: name it, hold ten minutes, move your body — push-ups, a walk, a cold face wash. It passes whether or not you obey it, and every wave you ride out makes the next one smaller."),
-                rule("Never bored, alone and in bed", "That combination is where almost every relapse happens. If the urge hits at night: lights on, out of bed, phone in the other room where it already sleeps. Change the scene and the urge loses its stage."),
-                rule("If you fall, get up clean", "No spiral, no “the day is ruined anyway”. Restart the day, note what opened the door — tiredness, the hour, the app — and close that door tomorrow. Shame feeds the loop; a plan starves it."),
-            )),
-            GuideSection("Replace the hit", GuideKind.RULES, listOf(
-                rule("Train every day", "Exercise is the strongest clean hit there is — the real version of the rush the feed fakes. Thirty minutes minimum."),
-                rule("Walk with empty ears", "One walk a day, no podcast, no music. A quiet head is how your brain relearns slow rewards."),
-                rule("Finish something daily", "Completion is a real hit the feed can never give you — it only ever promises the next thing. Finish one thing fully, every day."),
-                rule("Read paper, twenty minutes", "Long attention is exactly what the feed dismantled. A paper book is the gym where it grows back."),
-                rule("See people for real", "One face-to-face conversation or call a day. The feed is a substitute for this — take the original instead."),
-                rule("Keep a hands hobby", "Cook, draw, fix, build. Slow reward, real skill, visible progress — everything the scroll pretends to be."),
-            )),
-            GuideSection("When a craving hits", GuideKind.STEPS, listOf(
-                GuideItem("Name it", "Say it out loud: “this is a craving, not a need”."),
-                GuideItem("Ten minutes", "You only have to hold for ten minutes. The wave falls on its own."),
-                GuideItem("Move", "Push-ups, a walk, cold water on your face. Cravings can't survive motion."),
-                GuideItem("Let the wall work", "Opened the app anyway? The block screen is there. Press Got it, walk away — that's a win."),
-            )),
-            GuideSection("If you slip", GuideKind.PLAIN, listOf(
-                GuideItem("", "Restart the day, never the streak. One bad hour doesn't cancel the good days behind it — note what opened the door, close it tomorrow, and carry on. Quitting because it wasn't perfect is the only real failure."),
-            )),
-        ),
-        closing = "Your attention is the most valuable thing you own.\nSpend it on purpose.",
-    ),
-
-    // 2 ─────────────────────────────────────────────────────────── I relapsed
+    // 1 ─────────────────────────────────────────────────────────── I relapsed
     Scenario(
         id = "relapse",
         hubTitle = "I relapsed",

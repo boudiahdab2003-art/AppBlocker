@@ -26,6 +26,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Delete
@@ -79,6 +80,7 @@ fun ProfileScreen(
     onOpenChangelog: () -> Unit = {},
     onOpenKeywords: () -> Unit = {},
     onOpenInstructions: () -> Unit = {},
+    onOpenDetox: () -> Unit = {},
     onOpenScenarios: () -> Unit = {},
     onOpenIconPicker: () -> Unit = {},
     updateVm: UpdateViewModel = viewModel(),
@@ -245,8 +247,17 @@ fun ProfileScreen(
             Divider()
             ProfileRow(
                 icon = Icons.Filled.SelfImprovement,
+                title = "Dopamine detox guide",
+                subtitle = "Clear rules to reset your brain's reward system.",
+                chevron = true,
+                enabled = true,
+                onClick = onOpenDetox,
+            )
+            Divider()
+            ProfileRow(
+                icon = Icons.Filled.Bolt,
                 title = "Scenarios",
-                subtitle = "Guides for the hard moments — detox, relapse, focus, and more.",
+                subtitle = "Guides for the hard moments — relapse, focus, sleep, and more.",
                 chevron = true,
                 enabled = true,
                 onClick = onOpenScenarios,

@@ -68,6 +68,7 @@ private sealed interface Overlay {
     data object CoachChat : Overlay
     data object Changelog : Overlay
     data object Instructions : Overlay
+    data object DetoxGuide : Overlay
     data object Scenarios : Overlay
     data object IconPicker : Overlay
     data class NewSchedule(val type: ScheduleType) : Overlay
@@ -143,6 +144,8 @@ fun AppRoot(openPermissionsOnStart: Boolean = false) {
                 ChangelogScreen(onBack = { overlay = null })
             is Overlay.Instructions ->
                 InstructionsScreen(onBack = { overlay = null })
+            is Overlay.DetoxGuide ->
+                DopamineDetoxScreen(onBack = { overlay = null })
             is Overlay.Scenarios ->
                 ScenariosScreen(onBack = { overlay = null })
             is Overlay.IconPicker ->
@@ -171,6 +174,7 @@ fun AppRoot(openPermissionsOnStart: Boolean = false) {
                 onOpenCoach = { overlay = Overlay.CoachChat },
                 onOpenChangelog = { overlay = Overlay.Changelog },
                 onOpenInstructions = { overlay = Overlay.Instructions },
+                onOpenDetox = { overlay = Overlay.DetoxGuide },
                 onOpenScenarios = { overlay = Overlay.Scenarios },
                 onOpenIconPicker = { overlay = Overlay.IconPicker },
             )
@@ -232,6 +236,7 @@ private fun MainScaffold(
     onOpenCoach: () -> Unit,
     onOpenChangelog: () -> Unit,
     onOpenInstructions: () -> Unit,
+    onOpenDetox: () -> Unit,
     onOpenScenarios: () -> Unit,
     onOpenIconPicker: () -> Unit,
 ) {
@@ -300,6 +305,7 @@ private fun MainScaffold(
                     onOpenChangelog = onOpenChangelog,
                     onOpenKeywords = onOpenKeywords,
                     onOpenInstructions = onOpenInstructions,
+                    onOpenDetox = onOpenDetox,
                     onOpenScenarios = onOpenScenarios,
                     onOpenIconPicker = onOpenIconPicker,
                     updateVm = updateVm,
