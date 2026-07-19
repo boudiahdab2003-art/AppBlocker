@@ -726,21 +726,46 @@ class BlockerAccessibilityService : AccessibilityService() {
         packageChangeReceiver = receiver
     }
 
-    /** Counts phone unlocks (for Insights "pickups"). USER_PRESENT can't be a static receiver
-     *  on modern Android, so we register it at runtime in this always-on service. */
+    /** Counts phone unlocks (for Insights "pickups"), and — on screen-off — clears transient
+     *  blocking state so an unlock never flashes a stale cover over Home. USER_PRESENT/
+     *  SCREEN_OFF can't be static receivers on modern Android, so we register at runtime in
+     *  this always-on service. onReceive runs on the main thread, so overlay ops are safe. */
     private fun registerUnlockReceiver() {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
-                if (intent.action == Intent.ACTION_USER_PRESENT) {
-                    UnlockCounter.recordUnlock(applicationContext)
+                when (intent.action) {
+                    Intent.ACTION_USER_PRESENT -> UnlockCounter.recordUnlock(applicationContext)
+                    Intent.ACTION_SCREEN_OFF -> onScreenOff()
                 }
             }
         }
         ContextCompat.registerReceiver(
-            this, receiver, IntentFilter(Intent.ACTION_USER_PRESENT),
+            this, receiver,
+            IntentFilter().apply {
+                addAction(Intent.ACTION_USER_PRESENT)
+                addAction(Intent.ACTION_SCREEN_OFF)
+            },
             ContextCompat.RECEIVER_NOT_EXPORTED,
         )
         unlockReceiver = receiver
+    }
+
+    /** Screen turned off: drop transient blocking state so the next unlock starts clean and
+     *  can't flash a cover over Home from a package that was foreground before the lock. A
+     *  genuinely blocked app is re-blocked by its own window-state event when reopened.
+     *  Shorts covers are owned by their own scan — left alone. */
+    private fun onScreenOff() {
+        if (shortsCovering) return
+        handler.removeCallbacks(webScanRunnable)
+        handler.removeCallbacks(recheckRunnable)
+        webScanJob?.cancel()
+        webScanQueuedAt = 0L
+        if (overlayView != null) {
+            lastBlockedPkg = null
+            removeBlockOverlay()
+        }
+        lastForegroundPkg = null
+        lastWebText = null
     }
 
     /** True if connected to Wi-Fi and (target empty = any, else SSID matches). */
