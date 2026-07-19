@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.89
+- When you block a social app (Facebook, Instagram, TikTok, YouTube, and so on), the browser now blocks that app's actual website — but no longer blocks pages that just mention its name, and no longer locks your whole browser for 30 minutes over it.
+
 ## v1.88
 - The block screen no longer flashes over your home screen after unlocking. When a word is blocked, the screen now shows you which word it was. And the plain word "porn" no longer blocks non-sexual apps (the fuller phrases still do).
 
