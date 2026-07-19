@@ -1,12 +1,15 @@
 package com.appblocker.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.width
@@ -40,15 +43,15 @@ fun DopamineDetoxScreen(onBack: () -> Unit) {
 
             // The philosophical frame: Buddhism's three marks of existence, each tied to
             // the rules it powers. Deliberately unnumbered — truths, not rules.
-            item { SectionLabel("Three truths to hold") }
+            item { SectionLabel("I", "Three truths to hold") }
             items(MARKS.size) { i ->
                 MarkCard(MARKS[i], top = if (i == 0) 14.dp else 10.dp)
             }
 
             // One continuous numbering across every domain — a single rulebook.
             var number = 1
-            SECTIONS.forEach { (label, rules) ->
-                item { SectionLabel(label) }
+            SECTIONS.forEachIndexed { s, (label, rules) ->
+                item { SectionLabel(ROMAN[s + 2], label) }
                 val first = number
                 items(rules.size) { i ->
                     RuleCard(
@@ -60,10 +63,10 @@ fun DopamineDetoxScreen(onBack: () -> Unit) {
                 number += rules.size
             }
 
-            item { SectionLabel("When a craving hits") }
+            item { SectionLabel(ROMAN[SECTIONS.size + 2], "When a craving hits") }
             item { CravingCard() }
 
-            item { SectionLabel("If you slip") }
+            item { SectionLabel(ROMAN[SECTIONS.size + 3], "If you slip") }
             item {
                 Card(top = 14.dp) {
                     Text(
@@ -89,11 +92,19 @@ fun DopamineDetoxScreen(onBack: () -> Unit) {
                         .padding(24.dp),
                 ) {
                     Text(
+                        "REMEMBER",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 2.sp,
+                        color = Color.White.copy(alpha = 0.7f),
+                    )
+                    Text(
                         "Your attention is the most valuable thing you own.\nSpend it on purpose.",
                         style = MaterialTheme.typography.titleLarge,
                         fontFamily = FontFamily.Serif,
                         lineHeight = 30.sp,
                         color = Color.White,
+                        modifier = Modifier.padding(top = 8.dp),
                     )
                 }
                 GradientButton(
@@ -139,19 +150,54 @@ private fun HeroPanel() {
             color = Color.White.copy(alpha = 0.85f),
             modifier = Modifier.padding(top = 8.dp),
         )
+        // Chapter index: a quiet map of the rulebook.
+        Row(Modifier.padding(top = 16.dp)) {
+            listOf("BLOCK", "SEAL", "BREAK", "URGES", "REPLACE").forEach { chip ->
+                Text(
+                    chip,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 1.5.sp,
+                    color = Color.White.copy(alpha = 0.9f),
+                    modifier = Modifier
+                        .padding(end = 8.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(Color.White.copy(alpha = 0.16f))
+                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                )
+            }
+        }
     }
 }
 
+/** Editorial section header: roman numeral in the accent gradient, uppercase title,
+ *  and a hairline running to the right edge. */
 @Composable
-private fun SectionLabel(text: String) {
-    Text(
-        text.uppercase(),
-        style = MaterialTheme.typography.labelLarge,
-        fontWeight = FontWeight.Black,
-        letterSpacing = 2.sp,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+private fun SectionLabel(numeral: String, text: String) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.padding(top = 30.dp),
-    )
+    ) {
+        Text(
+            numeral,
+            fontSize = 17.sp,
+            fontFamily = FontFamily.Serif,
+            style = TextStyle(brush = AppGradients.accent),
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(
+            text.uppercase(),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 2.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.width(12.dp))
+        Box(
+            Modifier.weight(1f).height(1.dp)
+                .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
+        )
+    }
 }
 
 @Composable
@@ -179,13 +225,16 @@ private fun RuleCard(number: Int, rule: Pair<String, String>, top: Dp) {
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            number.toString().padStart(2, '0'),
-            fontSize = 30.sp,
-            fontFamily = FontFamily.Serif,
-            style = TextStyle(brush = AppGradients.accent),
-        )
-        Spacer(Modifier.width(16.dp))
+        // Fixed-width numeral column so every rule's text starts on the same line.
+        Box(Modifier.width(46.dp)) {
+            Text(
+                number.toString().padStart(2, '0'),
+                fontSize = 30.sp,
+                fontFamily = FontFamily.Serif,
+                style = TextStyle(brush = AppGradients.accent),
+            )
+        }
+        Spacer(Modifier.width(6.dp))
         Column(Modifier.weight(1f)) {
             Text(rule.first, style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
@@ -200,12 +249,22 @@ private fun RuleCard(number: Int, rule: Pair<String, String>, top: Dp) {
 @Composable
 private fun MarkCard(mark: Triple<String, String, String>, top: Dp) {
     val shape = RoundedCornerShape(20.dp)
+    // The truths get the accent-gradient border — set apart from the rules below.
+    val accentBorder = BorderStroke(
+        1.dp,
+        androidx.compose.ui.graphics.Brush.linearGradient(
+            listOf(
+                AppGradients.AccentStart.copy(alpha = 0.55f),
+                AppGradients.AccentEnd.copy(alpha = 0.55f),
+            )
+        ),
+    )
     Column(
         Modifier.fillMaxWidth()
             .padding(top = top)
             .clip(shape)
             .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), shape)
+            .border(accentBorder, shape)
             .padding(16.dp),
     ) {
         Row(verticalAlignment = Alignment.Bottom) {
@@ -240,9 +299,18 @@ private fun MarkCard(mark: Triple<String, String, String>, top: Dp) {
 private fun CravingCard() {
     Card(top = 14.dp) {
         SOS.forEachIndexed { i, step ->
+            if (i > 0) {
+                Box(
+                    Modifier.fillMaxWidth().height(1.dp).padding(horizontal = 2.dp)
+                        .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                )
+            }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(top = if (i == 0) 0.dp else 12.dp),
+                modifier = Modifier.padding(
+                    top = if (i == 0) 0.dp else 12.dp,
+                    bottom = if (i == SOS.lastIndex) 0.dp else 12.dp,
+                ),
             ) {
                 Text(
                     "${i + 1}",
@@ -265,6 +333,9 @@ private fun CravingCard() {
 }
 
 // ---- Content (pure data — edit freely) ----
+
+/** Section numerals: index 1..n as the guide reads top to bottom. */
+private val ROMAN = listOf("", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX")
 
 /** Buddhism's three marks of existence, each tied to the rules it explains. */
 private val MARKS = listOf(
