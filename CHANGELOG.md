@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.88
+- The block screen no longer flashes over your home screen after unlocking. When a word is blocked, the screen now shows you which word it was. And the plain word "porn" no longer blocks non-sexual apps (the fuller phrases still do).
+
 ## v1.87
 - The Dopamine Detox guide's header is now compact — the tall empty blue box at the top is fixed.
 
