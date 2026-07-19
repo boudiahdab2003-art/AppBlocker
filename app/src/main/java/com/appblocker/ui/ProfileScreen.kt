@@ -26,6 +26,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Delete
@@ -33,7 +34,6 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.SelfImprovement
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Share
@@ -81,6 +81,7 @@ fun ProfileScreen(
     onOpenKeywords: () -> Unit = {},
     onOpenInstructions: () -> Unit = {},
     onOpenDetox: () -> Unit = {},
+    onOpenScenarios: () -> Unit = {},
     onOpenIconPicker: () -> Unit = {},
     updateVm: UpdateViewModel = viewModel(),
     vm: HomeViewModel = viewModel(),
@@ -176,18 +177,6 @@ fun ProfileScreen(
             )
         }
 
-        SectionTitle("Blocking")
-        SettingCard {
-            ProfileRow(
-                icon = Icons.Filled.Language,
-                title = "Blocked words",
-                subtitle = "Words to block in browsers, and inside apps you choose.",
-                chevron = true,
-                enabled = true, // adding words is allowed even during Strict; the screen guards removal
-                onClick = onOpenKeywords,
-            )
-        }
-
         SectionTitle("Appearance")
         SettingCard {
             ProfileRow(
@@ -259,10 +248,19 @@ fun ProfileScreen(
             ProfileRow(
                 icon = Icons.Filled.SelfImprovement,
                 title = "Dopamine detox guide",
-                subtitle = "Clear rules for your phone, sleep, body, work and people.",
+                subtitle = "Clear rules to reset your brain's reward system.",
                 chevron = true,
                 enabled = true,
                 onClick = onOpenDetox,
+            )
+            Divider()
+            ProfileRow(
+                icon = Icons.Filled.Bolt,
+                title = "Scenarios",
+                subtitle = "Guides for the hard moments — relapse, focus, sleep, and more.",
+                chevron = true,
+                enabled = true,
+                onClick = onOpenScenarios,
             )
             Divider()
             ProfileRow(

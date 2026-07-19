@@ -188,6 +188,18 @@
             </intent-filter>
         </service>
 
+        <!-- Quick Settings tile: toggle Quick Block from the pull-down shade. -->
+        <service
+            android:name=".service.QuickBlockTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_shield_white"
+            android:label="Quick Block"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
         <!-- The watcher: detects the foreground app and blocks it. -->
         <service
             android:name=".service.BlockerAccessibilityService"
