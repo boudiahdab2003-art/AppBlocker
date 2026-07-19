@@ -103,30 +103,38 @@ private fun ScenarioIndex(onBack: () -> Unit, onOpen: (Int) -> Unit) {
 @Composable
 private fun ScenarioRow(scenario: Scenario, onClick: () -> Unit) {
     val shape = RoundedCornerShape(20.dp)
+    val tileShape = RoundedCornerShape(14.dp)
     Row(
         Modifier.fillMaxWidth()
             .clip(shape)
+            // Surface first, then a faint wash of the scenario's own colors so the list
+            // reads as a colour-coded set at a glance.
             .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), shape)
+            .background(Brush.horizontalGradient(scenario.colors.map { it.copy(alpha = 0.12f) }))
+            .border(1.dp, scenario.colors.first().copy(alpha = 0.30f), shape)
             .clickable(onClick = onClick)
-            .padding(16.dp),
+            .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            Modifier.size(40.dp).clip(RoundedCornerShape(12.dp))
+            Modifier.size(46.dp)
+                .softGlow(tileShape, glow = scenario.colors.first(), elevation = 8.dp)
+                .clip(tileShape)
                 .background(Brush.linearGradient(scenario.colors)),
             contentAlignment = Alignment.Center,
         ) {
             Icon(scenario.icon, contentDescription = null, tint = Color.White,
-                modifier = Modifier.size(22.dp))
+                modifier = Modifier.size(24.dp))
         }
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(scenario.hubTitle, style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
             Text(scenario.hubSubtitle, style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 1.dp))
         }
+        Spacer(Modifier.width(8.dp))
         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
@@ -170,21 +178,28 @@ private fun ScenarioGuide(scenario: Scenario, onBack: () -> Unit) {
 @Composable
 private fun HeroPanel(scenario: Scenario) {
     val shape = RoundedCornerShape(28.dp)
-    Column(
+    Box(
         Modifier.fillMaxWidth()
-            .softGlow(shape)
+            .softGlow(shape, glow = scenario.colors.first())
             .clip(shape)
-            .background(Brush.verticalGradient(scenario.colors))
-            .padding(24.dp),
+            .background(Brush.verticalGradient(scenario.colors)),
     ) {
-        Text(scenario.kicker, style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Black, letterSpacing = 2.sp,
-            color = Color.White.copy(alpha = 0.7f))
-        Text(scenario.title, fontSize = 40.sp, lineHeight = 44.sp,
-            fontFamily = FontFamily.Serif, color = Color.White,
-            modifier = Modifier.padding(top = 6.dp))
-        Text(scenario.subtitle, style = MaterialTheme.typography.bodyLarge,
-            color = Color.White.copy(alpha = 0.85f), modifier = Modifier.padding(top = 8.dp))
+        // A large, faint icon watermark gives each guide its own visual signature.
+        Icon(
+            scenario.icon, contentDescription = null,
+            tint = Color.White.copy(alpha = 0.13f),
+            modifier = Modifier.align(Alignment.TopEnd).padding(10.dp).size(104.dp),
+        )
+        Column(Modifier.padding(24.dp)) {
+            Text(scenario.kicker, style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Black, letterSpacing = 2.sp,
+                color = Color.White.copy(alpha = 0.75f))
+            Text(scenario.title, fontSize = 42.sp, lineHeight = 46.sp,
+                fontFamily = FontFamily.Serif, color = Color.White,
+                modifier = Modifier.padding(top = 6.dp))
+            Text(scenario.subtitle, style = MaterialTheme.typography.bodyLarge,
+                color = Color.White.copy(alpha = 0.9f), modifier = Modifier.padding(top = 10.dp))
+        }
     }
 }
 

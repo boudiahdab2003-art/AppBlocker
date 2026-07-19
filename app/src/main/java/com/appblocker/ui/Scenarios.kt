@@ -13,8 +13,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 /** How a guide section renders. */
 enum class GuideKind { TRUTHS, RULES, STEPS, PLAIN }
 
-/** One entry in a section. [term] is the gradient serif-italic label used by TRUTHS cards;
- *  a blank [title] renders body-only (a plain paragraph card). */
+/** One entry in a section. [term] is the gradient serif-italic label used by TRUTHS cards
+ *  (e.g. a thinker's name); a blank [title] renders body-only (a plain paragraph card). */
 data class GuideItem(val title: String, val body: String, val term: String? = null)
 
 data class GuideSection(val label: String, val kind: GuideKind, val items: List<GuideItem>)
@@ -34,10 +34,12 @@ data class Scenario(
 )
 
 private fun rule(title: String, body: String) = GuideItem(title, body)
+private fun truth(name: String, headline: String, body: String) = GuideItem(headline, body, term = name)
 
 // NOTE: The Dopamine detox guide is deliberately kept OUTSIDE this hub, as its own
 // standalone screen (DopamineDetoxScreen.kt) reached from its own Profile row. This list
-// holds the situational guides only.
+// holds the situational guides only. Each opens with a short philosophical frame (existential
+// / evolutionary) before the practical steps — depth first, then do.
 val SCENARIOS: List<Scenario> = listOf(
 
     // 1 ─────────────────────────────────────────────────────────── I relapsed
@@ -51,6 +53,10 @@ val SCENARIOS: List<Scenario> = listOf(
         title = "Get Up Clean",
         subtitle = "What you do in the next ten minutes matters more than what you just did.",
         sections = listOf(
+            GuideSection("Hold this", GuideKind.TRUTHS, listOf(
+                truth("Sartre", "You are your acts", "There is no hidden “real you” that the slip exposed. Existence comes first: you are nothing but the sum of what you do — and the next act is always yours to choose. The relapse is behind you now; who you are is being decided by the next ten minutes, not the last ten."),
+                truth("Darwin", "Ancient wiring, modern trap", "The urge that pulled you under is old survival machinery — built to chase reward, never built for a screen engineered to trip it on command. It isn't your character; it's a reflex from another world. You are not obliged to obey a hundred-thousand-year-old instinct that never met an algorithm."),
+            )),
             GuideSection("Right now", GuideKind.STEPS, listOf(
                 GuideItem("Get up and move", "Leave the room. Change the scene with your body before your mind starts writing the story."),
                 GuideItem("Cold water", "Face or shower, thirty seconds cold. It clears the fog faster than any thought can."),
@@ -61,11 +67,6 @@ val SCENARIOS: List<Scenario> = listOf(
                 rule("The second thought is the trap", "The slip cost you minutes. “I've already ruined it” costs you the week. Don't take the bait."),
                 rule("Stop replaying it", "Every time you run the scene again, you feed it again. Close the loop and face forward."),
                 rule("Win the next hour, not forever", "“Never again” is a promise you'll break by tonight. Just take the next hour clean, then the next."),
-            )),
-            GuideSection("Reset the day", GuideKind.RULES, listOf(
-                rule("Do one real thing now", "A workout, a task, a call — anything you can finish. Completion is the cleanest cure for the empty feeling."),
-                rule("Get around people", "Shame grows in isolation. Sit with someone, text a friend, step outside. Company breaks the trance."),
-                rule("End the day on time", "Don't stay up litigating it. Phone in the other room, lights out — you wake up with a clean slate."),
             )),
             GuideSection("Guard tomorrow", GuideKind.RULES, listOf(
                 rule("Name what opened the door", "Tired? A certain hour? Bored and alone in bed? Find today's trigger and close that door before it opens again."),
@@ -87,6 +88,10 @@ val SCENARIOS: List<Scenario> = listOf(
         title = "Just Begin",
         subtitle = "Focus follows action. You don't think your way in — you start, and your mind catches up.",
         sections = listOf(
+            GuideSection("Hold this", GuideKind.TRUTHS, listOf(
+                truth("Sartre", "You become it by doing it", "You are not “a focused person” or “a distracted one” — those are stories, not facts. You make yourself, act by act. Sit down and work, and in that moment you already are the disciplined person you thought you had to become first."),
+                truth("Darwin", "Built to be distracted", "Your mind evolved to sweep the horizon for threat and novelty — wandering kept your ancestors alive. The feed just sells that ancient reflex back to you. It's not a flaw in you; it's old software running in a world it never predicted, and old software can be overruled."),
+            )),
             GuideSection("Clear the deck", GuideKind.RULES, listOf(
                 rule("Phone in another room", "Not face-down on the desk — gone. A phone you can see drains attention even while you ignore it."),
                 rule("One tab, one task", "Close the rest. Name the single thing this block is for, and hide everything that isn't it."),
@@ -123,6 +128,10 @@ val SCENARIOS: List<Scenario> = listOf(
         title = "Move First",
         subtitle = "You won't feel like it and then act. You act, and the feeling arrives.",
         sections = listOf(
+            GuideSection("Hold this", GuideKind.TRUTHS, listOf(
+                truth("Sartre", "“I'm lazy” is bad faith", "Calling yourself lazy is what Sartre named bad faith — pretending you're a fixed thing so you don't have to choose. There is no lazy essence, only a choice not yet made. Drop the label and the choice is right there, waiting for you to make it."),
+                truth("Darwin", "Your body hoards energy", "Doing nothing once meant surviving the famine — your body still guards its energy as if scarcity is coming tomorrow. The pull toward the couch is ancient thrift, not the truth about you. In a world of plenty you override it on purpose: motion, not rest, is what you actually need."),
+            )),
             GuideSection("The five-minute rule", GuideKind.STEPS, listOf(
                 GuideItem("Pick one thing", "The smallest useful move. Not the list — one thing."),
                 GuideItem("Promise only five minutes", "Tell yourself you can quit at five. You rarely will — starting is the whole battle."),
@@ -154,6 +163,10 @@ val SCENARIOS: List<Scenario> = listOf(
         title = "Put It Down",
         subtitle = "The scroll doesn't ease you to sleep — it steals the sleep you were about to fall into.",
         sections = listOf(
+            GuideSection("Hold this", GuideKind.TRUTHS, listOf(
+                truth("Darwin", "A brain built for the sun", "For a million years light meant day and dark meant sleep, and your body still obeys that clock. The screen is a counterfeit sun held inches from your eyes, telling an ancient brain to stay awake. Put out the fake sun and the old rhythm comes home on its own."),
+                truth("Sartre", "Let go to fall", "Sleep is the one thing you can't force by will — grip for it and it runs. Here freedom means surrender, not effort: stop steering, stop trying, and let the body do what it has always known how to do."),
+            )),
             GuideSection("Put the phone to bed", GuideKind.RULES, listOf(
                 rule("It sleeps in another room", "The single biggest change. In-bed scrolling wrecks your sleep and hides your worst urges. Buy an alarm clock."),
                 rule("Screens off an hour early", "Bright light and bottomless feeds tell your brain it's noon. Get off the drip before bed."),
@@ -185,6 +198,10 @@ val SCENARIOS: List<Scenario> = listOf(
         title = "Ride It Out",
         subtitle = "The urge rises, peaks, and falls on its own within minutes — fed or not.",
         sections = listOf(
+            GuideSection("Hold this", GuideKind.TRUTHS, listOf(
+                truth("Darwin", "A supernormal lure", "Evolution wired you to chase novelty, because novelty once meant food, safety, a mate. The feed is a supernormal version of that lure — brighter and faster than anything real, built to jam an instinct that never learned to say no. The pull is genuine; the reward is a decoy."),
+                truth("Sartre", "The urge is not an order", "You are free — even from your own impulses. The craving arrives on its own, but obeying it is a separate choice, and it is yours. In the gap between the urge and the hand reaching for the phone lives your whole freedom. Live in that gap."),
+            )),
             GuideSection("Ride the wave", GuideKind.STEPS, listOf(
                 GuideItem("Name it", "“This is an urge, not a need.” Naming it makes you the watcher, not the one obeying."),
                 GuideItem("Give it ten minutes", "You don't have to win forever — just outlast ten minutes. Unfed, the wave breaks on its own."),
@@ -215,6 +232,10 @@ val SCENARIOS: List<Scenario> = listOf(
         title = "Slow It Down",
         subtitle = "You can't think straight in a racing body. Settle the system first — then face the list.",
         sections = listOf(
+            GuideSection("Hold this", GuideKind.TRUTHS, listOf(
+                truth("Darwin", "An alarm for the wrong danger", "The racing heart, the tight chest — that's a survival alarm built to outrun predators, now firing at a full inbox. The body can't tell the difference. It isn't weakness; it's ancient hardware misreading a modern threat. Calm the body and the “danger” shrinks to its real size."),
+                truth("Sartre", "Condemned to be free", "Sartre said we are condemned to be free — choosing, always, whether we like it or not. Overwhelm is the weight of too many choices held at once. You can't make them all, but you can always make the single next one. That one choice is solid ground; stand on it."),
+            )),
             GuideSection("Settle the body", GuideKind.STEPS, listOf(
                 GuideItem("Breathe out long", "In for four, out for six, five times. A slow exhale is the fastest off-switch for panic."),
                 GuideItem("Land in the room", "Feel your feet, the chair, name three things you can see. Come out of the spin and into now."),
