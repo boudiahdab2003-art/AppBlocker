@@ -16,9 +16,24 @@ class WebContentFilter private constructor(
     private val adultKeywords: List<String>,
     private val packWords: List<String>,
 ) {
-    data class Hit(val title: String, val message: String, val word: String? = null)
+    /** [site] = matched because the user blocked an app and this is that app's WEBSITE (not a
+     *  typed word). Callers treat site hits more gently (cover the page, but don't lock the
+     *  whole browser), and they never fire on a mere page mention. */
+    data class Hit(val title: String, val message: String, val word: String? = null, val site: Boolean = false)
 
-    fun check(text: String, url: String?, userKeywords: List<String>, adultPack: Boolean, blockAdult: Boolean): Hit? {
+    /**
+     * @param siteKeywords domain words for apps the user blocked (e.g. "facebook"). Matched
+     *   against the URL ONLY — never the page text — so facebook.com blocks but an article that
+     *   merely says "facebook" does not. Skipped entirely when no URL could be read.
+     */
+    fun check(
+        text: String,
+        url: String?,
+        userKeywords: List<String>,
+        siteKeywords: List<String>,
+        adultPack: Boolean,
+        blockAdult: Boolean,
+    ): Hit? {
         if (text.isBlank()) return null
         val lower = text.lowercase()
 
@@ -34,6 +49,22 @@ class WebContentFilter private constructor(
             val kw = k.trim().lowercase()
             if (kw.isNotEmpty() && containsWord(keywordHay, kw)) {
                 return Hit("Blocked word", "“$kw” is on your blocked list.", kw)
+            }
+        }
+        // Blocked-app websites: match the URL only. "Block the website, not the word" — so a
+        // blocked app's site is covered, but a page that just mentions its name is not, and no
+        // URL means no match (never blocks on page text).
+        val host = url?.lowercase()?.takeIf { it.isNotBlank() }
+        if (host != null) {
+            for (k in siteKeywords) {
+                val kw = k.trim().lowercase()
+                if (kw.isNotEmpty() && containsWord(host, kw)) {
+                    return Hit(
+                        "Website blocked",
+                        "This site is blocked because its app is on your blocked list.",
+                        site = true,
+                    )
+                }
             }
         }
         if (adultPack && packWords.isNotEmpty()) {

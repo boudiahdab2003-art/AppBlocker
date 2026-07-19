@@ -956,9 +956,9 @@ class BlockerAccessibilityService : AccessibilityService() {
         // adult layer (pack + adult sites) keeps matching.
         val ownWords = if (updatePauseActive()) emptyList() else userKeywords
         val hit = if (isBrowser) {
-            filter.check(text, url, ownWords + autoSocialKeywords(), adultPackOn, SettingsStore.blockAdult(applicationContext))
+            filter.check(text, url, ownWords, autoSocialKeywords(), adultPackOn, SettingsStore.blockAdult(applicationContext))
         } else {
-            filter.check(text, url = null, ownWords, adultPackOn, blockAdult = false)
+            filter.check(text, url = null, ownWords, siteKeywords = emptyList(), adultPackOn, blockAdult = false)
         }
         if (hit == null) {
             lastWebText = null
@@ -971,9 +971,10 @@ class BlockerAccessibilityService : AccessibilityService() {
         // dismisses it, same as the GLOBAL_ACTION_HOME race removed in M2. Close goes home.)
         withContext(Dispatchers.Main) {
             if (lastForegroundPkg == pkg && stillOnScreen(pkg)) {
-                // The catch also locks the whole app for a while — "Got it" must not be
-                // a free pass back into the same page. Remember the word so re-entry names it.
-                addKeywordLockout(pkg, hit.word)
+                // A blocked WORD (or adult content) locks the whole app for a while — "Got it"
+                // must not be a free pass back in. A blocked WEBSITE is gentler: cover the page
+                // so the site stays blocked every visit, but don't lock the whole browser.
+                if (!hit.site) addKeywordLockout(pkg, hit.word)
                 showBlockScreen(title = hit.title, message = hit.message, packageName = null, counterKey = "web")
             } else lastWebText = null // left during the scan — don't cover what's there now
         }
