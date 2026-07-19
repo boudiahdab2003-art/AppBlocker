@@ -80,7 +80,9 @@ nutaku
 redgifs
 
 # --- porn, generic ---
-porn
+# NOTE: the bare word "porn" is intentionally omitted — it appears in plenty of
+# non-sexual contexts (news, chat, app UI), so it caused false blocks. The
+# unambiguous compounds below ("porn video", "free porn", …) still match.
 porno
 pornos
 pornography
@@ -345,7 +347,6 @@ onahole
 سيكس
 سكسي
 سكسية
-بورن
 بورنو
 اباحي
 اباحية

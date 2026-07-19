@@ -16,7 +16,7 @@ class WebContentFilter private constructor(
     private val adultKeywords: List<String>,
     private val packWords: List<String>,
 ) {
-    data class Hit(val title: String, val message: String)
+    data class Hit(val title: String, val message: String, val word: String? = null)
 
     fun check(text: String, url: String?, userKeywords: List<String>, adultPack: Boolean, blockAdult: Boolean): Hit? {
         if (text.isBlank()) return null
@@ -33,7 +33,7 @@ class WebContentFilter private constructor(
             // are boundaries, so it still matches inside "instagram.com/reels".
             val kw = k.trim().lowercase()
             if (kw.isNotEmpty() && containsWord(keywordHay, kw)) {
-                return Hit("Blocked word", "“$kw” is on your blocked list.")
+                return Hit("Blocked word", "“$kw” is on your blocked list.", kw)
             }
         }
         if (adultPack && packWords.isNotEmpty()) {
@@ -43,8 +43,7 @@ class WebContentFilter private constructor(
             val norm = normalizeArabic(lower)
             for (w in packWords) {
                 if (containsWord(norm, w)) {
-                    // Deliberately doesn't echo the matched word.
-                    return Hit("Adult content blocked", "This page contains blocked adult words.")
+                    return Hit("Adult content blocked", "“$w” is a blocked adult word.", w)
                 }
             }
         }
