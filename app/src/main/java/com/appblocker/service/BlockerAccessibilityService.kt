@@ -159,6 +159,9 @@ class BlockerAccessibilityService : AccessibilityService() {
     // text — until the expiry time. Guarded by its own lock (written from the background
     // scan, read from the main thread); mirrored to prefs so restarts don't lift it.
     private val keywordLockouts = mutableMapOf<String, Long>()
+    // The word that triggered each app's lockout, so re-entry can name it too. In-memory only
+    // (guarded by the keywordLockouts lock) — after a reboot it falls back to a generic line.
+    private val keywordLockoutWords = mutableMapOf<String, String>()
 
     @Volatile private var lastForegroundPkg: String? = null
     @Volatile private var lastLocation: Location? = null
@@ -252,12 +255,19 @@ class BlockerAccessibilityService : AccessibilityService() {
         ((keywordLockouts[pkg] ?: 0L) - System.currentTimeMillis()).coerceAtLeast(0L)
     }
 
-    /** Locks [pkg] for [KEYWORD_LOCKOUT_MS] after a blocked word was caught in it. */
-    private fun addKeywordLockout(pkg: String) {
+    /** The word that triggered [pkg]'s lockout, if still remembered (in-memory only). */
+    private fun keywordLockoutWord(pkg: String): String? = synchronized(keywordLockouts) {
+        keywordLockoutWords[pkg]
+    }
+
+    /** Locks [pkg] for [KEYWORD_LOCKOUT_MS] after a blocked [word] was caught in it. */
+    private fun addKeywordLockout(pkg: String, word: String?) {
         val now = System.currentTimeMillis()
         synchronized(keywordLockouts) {
             keywordLockouts.entries.removeAll { it.value <= now }
+            keywordLockoutWords.keys.retainAll(keywordLockouts.keys)
             keywordLockouts[pkg] = now + KEYWORD_LOCKOUT_MS
+            if (word != null) keywordLockoutWords[pkg] = word else keywordLockoutWords.remove(pkg)
             SettingsStore.setKeywordLockouts(applicationContext, keywordLockouts.toMap())
         }
     }
@@ -579,10 +589,15 @@ class BlockerAccessibilityService : AccessibilityService() {
         // Keyword lockout: a blocked word was caught in this app recently, so the whole app
         // stays locked — no page inside it is reachable until the lockout runs out.
         val lockLeft = keywordLockoutRemaining(pkg)
-        if (lockLeft > 0L) return BlockReason(
-            "Locked",
-            "A blocked word was found here. Locked for ${(lockLeft + 59_999L) / 60_000L} more min.",
-        )
+        if (lockLeft > 0L) {
+            val mins = (lockLeft + 59_999L) / 60_000L
+            val w = keywordLockoutWord(pkg)
+            return BlockReason(
+                "Locked",
+                if (w != null) "“$w” was found here. Locked for $mins more min."
+                else "A blocked word was found here. Locked for $mins more min.",
+            )
+        }
         val now = System.currentTimeMillis()
         val strict = strictRemaining() > 0L
 
@@ -957,8 +972,8 @@ class BlockerAccessibilityService : AccessibilityService() {
         withContext(Dispatchers.Main) {
             if (lastForegroundPkg == pkg && stillOnScreen(pkg)) {
                 // The catch also locks the whole app for a while — "Got it" must not be
-                // a free pass back into the same page.
-                addKeywordLockout(pkg)
+                // a free pass back into the same page. Remember the word so re-entry names it.
+                addKeywordLockout(pkg, hit.word)
                 showBlockScreen(title = hit.title, message = hit.message, packageName = null, counterKey = "web")
             } else lastWebText = null // left during the scan — don't cover what's there now
         }
