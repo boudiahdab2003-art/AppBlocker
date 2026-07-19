@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.86
+- The Dopamine Detox guide is now a full rulebook: three truths from Buddhism, 25 clear rules for beating the scrolling and porn cravings, a craving SOS, and a fresh, cleaner design.
+
 ## v1.85
 - New: a full Dopamine Detox guide on the Profile page — what scrolling does to your brain and a 7-day reset plan. Fixes: templates no longer add app-name words (like "youtube") to your blocked words, and the ones added before are cleaned up once; the turn-off typing challenge now works properly with the keyboard open; and the challenge uses longer words.
 
