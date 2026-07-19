@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.90
+- New Scenarios section in your Profile: short guides for the hard moments — relapse, can't focus, feeling lazy, can't sleep, the urge to scroll, and feeling overwhelmed — each opening with real quotes from thinkers like Marcus Aurelius, Seneca, Viktor Frankl and Sartre. The Dopamine detox guide stays where it was. You can also add a Quick Block button to your phone's pull-down Quick Settings panel to turn blocking on and off without opening the app.
+
 ## v1.89
 - When you block a social app (Facebook, Instagram, TikTok, YouTube, and so on), the browser now blocks that app's actual website — but no longer blocks pages that just mention its name, and no longer locks your whole browser for 30 minutes over it.
 
