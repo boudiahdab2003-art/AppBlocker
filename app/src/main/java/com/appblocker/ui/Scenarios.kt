@@ -56,6 +56,7 @@ val SCENARIOS: List<Scenario> = listOf(
             GuideSection("Hold this", GuideKind.TRUTHS, listOf(
                 truth("Sartre", "You are your acts", "There is no hidden “real you” that the slip exposed. Existence comes first: you are nothing but the sum of what you do — and the next act is always yours to choose. The relapse is behind you now; who you are is being decided by the next ten minutes, not the last ten."),
                 truth("Darwin", "Ancient wiring, modern trap", "The urge that pulled you under is old survival machinery — built to chase reward, never built for a screen engineered to trip it on command. It isn't your character; it's a reflex from another world. You are not obliged to obey a hundred-thousand-year-old instinct that never met an algorithm."),
+                truth("Epictetus", "Only the next move is yours", "The Stoics split the world in two: what is up to you and what isn't. The slip is already done — outside your power now, not worth another ounce of force. What IS up to you is the very next choice. Spend your energy there, and nowhere else."),
             )),
             GuideSection("Right now", GuideKind.STEPS, listOf(
                 GuideItem("Get up and move", "Leave the room. Change the scene with your body before your mind starts writing the story."),
@@ -91,6 +92,7 @@ val SCENARIOS: List<Scenario> = listOf(
             GuideSection("Hold this", GuideKind.TRUTHS, listOf(
                 truth("Sartre", "You become it by doing it", "You are not “a focused person” or “a distracted one” — those are stories, not facts. You make yourself, act by act. Sit down and work, and in that moment you already are the disciplined person you thought you had to become first."),
                 truth("Darwin", "Built to be distracted", "Your mind evolved to sweep the horizon for threat and novelty — wandering kept your ancestors alive. The feed just sells that ancient reflex back to you. It's not a flaw in you; it's old software running in a world it never predicted, and old software can be overruled."),
+                truth("Marcus Aurelius", "Do the thing in front of you", "“Concentrate every minute on doing what's in front of you,” wrote Marcus, “with real seriousness — as if it were the last thing you were doing in your life.” Focus isn't a mood to summon. It's a decision: give this one task everything, then the next."),
             )),
             GuideSection("Clear the deck", GuideKind.RULES, listOf(
                 rule("Phone in another room", "Not face-down on the desk — gone. A phone you can see drains attention even while you ignore it."),
@@ -131,6 +133,7 @@ val SCENARIOS: List<Scenario> = listOf(
             GuideSection("Hold this", GuideKind.TRUTHS, listOf(
                 truth("Sartre", "“I'm lazy” is bad faith", "Calling yourself lazy is what Sartre named bad faith — pretending you're a fixed thing so you don't have to choose. There is no lazy essence, only a choice not yet made. Drop the label and the choice is right there, waiting for you to make it."),
                 truth("Darwin", "Your body hoards energy", "Doing nothing once meant surviving the famine — your body still guards its energy as if scarcity is coming tomorrow. The pull toward the couch is ancient thrift, not the truth about you. In a world of plenty you override it on purpose: motion, not rest, is what you actually need."),
+                truth("Marcus Aurelius", "Rise to do your work", "At dawn, when he couldn't get out of bed, Marcus told himself: I am rising to do the work of a human being. You weren't made for warmth under a blanket — you were made to act. The reluctance is real; do it anyway, because that is what you are for."),
             )),
             GuideSection("The five-minute rule", GuideKind.STEPS, listOf(
                 GuideItem("Pick one thing", "The smallest useful move. Not the list — one thing."),
@@ -166,6 +169,7 @@ val SCENARIOS: List<Scenario> = listOf(
             GuideSection("Hold this", GuideKind.TRUTHS, listOf(
                 truth("Darwin", "A brain built for the sun", "For a million years light meant day and dark meant sleep, and your body still obeys that clock. The screen is a counterfeit sun held inches from your eyes, telling an ancient brain to stay awake. Put out the fake sun and the old rhythm comes home on its own."),
                 truth("Sartre", "Let go to fall", "Sleep is the one thing you can't force by will — grip for it and it runs. Here freedom means surrender, not effort: stop steering, stop trying, and let the body do what it has always known how to do."),
+                truth("Seneca", "Close the day in peace", "Seneca ended each night by reviewing the day — then letting it go entirely. Settle your accounts with the day on paper, forgive what can't be changed, and hand the rest to tomorrow. Sleep comes easily to the mind that has set its burden down."),
             )),
             GuideSection("Put the phone to bed", GuideKind.RULES, listOf(
                 rule("It sleeps in another room", "The single biggest change. In-bed scrolling wrecks your sleep and hides your worst urges. Buy an alarm clock."),
@@ -201,6 +205,7 @@ val SCENARIOS: List<Scenario> = listOf(
             GuideSection("Hold this", GuideKind.TRUTHS, listOf(
                 truth("Darwin", "A supernormal lure", "Evolution wired you to chase novelty, because novelty once meant food, safety, a mate. The feed is a supernormal version of that lure — brighter and faster than anything real, built to jam an instinct that never learned to say no. The pull is genuine; the reward is a decoy."),
                 truth("Sartre", "The urge is not an order", "You are free — even from your own impulses. The craving arrives on its own, but obeying it is a separate choice, and it is yours. In the gap between the urge and the hand reaching for the phone lives your whole freedom. Live in that gap."),
+                truth("Epictetus", "The impression is not the act", "Epictetus taught that an impression — the pull, the itch — arrives on its own, but your assent to it is entirely yours. The urge is not up to you; reaching for the phone is. Between the two is a gap, and in that gap is everything the Stoics called freedom."),
             )),
             GuideSection("Ride the wave", GuideKind.STEPS, listOf(
                 GuideItem("Name it", "“This is an urge, not a need.” Naming it makes you the watcher, not the one obeying."),
@@ -235,6 +240,7 @@ val SCENARIOS: List<Scenario> = listOf(
             GuideSection("Hold this", GuideKind.TRUTHS, listOf(
                 truth("Darwin", "An alarm for the wrong danger", "The racing heart, the tight chest — that's a survival alarm built to outrun predators, now firing at a full inbox. The body can't tell the difference. It isn't weakness; it's ancient hardware misreading a modern threat. Calm the body and the “danger” shrinks to its real size."),
                 truth("Sartre", "Condemned to be free", "Sartre said we are condemned to be free — choosing, always, whether we like it or not. Overwhelm is the weight of too many choices held at once. You can't make them all, but you can always make the single next one. That one choice is solid ground; stand on it."),
+                truth("Seneca", "We suffer more in imagination", "“We suffer more often in imagination than in reality,” said Seneca. Most of the crushing weight is the mind stacking future catastrophes that haven't happened. Handle only what is actually in front of you today; the towering rest is largely a story, and it shrinks the moment you act."),
             )),
             GuideSection("Settle the body", GuideKind.STEPS, listOf(
                 GuideItem("Breathe out long", "In for four, out for six, five times. A slow exhale is the fastest off-switch for panic."),
