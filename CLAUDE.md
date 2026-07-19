@@ -17,6 +17,16 @@ enforcement). Owner is non-technical; explain things in plain language.
   version sections.
 - Develop on the session branch, merge to `master` after the Build check is green.
 
+## "Play version" — selling this on Google Play
+
+When the owner says **"play version"**, he means the whole effort of turning this
+personal, single-user app into a paid product on the Google Play Store. The full
+step-by-step plan (non-technical, phase by phase) lives in
+**docs/PLAY_VERSION_PLAN.md** — read it first before doing any play-version work,
+and keep its "Where we are right now" section updated as we progress. The `play`
+build flavor already exists (no self-update, no location schedules) as the
+Play-safe starting point.
+
 ## Spare server
 
 A free-tier GCP VM (e2-micro, Debian 12, us-east1-b) is available for future
