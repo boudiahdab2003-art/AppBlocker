@@ -150,23 +150,6 @@ private fun HeroPanel() {
             color = Color.White.copy(alpha = 0.85f),
             modifier = Modifier.padding(top = 8.dp),
         )
-        // Chapter index: a quiet map of the rulebook.
-        Row(Modifier.padding(top = 16.dp)) {
-            listOf("BLOCK", "SEAL", "BREAK", "URGES", "REPLACE").forEach { chip ->
-                Text(
-                    chip,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 1.5.sp,
-                    color = Color.White.copy(alpha = 0.9f),
-                    modifier = Modifier
-                        .padding(end = 8.dp)
-                        .clip(RoundedCornerShape(50))
-                        .background(Color.White.copy(alpha = 0.16f))
-                        .padding(horizontal = 10.dp, vertical = 5.dp),
-                )
-            }
-        }
     }
 }
 
