@@ -44,39 +44,39 @@ val SCENARIOS: List<Scenario> = listOf(
     Scenario(
         id = "relapse",
         hubTitle = "I relapsed",
-        hubSubtitle = "Right after a slip — stop the spiral, reset clean.",
+        hubSubtitle = "Right after a slip — stop the spiral, start clean.",
         icon = Icons.Filled.Refresh,
         colors = listOf(Color(0xFFFB7185), Color(0xFFE11D48)),
         kicker = "A SLIP, NOT A COLLAPSE",
         title = "Get Up Clean",
-        subtitle = "The next ten minutes matter more than what just happened.",
+        subtitle = "What you do in the next ten minutes matters more than what you just did.",
         sections = listOf(
             GuideSection("Right now", GuideKind.STEPS, listOf(
-                GuideItem("Stand up", "Leave the room you're in. Physically change the scene before you do anything else."),
-                GuideItem("Cold water", "Splash your face, or thirty seconds of cold at the end of a shower. It resets the nervous system fast."),
-                GuideItem("Move your body", "Twenty push-ups, a brisk walk, anything hard for two minutes. Burn off the chemical fog."),
-                GuideItem("Say it straight", "“I slipped. It's over now.” No lie, no drama — name it and close it."),
+                GuideItem("Get up and move", "Leave the room. Change the scene with your body before your mind starts writing the story."),
+                GuideItem("Cold water", "Face or shower, thirty seconds cold. It clears the fog faster than any thought can."),
+                GuideItem("Burn it off", "Twenty push-ups or a hard two-minute walk. Give the leftover charge somewhere to go."),
+                GuideItem("Call it, then close it", "Say it once: “That happened. It's done.” No speech, no verdict — then move."),
             )),
-            GuideSection("Stop the spiral", GuideKind.RULES, listOf(
-                rule("One slip is not the day", "The shame spiral — “I already ruined it” — is what turns one slip into a lost week. Refuse the second thought."),
-                rule("Don't re-live it", "Close the tabs, and then stop replaying it in your head. Re-living it is re-feeding it."),
-                rule("No grand promises", "Don't vow “never again” — that sets up the next fall. Just win the next hour, then the next one."),
+            GuideSection("Kill the spiral", GuideKind.RULES, listOf(
+                rule("The second thought is the trap", "The slip cost you minutes. “I've already ruined it” costs you the week. Don't take the bait."),
+                rule("Stop replaying it", "Every time you run the scene again, you feed it again. Close the loop and face forward."),
+                rule("Win the next hour, not forever", "“Never again” is a promise you'll break by tonight. Just take the next hour clean, then the next."),
             )),
             GuideSection("Reset the day", GuideKind.RULES, listOf(
-                rule("Do one real thing", "Right now, do something that matters — a workout, a task, a call. Completion is the antidote to the empty feeling."),
-                rule("Get around people", "Isolation is the soil this grows in. Text a friend, sit with family, go outside. Presence breaks the trance."),
-                rule("Sleep on schedule", "Don't stay up spiraling. Phone in the other room, lights out on time — tomorrow you start clean."),
+                rule("Do one real thing now", "A workout, a task, a call — anything you can finish. Completion is the cleanest cure for the empty feeling."),
+                rule("Get around people", "Shame grows in isolation. Sit with someone, text a friend, step outside. Company breaks the trance."),
+                rule("End the day on time", "Don't stay up litigating it. Phone in the other room, lights out — you wake up with a clean slate."),
             )),
-            GuideSection("Prevent the next one", GuideKind.RULES, listOf(
-                rule("Find the trigger", "Tiredness? A certain hour? Boredom? Alone in bed? Name what opened the door today, and plan around it tomorrow."),
-                rule("Keep the walls up", "Adult pack on, Strict Mode running. Don't lower a single guard while you feel strong — you're protecting future-you."),
-                rule("The urge is a wave", "Next time it rises: name it, hold ten minutes, move. It always passes — feeding it just teaches it to come back louder."),
+            GuideSection("Guard tomorrow", GuideKind.RULES, listOf(
+                rule("Name what opened the door", "Tired? A certain hour? Bored and alone in bed? Find today's trigger and close that door before it opens again."),
+                rule("Don't lower the walls", "Adult pack on, Strict Mode running. The moment you feel strong is exactly when future-you needs the guard kept up."),
+                rule("Next urge: ride it", "Name it, hold ten minutes, move. It always passes — feed it once and it only learns to shout louder."),
             )),
         ),
-        closing = "You are not your worst ten minutes.\nYou are what you do next.",
+        closing = "You are not your worst ten minutes.\nYou are what you do in the next ten.",
     ),
 
-    // 3 ─────────────────────────────────────────────────────────── Can't focus
+    // 2 ─────────────────────────────────────────────────────────── Can't focus
     Scenario(
         id = "focus",
         hubTitle = "Can't focus",
@@ -85,34 +85,34 @@ val SCENARIOS: List<Scenario> = listOf(
         colors = listOf(Color(0xFF14B8A6), Color(0xFF22C55E)),
         kicker = "STOP WAITING TO FEEL READY",
         title = "Just Begin",
-        subtitle = "Focus follows action. You don't think your way in — you start, and the mind catches up.",
+        subtitle = "Focus follows action. You don't think your way in — you start, and your mind catches up.",
         sections = listOf(
             GuideSection("Clear the deck", GuideKind.RULES, listOf(
-                rule("Phone in another room", "Not face-down on the desk — another room. A visible phone taxes your attention even when you never touch it."),
-                rule("One tab, one task", "Close everything else. Decide the single thing you're doing this block and hide the rest."),
-                rule("Turn the walls on", "Start a Pomodoro or Strict session before you begin. Make the distraction impossible, not just discouraged."),
+                rule("Phone in another room", "Not face-down on the desk — gone. A phone you can see drains attention even while you ignore it."),
+                rule("One tab, one task", "Close the rest. Name the single thing this block is for, and hide everything that isn't it."),
+                rule("Turn the walls on first", "Start a Pomodoro or Strict session before you begin — make distraction impossible, not just discouraged."),
             )),
-            GuideSection("The 2-minute start", GuideKind.STEPS, listOf(
-                GuideItem("Shrink it", "Don't “study for the exam”. Open the book to page one. Write one sentence. Make the first step embarrassingly small."),
-                GuideItem("Set a timer", "Twenty-five minutes, one task. You're not committing to hours — just to the timer."),
-                GuideItem("Start ugly", "Messy notes, rough first draft, slow reading. Momentum beats quality at the start — you can fix ugly, you can't fix blank."),
-                GuideItem("Ride the warm-up", "The first ten minutes feel like friction. Push through them — that's the on-ramp, not the road."),
+            GuideSection("The two-minute start", GuideKind.STEPS, listOf(
+                GuideItem("Shrink it to nothing", "Not “study for the exam.” Open the book to page one. Write one line. Make step one too small to refuse."),
+                GuideItem("Set the timer", "Twenty-five minutes, one task. You're not promising hours — only the timer."),
+                GuideItem("Start ugly", "Rough notes, bad draft, slow reading. You can fix ugly — you can't fix blank."),
+                GuideItem("Push through the on-ramp", "The first ten minutes are friction, not the road. Drive through them and focus arrives."),
             )),
             GuideSection("Work in blocks", GuideKind.RULES, listOf(
-                rule("One block at a time", "Twenty-five to fifty minutes of single-tasking, then a real break. Sprints, not a marathon."),
-                rule("Break away from screens", "In the break, stand up, look far, move. Don't reward focus with a scroll — it undoes the reset."),
-                rule("Protect the deep hours", "Do the hardest work when your mind is freshest — usually the morning. Guard that window."),
+                rule("Sprints, not marathons", "Twenty-five to fifty minutes of single-tasking, then a real break. Depth beats duration."),
+                rule("Break without a screen", "Stand, stretch, look far, walk. Reward focus with a scroll and you erase the reset."),
+                rule("Spend your best hours well", "Do the hardest thing when your head is clearest — usually the morning. Guard that window like gold."),
             )),
             GuideSection("When your mind wanders", GuideKind.STEPS, listOf(
-                GuideItem("Notice, don't judge", "Wandering is normal, not failure. The skill is catching it — not never drifting."),
-                GuideItem("Park the thought", "Jot the distraction on a scrap of paper — “reply to X”, “check Y later” — and return. The paper holds it so your head doesn't."),
-                GuideItem("Back to one line", "Re-read the last sentence you wrote or read. Re-entry is easy from a single concrete point."),
+                GuideItem("Catch it, don't scold it", "Drifting is what minds do, not a failure. The skill is noticing — not never leaving."),
+                GuideItem("Park the thought", "Write the distraction on paper — “reply to X”, “check Y” — and let the page hold it so your head can let go."),
+                GuideItem("Re-enter on one line", "Re-read the last sentence you wrote. One concrete point is the easiest door back in."),
             )),
         ),
-        closing = "Discipline is doing it before you feel like it.\nStart, and the feeling arrives.",
+        closing = "Discipline is doing it before you feel like it.\nBegin, and the feeling shows up.",
     ),
 
-    // 4 ─────────────────────────────────────────────────────────── Feeling lazy
+    // 3 ─────────────────────────────────────────────────────────── Feeling lazy
     Scenario(
         id = "lazy",
         hubTitle = "Feeling lazy",
@@ -121,29 +121,29 @@ val SCENARIOS: List<Scenario> = listOf(
         colors = listOf(Color(0xFFFB923C), Color(0xFFF97316)),
         kicker = "MOTION BEFORE MOTIVATION",
         title = "Move First",
-        subtitle = "You won't feel like it and then act. You act, and the feeling shows up.",
+        subtitle = "You won't feel like it and then act. You act, and the feeling arrives.",
         sections = listOf(
-            GuideSection("The 5-minute rule", GuideKind.STEPS, listOf(
-                GuideItem("Pick one thing", "The smallest useful task. Not the whole list — one thing."),
-                GuideItem("Commit to five minutes", "Tell yourself you can quit after five. You almost never will — starting is the hard part, not continuing."),
-                GuideItem("Just start it", "Put your shoes on. Open the doc. Pick up the one dish. Begin the physical motion before the mind argues."),
-                GuideItem("Let momentum carry", "Five minutes in, you're moving. Ride it as far as it goes; stop without guilt when it fades."),
+            GuideSection("The five-minute rule", GuideKind.STEPS, listOf(
+                GuideItem("Pick one thing", "The smallest useful move. Not the list — one thing."),
+                GuideItem("Promise only five minutes", "Tell yourself you can quit at five. You rarely will — starting is the whole battle."),
+                GuideItem("Move your body into it", "Shoes on. Doc open. One dish in hand. Begin the physical act before the mind can argue."),
+                GuideItem("Let momentum take over", "Five minutes in, you're already moving. Ride it as far as it goes, and stop without guilt."),
             )),
             GuideSection("Lower the bar", GuideKind.RULES, listOf(
-                rule("Half is not nothing", "A short workout beats a skipped one. Ten minutes of work beats zero. Shrink the task until it's impossible to refuse."),
-                rule("Make starting stupidly easy", "Clothes laid out, book open, workspace clear. Remove every small friction between you and the first move."),
-                rule("Don't trust the mood", "Waiting to “feel motivated” is the trap. Mood is weather; action is the only thing you actually control."),
+                rule("Half beats zero", "A short workout, ten minutes of work, one paragraph. Shrink the task until saying no feels ridiculous."),
+                rule("Remove the friction", "Clothes laid out, book open, desk clear. Kill every tiny obstacle between you and the first move."),
+                rule("Don't wait for the mood", "Motivation is weather — it comes and goes. Action is the one lever you can always pull."),
             )),
             GuideSection("Build momentum", GuideKind.RULES, listOf(
-                rule("Stack one win first", "Make the bed, drink water, two minutes of movement. A tiny early win primes the bigger ones."),
-                rule("Body before brain", "Move, get daylight, get blood flowing. Lazy is often just under-moved and under-lit, not truly tired."),
-                rule("Guard against the scroll", "Laziness plus a phone equals hours gone. Turn Quick Block on when your willpower is low — decide once, coast on it."),
+                rule("Bank an easy win", "Make the bed, drink water, two minutes of movement. One small win primes the bigger ones."),
+                rule("Body before brain", "Move, get daylight, get blood flowing. “Lazy” is usually under-moved and under-lit, not truly tired."),
+                rule("Lock out the scroll", "Low willpower plus a phone eats the day. Flip Quick Block on and decide once, so you don't have to keep deciding."),
             )),
         ),
-        closing = "You don't need motivation.\nYou need to start. The rest follows.",
+        closing = "You don't need motivation.\nYou need the first move. The rest follows.",
     ),
 
-    // 5 ─────────────────────────────────────────────────────────── Can't sleep
+    // 4 ─────────────────────────────────────────────────────────── Can't sleep
     Scenario(
         id = "sleep",
         hubTitle = "Can't sleep",
@@ -152,29 +152,29 @@ val SCENARIOS: List<Scenario> = listOf(
         colors = listOf(Color(0xFF6366F1), Color(0xFF8B5CF6)),
         kicker = "THE PHONE IS THE PROBLEM",
         title = "Put It Down",
-        subtitle = "The scroll doesn't relax you into sleep — it robs the sleep you were about to get.",
+        subtitle = "The scroll doesn't ease you to sleep — it steals the sleep you were about to fall into.",
         sections = listOf(
             GuideSection("Put the phone to bed", GuideKind.RULES, listOf(
-                rule("It charges in another room", "The single biggest change. In-bed scrolling wrecks sleep and it's where the worst urges live. Get an alarm clock."),
-                rule("Screens off an hour before", "Blue light and endless feeds tell your brain it's daytime. End the day off the drip."),
-                rule("No “just five minutes”", "There is no five-minute scroll at night — it's always an hour. Don't open the door at all."),
+                rule("It sleeps in another room", "The single biggest change. In-bed scrolling wrecks your sleep and hides your worst urges. Buy an alarm clock."),
+                rule("Screens off an hour early", "Bright light and bottomless feeds tell your brain it's noon. Get off the drip before bed."),
+                rule("There is no “five minutes”", "At night, five minutes is always an hour. Don't crack the door at all."),
             )),
             GuideSection("Wind down", GuideKind.STEPS, listOf(
-                GuideItem("Dim everything", "Lights low, room cool and dark. Signal the body that the day is closing."),
-                GuideItem("Off-load the head", "Racing thoughts? Write tomorrow's worries and to-dos on paper. On the page, out of the mind."),
-                GuideItem("Slow the breath", "Breathe out longer than you breathe in — four in, six out — for a couple of minutes. It downshifts the nervous system."),
-                GuideItem("Read something dull", "A paper book, nothing exciting. Boredom is your friend here — let it pull you under."),
+                GuideItem("Dim the world", "Lights low, room cool and dark. Tell the body the day is closing."),
+                GuideItem("Empty your head onto paper", "Racing thoughts? Write tomorrow's worries and tasks down. On the page, out of the mind."),
+                GuideItem("Lengthen the exhale", "Breathe in four, out six, for two minutes. A long exhale is the body's brake."),
+                GuideItem("Read something boring", "Paper, nothing gripping. Let dullness do the work and pull you under."),
             )),
-            GuideSection("If you're still awake", GuideKind.RULES, listOf(
-                rule("Don't watch the clock", "Turn it away. Doing the math on lost sleep only wakes you up more."),
-                rule("Get up, don't scroll", "Awake for 20 minutes? Leave the bed, sit somewhere dim and boring, return when sleepy. Never reach for the phone."),
-                rule("One bad night isn't a crisis", "Pressure to sleep keeps you awake. You'll be fine tomorrow — let go of forcing it."),
+            GuideSection("Still awake?", GuideKind.RULES, listOf(
+                rule("Don't watch the clock", "Turn it away. Counting lost hours only wakes you further."),
+                rule("Get up, don't reach", "Awake twenty minutes? Leave the bed for somewhere dim and dull, and come back sleepy. Never the phone."),
+                rule("One rough night is fine", "Trying hard to sleep keeps you awake. Loosen your grip — tomorrow will hold."),
             )),
         ),
-        closing = "Guard your sleep like a foundation —\nbecause everything else is built on it.",
+        closing = "Protect your sleep like a foundation —\neverything else is built on it.",
     ),
 
-    // 6 ─────────────────────────────────────────────────────────── Urge to scroll
+    // 5 ─────────────────────────────────────────────────────────── Urge to scroll
     Scenario(
         id = "scroll",
         hubTitle = "Urge to scroll",
@@ -183,28 +183,28 @@ val SCENARIOS: List<Scenario> = listOf(
         colors = listOf(Color(0xFFF0598A), Color(0xFFB5179E)),
         kicker = "A WAVE, NOT AN ORDER",
         title = "Ride It Out",
-        subtitle = "The urge peaks and falls on its own in minutes — whether or not you feed it.",
+        subtitle = "The urge rises, peaks, and falls on its own within minutes — fed or not.",
         sections = listOf(
             GuideSection("Ride the wave", GuideKind.STEPS, listOf(
-                GuideItem("Name it", "“This is an urge, not a need.” Saying it moves you from being the urge to watching it."),
-                GuideItem("Wait ten minutes", "You don't have to resist forever — just ten minutes. The wave crests and falls if you don't feed it."),
-                GuideItem("Move your body", "Stand up, leave the room, ten push-ups, cold water. An urge lives in stillness; motion breaks it."),
-                GuideItem("Notice it pass", "It shrank, didn't it? Every wave you ride out teaches your brain the urge isn't an emergency."),
+                GuideItem("Name it", "“This is an urge, not a need.” Naming it makes you the watcher, not the one obeying."),
+                GuideItem("Give it ten minutes", "You don't have to win forever — just outlast ten minutes. Unfed, the wave breaks on its own."),
+                GuideItem("Move", "Stand, leave the room, ten push-ups, cold water. Urges live in stillness; motion kills them."),
+                GuideItem("Watch it shrink", "Smaller already, isn't it? Every wave you outlast teaches your brain it was never an emergency."),
             )),
             GuideSection("Make it harder", GuideKind.RULES, listOf(
-                rule("Put the phone away", "Out of your hand, out of the room if you can. Distance buys you the ten minutes you need."),
-                rule("Turn Quick Block on", "Flip the Quick Block tile the moment the urge hits. Make the app impossible, not just tempting."),
-                rule("Kill the entry points", "Feeds off the home screen, notifications off. Most scrolling starts with a lever someone else pulled."),
+                rule("Put distance between you and it", "Phone out of your hand, out of the room if you can. Distance buys you the ten minutes."),
+                rule("Flip Quick Block on", "The instant the urge hits, hit the tile. Make the app impossible, not merely tempting."),
+                rule("Close the entry points", "Feeds off the home screen, notifications off. Most scrolls start with a lever someone pulled for you."),
             )),
             GuideSection("Replace it", GuideKind.RULES, listOf(
-                rule("Have a default ready", "Decide beforehand what you'll do instead — a book on the desk, a walk, a set of push-ups. Don't negotiate mid-urge."),
-                rule("Fill the real gap", "The urge often just means bored or tired. Feed the real need — rest, movement, a person — not the fake one."),
+                rule("Have a default ready", "Decide now what you'll do instead — a book on the desk, a walk, a set of push-ups. Don't negotiate mid-urge."),
+                rule("Feed the real need", "The urge usually just means bored or tired. Answer that — rest, movement, a person — not the fake craving."),
             )),
         ),
-        closing = "Every urge you don't obey makes the next one quieter.\nYou're training your brain either way.",
+        closing = "Every urge you don't obey makes the next one quieter.\nYou're training your brain — train it well.",
     ),
 
-    // 7 ─────────────────────────────────────────────────────────── Overwhelmed
+    // 6 ─────────────────────────────────────────────────────────── Overwhelmed
     Scenario(
         id = "overwhelmed",
         hubTitle = "Overwhelmed",
@@ -213,22 +213,22 @@ val SCENARIOS: List<Scenario> = listOf(
         colors = listOf(Color(0xFF38BDF8), Color(0xFF3B82F6)),
         kicker = "BODY FIRST, THEN THE PROBLEM",
         title = "Slow It Down",
-        subtitle = "You can't think clearly in a spinning body. Settle the system first, then face the list.",
+        subtitle = "You can't think straight in a racing body. Settle the system first — then face the list.",
         sections = listOf(
-            GuideSection("Slow the body first", GuideKind.STEPS, listOf(
-                GuideItem("Breathe out long", "Four counts in, six counts out, five times. A long exhale is the fastest off-switch for panic."),
-                GuideItem("Feet on the floor", "Feel your feet, the chair, three things you can see. Come out of your head and into the room."),
-                GuideItem("One glass of water", "Drink it slowly. A tiny physical act interrupts the spin and gives your hands something to do."),
+            GuideSection("Settle the body", GuideKind.STEPS, listOf(
+                GuideItem("Breathe out long", "In for four, out for six, five times. A slow exhale is the fastest off-switch for panic."),
+                GuideItem("Land in the room", "Feel your feet, the chair, name three things you can see. Come out of the spin and into now."),
+                GuideItem("One glass of water", "Drink it slowly. A small physical act breaks the loop and gives your hands a job."),
             )),
             GuideSection("Empty your head", GuideKind.RULES, listOf(
-                rule("Brain-dump on paper", "Every worry and task out of your head onto a page. The mind spins to avoid forgetting; the paper holds it so you can stop."),
-                rule("Pick one next action", "Not the whole mountain — the single next physical step. Overwhelm is just too many things held at once."),
-                rule("Do that one thing", "Complete it, cross it off, then choose the next. Momentum shrinks the pile faster than planning does."),
+                rule("Dump it all on paper", "Every worry and task, out of your head and onto a page. The mind races to avoid forgetting — the paper remembers so you can stop."),
+                rule("Choose one next step", "Not the mountain — the single next physical action. Overwhelm is just too many things held at once."),
+                rule("Do that one, then the next", "Finish it, cross it off, choose again. Motion shrinks the pile faster than planning ever will."),
             )),
             GuideSection("Shrink the problem", GuideKind.RULES, listOf(
-                rule("Sort: yours or not", "Half of overwhelm is carrying what you can't control. Name what's actually yours to do, and set the rest down."),
-                rule("Now, later, or never", "Most “urgent” things aren't. Triage into now / later / never and delete ruthlessly."),
-                rule("Step away from the feed", "Scrolling while overwhelmed pours noise on the fire. Turn the blockers on and give your mind quiet to reset."),
+                rule("Sort what's yours", "Half the weight is things you can't control. Keep what's actually yours to do; set the rest down."),
+                rule("Now, later, or never", "Most “urgent” isn't. Triage hard into now / later / never, and delete without mercy."),
+                rule("Cut the noise", "Scrolling on top of overwhelm is fuel on a fire. Turn the blockers on and give your head silence to reset."),
             )),
         ),
         closing = "You don't have to carry it all at once.\nOne breath, one page, one next thing.",
