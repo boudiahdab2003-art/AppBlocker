@@ -23,6 +23,15 @@ android {
         targetSdk = 35 // Google Play requires 35+ for new app submissions
         versionCode = 91
         versionName = "1.90"
+
+        // AI Coach server proxy (docs/SERVER.md #1). When both are non-empty the coach routes
+        // requests through our VM (which holds the Gemini key) instead of needing an on-device
+        // key. Empty = proxy off (the app falls back to the user's own key, unchanged behaviour).
+        // Filled from gradle properties (root gradle.properties) so they're easy to rotate.
+        buildConfigField("String", "COACH_PROXY_URL",
+            "\"${providers.gradleProperty("coachProxyUrl").getOrElse("")}\"")
+        buildConfigField("String", "COACH_PROXY_SECRET",
+            "\"${providers.gradleProperty("coachProxySecret").getOrElse("")}\"")
     }
 
     // Two distribution channels, same app: "github" = the original sideloaded build with the
@@ -70,6 +79,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true // for the AI Coach proxy fields above
     }
     lint {
         // Skip the slow lintVital pass on every release build — this is a personal app

@@ -168,7 +168,9 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
 
     private suspend fun refreshCoach(force: Boolean) {
         val ctx = getApplication<Application>()
-        if (AiCoach.apiKey(ctx).isBlank()) { _coach.value = CoachState.NoKey; return }
+        // NoKey only when there's neither the server proxy nor a user-entered key. With the
+        // proxy on, the coach just works (Loading -> Tips).
+        if (!AiCoach.coachAvailable(ctx)) { _coach.value = CoachState.NoKey; return }
         _coach.value = CoachState.Loading
         // The usage summary is built inside AiCoach (shared with the chat) from day-cached data.
         val summary = withContext(Dispatchers.IO) { AiCoach.usageSummary(ctx) }

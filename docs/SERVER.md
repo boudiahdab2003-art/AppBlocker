@@ -28,19 +28,31 @@ Nothing runs on it for AppBlocker yet.
 
 ## Use cases, ranked (with plans)
 
-### 1. Gemini proxy for the AI Coach — highest value
+### 1. Gemini proxy for the AI Coach — highest value — **APP SIDE DONE, awaiting VM setup**
 Today the coach requires the user to paste a Gemini API key on-device
 (`AiCoach.setApiKey`). A tiny proxy makes the coach work out of the box.
 
-Plan when we build it:
-1. Small HTTP service on the VM (single endpoint, e.g. `POST /coach`) holding the
-   Gemini key server-side; a shared secret baked into the app gates access.
-2. App side: `AiCoach` tries the proxy first, falls back to the on-device key, and the
-   whole app keeps working if the VM is down (coach shows its existing
-   Unavailable state).
-3. HTTPS via a Caddy/nginx + Let's Encrypt on the VM (needs a domain or nip.io).
-4. Send the minimum: the same `usageSummary` text the coach already builds — no raw
-   per-app data beyond what the prompt needs.
+**Status (2026-07):** the *app side is built and merged*. `AiCoach` routes through
+the proxy whenever `BuildConfig.COACH_PROXY_URL`/`COACH_PROXY_SECRET` are set (from
+root `gradle.properties`), sending our shared secret as `Authorization: Bearer …`
+instead of the Google key; it falls back to the user's own on-device key if the
+proxy has a transient failure, and the coach shows its existing `Unavailable` state
+when nothing is reachable. `AiCoach.coachAvailable(ctx)` gates the "add a key" UI.
+Owner chose: HTTPS via **DuckDNS**, proxy enabled in **all builds** (shared secret
+is therefore effectively public — natural cap is the Gemini key's own quota).
+
+**What's left (the VM):** nothing runs on the VM yet. To go live:
+1. Point a free **DuckDNS** subdomain at the VM's external IP; open GCP firewall
+   `tcp:80,443` on tag `hermes-bot-vm`.
+2. `apt install caddy`; put `SHARED_SECRET` + `GEMINI_KEY` in `/etc/caddy/coach.env`
+   (chmod 600) and load it via a `systemctl edit caddy` drop-in
+   (`EnvironmentFile=`).
+3. Caddyfile: 403 unless `Authorization: Bearer {$SHARED_SECRET}`, else
+   `reverse_proxy https://generativelanguage.googleapis.com` with
+   `header_up Host …`, `header_up x-goog-api-key {$GEMINI_KEY}`,
+   `header_up -Authorization`.
+4. Fill `coachProxyUrl` / `coachProxySecret` in root `gradle.properties`, rebuild.
+5. Only the same aggregate `usageSummary` the coach already builds crosses the wire.
 
 ### 2. Telegram accountability bridge — most differentiating
 An external witness for the one loophole the app can't close alone: the user

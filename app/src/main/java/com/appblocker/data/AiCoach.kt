@@ -1,6 +1,7 @@
 package com.appblocker.data
 
 import android.content.Context
+import com.appblocker.BuildConfig
 import com.appblocker.service.UsageTracker
 import java.net.HttpURLConnection
 import java.net.URL
@@ -41,8 +42,22 @@ object AiCoach {
     private const val MAX_HISTORY_SENT = 16 // turns sent per request (keeps replies fast)
     private const val TIPS_TTL_MS = 60 * 60 * 1000L // tips refresh every hour
 
-    private fun endpoint(model: String) =
-        "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent"
+    // --- Server proxy (docs/SERVER.md #1) ---
+    // When a proxy URL is baked in (BuildConfig, from gradle.properties), the coach routes
+    // through our VM — which holds the Gemini key — so it works with no on-device key. Empty =
+    // off (fall back to the user's own key). The proxy takes the SAME request path and body;
+    // it just swaps our auth for Google's key server-side.
+    private fun proxyOn() = BuildConfig.COACH_PROXY_URL.isNotBlank()
+
+    /** True when the coach can run at all: either the server proxy is configured, or the user
+     *  has entered their own Gemini key. */
+    fun coachAvailable(ctx: Context) = proxyOn() || apiKey(ctx).isNotBlank()
+
+    private fun endpoint(model: String, viaProxy: Boolean): String {
+        val base = if (viaProxy) BuildConfig.COACH_PROXY_URL.trimEnd('/')
+        else "https://generativelanguage.googleapis.com"
+        return "$base/v1beta/models/$model:generateContent"
+    }
 
     /** What the app can do, so the coach recommends real features with concrete settings
      *  instead of generic advice. */
@@ -121,7 +136,7 @@ object AiCoach {
             if (!force && fresh) return@withContext parseTips(cached!!.json)
 
             val key = apiKey(ctx)
-            if (key.isBlank()) return@withContext null
+            if (key.isBlank() && !proxyOn()) return@withContext null
             val setup = runCatching { setupSnapshot(ctx) }.getOrDefault("")
             val goals = Goals.all(ctx).map { it.label() }
             val profile = runCatching { CoachProfile.promptText(ctx) }.getOrDefault("")
@@ -147,7 +162,7 @@ object AiCoach {
     suspend fun chat(ctx: Context, history: List<ChatMsg>, userMsg: String): CoachReply? =
         withContext(Dispatchers.IO) {
             val key = apiKey(ctx)
-            if (key.isBlank()) return@withContext null
+            if (key.isBlank() && !proxyOn()) return@withContext null
             val today = SimpleDateFormat("EEEE, MMM d, yyyy", Locale.US).format(Date())
             val nowTime = SimpleDateFormat("H:mm", Locale.US).format(Date())
             val first = SettingsStore.userName(ctx).substringBefore(' ')
@@ -472,18 +487,35 @@ object AiCoach {
      * [AiCategorizer]) reuse the same pipe. Throws on total failure.
      */
     internal fun callGemini(ctx: Context, key: String, body: JSONObject): String {
+        return try {
+            attemptWithModelFallback(ctx, key, body, viaProxy = proxyOn())
+        } catch (e: Exception) {
+            // Proxy had a transient problem (VM down, timeout, 5xx) but the user also set their
+            // own key → try Google directly once so the coach still answers. A 4xx (auth/bad
+            // request) is not transient, so we don't retry those.
+            val transient = !(e.message ?: "").contains("HTTP 4")
+            if (proxyOn() && transient && apiKey(ctx).isNotBlank()) {
+                attemptWithModelFallback(ctx, apiKey(ctx), body, viaProxy = false)
+            } else throw e
+        }
+    }
+
+    /** The primary-then-fallback model logic, over either the proxy or a direct Google call. */
+    private fun attemptWithModelFallback(
+        ctx: Context, key: String, body: JSONObject, viaProxy: Boolean,
+    ): String {
         val prefs = p(ctx)
         val useFallbackFirst = prefs.getString("model_ok", null) == FALLBACK_MODEL &&
             System.currentTimeMillis() - prefs.getLong("model_ok_at", 0) < MODEL_REPROBE_MS
         val first = if (useFallbackFirst) FALLBACK_MODEL else PRIMARY_MODEL
         return try {
-            postWithThinking(key, body, first)
+            postWithThinking(key, body, first, viaProxy)
         } catch (e: Exception) {
             val modelMissing = (e.message ?: "").let {
                 it.contains("HTTP 404") || it.contains("NOT_FOUND") || it.contains("not found")
             }
             if (first == PRIMARY_MODEL && modelMissing) {
-                val out = postWithThinking(key, body, FALLBACK_MODEL)
+                val out = postWithThinking(key, body, FALLBACK_MODEL, viaProxy)
                 prefs.edit().putString("model_ok", FALLBACK_MODEL)
                     .putLong("model_ok_at", System.currentTimeMillis()).apply()
                 out
@@ -493,7 +525,7 @@ object AiCoach {
 
     /** Adds the model-appropriate low-thinking config (the silent "thinking" pause is the main
      *  latency cost); if the server rejects the field (400), retries once without it. */
-    private fun postWithThinking(key: String, body: JSONObject, model: String): String {
+    private fun postWithThinking(key: String, body: JSONObject, model: String, viaProxy: Boolean): String {
         val tuned = JSONObject(body.toString())
         val gen = tuned.optJSONObject("generationConfig")
             ?: JSONObject().also { tuned.put("generationConfig", it) }
@@ -503,20 +535,23 @@ object AiCoach {
             else JSONObject().put("thinkingLevel", "low"),
         )
         return try {
-            post(key, tuned.toString(), model)
+            post(key, tuned.toString(), model, viaProxy)
         } catch (e: Exception) {
-            if ((e.message ?: "").contains("HTTP 400")) post(key, body.toString(), model)
+            if ((e.message ?: "").contains("HTTP 400")) post(key, body.toString(), model, viaProxy)
             else throw e
         }
     }
 
     /** POSTs [body] to one Gemini [model] and returns the text part (throws with the HTTP
      *  code + error body in the message on failure, so callers can route fallbacks). */
-    private fun post(key: String, body: String, model: String): String {
-        val conn = (URL(endpoint(model)).openConnection() as HttpURLConnection).apply {
+    private fun post(key: String, body: String, model: String, viaProxy: Boolean): String {
+        val conn = (URL(endpoint(model, viaProxy)).openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             setRequestProperty("Content-Type", "application/json")
-            setRequestProperty("x-goog-api-key", key)
+            // Through the proxy: our shared secret (the VM injects the real Gemini key).
+            // Direct: the user's own Gemini key.
+            if (viaProxy) setRequestProperty("Authorization", "Bearer ${BuildConfig.COACH_PROXY_SECRET}")
+            else setRequestProperty("x-goog-api-key", key)
             connectTimeout = 15_000
             readTimeout = 30_000
             doOutput = true
