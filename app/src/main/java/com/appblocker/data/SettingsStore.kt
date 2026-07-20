@@ -106,6 +106,16 @@ object SettingsStore {
     fun setQuickBlockPaused(context: Context, value: Boolean) =
         prefs(context).edit().putBoolean("quick_block_paused", value).apply()
 
+    const val KEY_QUICK_BLOCK_ALLOWLIST = "quick_block_allowlist"
+
+    /** Quick Block mode: false = Blocklist (block the chosen apps), true = Allowlist (allow only
+     *  the chosen apps, block everything else). Both selections are kept independently. */
+    fun quickBlockAllowlist(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_QUICK_BLOCK_ALLOWLIST, false)
+
+    fun setQuickBlockAllowlist(context: Context, value: Boolean) =
+        prefs(context).edit().putBoolean(KEY_QUICK_BLOCK_ALLOWLIST, value).apply()
+
     const val KEY_ADULT_WORDS_PACK = "adult_words_pack"
 
     /** The built-in pack of pornographic words (English + Arabic), blocked like the user's own

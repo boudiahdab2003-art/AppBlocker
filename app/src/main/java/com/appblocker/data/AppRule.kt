@@ -11,6 +11,9 @@ data class AppRule(
     @PrimaryKey val packageName: String,
     val appLabel: String,
     val isBlocked: Boolean = false,
+    // Allowlist mode: the app is one of the few allowed while Quick Block enforces (all others
+    // are blocked). Independent of [isBlocked] so switching modes never loses either selection.
+    val isAllowed: Boolean = false,
     val mode: BlockMode = BlockMode.HARD,
     // Reserved for later milestones:
     val scheduleStartMinutes: Int = -1, // minutes from midnight; -1 = unset

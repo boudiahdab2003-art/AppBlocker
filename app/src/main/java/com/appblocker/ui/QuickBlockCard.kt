@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.ShoppingBasket
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Spa
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.AlertDialog
@@ -119,8 +120,30 @@ internal fun TimerPomoRow(enabled: Boolean, onTimer: () -> Unit, onPomo: () -> U
 
 /** AppBlock-style muted category-icon pill shown on the empty/first-run Quick Block card. */
 @Composable
-internal fun QuickBlockPill(apps: Int = 0, words: Int = 0, adultOn: Boolean = false, dimmed: Boolean = false) {
+internal fun QuickBlockPill(
+    apps: Int = 0, words: Int = 0, adultOn: Boolean = false, dimmed: Boolean = false,
+    allowlist: Boolean = false, allowed: Int = 0,
+) {
     val baseTint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (dimmed) 0.45f else 1f)
+    if (allowlist) {
+        // Allowlist mode: only allowed apps run; everything else is blocked.
+        val desc = "Allowing $allowed apps, blocking all others"
+        Row(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(50))
+                .background(MaterialTheme.colorScheme.background.copy(alpha = 0.55f))
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .clearAndSetSemantics { contentDescription = desc },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(Icons.Filled.Star, null, tint = baseTint, modifier = Modifier.size(18.dp))
+            PillCount(Icons.Filled.PhoneAndroid, allowed, baseTint)
+            Text("allowed · all others blocked",
+                style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold,
+                color = baseTint)
+        }
+        return
+    }
     val pillDescription = "Blocking $apps apps, $words words" + if (adultOn) ", adult filter on" else ""
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(50))

@@ -25,6 +25,8 @@ data class AppItem(
     val label: String,
     val icon: Bitmap?,
     val isBlocked: Boolean,
+    // Allowlist-mode selection, kept independently of [isBlocked].
+    val isAllowed: Boolean = false,
     val mode: BlockMode = BlockMode.HARD,
     val dailyLimitMinutes: Int = -1,
     val installed: Boolean = true,
@@ -56,6 +58,7 @@ class AppListViewModel(app: Application) : AndroidViewModel(app) {
                     label = app.label,
                     icon = app.icon,
                     isBlocked = r?.isBlocked == true,
+                    isAllowed = r?.isAllowed == true,
                     mode = r?.mode ?: BlockMode.HARD,
                     dailyLimitMinutes = r?.dailyLimitMinutes ?: -1,
                     installed = true,
@@ -73,6 +76,7 @@ class AppListViewModel(app: Application) : AndroidViewModel(app) {
                         label = p.label,
                         icon = null,
                         isBlocked = r?.isBlocked == true,
+                        isAllowed = r?.isAllowed == true,
                         mode = r?.mode ?: BlockMode.HARD,
                         dailyLimitMinutes = r?.dailyLimitMinutes ?: -1,
                         installed = false,
@@ -97,16 +101,20 @@ class AppListViewModel(app: Application) : AndroidViewModel(app) {
         InstalledAppsRepository.refreshUsage(getApplication())
     }
 
-    /** Commit a staged Quick Block selection: block apps in [selected], unblock the rest. */
-    fun commitBlocked(selected: Set<String>) {
+    /** Commit both Quick Block selections at once: an app is blocked iff it's in [blocked] and
+     *  allowed iff it's in [allowed]. Writing both fields in a single row per app keeps the two
+     *  selections independent and avoids a clobber when the same app is toggled in both lists. */
+    fun commitQuickBlock(blocked: Set<String>, allowed: Set<String>) {
         viewModelScope.launch {
             val changed = apps.value.mapNotNull { a ->
-                val shouldBlock = a.packageName in selected
-                if (a.isBlocked == shouldBlock) null
+                val shouldBlock = a.packageName in blocked
+                val shouldAllow = a.packageName in allowed
+                if (a.isBlocked == shouldBlock && a.isAllowed == shouldAllow) null
                 else AppRule(
                     packageName = a.packageName,
                     appLabel = a.label,
                     isBlocked = shouldBlock,
+                    isAllowed = shouldAllow,
                     mode = a.mode,
                     dailyLimitMinutes = a.dailyLimitMinutes,
                 )

@@ -25,7 +25,7 @@ class Converters {
 @Database(
     entities = [AppRule::class, FocusState::class, BlockedKeyword::class, Schedule::class,
         SavedPlace::class],
-    version = 8,
+    version = 9,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -73,6 +73,16 @@ abstract class BlockerDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v8 -> v9: add app_rules.isAllowed for Quick Block's Allowlist mode. Existing rows
+         * default to 0 (not allowed) — harmless while the default Blocklist mode is active.
+         */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE app_rules ADD COLUMN isAllowed INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun get(context: Context): BlockerDatabase =
             INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -80,7 +90,7 @@ abstract class BlockerDatabase : RoomDatabase() {
                     BlockerDatabase::class.java,
                     "appblocker.db"
                 )
-                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
+                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
                     // Only wipe on a downgrade (installing an older APK) — never on upgrade.
                     .fallbackToDestructiveMigrationOnDowngrade()
                     .build().also { INSTANCE = it }

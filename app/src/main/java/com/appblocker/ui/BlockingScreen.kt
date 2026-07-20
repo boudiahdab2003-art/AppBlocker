@@ -84,6 +84,7 @@ fun BlockingScreen(
     val updateState by updateVm.state.collectAsState()
     val context = LocalContext.current
     val appsBlocked by vm.appsBlocked.collectAsState()
+    val appsAllowed by vm.appsAllowed.collectAsState()
     val keywords by vm.keywordCount.collectAsState()
     val schedules by scheduleVm.schedules.collectAsState()
     val focusActive by focusVm.isActive.collectAsState()
@@ -140,7 +141,9 @@ fun BlockingScreen(
 
         // Quick Block card
         item {
-            val configured = appsBlocked > 0 || keywords > 0
+            var allowlist by remember { mutableStateOf(SettingsStore.quickBlockAllowlist(context)) }
+            LaunchedEffect(perms) { allowlist = SettingsStore.quickBlockAllowlist(context) }
+            val configured = if (allowlist) appsAllowed > 0 else appsBlocked > 0 || keywords > 0
             var paused by remember { mutableStateOf(SettingsStore.quickBlockPaused(context)) }
             LaunchedEffect(perms) { paused = SettingsStore.quickBlockPaused(context) }
             val active = configured && !paused
@@ -156,7 +159,8 @@ fun BlockingScreen(
                     Text("Quick Block", style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     Spacer(Modifier.padding(top = 14.dp))
-                    QuickBlockPill(apps = appsBlocked, words = keywords, adultOn = adultOn, dimmed = !active)
+                    QuickBlockPill(apps = appsBlocked, words = keywords, adultOn = adultOn,
+                        dimmed = !active, allowlist = allowlist, allowed = appsAllowed)
                     Spacer(Modifier.padding(top = 18.dp))
                     when {
                         !configured -> GradientButton(text = "Start", onClick = onEditQuickBlock)

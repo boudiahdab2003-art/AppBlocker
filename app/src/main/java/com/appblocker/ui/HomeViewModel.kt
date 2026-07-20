@@ -21,6 +21,12 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             .map { list -> list.count { it.isBlocked } }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
 
+    /** Apps on the Allowlist (used only when Quick Block is in Allowlist mode). */
+    val appsAllowed: StateFlow<Int> =
+        db.appRuleDao().getAll()
+            .map { list -> list.count { it.isAllowed } }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+
     val keywordCount: StateFlow<Int> =
         db.blockedKeywordDao().getAll()
             .map { it.size }

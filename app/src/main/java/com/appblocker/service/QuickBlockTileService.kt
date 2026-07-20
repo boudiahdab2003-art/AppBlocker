@@ -61,9 +61,13 @@ class QuickBlockTileService : TileService() {
             focus.realtimeStartMillis, focus.realtimeEndMillis,
             focus.startTimeMillis, focus.endTimeMillis,
         ) > 0L
-        val configured =
+        val allowlist = SettingsStore.quickBlockAllowlist(applicationContext)
+        val configured = if (allowlist) {
+            db.appRuleDao().getAll().first().any { it.isAllowed }
+        } else {
             db.appRuleDao().getAll().first().any { it.isBlocked } ||
                 db.blockedKeywordDao().getAll().first().isNotEmpty()
+        }
         return State(active = strict || (configured && !paused), strict, configured, paused)
     }
 

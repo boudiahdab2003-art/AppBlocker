@@ -31,6 +31,9 @@ class PackageInstallReceiver : BroadcastReceiver() {
         // EXTRA_REPLACING = an update to an existing app, not a brand-new install.
         if (intent.getBooleanExtra(Intent.EXTRA_REPLACING, false)) return
         InstalledAppsRepository.invalidate(context)
+        // In Allowlist mode a new app is already blocked (it isn't on the allowlist), so there's
+        // nothing to auto-add. The "Add newly installed apps" toggle is a Blocklist concept.
+        if (SettingsStore.quickBlockAllowlist(context)) return
         if (!SettingsStore.addNewApps(context)) return
 
         val pkg = intent.data?.schemeSpecificPart ?: return

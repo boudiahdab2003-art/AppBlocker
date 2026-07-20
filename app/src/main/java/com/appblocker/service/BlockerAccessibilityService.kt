@@ -104,6 +104,12 @@ class BlockerAccessibilityService : AccessibilityService() {
     @Volatile private var adultPackOn: Boolean = true
     // Blocking paused after an app update, until the user reactivates (Blocking-tab banner).
     @Volatile private var updatePaused: Boolean = false
+    // Quick Block mode: false = Blocklist (block chosen apps), true = Allowlist (allow only the
+    // chosen apps, block everything else but the essentials). Refreshed by the prefs listener.
+    @Volatile private var allowlistMode: Boolean = false
+    // System apps that must never be blocked in Allowlist mode or the phone becomes unusable.
+    // Resolved at connect (rarely change); the current IME is re-read live (see isEssentialAllowed).
+    @Volatile private var essentialPackages: Set<String> = emptySet()
     private var prefsListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
 
     /** True while the after-update pause suspends blocking. An update also ENDS any running
@@ -247,6 +253,9 @@ class BlockerAccessibilityService : AccessibilityService() {
         overlayView != null ||
             keywordLockoutRemaining(pkg) > 0L ||
             rules[pkg]?.isBlocked == true ||
+            // Allowlist mode: any non-allowed app can flip (e.g. a Pomodoro break ending), so
+            // keep re-checking while Quick Block is enforcing.
+            (allowlistMode && quickBlockActive() && rules[pkg]?.isAllowed != true) ||
             QuickSession.state(this).active ||
             schedules.any { it.enabled && pkg in it.packages }
 
@@ -297,6 +306,8 @@ class BlockerAccessibilityService : AccessibilityService() {
         keywordsEverywhere = SettingsStore.keywordsEverywhere(this)
         adultPackOn = SettingsStore.adultWordsPack(this)
         updatePaused = SettingsStore.updatePaused(this)
+        allowlistMode = SettingsStore.quickBlockAllowlist(this)
+        essentialPackages = findEssentialPackages()
         // Restore unexpired keyword lockouts — a service rebind must not unlock an app early.
         val now = System.currentTimeMillis()
         synchronized(keywordLockouts) {
@@ -312,6 +323,8 @@ class BlockerAccessibilityService : AccessibilityService() {
                     adultPackOn = SettingsStore.adultWordsPack(this)
                 SettingsStore.KEY_UPDATE_PAUSED ->
                     updatePaused = SettingsStore.updatePaused(this)
+                SettingsStore.KEY_QUICK_BLOCK_ALLOWLIST ->
+                    allowlistMode = SettingsStore.quickBlockAllowlist(this)
             }
         }.also { sp.registerOnSharedPreferenceChangeListener(it) }
         registerPackageChangeReceiver()
@@ -602,14 +615,24 @@ class BlockerAccessibilityService : AccessibilityService() {
         val strict = strictRemaining() > 0L
 
         // Quick Block — enforced when Strict, or a running Timer/Pomodoro says "block now",
-        // or (no session) when not paused.
+        // or (no session) when not paused. Same "is it enforcing right now" gate in both modes.
         val rule = rules[pkg]
-        if (rule != null && rule.isBlocked) {
+        val session = QuickSession.state(this)
+        val quickOn = strict || if (session.active) session.blockingNow else !SettingsStore.quickBlockPaused(this)
+
+        if (allowlistMode) {
+            // Allowlist: block anything that isn't explicitly allowed and isn't an essential.
+            if (quickOn && !isEssentialAllowed(pkg) && rule?.isAllowed != true) {
+                return BlockReason(
+                    if (strict) "Strict Mode" else "Blocked",
+                    "Only your allowed apps work right now.",
+                )
+            }
+            // Per-app HARD/SCHEDULE/LIMIT modes don't apply in Allowlist mode.
+        } else if (rule != null && rule.isBlocked) {
             if (strict) { // Strict Mode blocks every chosen app outright.
                 return BlockReason("Strict Mode", "Blocked until your Strict session ends.")
             }
-            val session = QuickSession.state(this)
-            val quickOn = if (session.active) session.blockingNow else !SettingsStore.quickBlockPaused(this)
             if (quickOn) when (rule.mode) {
                 BlockMode.HARD, BlockMode.SCHEDULE ->
                     return BlockReason("Blocked", "Quick Block is on for this app.")
@@ -707,6 +730,42 @@ class BlockerAccessibilityService : AccessibilityService() {
         knownNonLauncherPkgs = knownNonLauncherPkgs + pkg
         return false
     }
+
+    /** System packages that must stay usable in Allowlist mode or the phone bricks: the core
+     *  Android system, System UI (status bar / recents / power menu), Settings, and the default
+     *  phone/dialer app (so calls work). The launcher is handled by [isLauncherPkg] and the
+     *  current keyboard by [isEssentialAllowed] (re-read live, since it can change). */
+    private fun findEssentialPackages(): Set<String> {
+        val set = mutableSetOf("android", "com.android.systemui", "com.android.settings")
+        runCatching {
+            val tm = getSystemService(Context.TELECOM_SERVICE) as? android.telecom.TelecomManager
+            tm?.defaultDialerPackage?.let { set.add(it) }
+        }
+        // Whatever handles the phone/dialer intent (covers OEMs whose dialer differs from the
+        // default-dialer role, and the incoming-call UI).
+        runCatching {
+            val dial = Intent(Intent.ACTION_DIAL)
+            packageManager.resolveActivity(dial, PackageManager.MATCH_DEFAULT_ONLY)
+                ?.activityInfo?.packageName?.let { set.add(it) }
+        }
+        return set
+    }
+
+    /** The package of the keyboard the user currently has selected, or null. Read live so a
+     *  keyboard swap never locks typing out. */
+    private fun currentImePackage(): String? = runCatching {
+        android.provider.Settings.Secure.getString(
+            contentResolver, android.provider.Settings.Secure.DEFAULT_INPUT_METHOD,
+        )?.substringBefore('/')?.takeIf { it.isNotBlank() }
+    }.getOrNull()
+
+    /** True when [pkg] must never be blocked in Allowlist mode: ourselves, the launcher, the
+     *  current keyboard, and the core system/dialer set. Keeps the phone usable. */
+    private fun isEssentialAllowed(pkg: String): Boolean =
+        pkg == packageName ||
+            pkg in essentialPackages ||
+            pkg == currentImePackage() ||
+            isLauncherPkg(pkg)
 
     /** All packages that can handle an https:// link — i.e. the device's browsers. */
     private fun findBrowserPackages(): Set<String> = runCatching {
@@ -884,7 +943,9 @@ class BlockerAccessibilityService : AccessibilityService() {
     /** Website keywords for the social apps the user has blocked, so a blocked app's site is
      *  blocked too. Empty while Quick Block is paused so pausing relieves the web block as well. */
     private fun autoSocialKeywords(): List<String> {
-        if (!quickBlockActive()) return emptyList()
+        // Auto-blocking a blocked app's website is a Blocklist concept; in Allowlist mode the
+        // allowed browser is allowed and the user's own keywords still apply.
+        if (allowlistMode || !quickBlockActive()) return emptyList()
         return rules.values.asSequence()
             .filter { it.isBlocked && it.mode != BlockMode.LIMIT }
             .flatMap { (SOCIAL_DOMAINS[it.packageName] ?: emptyList()).asSequence() }

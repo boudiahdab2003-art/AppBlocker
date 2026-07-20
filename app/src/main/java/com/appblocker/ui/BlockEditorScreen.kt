@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.provider.Settings
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,12 +27,14 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.GetApp
 import androidx.compose.material.icons.filled.NoAdultContent
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SubdirectoryArrowRight
 import androidx.compose.material.icons.filled.ShoppingBasket
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Web
 import androidx.compose.material3.Checkbox
@@ -39,6 +42,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
@@ -83,13 +87,21 @@ fun BlockEditorScreen(
     val savedKeywords by webVm.keywords.collectAsState()
 
     // --- staged state (seeded from current data, mirrors until the user edits) ---
-    val selected = remember { mutableStateListOf<String>() }
+    // Blocklist and allowlist selections are staged independently so flipping the mode chooser
+    // never loses either one (matches AppBlock).
+    val selectedBlock = remember { mutableStateListOf<String>() }
+    val selectedAllow = remember { mutableStateListOf<String>() }
     var editedApps by remember { mutableStateOf(false) }
     LaunchedEffect(apps) {
         if (!editedApps && apps.isNotEmpty()) {
-            selected.clear(); selected.addAll(apps.filter { it.isBlocked }.map { it.packageName })
+            selectedBlock.clear(); selectedBlock.addAll(apps.filter { it.isBlocked }.map { it.packageName })
+            selectedAllow.clear(); selectedAllow.addAll(apps.filter { it.isAllowed }.map { it.packageName })
         }
     }
+    var allowlist by remember { mutableStateOf(SettingsStore.quickBlockAllowlist(context)) }
+    var showModeSheet by remember { mutableStateOf(false) }
+    // The selection the picker is currently editing.
+    val selected = if (allowlist) selectedAllow else selectedBlock
     val keywords = remember { mutableStateListOf<String>() }
     var editedKw by remember { mutableStateOf(false) }
     LaunchedEffect(savedKeywords) {
@@ -117,7 +129,10 @@ fun BlockEditorScreen(
     val preBlockApps = remember(shownApps) { shownApps.filter { !it.installed } }
 
     fun save() {
-        appsVm.commitBlocked(selected.toSet())
+        // Commit both selections together (the inactive one is unchanged) so switching modes is
+        // lossless and an app toggled in both lists can't clobber itself.
+        appsVm.commitQuickBlock(selectedBlock.toSet(), selectedAllow.toSet())
+        SettingsStore.setQuickBlockAllowlist(context, allowlist)
         webVm.setKeywords(keywords.toList())
         SettingsStore.setBlockAdult(context, adult)
         SettingsStore.setAddNewApps(context, addNew)
@@ -139,15 +154,28 @@ fun BlockEditorScreen(
         LazyColumn(Modifier.padding(padding).fillMaxSize().padding(horizontal = 16.dp)) {
             item {
                 Spacer(Modifier.padding(top = 4.dp))
-                Text("Choose what to block. Nothing is applied until you tap Save.",
+                // Blocking-mode header: title + a tappable Blocklist/Allowlist chip (AppBlock-style).
+                BlockingModeHeader(
+                    allowlist = allowlist,
+                    // The chooser can't be used to weaken protection mid-Strict.
+                    enabled = !strictActive,
+                    onClick = { if (!strictActive) showModeSheet = true },
+                )
+                Spacer(Modifier.padding(top = 4.dp))
+                Text(
+                    if (allowlist) "Select apps you want to allow. All others will be blocked."
+                    else "Select apps, sites or words you want to block.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 Spacer(Modifier.padding(top = 12.dp))
                 if (!AccessibilityUtil.isEnabled(context)) {
                     ProtectionBanner(context); Spacer(Modifier.padding(top = 12.dp))
                 }
                 if (strictActive) {
-                    Text("🔒 Strict Mode — you can add blocks, but not remove them.",
+                    Text(
+                        if (allowlist) "🔒 Strict Mode — you can remove allowed apps, but not add them."
+                        else "🔒 Strict Mode — you can add blocks, but not remove them.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.padding(top = 12.dp))
@@ -176,29 +204,36 @@ fun BlockEditorScreen(
                         selected = selected,
                         expandedCats = expandedCats.toSet(),
                         query = query,
-                        // During Strict you can check (add) an app, but not uncheck (remove) one.
-                        rowEnabled = { checked -> ed || !checked },
+                        // During Strict you can only *tighten*: in Blocklist mode add a block
+                        // (can't uncheck); in Allowlist mode remove an allowed app (can't check).
+                        rowEnabled = { checked -> if (allowlist) ed || checked else ed || !checked },
                         onToggleExpand = { cat ->
                             expandedCats = if (cat.name in expandedCats) expandedCats - cat.name
                             else expandedCats + cat.name
                         },
                         onToggle = { app, on ->
-                            if (strictActive && !on) return@categorizedAppItems
+                            if (strictActive && (if (allowlist) on else !on)) return@categorizedAppItems
                             editedApps = true
                             if (on) selected.add(app.packageName) else selected.remove(app.packageName)
                         },
                         onSelectAll = { catApps ->
+                            // Selecting a whole category adds; in Allowlist that loosens, so it's
+                            // locked during Strict.
+                            if (strictActive && allowlist) return@categorizedAppItems
                             editedApps = true
                             catApps.forEach { if (!selected.contains(it.packageName)) selected.add(it.packageName) }
                         },
                         onClearAll = { catApps ->
-                            if (strictActive) return@categorizedAppItems
+                            // Clearing a category removes; in Blocklist that loosens, so it's locked
+                            // during Strict.
+                            if (strictActive && !allowlist) return@categorizedAppItems
                             editedApps = true
                             catApps.forEach { selected.remove(it.packageName) }
                         },
                         extraUnder = { app ->
-                            // Nested "Shorts" sub-row right under YouTube (blocks only the Shorts feed).
-                            if (app.packageName == "com.google.android.youtube") {
+                            // Nested "Shorts" sub-row right under YouTube (blocks only the Shorts
+                            // feed). Blocklist-only — in Allowlist an allowed app is fully allowed.
+                            if (!allowlist && app.packageName == "com.google.android.youtube") {
                                 {
                                     ShortsSubRow(icon = app.icon, checked = ytShorts, enabled = ed || !ytShorts) { on ->
                                         if (strictActive && !on) return@ShortsSubRow
@@ -211,67 +246,70 @@ fun BlockEditorScreen(
                 }
             }
 
-            item {
-                Spacer(Modifier.padding(top = 16.dp))
-                val preBlockCount = apps.count { !it.installed && selected.contains(it.packageName) }
-                CollapsibleHeader(Icons.Filled.GetApp, "Hypothetical apps", preBlockCount, preBlockOpen) {
-                    preBlockOpen = !preBlockOpen
+            // Hypothetical apps & Websites/words are Blocklist concepts — hidden in Allowlist mode.
+            if (!allowlist) {
+                item {
+                    Spacer(Modifier.padding(top = 16.dp))
+                    val preBlockCount = apps.count { !it.installed && selected.contains(it.packageName) }
+                    CollapsibleHeader(Icons.Filled.GetApp, "Hypothetical apps", preBlockCount, preBlockOpen) {
+                        preBlockOpen = !preBlockOpen
+                    }
+                    if (preBlockOpen) {
+                        Text("Apps you don't have yet. Block them now and they'll be blocked the moment you install them.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 4.dp))
+                    }
                 }
                 if (preBlockOpen) {
-                    Text("Apps you don't have yet. Block them now and they'll be blocked the moment you install them.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = 4.dp))
-                }
-            }
-            if (preBlockOpen) {
-                items(preBlockApps, key = { it.packageName }) { app ->
-                    val isChecked = selected.contains(app.packageName)
-                    AppCheckRow(app, checked = isChecked, enabled = ed || !isChecked,
-                        subtitle = "Not installed yet") { on ->
-                        if (strictActive && !on) return@AppCheckRow
-                        editedApps = true
-                        if (on) selected.add(app.packageName) else selected.remove(app.packageName)
+                    items(preBlockApps, key = { it.packageName }) { app ->
+                        val isChecked = selected.contains(app.packageName)
+                        AppCheckRow(app, checked = isChecked, enabled = ed || !isChecked,
+                            subtitle = "Not installed yet") { on ->
+                            if (strictActive && !on) return@AppCheckRow
+                            editedApps = true
+                            if (on) selected.add(app.packageName) else selected.remove(app.packageName)
+                        }
                     }
                 }
-            }
 
-            item {
-                Spacer(Modifier.padding(top = 16.dp))
-                CollapsibleHeader(Icons.Filled.Web, "Websites & words", keywords.size, webOpen) { webOpen = !webOpen }
-                if (webOpen) {
-                    Text("Any web address or search containing one of these is blocked. " +
-                        "Also on the Blocked words screen (Blocking tab), where you can block them inside apps too.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedTextField(
-                            value = newWord, onValueChange = { newWord = it },
-                            placeholder = { Text("Add a word or site") },
-                            singleLine = true, enabled = true, // adding is allowed during Strict
-                            shape = RoundedCornerShape(28.dp),
-                            modifier = Modifier.weight(1f),
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        IconButton(enabled = newWord.isNotBlank(), onClick = {
-                            editedKw = true
-                            val w = newWord.trim().lowercase()
-                            if (w.isNotEmpty() && w !in keywords) keywords.add(w)
-                            newWord = ""
-                        }) { Icon(Icons.Filled.Add, contentDescription = "Add",
-                            tint = MaterialTheme.colorScheme.primary) }
+                item {
+                    Spacer(Modifier.padding(top = 16.dp))
+                    CollapsibleHeader(Icons.Filled.Web, "Websites & words", keywords.size, webOpen) { webOpen = !webOpen }
+                    if (webOpen) {
+                        Text("Any web address or search containing one of these is blocked. " +
+                            "Also on the Blocked words screen (Blocking tab), where you can block them inside apps too.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            OutlinedTextField(
+                                value = newWord, onValueChange = { newWord = it },
+                                placeholder = { Text("Add a word or site") },
+                                singleLine = true, enabled = true, // adding is allowed during Strict
+                                shape = RoundedCornerShape(28.dp),
+                                modifier = Modifier.weight(1f),
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            IconButton(enabled = newWord.isNotBlank(), onClick = {
+                                editedKw = true
+                                val w = newWord.trim().lowercase()
+                                if (w.isNotEmpty() && w !in keywords) keywords.add(w)
+                                newWord = ""
+                            }) { Icon(Icons.Filled.Add, contentDescription = "Add",
+                                tint = MaterialTheme.colorScheme.primary) }
+                        }
                     }
                 }
-            }
-            if (webOpen) {
-                items(keywords, key = { it }) { word ->
-                    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        Text(word, Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurface,
-                            style = MaterialTheme.typography.bodyLarge)
-                        IconButton(enabled = ed, onClick = { editedKw = true; keywords.remove(word) }) {
-                            Icon(Icons.Filled.Delete, contentDescription = "Remove",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (webOpen) {
+                    items(keywords, key = { it }) { word ->
+                        Row(Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Text(word, Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurface,
+                                style = MaterialTheme.typography.bodyLarge)
+                            IconButton(enabled = ed, onClick = { editedKw = true; keywords.remove(word) }) {
+                                Icon(Icons.Filled.Delete, contentDescription = "Remove",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                         }
                     }
                 }
@@ -283,8 +321,12 @@ fun BlockEditorScreen(
                 Spacer(Modifier.padding(top = 4.dp))
                 ToggleRow(Icons.Filled.NoAdultContent, "Porn sites blocking",
                     "Detects and blocks adult sites in your browsers.", adult, ed) { adult = it }
-                ToggleRow(Icons.Filled.GetApp, "Add newly installed apps",
-                    "Newly installed apps are automatically blocked.", addNew, ed) { addNew = it }
+                // "Add newly installed apps" is a Blocklist concept — in Allowlist mode a new app
+                // is already blocked (it isn't allowed), so the toggle is hidden.
+                if (!allowlist) {
+                    ToggleRow(Icons.Filled.GetApp, "Add newly installed apps",
+                        "Newly installed apps are automatically blocked.", addNew, ed) { addNew = it }
+                }
                 ToggleRow(Icons.Filled.ShoppingBasket, "In-app purchases blocking",
                     "Blocks the Google Play purchase prompt in games and apps.", purchases, ed) { purchases = it }
                 ToggleRow(Icons.Filled.Web, "Block unsupported browsers",
@@ -292,6 +334,96 @@ fun BlockEditorScreen(
                     unsupported, ed) { unsupported = it }
                 Spacer(Modifier.padding(top = 16.dp))
             }
+        }
+    }
+
+    if (showModeSheet) {
+        BlockingModeSheet(
+            allowlist = allowlist,
+            onDismiss = { showModeSheet = false },
+            onPick = { pickAllowlist ->
+                allowlist = pickAllowlist
+                showModeSheet = false
+            },
+        )
+    }
+}
+
+/** The "Blocking" section title with a tappable mode chip on the right (Blocklist / Allowlist). */
+@Composable
+private fun BlockingModeHeader(allowlist: Boolean, enabled: Boolean, onClick: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
+        Text("Blocking", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+        Row(
+            Modifier.clip(RoundedCornerShape(20.dp)).clickable(enabled = enabled) { onClick() }
+                .padding(horizontal = 4.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(if (allowlist) Icons.Filled.Star else Icons.Filled.Block, contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(if (allowlist) "Allowlist" else "Blocklist",
+                style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary)
+            if (enabled) {
+                Icon(Icons.Filled.ExpandMore, contentDescription = "Change blocking mode",
+                    tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+            }
+        }
+    }
+}
+
+/** Bottom sheet that picks the Quick Block mode — mirrors AppBlock's "Blocking mode" chooser. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BlockingModeSheet(
+    allowlist: Boolean,
+    onDismiss: () -> Unit,
+    onPick: (Boolean) -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
+            Text("Blocking mode", style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+            Text("Choose the variant that works best for you.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.padding(top = 12.dp))
+            ModeOption(Icons.Filled.Block, "Blocklist",
+                "Select apps, sites or words you want to block.",
+                selected = !allowlist) { onPick(false) }
+            Spacer(Modifier.padding(top = 8.dp))
+            ModeOption(Icons.Filled.Star, "Allowlist",
+                "Select apps you want to allow. All others will be blocked.",
+                selected = allowlist) { onPick(true) }
+        }
+    }
+}
+
+@Composable
+private fun ModeOption(
+    icon: ImageVector, title: String, desc: String, selected: Boolean, onClick: () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .then(
+                if (selected) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(16.dp))
+                else Modifier,
+            )
+            .clickable { onClick() }
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(28.dp))
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+            Text(desc, style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
