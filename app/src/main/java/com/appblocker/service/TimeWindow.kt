@@ -22,6 +22,12 @@ internal fun scheduleWindowContains(
     nowMinutes: Int,
     startMinutes: Int,
     endMinutes: Int,
-): Boolean =
-    (daysMask shr dayBit) and 1 != 0 &&
+): Boolean {
+    val activeDayBit = if (startMinutes > endMinutes && nowMinutes < endMinutes) {
+        (dayBit + 6) % 7
+    } else {
+        dayBit
+    }
+    return (daysMask shr activeDayBit) and 1 != 0 &&
         timeWindowContains(nowMinutes, startMinutes, endMinutes)
+}
