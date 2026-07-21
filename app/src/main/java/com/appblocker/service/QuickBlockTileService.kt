@@ -7,6 +7,7 @@ import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import com.appblocker.MainActivity
 import com.appblocker.data.BlockerDatabase
+import com.appblocker.data.DeviceBoot
 import com.appblocker.data.SessionClock
 import com.appblocker.data.SettingsStore
 import kotlinx.coroutines.CoroutineScope
@@ -60,6 +61,7 @@ class QuickBlockTileService : TileService() {
         val strict = focus != null && SessionClock.remaining(
             focus.realtimeStartMillis, focus.realtimeEndMillis,
             focus.startTimeMillis, focus.endTimeMillis,
+            focus.bootCount, DeviceBoot.count(applicationContext),
         ) > 0L
         val configured =
             db.appRuleDao().getAll().first().any { it.isBlocked } ||

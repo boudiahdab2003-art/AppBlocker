@@ -36,6 +36,7 @@ object QuickSession {
             .putLong("rtEnd", nowRt + duration)
             .putLong("wallStart", nowWall)
             .putLong("wallEnd", nowWall + duration)
+            .putInt("bootCount", DeviceBoot.count(ctx))
             .apply()
     }
 
@@ -44,6 +45,7 @@ object QuickSession {
             .putInt("mode", MODE_POMO)
             .putLong("rtStart", SystemClock.elapsedRealtime())
             .putLong("wallStart", System.currentTimeMillis())
+            .putInt("bootCount", DeviceBoot.count(ctx))
             .putInt("work", workMin).putInt("break", breakMin).putInt("rounds", rounds)
             .apply()
     }
@@ -60,6 +62,8 @@ object QuickSession {
                     prefs.getLong("rtEnd", 0L),
                     prefs.getLong("wallStart", 0L),
                     prefs.getLong("wallEnd", 0L),
+                    prefs.getInt("bootCount", -1),
+                    DeviceBoot.count(ctx),
                 )
                 if (remaining <= 0L) { stop(ctx); return idle() }
                 return State(true, blockingNow = true, remainingMillis = remaining, label = "Time left")
@@ -73,6 +77,8 @@ object QuickSession {
                 val elapsed = SessionClock.elapsed(
                     prefs.getLong("rtStart", 0L),
                     prefs.getLong("wallStart", 0L),
+                    prefs.getInt("bootCount", -1),
+                    DeviceBoot.count(ctx),
                 )
                 if (elapsed >= total) { stop(ctx); return idle() }
                 val pos = elapsed % cycle

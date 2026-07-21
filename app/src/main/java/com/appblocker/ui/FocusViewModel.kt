@@ -5,6 +5,7 @@ import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.appblocker.data.BlockerDatabase
+import com.appblocker.data.DeviceBoot
 import com.appblocker.data.FocusState
 import com.appblocker.data.SessionClock
 import com.appblocker.data.StatsStore
@@ -40,6 +41,7 @@ class FocusViewModel(app: Application) : AndroidViewModel(app) {
                 val remaining = SessionClock.remaining(
                     state.realtimeStartMillis, state.realtimeEndMillis,
                     state.startTimeMillis, state.endTimeMillis,
+                    state.bootCount, DeviceBoot.count(getApplication()),
                 )
                 // Session over: zero the row so a stale deadline can never be resurrected
                 // by a wrong clock after a reboot. Only ever fires when remaining == 0,
@@ -74,6 +76,7 @@ class FocusViewModel(app: Application) : AndroidViewModel(app) {
                     realtimeStartMillis = nowRt,
                     realtimeEndMillis = nowRt + duration,
                     startTimeMillis = nowWall,
+                    bootCount = DeviceBoot.count(getApplication()),
                 )
             )
         }

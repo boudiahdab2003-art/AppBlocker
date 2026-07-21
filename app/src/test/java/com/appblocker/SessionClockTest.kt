@@ -14,26 +14,26 @@ class SessionClockTest {
 
     @Test fun usesRealtimeBranchWhenAnchored() {
         // realtimeEnd > 0 and nowRt(0) >= realtimeStart(0) -> realtime branch -> realtimeEnd - 0.
-        assertEquals(10_000L, SessionClock.remaining(realtimeStart = 0, realtimeEnd = 10_000, wallStart = 0, wallEnd = 0))
+        assertEquals(10_000L, SessionClock.remaining(realtimeStart = 0, realtimeEnd = 10_000, wallStart = 0, wallEnd = 0, savedBootCount = 1, currentBootCount = 1))
     }
 
     @Test fun wallFallbackWhenNoRealtimeAnchor() {
         // realtimeEnd == 0 -> wall branch. Future wall end -> positive remaining.
-        val rem = SessionClock.remaining(0, 0, 0, System.currentTimeMillis() + 100_000)
+        val rem = SessionClock.remaining(0, 0, 0, System.currentTimeMillis() + 100_000, 1, 1)
         assertTrue("expected ~100s remaining, got $rem", rem in 90_000..100_000)
     }
 
     @Test fun expiredWallIsZero() {
-        assertEquals(0L, SessionClock.remaining(0, 0, 0, System.currentTimeMillis() - 100_000))
+        assertEquals(0L, SessionClock.remaining(0, 0, 0, System.currentTimeMillis() - 100_000, 1, 1))
     }
 
     @Test fun rebootDetectedFallsBackToWall() {
         // nowRt(0) < realtimeStart(5000) => reboot detected => wall branch; wall end in past => 0.
-        assertEquals(0L, SessionClock.remaining(realtimeStart = 5_000, realtimeEnd = 10_000, wallStart = 0, wallEnd = 0))
+        assertEquals(0L, SessionClock.remaining(realtimeStart = 5_000, realtimeEnd = 10_000, wallStart = 0, wallEnd = 0, savedBootCount = 1, currentBootCount = 1))
     }
 
     @Test fun remainingNeverNegative() {
-        assertEquals(0L, SessionClock.remaining(0, 0, 0, 0))
+        assertEquals(0L, SessionClock.remaining(0, 0, 0, 0, 1, 1))
     }
 
     @Test fun clockBeforeSessionStartIsInactive() {
@@ -45,6 +45,7 @@ class SessionClockTest {
             SessionClock.remaining(
                 realtimeStart = 5_000, realtimeEnd = 10_000,
                 wallStart = now + 50_000, wallEnd = now + 110_000,
+                savedBootCount = 1, currentBootCount = 1,
             ),
         )
     }
@@ -55,6 +56,7 @@ class SessionClockTest {
         val rem = SessionClock.remaining(
             realtimeStart = 5_000, realtimeEnd = 10_000,
             wallStart = now - 60_000, wallEnd = now + 60_000,
+            savedBootCount = 1, currentBootCount = 1,
         )
         assertTrue("expected ~60s remaining, got $rem", rem in 50_000..60_000)
     }
@@ -66,13 +68,14 @@ class SessionClockTest {
         val rem = SessionClock.remaining(
             realtimeStart = 5_000, realtimeEnd = 10_000,
             wallStart = now - 1_000, wallEnd = now + 9_000,
+            savedBootCount = 1, currentBootCount = 1,
         )
         assertTrue("expected <= 10s, got $rem", rem <= 10_000)
     }
 
     @Test fun elapsedWallBranchNeverNegative() {
         // realtimeStart == 0 -> wall branch. wallStart in the future would be negative -> clamped 0.
-        assertEquals(0L, SessionClock.elapsed(realtimeStart = 0, wallStart = System.currentTimeMillis() + 100_000))
+        assertEquals(0L, SessionClock.elapsed(realtimeStart = 0, wallStart = System.currentTimeMillis() + 100_000, savedBootCount = 1, currentBootCount = 1))
     }
 
     @Test fun mismatchedBootCountUsesWallClockEvenWhenUptimeLooksValid() {

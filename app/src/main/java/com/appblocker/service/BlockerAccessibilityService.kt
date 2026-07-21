@@ -45,6 +45,7 @@ import com.appblocker.data.BlockMode
 import com.appblocker.data.BlockedKeyword
 import com.appblocker.data.BlockerDatabase
 import com.appblocker.data.FocusState
+import com.appblocker.data.DeviceBoot
 import com.appblocker.data.InstalledAppsRepository
 import com.appblocker.data.LaunchCounter
 import com.appblocker.data.QuickSession
@@ -87,6 +88,7 @@ class BlockerAccessibilityService : AccessibilityService() {
     @Volatile private var focusRealtimeEnd: Long = 0L
     @Volatile private var focusWallStart: Long = 0L
     @Volatile private var focusWallEnd: Long = 0L
+    @Volatile private var focusBootCount: Int = -1
     @Volatile private var userKeywords: List<String> = emptyList()
     @Volatile private var schedules: List<Schedule> = emptyList()
     // Browser packages installed on the device (for "Block unsupported browsers").
@@ -113,7 +115,10 @@ class BlockerAccessibilityService : AccessibilityService() {
         updatePaused && strictRemaining() <= 0L
 
     private fun strictRemaining(): Long =
-        SessionClock.remaining(focusRealtimeStart, focusRealtimeEnd, focusWallStart, focusWallEnd)
+        SessionClock.remaining(
+            focusRealtimeStart, focusRealtimeEnd, focusWallStart, focusWallEnd,
+            focusBootCount, DeviceBoot.count(applicationContext),
+        )
 
     // Zeroes the focus row once the session it describes has expired, so a stale deadline
     // can never resurrect after a reboot with a wrong wall clock. Re-checks at fire time:
@@ -329,6 +334,7 @@ class BlockerAccessibilityService : AccessibilityService() {
             focusRealtimeEnd = focus?.realtimeEndMillis ?: 0L
             focusWallStart = focus?.startTimeMillis ?: 0L
             focusWallEnd = focus?.endTimeMillis ?: 0L
+            focusBootCount = focus?.bootCount ?: -1
             // Arm a one-shot clear for when this session expires (fires immediately for a
             // session that already expired, e.g. while the phone was off). See the runnable.
             handler.removeCallbacks(focusClearRunnable)
