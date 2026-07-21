@@ -26,4 +26,12 @@ class TimeWindowTest {
     @Test fun unselectedDayOutsideWindow() = assertFalse(
         scheduleWindowContains(1 shl 1, 2, 600, 540, 1020),
     )
+
+    @Test fun mondayOvernightRemainsActiveTuesdayMorning() = assertTrue(
+        scheduleWindowContains(1 shl 1, 2, 120, 1320, 360),
+    )
+
+    @Test fun tuesdayMorningIsInactiveWhenMondayWasNotSelected() = assertFalse(
+        scheduleWindowContains(1 shl 2, 2, 120, 1320, 360),
+    )
 }
