@@ -44,8 +44,8 @@ import com.appblocker.data.AttemptCounter
 import com.appblocker.data.BlockMode
 import com.appblocker.data.BlockedKeyword
 import com.appblocker.data.BlockerDatabase
-import com.appblocker.data.FocusState
 import com.appblocker.data.DeviceBoot
+import com.appblocker.data.FocusState
 import com.appblocker.data.InstalledAppsRepository
 import com.appblocker.data.LaunchCounter
 import com.appblocker.data.QuickSession

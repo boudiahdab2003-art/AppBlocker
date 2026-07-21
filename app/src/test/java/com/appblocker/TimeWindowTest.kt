@@ -12,6 +12,7 @@ class TimeWindowTest {
     @Test fun beforeNormal() = assertFalse(timeWindowContains(480, 540, 1020))  // 08:00
     @Test fun startIsInclusive() = assertTrue(timeWindowContains(540, 540, 1020))
     @Test fun endIsExclusive() = assertFalse(timeWindowContains(1020, 540, 1020))
+    @Test fun equalStartAndEndIsInactive() = assertFalse(timeWindowContains(540, 540, 540))
 
     // Wrap past midnight 22:00–06:00 (1320–360).
     @Test fun lateNightInside() = assertTrue(timeWindowContains(1380, 1320, 360))  // 23:00
