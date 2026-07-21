@@ -33,9 +33,3 @@ jobs:
 
       - name: Assemble debug APK
         run: gradle -p . :app:assembleGithubDebug
-
-      - name: Upload generated Room schema
-        uses: actions/upload-artifact@v4
-        with:
-          name: room-schema-9
-          path: app/schemas/com.appblocker.data.BlockerDatabase/9.json
