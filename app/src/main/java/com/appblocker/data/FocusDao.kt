@@ -13,4 +13,12 @@ interface FocusDao {
 
     @Upsert
     suspend fun set(state: FocusState)
+
+    /** Atomically clears only Strict state created before [currentVersion]. */
+    @Query(
+        "UPDATE focus_state SET endTimeMillis = 0, realtimeStartMillis = 0, " +
+            "realtimeEndMillis = 0, startTimeMillis = 0, bootCount = -1, " +
+            "appVersionCode = -1 WHERE id = 0 AND appVersionCode < :currentVersion"
+    )
+    suspend fun clearStrictSessionCreatedBefore(currentVersion: Long): Int
 }
