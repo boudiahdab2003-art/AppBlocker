@@ -865,9 +865,10 @@ class BlockerAccessibilityService : AccessibilityService() {
     private fun inTimeWindow(s: Schedule, now: Long): Boolean {
         val cal = Calendar.getInstance().apply { timeInMillis = now }
         val dayBit = cal.get(Calendar.DAY_OF_WEEK) - 1 // SUNDAY(1) -> bit 0
-        if ((s.daysMask shr dayBit) and 1 == 0) return false
         val minutes = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
-        return timeWindowContains(minutes, s.startMinutes, s.endMinutes)
+        return scheduleWindowContains(
+            s.daysMask, dayBit, minutes, s.startMinutes, s.endMinutes,
+        )
     }
 
     // --- Web / keyword filtering ---

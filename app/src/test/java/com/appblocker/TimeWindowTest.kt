@@ -1,6 +1,7 @@
 package com.appblocker
 
 import com.appblocker.service.timeWindowContains
+import com.appblocker.service.scheduleWindowContains
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -17,4 +18,12 @@ class TimeWindowTest {
     @Test fun earlyMorningInside() = assertTrue(timeWindowContains(120, 1320, 360)) // 02:00
     @Test fun middayOutside() = assertFalse(timeWindowContains(720, 1320, 360))     // 12:00
     @Test fun wrapEndIsExclusive() = assertFalse(timeWindowContains(360, 1320, 360))// 06:00
+
+    @Test fun selectedDayInsideWindow() = assertTrue(
+        scheduleWindowContains(1 shl 1, 1, 600, 540, 1020),
+    )
+
+    @Test fun unselectedDayOutsideWindow() = assertFalse(
+        scheduleWindowContains(1 shl 1, 2, 600, 540, 1020),
+    )
 }

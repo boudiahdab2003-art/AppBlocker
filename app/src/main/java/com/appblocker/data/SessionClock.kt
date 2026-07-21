@@ -23,11 +23,23 @@ object SessionClock {
      * session's original duration. wallStart == 0 means a legacy record with no start anchor.
      */
     fun remaining(realtimeStart: Long, realtimeEnd: Long, wallStart: Long, wallEnd: Long): Long {
-        val nowRt = SystemClock.elapsedRealtime()
+        return remainingAt(
+            realtimeStart, realtimeEnd, wallStart, wallEnd,
+            SystemClock.elapsedRealtime(), System.currentTimeMillis(),
+        )
+    }
+
+    internal fun remainingAt(
+        realtimeStart: Long,
+        realtimeEnd: Long,
+        wallStart: Long,
+        wallEnd: Long,
+        nowRt: Long,
+        nowWall: Long,
+    ): Long {
         if (realtimeEnd > 0L && nowRt >= realtimeStart) {
             return (realtimeEnd - nowRt).coerceAtLeast(0L)
         }
-        val nowWall = System.currentTimeMillis()
         val raw = (wallEnd - nowWall).coerceAtLeast(0L)
         if (wallStart <= 0L) return raw
         if (nowWall < wallStart) return 0L
@@ -39,11 +51,22 @@ object SessionClock {
      * Mirrors [remaining]: monotonic within a boot, wall-clock after a reboot. Never negative.
      */
     fun elapsed(realtimeStart: Long, wallStart: Long): Long {
-        val nowRt = SystemClock.elapsedRealtime()
+        return elapsedAt(
+            realtimeStart, wallStart,
+            SystemClock.elapsedRealtime(), System.currentTimeMillis(),
+        )
+    }
+
+    internal fun elapsedAt(
+        realtimeStart: Long,
+        wallStart: Long,
+        nowRt: Long,
+        nowWall: Long,
+    ): Long {
         return if (realtimeStart > 0L && nowRt >= realtimeStart) {
             nowRt - realtimeStart
         } else {
-            (System.currentTimeMillis() - wallStart).coerceAtLeast(0L)
+            (nowWall - wallStart).coerceAtLeast(0L)
         }
     }
 }
