@@ -74,4 +74,40 @@ class SessionClockTest {
         // realtimeStart == 0 -> wall branch. wallStart in the future would be negative -> clamped 0.
         assertEquals(0L, SessionClock.elapsed(realtimeStart = 0, wallStart = System.currentTimeMillis() + 100_000))
     }
+
+    @Test fun mismatchedBootCountUsesWallClockEvenWhenUptimeLooksValid() {
+        assertEquals(
+            0L,
+            SessionClock.remainingAt(
+                realtimeStart = 5_000, realtimeEnd = 10_000,
+                wallStart = 100, wallEnd = 200,
+                savedBootCount = 4, currentBootCount = 5,
+                nowRt = 6_000, nowWall = 250,
+            ),
+        )
+    }
+
+    @Test fun matchingBootCountKeepsMonotonicDeadline() {
+        assertEquals(
+            4_000L,
+            SessionClock.remainingAt(
+                realtimeStart = 5_000, realtimeEnd = 10_000,
+                wallStart = 7_000, wallEnd = 12_000,
+                savedBootCount = 5, currentBootCount = 5,
+                nowRt = 6_000, nowWall = 6_000,
+            ),
+        )
+    }
+
+    @Test fun unknownLegacyBootCountUsesWallClock() {
+        assertEquals(
+            0L,
+            SessionClock.remainingAt(
+                realtimeStart = 5_000, realtimeEnd = 10_000,
+                wallStart = 100, wallEnd = 200,
+                savedBootCount = -1, currentBootCount = 5,
+                nowRt = 6_000, nowWall = 250,
+            ),
+        )
+    }
 }
