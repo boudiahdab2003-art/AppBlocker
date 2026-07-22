@@ -13,6 +13,12 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.91", "Jul 22, 2026", "Allowlist mode + a cleaner Quick Block, and the coach just works", listOf(
+        "Quick Block now has an Allowlist mode. Instead of choosing what to block, you choose the few apps you want to KEEP — and everything else is blocked while a Quick Block, Timer or Pomodoro is running. Tap the 'Blocking' chip at the top of the Quick Block editor to switch between Blocklist and Allowlist. Your two lists are kept separately, so switching back and forth never loses either one.",
+        "Allowlist mode always keeps the essentials working, so the phone can never lock you out: your home screen (launcher), phone/dialer, keyboard, the notification shade, Settings, and AppBlocker itself stay open no matter what — only the apps you didn't allow are blocked.",
+        "The Quick Block editor got an AppBlock-style makeover: a full-screen 'Blocking mode' chooser with a Continue button, and a tidy summary card where 'Apps' (and 'Websites & words') open their own screens — instead of one long scroll.",
+        "The AI Coach now works for everyone with nothing to set up — no more pasting a Gemini API key. It's powered by our own small server, so it's ready the moment you open Insights. If you're ever offline the coach just waits, and the rest of the app keeps working as normal.",
+    )),
     VersionLog("1.69", "Jul 12, 2026", "Update-ends-Strict, now for real", listOf(
         "THIS is the update that ends your running Strict Mode session. The 1.67 → 1.68 update couldn't do it: 1.67 was too old to leave the note that 1.68 needed to recognize an update had happened — so nothing fired, not even the Reactivate banner. From 1.68 onward the note exists, which makes this the first update the feature can actually see.",
         "Also made it bulletproof: ending the session is now remembered as an unfinished job and retried on every app open until it truly lands — so even if Android cuts the first attempt short (it can, right after an install), the session still ends.",
