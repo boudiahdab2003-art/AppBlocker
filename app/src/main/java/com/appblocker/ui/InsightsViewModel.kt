@@ -63,7 +63,6 @@ data class CatSlice(val label: String, val color: Color, val minutes: Int)
 
 /** The AI Coach panel's state. */
 sealed interface CoachState {
-    data object NoKey : CoachState
     data object Loading : CoachState
     data class Tips(val tips: List<String>) : CoachState
     data object Unavailable : CoachState
@@ -155,12 +154,6 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
     private val _coach = MutableStateFlow<CoachState>(CoachState.Loading)
     val coach: StateFlow<CoachState> = _coach
 
-    /** Saves the user's Gemini key (device-local only) and fetches tips with it. */
-    fun setApiKey(key: String) {
-        AiCoach.setApiKey(getApplication(), key)
-        viewModelScope.launch { refreshCoach(force = false) }
-    }
-
     /** Forces a fresh Gemini call instead of today's cached tips. */
     fun newTips() {
         viewModelScope.launch { refreshCoach(force = true) }
@@ -168,9 +161,8 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
 
     private suspend fun refreshCoach(force: Boolean) {
         val ctx = getApplication<Application>()
-        // NoKey only when there's neither the server proxy nor a user-entered key. With the
-        // proxy on, the coach just works (Loading -> Tips).
-        if (!AiCoach.coachAvailable(ctx)) { _coach.value = CoachState.NoKey; return }
+        // The coach is served by the VM proxy, so it's always available to try. If nothing is
+        // reachable, the fetch below simply yields Unavailable.
         _coach.value = CoachState.Loading
         // The usage summary is built inside AiCoach (shared with the chat) from day-cached data.
         val summary = withContext(Dispatchers.IO) { AiCoach.usageSummary(ctx) }

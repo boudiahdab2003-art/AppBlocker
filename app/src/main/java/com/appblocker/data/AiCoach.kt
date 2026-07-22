@@ -76,12 +76,9 @@ object AiCoach {
 
     private fun p(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
+    // Vestigial: the coach is served by the VM proxy now, so no key is entered on-device. Kept
+    // only because callGemini's transient-failure fallback still reads it (always blank now).
     fun apiKey(ctx: Context): String = p(ctx).getString("key", "") ?: ""
-
-    fun setApiKey(ctx: Context, key: String) {
-        // A new key should trigger a fresh fetch rather than serving another key's cache.
-        p(ctx).edit().putString("key", key.trim()).remove("tips").apply()
-    }
 
     // --- Chat history (persisted so the conversation survives restarts) ---
 

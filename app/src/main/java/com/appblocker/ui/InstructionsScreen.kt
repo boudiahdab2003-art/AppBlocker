@@ -428,10 +428,9 @@ private val TOPICS = listOf(
                 "add a note. Your last week of moods feeds the coach's context.",
             "AI Coach" to
                 "Writes short daily tips from your stats, goals and moods, and you can chat " +
-                "with it. It runs on Google's Gemini: add a free API key " +
-                "(aistudio.google.com/apikey) via the card's \"Add key\" button — the key " +
-                "stays on your phone. \"New tips\" fetches a fresh take; without a key or " +
-                "offline, everything else in the app works normally.",
+                "with it. It runs on Google's Gemini and works right out of the box — nothing " +
+                "to set up. \"New tips\" fetches a fresh take; when you're offline the coach " +
+                "pauses and everything else in the app works normally.",
         ),
     ),
     Topic(

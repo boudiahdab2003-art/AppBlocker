@@ -220,7 +220,7 @@ private fun CoachStep(onNext: () -> Unit) {
             "Agree on targets together, track them live, and get fresh tips through the day.")
         Spacer(Modifier.height(16.dp))
         Text(
-            "Free — just add your free Gemini key later in Insights ▸ AI Coach.",
+            "Free, and works right out of the box — find it in Insights ▸ AI Coach.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,

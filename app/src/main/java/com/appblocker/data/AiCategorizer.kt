@@ -33,8 +33,10 @@ object AiCategorizer {
      */
     suspend fun categorizeAll(ctx: Context, apps: List<InstalledApp>): Map<String, AppCategory>? =
         withContext(Dispatchers.IO) {
+            // Runs through the server proxy (no on-device key needed); only bails when neither
+            // the proxy nor a personal key is available. callGemini prefers the proxy.
+            if (!AiCoach.coachAvailable(ctx)) return@withContext null
             val key = AiCoach.apiKey(ctx)
-            if (key.isBlank()) return@withContext null
             val prefs = p(ctx)
             val pending = apps.filter { !prefs.contains(it.packageName) }.take(MAX_BATCH)
             if (pending.isEmpty()) return@withContext null

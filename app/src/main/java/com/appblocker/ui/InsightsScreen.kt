@@ -111,7 +111,6 @@ fun InsightsScreen(
     val coach by vm.coach.collectAsState()
     val context = LocalContext.current
     var tab by rememberSaveable { mutableIntStateOf(0) } // 0 Day, 1 Week, 2 Trend
-    var showKeyDialog by remember { mutableStateOf(false) }
     var showMood by remember { mutableStateOf(false) }
 
     // Rebuild the stats every time the tab is opened, so they're always current.
@@ -234,7 +233,6 @@ fun InsightsScreen(
         // AI Coach: Gemini's daily read of the numbers above.
         item {
             CoachCard(coach, state.goals.map { it.goal.label() },
-                onEditKey = { showKeyDialog = true },
                 onNewTips = { vm.newTips() }, onChat = onOpenCoach)
             Spacer(Modifier.padding(top = 24.dp))
         }
@@ -383,37 +381,6 @@ fun InsightsScreen(
         )
     }
 
-    if (showKeyDialog) {
-        var keyText by remember { mutableStateOf("") }
-        AlertDialog(
-            onDismissRequest = { showKeyDialog = false },
-            title = { Text("Gemini API key") },
-            text = {
-                Column {
-                    Text(
-                        "Paste your free key from aistudio.google.com/apikey. " +
-                            "It's stored on this device only.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = keyText,
-                        onValueChange = { keyText = it.trim() },
-                        label = { Text("API key") },
-                        singleLine = true,
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = keyText.isNotBlank(),
-                    onClick = { vm.setApiKey(keyText); showKeyDialog = false },
-                ) { Text("Save") }
-            },
-            dismissButton = { TextButton(onClick = { showKeyDialog = false }) { Text("Cancel") } },
-        )
-    }
 }
 
 /** The AI Coach panel: Gemini-written tips from today's aggregate stats. Styled as the page's
@@ -422,7 +389,6 @@ fun InsightsScreen(
 private fun CoachCard(
     state: CoachState,
     goals: List<String>,
-    onEditKey: () -> Unit,
     onNewTips: () -> Unit,
     onChat: () -> Unit,
 ) {
@@ -453,16 +419,6 @@ private fun CoachCard(
             .padding(horizontal = 16.dp, vertical = 6.dp),
     ) {
         when (state) {
-            CoachState.NoKey -> {
-                Text(
-                    "Add your free Gemini API key to get daily coaching based on how you " +
-                        "actually used your phone.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(top = 12.dp),
-                )
-                TextButton(onClick = onEditKey) { Text("Add key") }
-            }
             CoachState.Loading -> {
                 Row(Modifier.padding(vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
@@ -509,8 +465,6 @@ private fun CoachCard(
                     modifier = Modifier.padding(top = 12.dp))
                 Row {
                     TextButton(onClick = onNewTips) { Text("New tips") }
-                    Spacer(Modifier.weight(1f))
-                    TextButton(onClick = onEditKey) { Text("Change key") }
                 }
             }
             CoachState.Unavailable -> {
@@ -524,8 +478,6 @@ private fun CoachCard(
                     modifier = Modifier.padding(top = 12.dp))
                 Row {
                     TextButton(onClick = onNewTips) { Text("Try again") }
-                    Spacer(Modifier.weight(1f))
-                    TextButton(onClick = onEditKey) { Text("Change key") }
                 }
             }
         }
