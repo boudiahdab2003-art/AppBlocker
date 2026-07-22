@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.91
+- Quick Block now has an Allowlist mode: instead of choosing what to block, choose the few apps you want to keep — everything else is blocked while a Quick Block, Timer or Pomodoro is running, and your home screen, phone, keyboard and Settings always stay usable. The Quick Block editor got an AppBlock-style redesign, with a full-screen Blocking-mode chooser and a tidy summary that opens Apps (and Websites & words) on their own screens. The AI Coach now works for everyone with nothing to set up — no more pasting a Gemini API key. And the block screen no longer shows twice on tablets after you tap Got it.
+
 ## v1.90
 - New Scenarios section in your Profile: short guides for the hard moments — relapse, can't focus, feeling lazy, can't sleep, the urge to scroll, and feeling overwhelmed — each opening with real quotes from thinkers like Marcus Aurelius, Seneca, Viktor Frankl and Sartre. The Dopamine detox guide stays where it was. You can also add a Quick Block button to your phone's pull-down Quick Settings panel to turn blocking on and off without opening the app.
 
