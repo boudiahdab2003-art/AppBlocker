@@ -969,8 +969,10 @@ class BlockerAccessibilityService : AccessibilityService() {
         // Just dismissed a cover ("Got it" → HOME): the page stays on screen during the
         // transition. Skip everything — including the lockout fast path below, which used to
         // redraw the cover over the departing app (a visible flash) — WITHOUT touching
-        // lastWebText, so detection re-arms the moment the window ends.
-        if (dismissedKey != null && System.currentTimeMillis() - dismissedAt < 2500) return
+        // lastWebText, so detection re-arms the moment the suppression ends. Any dismissal
+        // suppresses the scan (key-agnostic, as before), on the same extended window as
+        // showBlockScreen (tablets: HOME can land slowly).
+        if (dismissedKey != null && withinDismissWindow()) return
         // Under a keyword lockout the app is blocked outright — cover it on any content
         // event, no text matching. This path fires from cached state, so it demands positive
         // confirmation that the locked app is REALLY the visible one (an unreadable root is
@@ -1055,6 +1057,11 @@ class BlockerAccessibilityService : AccessibilityService() {
      * scrolls/navigates out of Shorts.
      */
     private suspend fun scanShorts() {
+        // A full app-block cover is already up (YouTube itself is blocked) — Shorts-only
+        // blocking is moot, and the overlay is not-focusable so this scan would still read
+        // the YouTube UI behind it, re-keying the cover to "shorts": a visible repaint plus
+        // a double-counted attempt. Leave the app-block cover alone.
+        if (overlayView != null && overlayIsAppBlock) return
         if (!SettingsStore.blockYoutubeShorts(applicationContext) || !quickBlockActive() ||
             lastForegroundPkg != YOUTUBE_PKG
         ) {
@@ -1166,6 +1173,28 @@ class BlockerAccessibilityService : AccessibilityService() {
         return sb.toString()
     }
 
+    /** True while a just-dismissed cover's re-show should stay suppressed: always for the
+     *  first 1.5s (event stragglers during the trip Home), and for up to 8s while the
+     *  dismissed app is STILL foreground — on tablets the HOME action can land slowly (or
+     *  not at all in split-screen), and the old flat 2.5s window let the very next event
+     *  re-block, showing the cover "twice". Once the user actually leaves (foreground moves
+     *  off the dismissed app), a fresh open blocks instantly again; deliberately staying in
+     *  the blocked app still re-blocks after 8s. Only matches the dismissed key/package —
+     *  a DIFFERENT app opened right after still blocks instantly.
+     *  (Shorts covers are exempt — their scan tracks covering state in shortsCovering, and
+     *  suppressing a show here would desync it and leave Shorts uncovered.) */
+    private fun dismissSuppressed(counterKey: String): Boolean {
+        if (counterKey == "shorts") return false
+        if (counterKey != dismissedKey && counterKey != dismissedPkg) return false
+        return withinDismissWindow()
+    }
+
+    /** The timing half of [dismissSuppressed]: still inside the post-"Got it" grace. */
+    private fun withinDismissWindow(): Boolean {
+        val since = System.currentTimeMillis() - dismissedAt
+        return since < 1_500 || (since < 8_000 && lastForegroundPkg == dismissedPkg)
+    }
+
     private fun showBlockScreen(
         title: String,
         message: String?,
@@ -1177,16 +1206,8 @@ class BlockerAccessibilityService : AccessibilityService() {
         // re-roll the quote — so a cover already up for this key means there's nothing to do.
         if (overlayView != null && overlayCounterKey == counterKey) return
         // Same guard for a JUST-dismissed cover: Close goes HOME, but the blocked app stays
-        // on screen for the transition and would re-block/re-count immediately. Also matches
-        // the dismissed app's own package — a "web" dismissal must suppress the lockout
-        // re-show keyed by that package (and vice versa), or the cover flashes during the
-        // trip Home. A DIFFERENT app opened right after still blocks instantly.
-        // (Shorts covers are exempt — their scan tracks covering state in shortsCovering, and
-        // suppressing a show here would desync it and leave Shorts uncovered.)
-        if (counterKey != "shorts" &&
-            (counterKey == dismissedKey || counterKey == dismissedPkg) &&
-            System.currentTimeMillis() - dismissedAt < 2500
-        ) return
+        // on screen for the transition and would re-block/re-count immediately.
+        if (dismissSuppressed(counterKey)) return
         val (today, total) = AttemptCounter.record(applicationContext, counterKey)
         overlayCounterKey = counterKey
         // Only app-rule blocks pass a package; web/purchase/Shorts covers are managed by
@@ -1288,6 +1309,14 @@ class BlockerAccessibilityService : AccessibilityService() {
                 lastWebText = null
                 removeBlockOverlay()
                 performGlobalAction(GLOBAL_ACTION_HOME)
+                // Tablets sometimes swallow the first HOME (split-screen/slow transition),
+                // leaving the blocked app on screen until the dismiss grace lapses — which
+                // read as a second block. One retry if the foreground hasn't moved.
+                handler.postDelayed({
+                    if (dismissedPkg != null && lastForegroundPkg == dismissedPkg) {
+                        performGlobalAction(GLOBAL_ACTION_HOME)
+                    }
+                }, 800)
             }
             // Clip the footer icon to a circle — the icon-art PNGs are full-bleed squares,
             // and this matches how the icon picker (and most launchers) present icons.
