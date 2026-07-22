@@ -28,7 +28,20 @@ Nothing runs on it for AppBlocker yet.
 
 ## Use cases, ranked (with plans)
 
-### 1. Gemini proxy for the AI Coach — highest value — **APP SIDE DONE, awaiting VM setup**
+### 1. Gemini proxy for the AI Coach — highest value — **LIVE ✅**
+
+**Live since 2026-07:** the VM runs Caddy as a reverse proxy at
+`https://appblocker-coach.duckdns.org` (DuckDNS → the VM's external IP,
+firewall opens tcp:80,443). Caddy holds the Gemini key + shared secret in
+`/etc/caddy/coach.env` (loaded via a systemd drop-in), rejects requests without
+`Authorization: Bearer <secret>` (403), and injects `x-goog-api-key` before
+forwarding to Google. The app's `gradle.properties` carries the matching
+`coachProxyUrl`/`coachProxySecret`, so the coach works with no on-device key.
+Hermes was fully wiped from the VM first (service, files) per the standing
+instruction. To rotate the secret: edit `/etc/caddy/coach.env` + `gradle.properties`,
+`sudo systemctl restart caddy`, rebuild. Original design notes below.
+
+
 Today the coach requires the user to paste a Gemini API key on-device
 (`AiCoach.setApiKey`). A tiny proxy makes the coach work out of the box.
 
