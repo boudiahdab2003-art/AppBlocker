@@ -19,6 +19,79 @@ val changelog: List<VersionLog> = listOf(
         "The Quick Block editor got an AppBlock-style makeover: a full-screen 'Blocking mode' chooser with a Continue button, and a tidy summary card where 'Apps' (and 'Websites & words') open their own screens — instead of one long scroll.",
         "The AI Coach now works for everyone with nothing to set up — no more pasting a Gemini API key. It's powered by our own small server, so it's ready the moment you open Insights. If you're ever offline the coach just waits, and the rest of the app keeps working as normal.",
     )),
+    VersionLog("1.90", "Jul 19, 2026", "Scenarios for the hard moments + a Quick Settings button", listOf(
+        "New Scenarios section in your Profile: short guides for the hard moments — relapse, can't focus, feeling lazy, can't sleep, the urge to scroll, and feeling overwhelmed. Each one opens with real quotes from thinkers like Marcus Aurelius, Seneca, Viktor Frankl and Sartre. (The Dopamine detox guide stays right where it was.)",
+        "You can now add a Quick Block button to your phone's pull-down Quick Settings panel, so you can turn blocking on and off without even opening the app.",
+    )),
+    VersionLog("1.89", "Jul 19, 2026", "Smarter social-website blocking", listOf(
+        "Blocking a social app (Facebook, Instagram, TikTok, YouTube and so on) still blocks that app's actual website in your browser — but it no longer blocks pages that merely mention the app's name, and no longer locks your whole browser for 30 minutes over it.",
+    )),
+    VersionLog("1.88", "Jul 19, 2026", "Block-screen polish + clearer word blocks", listOf(
+        "The block screen no longer flashes over your home screen after you unlock the phone.",
+        "When a word is blocked, the screen now tells you which word it was. And the plain word 'porn' no longer blocks non-sexual apps — the fuller phrases still do.",
+    )),
+    VersionLog("1.87", "Jul 19, 2026", "Dopamine Detox header fix", listOf(
+        "Small fix: the Dopamine Detox guide's header is compact again — the tall empty blue box at the top is gone.",
+    )),
+    VersionLog("1.86", "Jul 19, 2026", "Dopamine Detox: the full rulebook", listOf(
+        "The Dopamine Detox guide is now a full rulebook: three truths from Buddhism, 25 clear rules for beating the scrolling and porn cravings, a craving SOS, and a fresh, cleaner design.",
+    )),
+    VersionLog("1.85", "Jul 18, 2026", "The Dopamine Detox guide arrives", listOf(
+        "New: a full Dopamine Detox guide on the Profile page — what endless scrolling does to your brain, and a 7-day reset plan.",
+        "Fixes: templates no longer add app-name words (like 'youtube') to your blocked words, and any added before are cleaned up once; the turn-off typing challenge now works properly with the keyboard open; and the challenge uses longer words.",
+    )),
+    VersionLog("1.84", "Jul 18, 2026", "Turning off adult protection got harder", listOf(
+        "The typing challenge for turning off the adult content pack now works properly — full-screen, the keyboard can't hide it, and capitals or extra spaces don't matter.",
+        "Turning the pack off is also much harder now: even after the typing challenge, the pack keeps protecting you for another 24 hours before the switch actually takes effect. And the block screen no longer flashes over your home screen or right after you press 'Got it'.",
+    )),
+    VersionLog("1.83", "Jul 18, 2026", "Stronger word blocking", listOf(
+        "Word blocking is much stronger: pressing 'Got it' no longer lets you slip back and keep reading — the app where the blocked word appeared locks completely for 30 minutes. Scanning is faster too, and now catches words while you scroll.",
+        "After updating, turn the AppBlocker accessibility service off and on once in your phone's settings.",
+    )),
+    VersionLog("1.82", "Jul 17, 2026", "Delete schedules from the list", listOf(
+        "Schedules can now be deleted right from the list — a trash icon with a confirm, hidden during Strict Mode.",
+        "And two labels no longer break mid-word on larger font sizes (the Active badge on templates and the Location schedule tile).",
+    )),
+    VersionLog("1.81", "Jul 17, 2026", "Timer Save button, pinned down", listOf(
+        "Another fix for the timer picker's Save button: it now keeps a guaranteed fixed distance from the bottom of the screen, instead of relying on the phone to report its gesture-bar height — some phones report zero, which defeated every measured fix.",
+    )),
+    VersionLog("1.80", "Jul 17, 2026", "Timer Save button reads the real nav bar", listOf(
+        "The timer picker's Save button now reads the navigation-bar height straight from Android's root window — the deepest, most reliable source, immune to the popup-window quirks that defeated the earlier fixes.",
+    )),
+    VersionLog("1.79", "Jul 17, 2026", "Timer Save button fixed at the source", listOf(
+        "Fixed for real: the Save button in the timer picker (Strict Mode and Quick Block) now measures the navigation bar from the app's main window — the popup was reporting it as zero, which is why earlier fixes didn't stick.",
+        "Also: Instructions topic pages got a cleaner layout, with titled point cards instead of plain text.",
+    )),
+    VersionLog("1.78", "Jul 17, 2026", "Full-page settings & icon picker", listOf(
+        "Smoother settings: Instructions topics now open as their own full page (much easier to read than the old expanding cards), and the app-icon chooser is a clean full-page grid instead of the cramped popup.",
+    )),
+    VersionLog("1.77", "Jul 17, 2026", "Instructions: a guide to every feature", listOf(
+        "New: Profile ▸ Instructions — a built-in guide explaining every feature in detail, across thirteen topics: protection setup, Quick Block, templates, all five schedule types, Strict Mode, blocked words and websites, the block screen, YouTube Shorts, the full Insights tab, goals/mood/AI Coach, PIN lock, updates, and personalization.",
+    )),
+    VersionLog("1.76", "Jul 17, 2026", "Your chosen icon on the block screen", listOf(
+        "The block screen now shows the app icon you actually picked in the icon switcher (it used to show the default logo).",
+        "And the quotes got a quality pass — cliches cut, misattributions fixed, and stronger lines added from William James, Mary Oliver, Seneca, Pascal and James Clear.",
+    )),
+    VersionLog("1.75", "Jul 17, 2026", "One block counts once", listOf(
+        "Fixed: one blocked attempt was being counted (and re-shown) several times. A single block now records exactly one entry, the quote stays put while the block screen is up, and tapping 'Got it' no longer re-triggers the same block on the way to your home screen.",
+    )),
+    VersionLog("1.74", "Jul 17, 2026", "Smarter, more precise blocking", listOf(
+        "No more false blocks on the home screen, and the block screen now explains WHY you're blocked — the schedule name, a daily limit, Quick Block, Strict Mode, or the exact word it matched.",
+        "Blocked words now match the site you're actually on in Chrome instead of any page that mentions them, blocked apps get covered faster, and blocking YouTube or a social app now also covers its website and short links (youtube.com, youtu.be, t.co, redd.it, fb.watch…).",
+    )),
+    VersionLog("1.73", "Jul 16, 2026", "Save button lifted above the gesture bar", listOf(
+        "Fixed: the Save button in the Strict Mode timer picker (and the schedule, template and Quick Block editors) sat too low, inside the gesture-navigation area — it now sits clearly above it.",
+    )),
+    VersionLog("1.72", "Jul 14, 2026", "Android 15 polish", listOf(
+        "Polish for Android 15 phones: the AI Coach chat, the What's new page and the PIN lock screen no longer draw behind the status bar, and the PIN screen's Unlock button stays above the keyboard.",
+    )),
+    VersionLog("1.71", "Jul 14, 2026", "Setup wizard always reachable", listOf(
+        "Fixed: on phones with larger text or display size, the setup wizard could hide its Continue button off the bottom of the screen with no way forward. The steps now scroll, the button is always visible, and the wizard no longer draws behind the status bar on Android 15.",
+    )),
+    VersionLog("1.70", "Jul 13, 2026", "Fewer false word blocks + a time-aware coach", listOf(
+        "Fewer false adult-word blocks: only real porn vocabulary triggers a block now — everyday phrases (adult content, queen of spades, cream pie…) no longer do.",
+        "And the AI Coach now knows the time of day, so no more 'goal hit!' at 9am, or praising your night's sleep as phone-free time.",
+    )),
     VersionLog("1.69", "Jul 12, 2026", "Update-ends-Strict, now for real", listOf(
         "THIS is the update that ends your running Strict Mode session. The 1.67 → 1.68 update couldn't do it: 1.67 was too old to leave the note that 1.68 needed to recognize an update had happened — so nothing fired, not even the Reactivate banner. From 1.68 onward the note exists, which makes this the first update the feature can actually see.",
         "Also made it bulletproof: ending the session is now remembered as an unfinished job and retried on every app open until it truly lands — so even if Android cuts the first attempt short (it can, right after an install), the session still ends.",
