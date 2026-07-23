@@ -405,6 +405,20 @@ class BlockerAccessibilityService : AccessibilityService() {
      *  fast path; the `pkg != lastForegroundPkg` guard keeps recordOpen at exactly one
      *  count per open regardless of which event type wins the race. */
     private fun onForegroundChanged(pkg: String?, className: String?) {
+        // Keep a live app-block cover rock-solid. A blocked app runs behind the (non-focusable)
+        // cover and can spit out stray windows — a system/floating popup, a splash, a different-
+        // package sub-window — whose window-state event carries a package that isn't blocked.
+        // Acting on it would set lastForegroundPkg to that stray package and tear the cover down
+        // (handleAppBlock → blockReason null → removeBlockOverlay), then the blocked app's own
+        // window returns and re-blocks: the "disappears ~2s then reblocks" flicker. Ignore any
+        // such new package unless it's the confirmed active window (a real switch — our overlay
+        // is FLAG_NOT_FOCUSABLE so it never holds focus) or a launcher (Home is always honored,
+        // so the user can't be trapped).
+        if (overlayView != null && overlayIsAppBlock &&
+            pkg != null && pkg != lastForegroundPkg &&
+            !isLauncherPkg(pkg) &&
+            rootInActiveWindow?.packageName?.toString() != pkg
+        ) return
         if (pkg != null && pkg != lastForegroundPkg) {
             lastForegroundPkg = pkg
             LaunchCounter.recordOpen(applicationContext, pkg) // for LAUNCH_COUNT
