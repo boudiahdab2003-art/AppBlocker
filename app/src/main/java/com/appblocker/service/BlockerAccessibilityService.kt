@@ -218,12 +218,11 @@ class BlockerAccessibilityService : AccessibilityService() {
                 pkg = actual
             }
             if (isLauncherPkg(pkg)) {
-                // An app-block cover intentionally stays up on the launcher — we bounce blocked
-                // apps to Home and keep the block screen over it until "Got it" or a real app
-                // switch (see handleAppBlock). Only null-package covers (web/purchase/guard) that
-                // no other path took down get released here. Shorts covers stay owned by their
+                // On Home nothing should stay covered — this also releases the web/purchase/
+                // guard covers (packageName == null) that no other path takes down when the
+                // launcher window-state event went missing. Shorts covers stay owned by their
                 // scan. The next window-state event re-arms this loop.
-                if (overlayView != null && !overlayIsAppBlock && !shortsCovering) {
+                if (overlayView != null && !shortsCovering) {
                     lastBlockedPkg = null
                     removeBlockOverlay()
                 }
@@ -505,11 +504,6 @@ class BlockerAccessibilityService : AccessibilityService() {
             // Keep a Shorts cover up even though the whole app isn't blocked — the shorts
             // scan owns adding/removing it as the user moves in and out of Shorts.
             if (pkg == YOUTUBE_PKG && shortsCovering) { lastBlockedPkg = null; return }
-            // We bounce a blocked app to Home (below), so the launcher is where the user lands
-            // with the block screen still over it — keep an app-block cover up on the launcher
-            // instead of tearing it down. It comes down on "Got it" or a real app switch. A
-            // genuine allowed app (non-launcher) still releases the cover as before.
-            if (isLauncherPkg(pkg) && overlayView != null && overlayIsAppBlock) return
             lastBlockedPkg = null
             removeBlockOverlay() // left the blocked app — take the cover down
             return
@@ -519,12 +513,6 @@ class BlockerAccessibilityService : AccessibilityService() {
         lastBlockedPkg = pkg
         lastBlockAt = now
         showBlockScreen(title = reason.title, message = reason.message, packageName = pkg, counterKey = pkg)
-        // Decisive block: shove the blocked app off-screen so nothing runs live behind the cover
-        // (the source of the flicker). The block screen then sits solidly over Home. HOME can be
-        // suppressed on some MIUI states — the cover stays up regardless, so it's never a gap.
-        // Only when the overlay is up: the Activity fallback (overlayView == null) already
-        // replaced the app on screen, and HOME would background our own block screen.
-        if (overlayView != null) performGlobalAction(GLOBAL_ACTION_HOME)
     }
 
     /**
