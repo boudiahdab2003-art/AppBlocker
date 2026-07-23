@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.92
+- Fixed the block screen flickering. When you open a blocked app, the block screen now stays put instead of flashing away and coming back. It sits solidly over the app and sends you to your home screen when you tap Got it.
+
 ## v1.91
 - Quick Block now has an Allowlist mode: instead of choosing what to block, choose the few apps you want to keep — everything else is blocked while a Quick Block, Timer or Pomodoro is running, and your home screen, phone, keyboard and Settings always stay usable. The Quick Block editor got an AppBlock-style redesign, with a full-screen Blocking-mode chooser and a tidy summary that opens Apps (and Websites & words) on their own screens. The AI Coach now works for everyone with nothing to set up — no more pasting a Gemini API key. And the block screen no longer shows twice on tablets after you tap Got it.
 
