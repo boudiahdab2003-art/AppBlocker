@@ -13,6 +13,10 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.94", "Jul 24, 2026", "Guide cards line up properly again", listOf(
+        "In the Scenarios guides and the Dopamine detox, the thinker's name and the headline next to it were laid out badly whenever the headline was too long for one line: the name dropped to the bottom line and left a big empty gap above it. Now they sit side by side when they fit, and the headline moves onto its own line under the name when it doesn't — which is what you'll see at larger font sizes.",
+        "The big number on the numbered rules and steps now sits beside the rule's title instead of floating in the middle of a long paragraph.",
+    )),
     VersionLog("1.93", "Jul 24, 2026", "Overnight schedules, restarts and updates now behave", listOf(
         "Schedules that cross midnight now follow the day you picked. A 22:00–06:00 schedule set for Monday runs from Monday night straight through to Tuesday morning — before, it stopped at midnight and instead blocked you early on Monday morning, which belonged to Sunday night.",
         "Timers, Pomodoro and Strict sessions now stay honest across a phone restart. The app remembers which boot a session was started in, so after a reboot it falls back to the calendar clock instead of trusting a stopwatch that reset to zero — a finished session can't come back to life, and a running one can't end early.",

@@ -3,8 +3,11 @@ package com.appblocker.ui
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -117,7 +120,11 @@ internal fun GuideCard(top: Dp, content: @Composable () -> Unit) {
     ) { content() }
 }
 
-/** A numbered rule. The numeral sits in a fixed-width column so every rule's text lines up. */
+/**
+ * A numbered rule. The numeral sits in a fixed-width column so every rule's text lines up, and
+ * beside the rule's TITLE rather than centred on the whole card — on a long rule (or a large font
+ * size) a centred numeral drifts into the middle of the paragraph.
+ */
 @Composable
 internal fun GuideRuleCard(number: Int, item: GuideItem, top: Dp) {
     val shape = RoundedCornerShape(20.dp)
@@ -126,7 +133,7 @@ internal fun GuideRuleCard(number: Int, item: GuideItem, top: Dp) {
             .background(MaterialTheme.colorScheme.surface)
             .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), shape)
             .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.Top,
     ) {
         Box(Modifier.width(46.dp)) {
             Text(number.toString().padStart(2, '0'), fontSize = 30.sp,
@@ -144,6 +151,7 @@ internal fun GuideRuleCard(number: Int, item: GuideItem, top: Dp) {
 }
 
 /** A truth/quote card — accent-gradient border sets it apart from the rules below it. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun GuideMarkCard(item: GuideItem, top: Dp) {
     val shape = RoundedCornerShape(20.dp)
@@ -161,14 +169,20 @@ internal fun GuideMarkCard(item: GuideItem, top: Dp) {
             .background(MaterialTheme.colorScheme.surface)
             .border(accentBorder, shape).padding(16.dp),
     ) {
-        Row(verticalAlignment = Alignment.Bottom) {
+        // FlowRow, not Row: the name and the headline share a line when they fit, and the
+        // headline drops onto its own line underneath when they don't. A plain Row anchored the
+        // name to the LAST line of a wrapped headline, leaving a hole beside the first lines —
+        // very visible at large font/display sizes.
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
             Text(item.term.orEmpty(), fontSize = 22.sp, fontFamily = FontFamily.Serif,
                 fontStyle = FontStyle.Italic, style = TextStyle(brush = AppGradients.accent))
-            Spacer(Modifier.width(10.dp))
             Text(item.title.uppercase(), style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Black, letterSpacing = 1.5.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 3.dp))
+                modifier = Modifier.align(Alignment.Bottom).padding(bottom = 3.dp))
         }
         Text(item.body, style = MaterialTheme.typography.bodyMedium, lineHeight = 21.sp,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
@@ -186,7 +200,9 @@ internal fun GuideStepsCard(items: List<GuideItem>) {
                     .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)))
             }
             Row(
-                verticalAlignment = Alignment.CenterVertically,
+                // Top, not centre: the step number belongs beside the step's title, not adrift
+                // in the middle of a long one (which is what large font sizes produce).
+                verticalAlignment = Alignment.Top,
                 modifier = Modifier.padding(
                     top = if (i == 0) 0.dp else 12.dp,
                     bottom = if (i == items.lastIndex) 0.dp else 12.dp,
