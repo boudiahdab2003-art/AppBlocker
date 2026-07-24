@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.94
+- Fixes how the guide cards look: the thinker's name and the headline beside it no longer leave a big empty gap when the headline is too long for one line, and the big number on numbered rules now sits next to the rule's title instead of floating in the middle.
+
 ## v1.93
 - Overnight schedules now follow the day you picked, timers and Strict sessions stay correct after a restart, and a Strict session started right after an update is no longer cancelled. Blocking is also harder to knock over: an unexpected error can't take it down any more, and if your phone kills it in the background the app now notices and tells you.
 
