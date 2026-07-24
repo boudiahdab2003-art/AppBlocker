@@ -172,7 +172,7 @@ fun BlockingScreen(
                                         tint = Color.White, modifier = Modifier.size(16.dp))
                                 }
                                 Spacer(Modifier.width(10.dp))
-                                Text("${session.label} ${fmtClock(session.remainingMillis)}",
+                                Text("${session.label} ${fmtCountdown(session.remainingMillis)}",
                                     style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary)
                             }

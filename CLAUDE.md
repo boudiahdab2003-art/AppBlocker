@@ -6,8 +6,12 @@ enforcement). Owner is non-technical; explain things in plain language.
 ## Workflow (established)
 
 - **No local builds** in cloud sessions (Google Maven is blocked). Compile-verify by
-  pushing: the **"Build check"** GitHub Actions workflow runs `assembleGithubDebug`
-  on every push.
+  pushing: the **"Build check"** GitHub Actions workflow runs the unit tests and
+  `assembleGithubDebug` on every push.
+- On the owner's PC local builds DO work: `JAVA_HOME=C:\Program Files\Android\Android Studio\jbr`
+  with the bundled Gradle (`_tools\gradle\gradle-8.9\bin\gradle.bat -p . :app:assembleGithubDebug
+  :app:testGithubDebugUnitTest`) — there is no gradle wrapper, and the `github`/`play` flavors
+  make bare `assembleDebug` ambiguous. Test on the `appblocker_test` emulator.
 - **Releases are cloud-published**: merge to `master`, then trigger the
   **"Publish release"** workflow (`publish.yml`) with a plain-language release note —
   it bumps the version, builds the signed APK (key in repo secrets, fingerprint

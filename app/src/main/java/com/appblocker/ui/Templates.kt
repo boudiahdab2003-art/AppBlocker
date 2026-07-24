@@ -73,14 +73,6 @@ fun QuickOption.turnOn(context: Context) = when (this) {
     QuickOption.UNSUPPORTED -> SettingsStore.setBlockUnsupportedBrowsers(context, true)
 }
 
-private fun daysText(mask: Int): String {
-    if (mask and 0b1111111 == 0b1111111) return "Every day"
-    if (mask == 0b0111110) return "Mon–Fri"
-    val labels = listOf("Su", "Mo", "Tu", "We", "Th", "Fr", "Sa")
-    return (0..6).filter { (mask shr it) and 1 == 1 }.joinToString(" ") { labels[it] }
-        .ifEmpty { "No days" }
-}
-
 private val SOCIAL = listOf(
     "com.instagram.android" to "Instagram",
     "com.zhiliaoapp.musically" to "TikTok",

@@ -98,7 +98,7 @@ fun StrictModeScreen(
 
         if (active) {
             Text(
-                fmtDuration(remaining),
+                fmtCountdown(remaining, padMinutes = true),
                 fontSize = 56.sp, fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
             )
@@ -269,13 +269,6 @@ private fun humanDuration(minutes: Int): String {
 private fun endsAt(minutes: Int): String {
     val end = Date(System.currentTimeMillis() + minutes * 60_000L)
     return SimpleDateFormat("EEE, MMM d 'at' h:mm a", Locale.getDefault()).format(end)
-}
-
-/** Countdown as H:MM:SS once an hour or longer, else MM:SS. */
-private fun fmtDuration(ms: Long): String {
-    val total = (ms / 1000).coerceAtLeast(0)
-    val h = total / 3600; val m = (total % 3600) / 60; val s = total % 60
-    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%02d:%02d".format(m, s)
 }
 
 /** One-line summary of what Strict Mode will lock. */

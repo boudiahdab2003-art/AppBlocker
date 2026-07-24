@@ -200,10 +200,10 @@ fun KeywordsScreen(
                             Text(
                                 if (offReady) {
                                     "You can turn the pack off now — tap the switch. This " +
-                                        "unlock expires in ${fmtHm(offRequestAt + OFF_DELAY_MS + OFF_WINDOW_MS - now)}."
+                                        "unlock expires in ${fmtHoursMinutes(offRequestAt + OFF_DELAY_MS + OFF_WINDOW_MS - now)}."
                                 } else {
                                     "Turn-off requested. The pack keeps protecting you for " +
-                                        "another ${fmtHm(offUnlockAt - now)}."
+                                        "another ${fmtHoursMinutes(offUnlockAt - now)}."
                                 },
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -256,12 +256,6 @@ fun KeywordsScreen(
  *  window to do it in afterwards — miss it and the request expires, gate and all. */
 private const val OFF_DELAY_MS = 24 * 60 * 60_000L
 private const val OFF_WINDOW_MS = 24 * 60 * 60_000L
-
-/** "23h 40m" / "35m" for countdown rows (rounded up so it never shows 0m while pending). */
-private fun fmtHm(ms: Long): String {
-    val m = (ms.coerceAtLeast(0L) + 59_999) / 60_000
-    return if (m >= 60) "${m / 60}h ${m % 60}m" else "${m}m"
-}
 
 /** Length of the random paragraph you must type, and the wait before Confirm unlocks. */
 private const val CHALLENGE_LEN = 60
