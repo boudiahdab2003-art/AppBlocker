@@ -59,18 +59,17 @@ try {
     # --- 3. Build the signed app --------------------------------------------------
     Step 3 "Building the app (this can take a minute or two)..."
     $env:JAVA_HOME = $Jbr
-    # Checks first, and deliberately after the version bump: one of them makes sure the in-app
-    # "What's new" list has an entry for the version being released, so nothing ships without
-    # its release note (or with a failing test). Nothing has been committed at this point.
-    & $GradleBat -p $Repo :app:testGithubDebugUnitTest
+    # Checks run first (Gradle stops on a failure), deliberately after the version bump: one of
+    # them makes sure the in-app "What's new" list has an entry for the version being released,
+    # so nothing ships without its release note. Nothing has been committed at this point.
+    # Both in one invocation, against the release variant, so the app compiles once — not once
+    # for a debug build that gets thrown away and again for the real one.
+    & $GradleBat -p $Repo :app:testGithubReleaseUnitTest :app:assembleGithubRelease
     if ($LASTEXITCODE -ne 0) {
         # Put the version number back, so running Publish again doesn't skip a number.
         [System.IO.File]::WriteAllText($GradleFile, $originalGradle)
-        Die "A check failed (see above). If it's ChangelogTest, add a VersionLog entry for $newName in app/src/main/java/com/appblocker/data/Changelog.kt, then run Publish again."
+        Die "The checks or the build failed (see above). If it's ChangelogTest, add a VersionLog entry for $newName in app/src/main/java/com/appblocker/data/Changelog.kt, then run Publish again."
     }
-    Ok "Checks passed"
-    & $GradleBat -p $Repo assembleGithubRelease
-    if ($LASTEXITCODE -ne 0) { Die "The build failed (see the messages above)." }
     if (-not (Test-Path $ApkBuilt)) { Die "The build finished but no APK was produced." }
     Ok "Built app-github-release.apk"
 

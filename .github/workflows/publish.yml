@@ -96,11 +96,13 @@ jobs:
       # entry for the version being released, so a release with no entry stops here — before
       # anything is committed, tagged, pushed or uploaded. (The bump so far exists only in this
       # runner's checkout.) It also means a release can never ship failing tests.
-      - name: Run unit tests
-        run: gradle -p . :app:testGithubDebugUnitTest
-
-      - name: Build signed APK
-        run: gradle -p . assembleGithubRelease
+      #
+      # Tests run against the RELEASE variant, in the same Gradle invocation as the APK, so the
+      # app is compiled once instead of twice — testing debug and then building release used to
+      # cost a full extra compile (~90s) for a variant that was thrown away. Gradle still runs
+      # the tests first and stops on failure.
+      - name: Run unit tests and build the signed APK
+        run: gradle -p . :app:testGithubReleaseUnitTest :app:assembleGithubRelease
 
       - name: Verify release signature
         run: |
