@@ -69,6 +69,8 @@ import com.appblocker.data.AttemptCounter
 import com.appblocker.data.PinStore
 import com.appblocker.data.SettingsStore
 import com.appblocker.service.AccessibilityUtil
+import com.appblocker.service.ProtectionState
+import com.appblocker.service.ProtectionWatchdog
 import com.appblocker.ui.theme.AppGradients
 import com.appblocker.ui.theme.LocalThemeController
 import com.appblocker.ui.theme.softGlow
@@ -469,9 +471,15 @@ private fun RenameDialog(initial: String, onSet: (String) -> Unit, onDismiss: ()
     )
 }
 
-/** Whether the core blocking permissions (accessibility + overlay) are both granted. */
+/**
+ * Whether blocking is genuinely working: the core permissions (accessibility + overlay) are
+ * granted AND the watcher is still alive. A service the phone killed hours ago still reports as
+ * "enabled", so the health check is what makes this row honest — see ProtectionWatchdog.state.
+ */
 private fun protectionOk(context: Context): Boolean =
-    AccessibilityUtil.isEnabled(context) && Settings.canDrawOverlays(context)
+    AccessibilityUtil.isEnabled(context) &&
+        Settings.canDrawOverlays(context) &&
+        ProtectionWatchdog.state(context) == ProtectionState.OK
 
 private fun shareApp(context: Context) {
     val text = "Block distracting apps & websites with AppBlocker:\n" +

@@ -16,10 +16,13 @@ import com.appblocker.R
 import com.appblocker.data.SettingsStore
 import java.util.concurrent.TimeUnit
 
-/** Alerts the user if AppBlocker's Accessibility service gets silently turned off. */
+/** Alerts the user if AppBlocker's Accessibility service gets silently turned off — or stops
+ *  responding while still switched on. */
 object ProtectionNotifier {
     private const val CHANNEL_ID = "protection_off"
     private const val NOTIF_ID = 1001
+    // Its own id so the "stalled" alert can't silently replace (or be replaced by) the "off" one.
+    private const val NOTIF_ID_STALLED = 1002
 
     // Once shown, don't nag again until this much time has passed while still disabled.
     private val MIN_RENOTIFY_MS = TimeUnit.HOURS.toMillis(4)
@@ -76,6 +79,38 @@ object ProtectionNotifier {
         manager.notify(NOTIF_ID, notification)
         // Stamp the cooldown only after actually posting, so a failed post never suppresses a
         // later real one.
+        SettingsStore.setProtectionLastNotifiedAt(context, now)
+    }
+
+    /**
+     * Posts the "blocking stopped responding" alert: the service is still switched on, but hasn't
+     * seen an event in hours of active phone use — normally an OEM battery manager having killed
+     * it. Turning accessibility off and on again revives it, which is where the alert leads.
+     *
+     * Shares the throttle and channel with [notifyDisabled] (they're the same concern to the user:
+     * blocking isn't working) but uses its own notification id so one can't silently replace the
+     * other.
+     */
+    @SuppressLint("MissingPermission") // guarded by the areNotificationsEnabled() check below.
+    fun notifyStalled(context: Context, force: Boolean = false) {
+        val manager = NotificationManagerCompat.from(context)
+        if (!manager.areNotificationsEnabled()) return
+
+        val now = System.currentTimeMillis()
+        if (!force) {
+            val last = SettingsStore.protectionLastNotifiedAt(context)
+            if (now - last < MIN_RENOTIFY_MS) return
+        }
+
+        val notification = build(
+            context,
+            title = "Blocking stopped responding",
+            collapsed = "Tap to switch it off and on again",
+            bannerHeadline = "BLOCKING STALLED",
+            bannerSubtitle = "Your phone may have stopped it",
+            action = "Fix it",
+        )
+        manager.notify(NOTIF_ID_STALLED, notification)
         SettingsStore.setProtectionLastNotifiedAt(context, now)
     }
 
@@ -140,7 +175,11 @@ object ProtectionNotifier {
             .build()
     }
 
+    /** Clears both alerts — blocking being healthy means neither one still applies. */
     fun cancel(context: Context) {
-        NotificationManagerCompat.from(context).cancel(NOTIF_ID)
+        NotificationManagerCompat.from(context).apply {
+            cancel(NOTIF_ID)
+            cancel(NOTIF_ID_STALLED)
+        }
     }
 }

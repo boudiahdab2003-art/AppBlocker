@@ -37,12 +37,14 @@ import com.appblocker.data.QuickSession
 import com.appblocker.data.SOCIAL_DOMAINS
 import com.appblocker.data.Schedule
 import com.appblocker.data.ScheduleType
+import com.appblocker.data.ServiceHealth
 import com.appblocker.data.SessionClock
 import com.appblocker.data.SettingsStore
 import com.appblocker.data.UnlockCounter
 import com.appblocker.data.UpdatePause
 import com.appblocker.ui.BlockScreenActivity
 import java.util.Calendar
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -62,7 +64,16 @@ import kotlinx.coroutines.withContext
  */
 class BlockerAccessibilityService : AccessibilityService() {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    // The handler is the safety net for the background scans: without it, an exception inside a
+    // launched coroutine reaches the thread's default handler and kills the process — taking all
+    // blocking with it. See guarded() in Guarded.kt.
+    private val scope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Default +
+            CoroutineExceptionHandler { _, t ->
+                Log.w(TAG, "background scan failed — blocking continues", t)
+                runCatching { ServiceHealth.recordError(applicationContext, "scan", t) }
+            }
+    )
     private val filter by lazy { WebContentFilter.get(applicationContext) }
 
     @Volatile private var rules: Map<String, AppRule> = emptyMap()
@@ -114,9 +125,11 @@ class BlockerAccessibilityService : AccessibilityService() {
     // can never resurrect after a reboot with a wrong wall clock. Re-checks at fire time:
     // only a genuinely expired session is cleared — Strict stays un-stoppable while active.
     private val focusClearRunnable = Runnable {
-        if (strictRemaining() <= 0L && (focusWallEnd > 0L || focusRealtimeEnd > 0L)) {
-            scope.launch {
-                BlockerDatabase.get(applicationContext).focusDao().set(FocusState(id = 0))
+        guarded(applicationContext, "focusClear") {
+            if (strictRemaining() <= 0L && (focusWallEnd > 0L || focusRealtimeEnd > 0L)) {
+                scope.launch {
+                    BlockerDatabase.get(applicationContext).focusDao().set(FocusState(id = 0))
+                }
             }
         }
     }
@@ -170,17 +183,21 @@ class BlockerAccessibilityService : AccessibilityService() {
     // debounce cap how long a never-quiet page can keep postponing the scan.
     private var webScanQueuedAt = 0L
     private val webScanRunnable = Runnable {
-        webScanQueuedAt = 0L
-        webScanJob?.cancel()
-        webScanJob = scope.launch { scanWebContent() }
+        guarded(applicationContext, "webScan") {
+            webScanQueuedAt = 0L
+            webScanJob?.cancel()
+            webScanJob = scope.launch { scanWebContent() }
+        }
     }
 
     // YouTube Shorts: when on, cover the Shorts player but leave the rest of YouTube usable.
     @Volatile private var shortsScanJob: Job? = null
     private var shortsCovering = false
     private val shortsScanRunnable = Runnable {
-        shortsScanJob?.cancel()
-        shortsScanJob = scope.launch { scanShorts() }
+        guarded(applicationContext, "shortsScan") {
+            shortsScanJob?.cancel()
+            shortsScanJob = scope.launch { scanShorts() }
+        }
     }
 
     // Periodic re-check of the app the user is sitting in, so time-based conditions take
@@ -188,7 +205,9 @@ class BlockerAccessibilityService : AccessibilityService() {
     // schedule starting (or ending — the same tick releases a stale block overlay), a
     // Pomodoro break starting/ending, a Timer or Strict session running out.
     private val recheckRunnable = object : Runnable {
-        override fun run() {
+        override fun run() = guarded(applicationContext, "recheck") { runGuarded() }
+
+        private fun runGuarded() {
             var pkg = lastForegroundPkg ?: return
             // Gesture-nav Home can arrive without a window-state event, leaving the cache on
             // the app the user already left — reconcile with the real active window first so
@@ -348,9 +367,18 @@ class BlockerAccessibilityService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        // Everything below runs inside the safety net: an exception escaping this callback would
+        // kill the process and end ALL blocking until the user noticed. See Guarded.kt.
+        guarded(applicationContext, "event") { handleEvent(event) }
+    }
+
+    private fun handleEvent(event: AccessibilityEvent?) {
         event ?: return
         val pkg = event.packageName?.toString()
         if (pkg == packageName) return // never act on ourselves
+        // Proof of life for the watchdog: "switched on" is not the same as "still working".
+        // Self-throttled to one write a minute (ServiceHealth), so this costs a comparison.
+        ServiceHealth.recordEvent(applicationContext)
 
         when (event.eventType) {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ->
@@ -585,109 +613,50 @@ class BlockerAccessibilityService : AccessibilityService() {
 
     private fun shouldBlock(pkg: String): Boolean = blockReason(pkg) != null
 
-    /** Why an app is blocked right now — the block screen's title kicker + short human message. */
-    private data class BlockReason(val title: String, val message: String)
-
-    /** The reason [pkg] is blocked right now, or null when it's allowed. Checked in order —
-     *  Strict/Quick Block, then schedules (first match wins), then unsupported browsers. */
+    /**
+     * Gathers the live state the decision needs and hands it to [decideBlock], which holds the
+     * rules themselves (and is unit-tested — see BlockDecisionTest). Everything expensive is a
+     * lambda, so a package with no rules and no schedules costs nothing beyond the flags.
+     */
     private fun blockReason(pkg: String): BlockReason? {
-        // After an update: nothing blocks until the user reactivates (the update also ends
-        // any Strict session — see UpdatePause).
-        if (updatePauseActive()) return null
-        // Keyword lockout: a blocked word was caught in this app recently, so the whole app
-        // stays locked — no page inside it is reachable until the lockout runs out.
-        val lockLeft = keywordLockoutRemaining(pkg)
-        if (lockLeft > 0L) {
-            val mins = (lockLeft + 59_999L) / 60_000L
-            val w = keywordLockoutWord(pkg)
-            return BlockReason(
-                "Locked",
-                if (w != null) "“$w” was found here. Locked for $mins more min."
-                else "A blocked word was found here. Locked for $mins more min.",
-            )
-        }
-        val now = System.currentTimeMillis()
-        val strict = strictRemaining() > 0L
-
-        // Quick Block — enforced when Strict, or a running Timer/Pomodoro says "block now",
-        // or (no session) when not paused. Same "is it enforcing right now" gate in both modes.
-        val rule = rules[pkg]
         val session = QuickSession.state(this)
-        val quickOn = strict || if (session.active) session.blockingNow else !SettingsStore.quickBlockPaused(this)
-
-        if (allowlistMode) {
-            // Allowlist: block anything that isn't explicitly allowed and isn't an essential.
-            if (quickOn && !isEssentialAllowed(pkg) && rule?.isAllowed != true) {
-                return BlockReason(
-                    if (strict) "Strict Mode" else "Blocked",
-                    "Only your allowed apps work right now.",
-                )
-            }
-            // Per-app HARD/SCHEDULE/LIMIT modes don't apply in Allowlist mode.
-        } else if (rule != null && rule.isBlocked) {
-            if (strict) { // Strict Mode blocks every chosen app outright.
-                return BlockReason("Strict Mode", "Blocked until your Strict session ends.")
-            }
-            if (quickOn) when (rule.mode) {
-                BlockMode.HARD, BlockMode.SCHEDULE ->
-                    return BlockReason("Blocked", "Quick Block is on for this app.")
-                BlockMode.LIMIT ->
-                    if (rule.dailyLimitMinutes >= 0 &&
-                        UsageTracker.usedMinutesToday(this, pkg) >= rule.dailyLimitMinutes
-                    ) return BlockReason(
-                        "Daily limit reached",
-                        if (rule.dailyLimitMinutes > 0)
-                            "You've used your ${rule.dailyLimitMinutes} min for today."
-                        else "This app is blocked for today.",
-                    )
-            }
-        }
-
-        // Schedules — block when the schedule's condition is currently met. First match wins.
+        val strict = strictRemaining() > 0L
+        val now = System.currentTimeMillis()
         if (DEBUG) Log.d(TAG, "blockReason $pkg schedules=${schedules.size} opens=${LaunchCounter.opensToday(this, pkg)}")
-        for (s in schedules) {
-            if (!s.enabled || pkg !in s.packages) continue
-            val reason = when (s.type) {
-                ScheduleType.TIME -> if (inTimeWindow(s, now)) BlockReason(
-                    "Blocked by schedule",
-                    "${schedLabel(s)} is on until ${hm(s.endMinutes)}.",
-                ) else null
-                ScheduleType.USAGE_LIMIT -> if (
-                    UsageTracker.usedMinutesToday(this, pkg) >= s.limitMinutes
-                ) BlockReason(
-                    "Daily limit reached",
-                    "${s.limitMinutes} min used today — the limit set by ${schedLabel(s)}.",
-                ) else null
-                ScheduleType.LAUNCH_COUNT -> if (
-                    LaunchCounter.opensToday(this, pkg) >= s.limitCount
-                ) BlockReason(
-                    "Open limit reached",
-                    "Opened ${s.limitCount} times today — the limit set by ${schedLabel(s)}.",
-                ) else null
-                ScheduleType.WIFI -> if (onMatchingWifi(s.wifiSsid)) BlockReason(
-                    "Blocked on this Wi-Fi",
-                    if (s.wifiSsid.isBlank()) "This app is blocked while you're on Wi-Fi."
-                    else "This app is blocked on “${s.wifiSsid}”.",
-                ) else null
-                ScheduleType.LOCATION -> if (inLocation(s)) BlockReason(
-                    "Blocked at this location",
-                    "This app is blocked here by ${schedLabel(s)}.",
-                ) else null
-            }
-            if (reason != null) return reason
-        }
-
-        // Unsupported browsers — if web filtering is on, block browsers we can't read so they
-        // can't be used to bypass website/keyword filtering (e.g. Brave). Chrome is filterable.
-        if (SettingsStore.blockUnsupportedBrowsers(this) &&
-            (userKeywords.isNotEmpty() || adultPackOn || SettingsStore.blockAdult(this)) &&
-            pkg in browserPackages && pkg !in SUPPORTED_BROWSERS
-        ) return BlockReason(
-            "Browser blocked",
-            "This browser can't be filtered, so it's blocked while word blocking is on.",
+        return decideBlock(
+            BlockInputs(
+                pkg = pkg,
+                updatePaused = updatePauseActive(),
+                lockoutRemainingMs = keywordLockoutRemaining(pkg),
+                lockoutWord = keywordLockoutWord(pkg),
+                strict = strict,
+                // Enforcing when Strict, or a running Timer/Pomodoro says "block now", or
+                // (no session) when not paused. Same gate in Blocklist and Allowlist mode.
+                quickEnforcing = strict ||
+                    if (session.active) session.blockingNow else !SettingsStore.quickBlockPaused(this),
+                rule = rules[pkg],
+                allowlistMode = allowlistMode,
+                isEssential = { isEssentialAllowed(pkg) },
+                schedules = schedules,
+                isUnsupportedBrowser = pkg in browserPackages && pkg !in SUPPORTED_BROWSERS,
+                unsupportedBrowserBlockingActive = {
+                    SettingsStore.blockUnsupportedBrowsers(this) &&
+                        (userKeywords.isNotEmpty() || adultPackOn || SettingsStore.blockAdult(this))
+                },
+                usedMinutesToday = { UsageTracker.usedMinutesToday(this, it) },
+                opensToday = { LaunchCounter.opensToday(this, it) },
+                scheduleConditionMet = { s ->
+                    when (s.type) {
+                        ScheduleType.TIME -> inTimeWindow(s, now)
+                        ScheduleType.WIFI -> onMatchingWifi(s.wifiSsid)
+                        ScheduleType.LOCATION -> inLocation(s)
+                        else -> false // usage/launch limits are counted, not conditions
+                    }
+                },
+                scheduleLabel = ::schedLabel,
+                hourMinuteLabel = ::hm,
+            )
         )
-
-        return null
     }
 
     /** "your “Work” schedule", or just "your schedule" when it has no name. */
