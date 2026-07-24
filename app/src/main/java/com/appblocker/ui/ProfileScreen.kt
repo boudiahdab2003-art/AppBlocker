@@ -78,7 +78,6 @@ fun ProfileScreen(
     strictActive: Boolean = false,
     onOpenPermissions: () -> Unit = {},
     onOpenChangelog: () -> Unit = {},
-    onOpenKeywords: () -> Unit = {},
     onOpenInstructions: () -> Unit = {},
     onOpenDetox: () -> Unit = {},
     onOpenScenarios: () -> Unit = {},

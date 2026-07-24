@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.filled.Apps
@@ -24,7 +25,6 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Flight
 import androidx.compose.material.icons.filled.Forum
-import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Palette
@@ -143,7 +143,7 @@ fun categoryIcon(category: AppCategory): ImageVector = when (category) {
     AppCategory.SOCIAL -> Icons.Filled.Forum
     AppCategory.ENTERTAINMENT -> Icons.Filled.Movie
     AppCategory.GAMES -> Icons.Filled.SportsEsports
-    AppCategory.NEWS_BOOKS -> Icons.Filled.MenuBook
+    AppCategory.NEWS_BOOKS -> Icons.AutoMirrored.Filled.MenuBook
     AppCategory.SHOPPING_FOOD -> Icons.Filled.ShoppingCart
     AppCategory.CREATIVITY -> Icons.Filled.Palette
     AppCategory.TRAVEL -> Icons.Filled.Flight

@@ -303,7 +303,6 @@ private fun MainScaffold(
                     strictActive = strictActive,
                     onOpenPermissions = onOpenPermissions,
                     onOpenChangelog = onOpenChangelog,
-                    onOpenKeywords = onOpenKeywords,
                     onOpenInstructions = onOpenInstructions,
                     onOpenDetox = onOpenDetox,
                     onOpenScenarios = onOpenScenarios,

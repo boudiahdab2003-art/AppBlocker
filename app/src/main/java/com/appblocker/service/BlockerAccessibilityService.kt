@@ -1229,7 +1229,8 @@ class BlockerAccessibilityService : AccessibilityService() {
         // Same guard for a JUST-dismissed cover: Close goes HOME, but the blocked app stays
         // on screen for the transition and would re-block/re-count immediately.
         if (dismissSuppressed(counterKey)) return
-        val (today, total) = AttemptCounter.record(applicationContext, counterKey)
+        // Recorded for the counter's own sake — the cover reads the running total itself.
+        AttemptCounter.record(applicationContext, counterKey)
         overlayCounterKey = counterKey
         // Only app-rule blocks pass a package; web/purchase/Shorts covers are managed by
         // their own scans and the periodic re-check must leave them alone.
@@ -1237,7 +1238,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         val label = packageName?.let { loadLabel(it) }
         val msg = message ?: label?.let { "$it is blocked" } ?: "This is blocked right now."
         // Instant overlay; fall back to the Activity only if the overlay can't be drawn.
-        if (!showBlockOverlay(packageName, title, msg, today, total)) {
+        if (!showBlockOverlay(packageName, title, msg)) {
             startActivity(
                 Intent(this, BlockScreenActivity::class.java).apply {
                     addFlags(
@@ -1248,8 +1249,6 @@ class BlockerAccessibilityService : AccessibilityService() {
                     putExtra(BlockScreenActivity.EXTRA_TITLE, title)
                     if (message != null) putExtra(BlockScreenActivity.EXTRA_MESSAGE, message)
                     if (packageName != null) putExtra(BlockScreenActivity.EXTRA_PACKAGE, packageName)
-                    putExtra(BlockScreenActivity.EXTRA_TODAY, today)
-                    putExtra(BlockScreenActivity.EXTRA_TOTAL, total)
                 }
             )
         }
@@ -1261,7 +1260,7 @@ class BlockerAccessibilityService : AccessibilityService() {
 
     /** Draws/updates the full-screen block overlay instantly. Returns false if it can't. */
     private fun showBlockOverlay(
-        packageName: String?, title: String, message: String, today: Int, total: Int,
+        packageName: String?, title: String, message: String,
     ): Boolean = try {
         val v = overlayView ?: (preInflatedOverlay ?: newOverlayView()).also {
             preInflatedOverlay = null

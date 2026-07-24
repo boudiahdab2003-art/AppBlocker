@@ -25,10 +25,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.HourglassEmpty
-import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Schedule
@@ -79,7 +79,6 @@ fun BlockingScreen(
     scheduleVm: ScheduleViewModel = viewModel(),
     focusVm: FocusViewModel = viewModel(),
     updateVm: UpdateViewModel = viewModel(),
-    appsVm: AppListViewModel = viewModel(),
 ) {
     val updateState by updateVm.state.collectAsState()
     val context = LocalContext.current
@@ -254,7 +253,7 @@ fun BlockingScreen(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null,
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }

@@ -111,8 +111,6 @@ class BlockScreenActivity : ComponentActivity() {
         const val EXTRA_PACKAGE = "package"
         const val EXTRA_TITLE = "title"
         const val EXTRA_MESSAGE = "message"
-        const val EXTRA_TODAY = "today"
-        const val EXTRA_TOTAL = "total"
     }
 }
 
