@@ -1,0 +1,168 @@
+package com.appblocker.service
+
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.LinearGradient
+import android.graphics.Outline
+import android.graphics.PixelFormat
+import android.graphics.Shader
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
+import android.util.TypedValue
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewOutlineProvider
+import android.view.WindowManager
+import android.widget.Button
+import android.widget.ImageView
+import android.widget.TextView
+import com.appblocker.R
+import com.appblocker.data.AppIcons
+import com.appblocker.data.AttemptCounter
+import com.appblocker.data.Quotes
+
+/**
+ * The full-screen "blocked" cover: a window drawn straight over the offending app by
+ * [BlockerAccessibilityService], which is instant, unlike starting an Activity (the Activity
+ * in [com.appblocker.ui.BlockScreenActivity] is only the fallback when the overlay can't be
+ * drawn).
+ *
+ * This class owns the window mechanics — inflating, attaching, filling in the content and
+ * tearing down — so the service file can stay about deciding *when* to block. What happens
+ * when the user presses "Got it" stays in the service (it has to reset the dismiss
+ * bookkeeping and send the phone Home), handed in here as `onClose`.
+ *
+ * The detached view is kept after removal and reused for the next block: every field is
+ * rewritten on show, and re-inflating cost a visible beat before the cover landed.
+ */
+internal class BlockOverlay(private val context: Context) {
+
+    private val windowManager by lazy {
+        context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+    }
+    private val handler = Handler(Looper.getMainLooper())
+
+    private var view: View? = null
+    private var preInflated: View? = null
+
+    /** True while a cover is attached. */
+    val isShowing: Boolean get() = view != null
+
+    /** True when the visible cover is a whole-app block (not a web/word/purchase/Shorts cover). */
+    var isAppBlock = false
+        private set
+
+    /** The attempt-counter key the visible cover was raised for, or null. */
+    var counterKey: String? = null
+        private set
+
+    /**
+     * Inflates the cover ahead of time (without attaching it) so the first block of a session
+     * lands instantly instead of paying for inflation on the hot path.
+     */
+    fun warmUp(onClose: () -> Unit) {
+        if (view == null && preInflated == null) preInflated = newView(onClose)
+    }
+
+    /** Draws/updates the cover instantly. Returns false if it can't be drawn. */
+    fun show(
+        packageName: String?,
+        title: String,
+        message: String,
+        counterKey: String,
+        isAppBlock: Boolean,
+        onClose: () -> Unit,
+        iconLoader: (String) -> Bitmap?,
+    ): Boolean = try {
+        this.counterKey = counterKey
+        this.isAppBlock = isAppBlock
+        val v = view ?: (preInflated ?: newView(onClose)).also {
+            preInflated = null
+            val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            else @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE
+            val params = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT,
+                type,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                PixelFormat.TRANSLUCENT,
+            )
+            windowManager.addView(it, params)
+            view = it
+        }
+        v.findViewById<TextView>(R.id.overlay_title).text = title
+        v.findViewById<TextView>(R.id.overlay_subtitle).text = message
+        // Masthead: every dodged open counts as ~3 minutes of life back.
+        v.findViewById<TextView>(R.id.overlay_stat_number).text =
+            (AttemptCounter.totalToday(context) * MINUTES_PER_DODGE).toString()
+        // Fresh motivation every time the cover appears (the view is reused across blocks).
+        val quote = Quotes.random()
+        v.findViewById<TextView>(R.id.overlay_quote).apply {
+            text = quote.text
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, Quotes.sizeSpFor(quote.text))
+        }
+        v.findViewById<TextView>(R.id.overlay_quote_author).apply {
+            text = "— ${quote.author}"
+            // Brand blue→violet sweep across the author line.
+            val width = paint.measureText(text.toString()).coerceAtLeast(1f)
+            paint.shader = LinearGradient(
+                0f, 0f, width, 0f,
+                0xFF2E7BFF.toInt(), 0xFF7C5CFF.toInt(), Shader.TileMode.CLAMP,
+            )
+        }
+        val iconView = v.findViewById<ImageView>(R.id.overlay_icon)
+        // Our own mark must be the launcher icon the user actually picked (icon switcher),
+        // not the hardcoded default that stops matching the moment they change it.
+        iconView.setImageResource(AppIcons.current(context).previewRes)
+        if (packageName != null) {
+            // The icon can need a PackageManager decode (cache miss) — keep it off the
+            // first frame so the cover lands instantly; guard against a torn-down cover.
+            handler.post {
+                if (view == v) iconLoader(packageName)?.let(iconView::setImageBitmap)
+            }
+        }
+        true
+    } catch (e: Exception) {
+        Log.w(TAG, "overlay failed, falling back to activity", e)
+        false
+    }
+
+    /** Detaches the cover (keeping the view for reuse). Safe to call when nothing is up. */
+    fun remove() {
+        view?.let {
+            runCatching { windowManager.removeView(it) }
+            preInflated = it
+        }
+        view = null
+        counterKey = null
+    }
+
+    /** Inflates the cover and wires its Close button (not yet attached). */
+    private fun newView(onClose: () -> Unit): View =
+        LayoutInflater.from(context).inflate(R.layout.overlay_block, null).also {
+            it.findViewById<Button>(R.id.overlay_close).setOnClickListener { onClose() }
+            // Clip the footer icon to a circle — the icon-art PNGs are full-bleed squares,
+            // and this matches how the icon picker (and most launchers) present icons.
+            it.findViewById<ImageView>(R.id.overlay_icon).apply {
+                clipToOutline = true
+                outlineProvider = object : ViewOutlineProvider() {
+                    override fun getOutline(view: View, outline: Outline) {
+                        outline.setOval(0, 0, view.width, view.height)
+                    }
+                }
+            }
+        }
+
+    private companion object {
+        const val TAG = "AppBlocker"
+
+        // Average minutes of scrolling one dodged open would have cost — powers the
+        // "minutes reclaimed today" masthead on the cover.
+        const val MINUTES_PER_DODGE = 3
+    }
+}

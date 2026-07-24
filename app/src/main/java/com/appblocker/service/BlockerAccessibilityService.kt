@@ -8,37 +8,22 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
-import android.graphics.LinearGradient
-import android.graphics.Outline
-import android.graphics.PixelFormat
-import android.graphics.Shader
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
-import android.net.Uri
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
-import android.util.TypedValue
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewOutlineProvider
-import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
-import android.view.accessibility.AccessibilityWindowInfo
-import android.widget.Button
-import android.widget.ImageView
-import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
 import com.appblocker.R
-import com.appblocker.data.AppIcons
 import com.appblocker.data.AppRule
 import com.appblocker.data.AttemptCounter
 import com.appblocker.data.BlockMode
@@ -49,7 +34,6 @@ import com.appblocker.data.FocusState
 import com.appblocker.data.InstalledAppsRepository
 import com.appblocker.data.LaunchCounter
 import com.appblocker.data.QuickSession
-import com.appblocker.data.Quotes
 import com.appblocker.data.SOCIAL_DOMAINS
 import com.appblocker.data.Schedule
 import com.appblocker.data.ScheduleType
@@ -93,7 +77,7 @@ class BlockerAccessibilityService : AccessibilityService() {
     @Volatile private var schedules: List<Schedule> = emptyList()
     // Browser packages installed on the device (for "Block unsupported browsers").
     @Volatile private var browserPackages: Set<String> = emptySet()
-    // Home-screen (launcher) apps — never keyword-scanned, see findLauncherPackages().
+    // Home-screen (launcher) apps — never keyword-scanned, see findLauncherPackages(this).
     @Volatile private var launcherPackages: Set<String> = emptySet()
     // Negative cache for isLauncherPkg, so its throttled re-detection only runs on new packages.
     @Volatile private var knownNonLauncherPkgs: Set<String> = emptySet()
@@ -145,18 +129,11 @@ class BlockerAccessibilityService : AccessibilityService() {
     // Read/written from the background web-scan coroutine as well as the main thread.
     @Volatile private var lastWebText: String? = null
 
-    // Instant block screen drawn as an overlay window (no Activity-launch lag).
-    private val windowManager by lazy { getSystemService(WINDOW_SERVICE) as WindowManager }
-    private var overlayView: View? = null
-    // Inflated-but-not-attached overlay, warmed at service connect and re-stashed on
-    // removal, so no block ever pays layout inflation while the blocked app is visible.
-    private var preInflatedOverlay: View? = null
-    // Whether the current overlay is an app-rule block (vs web/purchase/Shorts, which are
-    // owned by their own scans and must not be taken down by the periodic re-check).
-    private var overlayIsAppBlock = false
-    // What the current cover is counting (package name or "web"/"shorts"/...): one cover =
-    // one recorded attempt, so a re-show for the same key must not re-record or re-draw.
-    private var overlayCounterKey: String? = null
+    // Instant block screen drawn as an overlay window (no Activity-launch lag). The window
+    // mechanics live in BlockOverlay; it also tracks what the visible cover is counting
+    // (one cover = one recorded attempt) and whether it's a whole-app block (vs web/
+    // purchase/Shorts covers, which their own scans own and the re-check must leave alone).
+    private val overlay by lazy { BlockOverlay(this) }
     // The just-dismissed cover's key + time: "Got it" goes HOME, but events from the still-
     // visible app during that transition must not instantly re-block/re-count the same entry.
     // (Volatile: also read by the background web-scan coroutine.)
@@ -227,25 +204,25 @@ class BlockerAccessibilityService : AccessibilityService() {
                 // guard covers (packageName == null) that no other path takes down when the
                 // launcher window-state event went missing. Shorts covers stay owned by their
                 // scan. The next window-state event re-arms this loop.
-                if (overlayView != null && !shortsCovering) {
+                if (overlay.isShowing && !shortsCovering) {
                     lastBlockedPkg = null
-                    removeBlockOverlay()
+                    overlay.remove()
                 }
                 return
             }
-            if (overlayView == null) {
+            if (!overlay.isShowing) {
                 // Draw a NEW cover only when the foreground is positively identified as the
                 // cached app (post-reconcile that means a readable root that isn't our own
                 // UI). With an unreadable root the cache may be stale (missed gesture-nav
                 // Home event), and blocking blind used to flash the cover over the home
                 // screen — wait for a tick that can actually see what's on screen.
                 if (actual != null && actual != packageName) handleAppBlock(pkg)
-            } else if (overlayIsAppBlock && !shouldBlock(pkg)) {
+            } else if (overlay.isAppBlock && !shouldBlock(pkg)) {
                 // The condition ended while the cover was up → release without an app switch.
                 // (Acting only on this transition also avoids re-recording an "attempt" every
                 // tick; web/purchase/Shorts covers are owned by their own scans — hands off.)
                 lastBlockedPkg = null
-                removeBlockOverlay()
+                overlay.remove()
             }
             if (recheckMatters(pkg)) handler.postDelayed(this, RECHECK_MS)
         }
@@ -255,7 +232,7 @@ class BlockerAccessibilityService : AccessibilityService() {
      *  covered by any rule/schedule, a session is running, a keyword lockout is ticking, or
      *  a block cover is up. */
     private fun recheckMatters(pkg: String): Boolean =
-        overlayView != null ||
+        overlay.isShowing ||
             keywordLockoutRemaining(pkg) > 0L ||
             rules[pkg]?.isBlocked == true ||
             // Allowlist mode: any non-allowed app can flip (e.g. a Pomodoro break ending), so
@@ -306,13 +283,13 @@ class BlockerAccessibilityService : AccessibilityService() {
         // The service is rebound right after an update installs, so detect it here too —
         // the pause arms even if the app itself isn't opened.
         UpdatePause.checkVersionChange(this)
-        browserPackages = findBrowserPackages()
-        launcherPackages = findLauncherPackages()
+        browserPackages = findBrowserPackages(this)
+        launcherPackages = findLauncherPackages(this)
         keywordsEverywhere = SettingsStore.keywordsEverywhere(this)
         adultPackOn = SettingsStore.adultWordsPack(this)
         updatePaused = SettingsStore.updatePaused(this)
         allowlistMode = SettingsStore.quickBlockAllowlist(this)
-        essentialPackages = findEssentialPackages()
+        essentialPackages = findEssentialPackages(this)
         // Restore unexpired keyword lockouts — a service rebind must not unlock an app early.
         val now = System.currentTimeMillis()
         synchronized(keywordLockouts) {
@@ -367,9 +344,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         }.launchIn(scope)
         // Warm the block overlay off the connect path (inflate only, NOT addView), so the
         // very first block doesn't pay layout inflation while the blocked app is visible.
-        handler.post {
-            if (overlayView == null && preInflatedOverlay == null) preInflatedOverlay = newOverlayView()
-        }
+        handler.post { overlay.warmUp(::onCoverDismissed) }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -420,7 +395,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         // such new package unless it's the confirmed active window (a real switch — our overlay
         // is FLAG_NOT_FOCUSABLE so it never holds focus) or a launcher (Home is always honored,
         // so the user can't be trapped).
-        if (overlayView != null && overlayIsAppBlock &&
+        if (overlay.isShowing && overlay.isAppBlock &&
             pkg != null && pkg != lastForegroundPkg &&
             !isLauncherPkg(pkg) &&
             rootInActiveWindow?.packageName?.toString() != pkg
@@ -495,7 +470,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (!SettingsStore.blockYoutubeShorts(this) || !quickBlockActive() ||
             lastForegroundPkg != YOUTUBE_PKG
         ) {
-            if (shortsCovering) { shortsCovering = false; removeBlockOverlay() }
+            if (shortsCovering) { shortsCovering = false; overlay.remove() }
             return
         }
         handler.removeCallbacks(shortsScanRunnable)
@@ -511,7 +486,7 @@ class BlockerAccessibilityService : AccessibilityService() {
             // scan owns adding/removing it as the user moves in and out of Shorts.
             if (pkg == YOUTUBE_PKG && shortsCovering) { lastBlockedPkg = null; return }
             lastBlockedPkg = null
-            removeBlockOverlay() // left the blocked app — take the cover down
+            overlay.remove() // left the blocked app — take the cover down
             return
         }
         val now = System.currentTimeMillis()
@@ -557,7 +532,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         // Safety net: a null-package cover has no owner to auto-remove it, so if HOME is slow or
         // suppressed (MIUI), take it down anyway. The normal path is the launcher's window-state
         // event → handleAppBlock → removeBlockOverlay.
-        handler.postDelayed({ if (!overlayIsAppBlock) removeBlockOverlay() }, 1500)
+        handler.postDelayed({ if (!overlay.isAppBlock) overlay.remove() }, 1500)
         return true
     }
 
@@ -722,19 +697,6 @@ class BlockerAccessibilityService : AccessibilityService() {
     /** Minutes-from-midnight → "9:00" / "17:30". */
     private fun hm(m: Int): String = "%d:%02d".format(m / 60, m % 60)
 
-    /** All installed home-screen (launcher) apps — never keyword-scanned: a keyword matching an
-     *  app's label on the home screen would cover Home itself, and Close→home would loop forever.
-     *  The *current default* home is also resolved explicitly — MATCH_ALL has missed it on some
-     *  OEM builds, and a missed launcher means false blocks on the home screen. */
-    private fun findLauncherPackages(): Set<String> = runCatching {
-        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
-        val all = packageManager.queryIntentActivities(intent, PackageManager.MATCH_ALL)
-            .mapNotNull { it.activityInfo?.packageName }
-        val default = packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
-            ?.activityInfo?.packageName
-        (all + listOfNotNull(default)).toSet()
-    }.getOrDefault(emptySet())
-
     /** Launcher check that self-heals after a default-launcher change: the set is built at
      *  service start, so on an unknown package it re-detects (throttled) before declaring it
      *  not-a-launcher, caching negatives to keep the hot paths cheap. Thread-safe. */
@@ -744,58 +706,20 @@ class BlockerAccessibilityService : AccessibilityService() {
         val now = SystemClock.elapsedRealtime()
         if (now - lastLauncherRefreshAt >= LAUNCHER_REFRESH_MS) {
             lastLauncherRefreshAt = now
-            launcherPackages = findLauncherPackages()
+            launcherPackages = findLauncherPackages(this)
             if (pkg in launcherPackages) return true
         }
         knownNonLauncherPkgs = knownNonLauncherPkgs + pkg
         return false
     }
 
-    /** System packages that must stay usable in Allowlist mode or the phone bricks: the core
-     *  Android system, System UI (status bar / recents / power menu), Settings, and the default
-     *  phone/dialer app (so calls work). The launcher is handled by [isLauncherPkg] and the
-     *  current keyboard by [isEssentialAllowed] (re-read live, since it can change). */
-    private fun findEssentialPackages(): Set<String> {
-        val set = mutableSetOf("android", "com.android.systemui", "com.android.settings")
-        runCatching {
-            val tm = getSystemService(Context.TELECOM_SERVICE) as? android.telecom.TelecomManager
-            tm?.defaultDialerPackage?.let { set.add(it) }
-        }
-        // Whatever handles the phone/dialer intent (covers OEMs whose dialer differs from the
-        // default-dialer role, and the incoming-call UI).
-        runCatching {
-            val dial = Intent(Intent.ACTION_DIAL)
-            packageManager.resolveActivity(dial, PackageManager.MATCH_DEFAULT_ONLY)
-                ?.activityInfo?.packageName?.let { set.add(it) }
-        }
-        return set
-    }
-
-    /** The package of the keyboard the user currently has selected, or null. Read live so a
-     *  keyboard swap never locks typing out. */
-    private fun currentImePackage(): String? = runCatching {
-        android.provider.Settings.Secure.getString(
-            contentResolver, android.provider.Settings.Secure.DEFAULT_INPUT_METHOD,
-        )?.substringBefore('/')?.takeIf { it.isNotBlank() }
-    }.getOrNull()
-
     /** True when [pkg] must never be blocked in Allowlist mode: ourselves, the launcher, the
      *  current keyboard, and the core system/dialer set. Keeps the phone usable. */
     private fun isEssentialAllowed(pkg: String): Boolean =
         pkg == packageName ||
             pkg in essentialPackages ||
-            pkg == currentImePackage() ||
+            pkg == currentImePackage(this) ||
             isLauncherPkg(pkg)
-
-    /** All packages that can handle an https:// link — i.e. the device's browsers. */
-    private fun findBrowserPackages(): Set<String> = runCatching {
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com"))
-            .addCategory(Intent.CATEGORY_BROWSABLE)
-        packageManager.queryIntentActivities(intent, 0)
-            .mapNotNull { it.activityInfo?.packageName }
-            .filter { it != packageName }
-            .toSet()
-    }.getOrDefault(emptySet())
 
     /**
      * Browsers can be installed/removed after the service starts; re-detect them on package
@@ -805,8 +729,8 @@ class BlockerAccessibilityService : AccessibilityService() {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
                 scope.launch {
-                    browserPackages = findBrowserPackages()
-                    launcherPackages = findLauncherPackages()
+                    browserPackages = findBrowserPackages(applicationContext)
+                    launcherPackages = findLauncherPackages(applicationContext)
                     knownNonLauncherPkgs = emptySet() // a new install may be a launcher
                 }
             }
@@ -854,9 +778,9 @@ class BlockerAccessibilityService : AccessibilityService() {
         handler.removeCallbacks(recheckRunnable)
         webScanJob?.cancel()
         webScanQueuedAt = 0L
-        if (overlayView != null) {
+        if (overlay.isShowing) {
             lastBlockedPkg = null
-            removeBlockOverlay()
+            overlay.remove()
         }
         lastForegroundPkg = null
         lastWebText = null
@@ -986,7 +910,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         // is nothing new to block; scanning behind it would only re-fire on the covered
         // page's churn (or on a keyword in the covered app's own UI) and re-count the entry.
         // Shorts covers stay with their own scan, which adds/removes them as the user scrolls.
-        if (overlayView != null && !shortsCovering) return
+        if (overlay.isShowing && !shortsCovering) return
         // Just dismissed a cover ("Got it" → HOME): the page stays on screen during the
         // transition. Skip everything — including the lockout fast path below, which used to
         // redraw the cover over the departing app (a visible flash) — WITHOUT touching
@@ -1008,7 +932,7 @@ class BlockerAccessibilityService : AccessibilityService() {
             return
         }
         val isBrowser = pkg in browserPackages
-        val text = extractVisibleText()
+        val text = extractVisibleText(::isLauncherPkg)
         if (DEBUG) Log.d(TAG, "scan[$pkg browser=$isBrowser]: ${text.length} chars: ${text.take(120)}")
         if (text.isBlank()) return
         if (text == lastWebText) return
@@ -1082,13 +1006,13 @@ class BlockerAccessibilityService : AccessibilityService() {
         // blocking is moot, and the overlay is not-focusable so this scan would still read
         // the YouTube UI behind it, re-keying the cover to "shorts": a visible repaint plus
         // a double-counted attempt. Leave the app-block cover alone.
-        if (overlayView != null && overlayIsAppBlock) return
+        if (overlay.isShowing && overlay.isAppBlock) return
         if (!SettingsStore.blockYoutubeShorts(applicationContext) || !quickBlockActive() ||
             lastForegroundPkg != YOUTUBE_PKG
         ) {
             if (shortsCovering) {
                 shortsCovering = false
-                withContext(Dispatchers.Main) { removeBlockOverlay() }
+                withContext(Dispatchers.Main) { overlay.remove() }
             }
             return
         }
@@ -1105,93 +1029,8 @@ class BlockerAccessibilityService : AccessibilityService() {
             }
         } else if (!onShorts && shortsCovering) {
             shortsCovering = false
-            withContext(Dispatchers.Main) { removeBlockOverlay() }
+            withContext(Dispatchers.Main) { overlay.remove() }
         }
-    }
-
-    /** True if the YouTube Shorts player (the "reel" surface) is currently on screen. We match
-     *  the player's view-ids, not the always-present "Shorts" nav tab. */
-    private fun isShortsOnScreen(): Boolean {
-        val root = rootInActiveWindow ?: return false
-        if (root.packageName != YOUTUBE_PKG) return false
-        val queue = ArrayDeque<AccessibilityNodeInfo>()
-        queue.add(root)
-        var visited = 0
-        while (queue.isNotEmpty() && visited < 400) {
-            val node = queue.removeFirst()
-            visited++
-            node.viewIdResourceName?.let { id ->
-                if (SHORTS_ID_MARKERS.any { id.contains(it) }) return true
-            }
-            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
-        }
-        return false
-    }
-
-    /**
-     * The browser's omnibox text (trimmed, lowercased), or null when no omnibox is on
-     * screen (fullscreen video, a browser UI change) — callers must then fall back to
-     * page-text matching so fullscreen can't become a bypass. Chromium browsers expose
-     * the omnibox as <pkg>:id/url_bar (flagReportViewIds is set in our service config).
-     */
-    private fun extractBrowserUrl(pkg: String): String? {
-        val urlBarId = "$pkg:id/url_bar"
-        val roots = ArrayList<AccessibilityNodeInfo>()
-        rootInActiveWindow?.let(roots::add) // the omnibox the user sees wins
-        windows?.forEach { w ->
-            if (w.type != AccessibilityWindowInfo.TYPE_INPUT_METHOD) w.root?.let(roots::add)
-        }
-        for (root in roots) {
-            if (root.packageName?.toString() != pkg) continue
-            // Nodes can be recycled under us mid page-churn — treat failures as "not found".
-            val nodes = runCatching { root.findAccessibilityNodeInfosByViewId(urlBarId) }
-                .getOrNull() ?: continue
-            for (n in nodes) {
-                val t = n.text?.toString()?.trim()?.lowercase()
-                if (!t.isNullOrBlank()) return t
-            }
-        }
-        return null
-    }
-
-    /**
-     * Collects on-screen text (URL bar, search fields, page) across all windows — not
-     * just the active one, since Chrome's omnibox/page can sit in a non-active window
-     * (suggestion popup, dialog). Capped for battery.
-     */
-    private fun extractVisibleText(): String {
-        val sb = StringBuilder()
-        val roots = ArrayList<AccessibilityNodeInfo>()
-        windows?.forEach { w ->
-            // Skip the keyboard: its suggestion strip shows a blocked word while it's being
-            // typed. (windows is empty without flagRetrieveInteractiveWindows on stock builds,
-            // but some OEMs populate it — this keeps them safe too.)
-            if (w.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD) return@forEach
-            w.root?.let(roots::add)
-        }
-        rootInActiveWindow?.let(roots::add)
-        // Never scan our own windows (e.g. the block screen, whose message can itself
-        // contain the keyword) — that would re-trigger the block in a loop. Same for
-        // launcher/System UI windows overlaying the scanned app on OEM builds.
-        roots.removeAll {
-            val p = it.packageName?.toString() ?: return@removeAll false
-            p == packageName || isLauncherPkg(p) || p in KEYWORD_SCAN_EXCLUDED
-        }
-        if (roots.isEmpty()) return ""
-
-        val queue = ArrayDeque<AccessibilityNodeInfo>()
-        roots.forEach(queue::add)
-        var visited = 0
-        while (queue.isNotEmpty() && visited < 400 && sb.length < 4000) {
-            val node = queue.removeFirst()
-            visited++
-            node.text?.let { if (it.isNotBlank()) sb.append(it).append(' ') }
-            node.contentDescription?.let { if (it.isNotBlank()) sb.append(it).append(' ') }
-            for (i in 0 until node.childCount) {
-                node.getChild(i)?.let { queue.add(it) }
-            }
-        }
-        return sb.toString()
     }
 
     /** True while a just-dismissed cover's re-show should stay suppressed: always for the
@@ -1225,20 +1064,26 @@ class BlockerAccessibilityService : AccessibilityService() {
         // One cover = one recorded entry. The page/app behind a cover keeps emitting events
         // (feeds churn, activities transition), and each used to re-record an "attempt" and
         // re-roll the quote — so a cover already up for this key means there's nothing to do.
-        if (overlayView != null && overlayCounterKey == counterKey) return
+        if (overlay.isShowing && overlay.counterKey == counterKey) return
         // Same guard for a JUST-dismissed cover: Close goes HOME, but the blocked app stays
         // on screen for the transition and would re-block/re-count immediately.
         if (dismissSuppressed(counterKey)) return
         // Recorded for the counter's own sake — the cover reads the running total itself.
         AttemptCounter.record(applicationContext, counterKey)
-        overlayCounterKey = counterKey
-        // Only app-rule blocks pass a package; web/purchase/Shorts covers are managed by
-        // their own scans and the periodic re-check must leave them alone.
-        overlayIsAppBlock = packageName != null
         val label = packageName?.let { loadLabel(it) }
         val msg = message ?: label?.let { "$it is blocked" } ?: "This is blocked right now."
         // Instant overlay; fall back to the Activity only if the overlay can't be drawn.
-        if (!showBlockOverlay(packageName, title, msg)) {
+        // Only app-rule blocks pass a package (see isAppBlock).
+        val drawn = overlay.show(
+            packageName = packageName,
+            title = title,
+            message = msg,
+            counterKey = counterKey,
+            isAppBlock = packageName != null,
+            onClose = ::onCoverDismissed,
+            iconLoader = ::loadIcon,
+        )
+        if (!drawn) {
             startActivity(
                 Intent(this, BlockScreenActivity::class.java).apply {
                     addFlags(
@@ -1258,106 +1103,28 @@ class BlockerAccessibilityService : AccessibilityService() {
         handler.postDelayed(recheckRunnable, RECHECK_MS)
     }
 
-    /** Draws/updates the full-screen block overlay instantly. Returns false if it can't. */
-    private fun showBlockOverlay(
-        packageName: String?, title: String, message: String,
-    ): Boolean = try {
-        val v = overlayView ?: (preInflatedOverlay ?: newOverlayView()).also {
-            preInflatedOverlay = null
-            val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            else @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE
-            val params = WindowManager.LayoutParams(
-                WindowManager.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.MATCH_PARENT,
-                type,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-                PixelFormat.TRANSLUCENT,
-            )
-            windowManager.addView(it, params)
-            overlayView = it
-        }
-        v.findViewById<TextView>(R.id.overlay_title).text = title
-        v.findViewById<TextView>(R.id.overlay_subtitle).text = message
-        // Masthead: every dodged open counts as ~3 minutes of life back.
-        v.findViewById<TextView>(R.id.overlay_stat_number).text =
-            (AttemptCounter.totalToday(applicationContext) * MINUTES_PER_DODGE).toString()
-        // Fresh motivation every time the cover appears (the view is reused across blocks).
-        val quote = Quotes.random()
-        v.findViewById<TextView>(R.id.overlay_quote).apply {
-            text = quote.text
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, Quotes.sizeSpFor(quote.text))
-        }
-        v.findViewById<TextView>(R.id.overlay_quote_author).apply {
-            text = "— ${quote.author}"
-            // Brand blue→violet sweep across the author line.
-            val width = paint.measureText(text.toString()).coerceAtLeast(1f)
-            paint.shader = LinearGradient(
-                0f, 0f, width, 0f,
-                0xFF2E7BFF.toInt(), 0xFF7C5CFF.toInt(), Shader.TileMode.CLAMP,
-            )
-        }
-        val iconView = v.findViewById<ImageView>(R.id.overlay_icon)
-        // Our own mark must be the launcher icon the user actually picked (icon switcher),
-        // not the hardcoded default that stops matching the moment they change it.
-        iconView.setImageResource(AppIcons.current(this).previewRes)
-        if (packageName != null) {
-            // The icon can need a PackageManager decode (cache miss) — keep it off the
-            // first frame so the cover lands instantly; guard against a torn-down cover.
-            handler.post {
-                if (overlayView == v) loadIcon(packageName)?.let(iconView::setImageBitmap)
-            }
-        }
-        true
-    } catch (e: Exception) {
-        Log.w(TAG, "overlay failed, falling back to activity", e)
-        false
-    }
-
-    /** Inflates the block overlay and wires its Close button (not yet attached). */
-    private fun newOverlayView(): View =
-        LayoutInflater.from(this).inflate(R.layout.overlay_block, null).also {
-            it.findViewById<Button>(R.id.overlay_close).setOnClickListener {
-                dismissedKey = overlayCounterKey
-                dismissedPkg = lastForegroundPkg
-                dismissedAt = System.currentTimeMillis()
-                lastBlockedPkg = null
-                // Re-arm word detection: coming back to the page that was just blocked must
-                // block again, not read as "already handled" via the text dedup.
-                lastWebText = null
-                removeBlockOverlay()
+    /**
+     * "Got it" on the cover: remember what was dismissed (so the app still on screen during
+     * the trip Home can't instantly re-block), take the cover down and go Home. Tablets
+     * sometimes swallow the first HOME (split-screen/slow transition), leaving the blocked app
+     * up until the dismiss grace lapses — which read as a second block — so retry once if the
+     * foreground hasn't moved.
+     */
+    private fun onCoverDismissed() {
+        dismissedKey = overlay.counterKey
+        dismissedPkg = lastForegroundPkg
+        dismissedAt = System.currentTimeMillis()
+        lastBlockedPkg = null
+        // Re-arm word detection: coming back to the page that was just blocked must
+        // block again, not read as "already handled" via the text dedup.
+        lastWebText = null
+        overlay.remove()
+        performGlobalAction(GLOBAL_ACTION_HOME)
+        handler.postDelayed({
+            if (dismissedPkg != null && lastForegroundPkg == dismissedPkg) {
                 performGlobalAction(GLOBAL_ACTION_HOME)
-                // Tablets sometimes swallow the first HOME (split-screen/slow transition),
-                // leaving the blocked app on screen until the dismiss grace lapses — which
-                // read as a second block. One retry if the foreground hasn't moved.
-                handler.postDelayed({
-                    if (dismissedPkg != null && lastForegroundPkg == dismissedPkg) {
-                        performGlobalAction(GLOBAL_ACTION_HOME)
-                    }
-                }, 800)
             }
-            // Clip the footer icon to a circle — the icon-art PNGs are full-bleed squares,
-            // and this matches how the icon picker (and most launchers) present icons.
-            it.findViewById<ImageView>(R.id.overlay_icon).apply {
-                clipToOutline = true
-                outlineProvider = object : ViewOutlineProvider() {
-                    override fun getOutline(view: View, outline: Outline) {
-                        outline.setOval(0, 0, view.width, view.height)
-                    }
-                }
-            }
-        }
-
-    private fun removeBlockOverlay() {
-        overlayView?.let {
-            runCatching { windowManager.removeView(it) }
-            // Keep the detached view for the next block (every field is rewritten per show).
-            preInflatedOverlay = it
-        }
-        overlayView = null
-        overlayCounterKey = null
+        }, 800)
     }
 
     // Launch-warmed cache first (label + icon already decoded); PackageManager fallback for
@@ -1393,17 +1160,13 @@ class BlockerAccessibilityService : AccessibilityService() {
         packageChangeReceiver = null
         unlockReceiver?.let { runCatching { unregisterReceiver(it) } }
         unlockReceiver = null
-        removeBlockOverlay()
+        overlay.remove()
         scope.cancel()
     }
 
     companion object {
         private const val TAG = "AppBlocker"
         private const val DEBUG = false // flip to true to log scans/blocks for debugging
-
-        // Average minutes of scrolling one dodged open would have cost — powers the
-        // "minutes reclaimed today" masthead on the block screen.
-        private const val MINUTES_PER_DODGE = 3
 
         // How often to re-check the app the user is currently inside (mid-use enforcement).
         private const val RECHECK_MS = 30_000L
@@ -1456,12 +1219,5 @@ class BlockerAccessibilityService : AccessibilityService() {
 
         private const val YOUTUBE_PKG = "com.google.android.youtube"
 
-        // YouTube Shorts player view-id fragments (Shorts is "reel" internally). These match the
-        // full-screen Short player, NOT the always-present "Shorts" nav tab. Exact ids vary by
-        // YouTube version, so this list is intentionally broad and may need tuning over time.
-        private val SHORTS_ID_MARKERS = listOf(
-            "reel_recycler", "reel_player", "reel_watch", "reels_player",
-            "reel_progress", "shorts_",
-        )
     }
 }
