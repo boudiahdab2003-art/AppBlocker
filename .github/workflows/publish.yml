@@ -92,6 +92,13 @@ jobs:
           echo "name=$new_name" >> "$GITHUB_OUTPUT"
           echo "Bumped $old_name (code $old_code) -> $new_name (code $new_code)"
 
+      # Deliberately AFTER the bump: ChangelogTest checks the in-app "What's new" list has an
+      # entry for the version being released, so a release with no entry stops here — before
+      # anything is committed, tagged, pushed or uploaded. (The bump so far exists only in this
+      # runner's checkout.) It also means a release can never ship failing tests.
+      - name: Run unit tests
+        run: gradle -p . :app:testGithubDebugUnitTest
+
       - name: Build signed APK
         run: gradle -p . assembleGithubRelease
 

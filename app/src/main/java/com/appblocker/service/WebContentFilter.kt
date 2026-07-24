@@ -11,7 +11,9 @@ import android.content.Context
  * match the site/search the user is ON rather than anything the page happens to
  * mention. The adult layers always match the full text — never weaker on purpose.
  */
-class WebContentFilter private constructor(
+// The constructor is internal (not private) purely so unit tests can build a filter from three
+// plain word lists — no Context, no assets. Production code must still go through [get].
+class WebContentFilter internal constructor(
     private val adultDomains: List<String>,
     private val adultKeywords: List<String>,
     private val packWords: List<String>,

@@ -39,6 +39,7 @@ try {
     # --- 2. Bump the version automatically ----------------------------------------
     Step 2 "Bumping the version number"
     $text = [System.IO.File]::ReadAllText($GradleFile)
+    $originalGradle = $text   # so a failed check can put the version back exactly as it was
     if ($text -notmatch 'versionCode\s*=\s*(\d+)') { Die "Couldn't find versionCode in build.gradle.kts." }
     $oldCode = [int]$Matches[1]
     if ($text -notmatch 'versionName\s*=\s*"([^"]+)"') { Die "Couldn't find versionName in build.gradle.kts." }
@@ -58,6 +59,16 @@ try {
     # --- 3. Build the signed app --------------------------------------------------
     Step 3 "Building the app (this can take a minute or two)..."
     $env:JAVA_HOME = $Jbr
+    # Checks first, and deliberately after the version bump: one of them makes sure the in-app
+    # "What's new" list has an entry for the version being released, so nothing ships without
+    # its release note (or with a failing test). Nothing has been committed at this point.
+    & $GradleBat -p $Repo :app:testGithubDebugUnitTest
+    if ($LASTEXITCODE -ne 0) {
+        # Put the version number back, so running Publish again doesn't skip a number.
+        [System.IO.File]::WriteAllText($GradleFile, $originalGradle)
+        Die "A check failed (see above). If it's ChangelogTest, add a VersionLog entry for $newName in app/src/main/java/com/appblocker/data/Changelog.kt, then run Publish again."
+    }
+    Ok "Checks passed"
     & $GradleBat -p $Repo assembleGithubRelease
     if ($LASTEXITCODE -ne 0) { Die "The build failed (see the messages above)." }
     if (-not (Test-Path $ApkBuilt)) { Die "The build finished but no APK was produced." }
