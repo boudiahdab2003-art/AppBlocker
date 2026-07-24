@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.93
+- Overnight schedules now follow the day you picked, timers and Strict sessions stay correct after a restart, and a Strict session started right after an update is no longer cancelled. Blocking is also harder to knock over: an unexpected error can't take it down any more, and if your phone kills it in the background the app now notices and tells you.
+
 ## v1.92
 - Fixed the block screen flickering. When you open a blocked app, the block screen now stays put instead of flashing away and coming back. It sits solidly over the app and sends you to your home screen when you tap Got it.
 
