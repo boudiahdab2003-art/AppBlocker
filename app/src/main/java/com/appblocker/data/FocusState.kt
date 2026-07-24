@@ -20,4 +20,6 @@ data class FocusState(
     val realtimeEndMillis: Long = 0L,    // monotonic deadline (clock-change-proof)
     val startTimeMillis: Long = 0L,      // wall clock at session start (0 = legacy/none);
                                          // lets the reboot fallback reject impossible clocks
+    val bootCount: Int = -1,             // Android boot sequence that owns realtime* values
+    val appVersionCode: Long = -1L,      // app version that created this Strict session
 )

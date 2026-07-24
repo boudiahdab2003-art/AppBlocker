@@ -13,6 +13,11 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.93", "Jul 24, 2026", "Overnight schedules, restarts and updates now behave", listOf(
+        "Schedules that cross midnight now follow the day you picked. A 22:00–06:00 schedule set for Monday runs from Monday night straight through to Tuesday morning — before, it stopped at midnight and instead blocked you early on Monday morning, which belonged to Sunday night.",
+        "Timers, Pomodoro and Strict sessions now stay honest across a phone restart. The app remembers which boot a session was started in, so after a reboot it falls back to the calendar clock instead of trusting a stopwatch that reset to zero — a finished session can't come back to life, and a running one can't end early.",
+        "A Strict session you start right after updating the app is no longer cancelled by the update. The 'clear the old session' step now checks which app version created the session, in a single database operation, so only sessions from before the update are cleared.",
+    )),
     VersionLog("1.91", "Jul 22, 2026", "Allowlist mode + a cleaner Quick Block, and the coach just works", listOf(
         "Quick Block now has an Allowlist mode. Instead of choosing what to block, you choose the few apps you want to KEEP — and everything else is blocked while a Quick Block, Timer or Pomodoro is running. Tap the 'Blocking' chip at the top of the Quick Block editor to switch between Blocklist and Allowlist. Your two lists are kept separately, so switching back and forth never loses either one.",
         "Allowlist mode always keeps the essentials working, so the phone can never lock you out: your home screen (launcher), phone/dialer, keyboard, the notification shade, Settings, and AppBlocker itself stay open no matter what — only the apps you didn't allow are blocked.",

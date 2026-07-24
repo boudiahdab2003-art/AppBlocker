@@ -1,7 +1,6 @@
 package com.appblocker.data
 
 import android.content.Context
-import androidx.core.content.pm.PackageInfoCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -20,11 +19,8 @@ object UpdatePause {
      *  (which also means the update INTO the first version carrying this feature is
      *  invisible: the old version left no record to compare against). */
     fun checkVersionChange(context: Context) {
-        val current = runCatching {
-            PackageInfoCompat.getLongVersionCode(
-                context.packageManager.getPackageInfo(context.packageName, 0)
-            )
-        }.getOrNull() ?: return
+        val current = AppVersion.code(context)
+        if (current < 0L) return
         val last = SettingsStore.lastSeenVersionCode(context)
         if (last != current) {
             SettingsStore.setLastSeenVersionCode(context, current)
@@ -38,14 +34,20 @@ object UpdatePause {
         }
         // Runs on EVERY call (app open, service reconnect, install broadcast) — a clear
         // whose process died mid-write is retried until it actually lands. The flag is
-        // consumed only after the write returns, so a Strict session the user starts
-        // later is never touched.
+        // consumed only after the conditional write returns. The version predicate is part of
+        // that single database operation, so a current-version Strict session survives no
+        // matter whether it is written before or after this coroutine reaches Room.
         if (SettingsStore.strictClearPending(context)) {
             val appContext = context.applicationContext
             CoroutineScope(Dispatchers.IO).launch {
-                BlockerDatabase.get(appContext).focusDao().set(FocusState(id = 0))
+                BlockerDatabase.get(appContext).focusDao()
+                    .clearStrictSessionCreatedBefore(current)
                 SettingsStore.setStrictClearPending(appContext, false)
             }
         }
     }
 }
+
+/** Pure form of the version predicate enforced atomically by [FocusDao]. */
+internal fun strictSessionNeedsUpdateClear(sessionVersion: Long, currentVersion: Long): Boolean =
+    sessionVersion < currentVersion

@@ -25,7 +25,7 @@ class Converters {
 @Database(
     entities = [AppRule::class, FocusState::class, BlockedKeyword::class, Schedule::class,
         SavedPlace::class],
-    version = 9,
+    version = 10,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -83,6 +83,14 @@ abstract class BlockerDatabase : RoomDatabase() {
             }
         }
 
+        /** v9 -> v10: identify the boot and app version that created a Strict session. */
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE focus_state ADD COLUMN bootCount INTEGER NOT NULL DEFAULT -1")
+                db.execSQL("ALTER TABLE focus_state ADD COLUMN appVersionCode INTEGER NOT NULL DEFAULT -1")
+            }
+        }
+
         fun get(context: Context): BlockerDatabase =
             INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -90,7 +98,10 @@ abstract class BlockerDatabase : RoomDatabase() {
                     BlockerDatabase::class.java,
                     "appblocker.db"
                 )
-                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+                    .addMigrations(
+                        MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
+                        MIGRATION_9_10,
+                    )
                     // Only wipe on a downgrade (installing an older APK) — never on upgrade.
                     .fallbackToDestructiveMigrationOnDowngrade()
                     .build().also { INSTANCE = it }

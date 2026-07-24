@@ -1,6 +1,7 @@
 package com.appblocker
 
 import com.appblocker.service.timeWindowContains
+import com.appblocker.service.scheduleWindowContains
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -11,10 +12,27 @@ class TimeWindowTest {
     @Test fun beforeNormal() = assertFalse(timeWindowContains(480, 540, 1020))  // 08:00
     @Test fun startIsInclusive() = assertTrue(timeWindowContains(540, 540, 1020))
     @Test fun endIsExclusive() = assertFalse(timeWindowContains(1020, 540, 1020))
+    @Test fun equalStartAndEndIsInactive() = assertFalse(timeWindowContains(540, 540, 540))
 
     // Wrap past midnight 22:00–06:00 (1320–360).
     @Test fun lateNightInside() = assertTrue(timeWindowContains(1380, 1320, 360))  // 23:00
     @Test fun earlyMorningInside() = assertTrue(timeWindowContains(120, 1320, 360)) // 02:00
     @Test fun middayOutside() = assertFalse(timeWindowContains(720, 1320, 360))     // 12:00
     @Test fun wrapEndIsExclusive() = assertFalse(timeWindowContains(360, 1320, 360))// 06:00
+
+    @Test fun selectedDayInsideWindow() = assertTrue(
+        scheduleWindowContains(1 shl 1, 1, 600, 540, 1020),
+    )
+
+    @Test fun unselectedDayOutsideWindow() = assertFalse(
+        scheduleWindowContains(1 shl 1, 2, 600, 540, 1020),
+    )
+
+    @Test fun mondayOvernightRemainsActiveTuesdayMorning() = assertTrue(
+        scheduleWindowContains(1 shl 1, 2, 120, 1320, 360),
+    )
+
+    @Test fun tuesdayMorningIsInactiveWhenMondayWasNotSelected() = assertFalse(
+        scheduleWindowContains(1 shl 2, 2, 120, 1320, 360),
+    )
 }

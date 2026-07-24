@@ -11,3 +11,23 @@ internal fun timeWindowContains(nowMinutes: Int, startMinutes: Int, endMinutes: 
     } else {
         nowMinutes >= startMinutes || nowMinutes < endMinutes // wraps past midnight
     }
+
+/**
+ * Combines the selected-day and time checks for a schedule. [dayBit] is zero-based with
+ * Sunday at bit 0, matching [com.appblocker.data.Schedule.daysMask].
+ */
+internal fun scheduleWindowContains(
+    daysMask: Int,
+    dayBit: Int,
+    nowMinutes: Int,
+    startMinutes: Int,
+    endMinutes: Int,
+): Boolean {
+    val activeDayBit = if (startMinutes > endMinutes && nowMinutes < endMinutes) {
+        (dayBit + 6) % 7
+    } else {
+        dayBit
+    }
+    return (daysMask shr activeDayBit) and 1 != 0 &&
+        timeWindowContains(nowMinutes, startMinutes, endMinutes)
+}
