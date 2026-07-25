@@ -269,7 +269,17 @@ class BlockerAccessibilityService : AccessibilityService() {
 
     // YouTube Shorts: when on, cover the Shorts player but leave the rest of YouTube usable.
     @Volatile private var shortsScanJob: Job? = null
-    private var shortsCovering = false
+    /**
+     * Whether the cover currently up is the YouTube-Shorts one.
+     *
+     * Derived, never stored. This used to be a separate flag the Shorts scan set and cleared,
+     * which made it a second source of truth about a thing the overlay already knows — and when
+     * the two drifted, three different paths acted on the lie: scheduleShortsScan tore down a
+     * real app-block cover, screen-off skipped its entire cleanup, and the re-check's
+     * home-screen cleanup refused to run. Asking the overlay cannot drift.
+     */
+    private val shortsCovering: Boolean
+        get() = overlay.isShowing && overlay.counterKey == CoverGate.SHORTS_KEY
     private val shortsScanRunnable = Runnable {
         guarded(applicationContext, "shortsScan") {
             shortsScanJob?.cancel()
@@ -626,7 +636,10 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (!SettingsStore.blockYoutubeShorts(this) || !quickBlockActive() ||
             lastForegroundPkg != YOUTUBE_PKG
         ) {
-            if (shortsCovering) { shortsCovering = false; overlay.remove() }
+            // Only ever takes down the Shorts cover itself — shortsCovering is now derived from
+            // what is actually up, so this can no longer remove an app-block cover that replaced
+            // it (which happened when YouTube became fully blocked while Shorts was covered).
+            if (shortsCovering) overlay.remove()
             return
         }
         handler.removeCallbacks(shortsScanRunnable)
@@ -916,7 +929,12 @@ class BlockerAccessibilityService : AccessibilityService() {
      *  genuinely blocked app is re-blocked by its own window-state event when reopened.
      *  Shorts covers are owned by their own scan — left alone. */
     private fun onScreenOff() {
-        if (shortsCovering) return
+        // This used to bail out entirely while a Shorts cover was up, to leave the Shorts scan's
+        // state alone. The effect was that locking the phone mid-Shorts skipped ALL of the
+        // cleanup below: the cover stayed attached, the timers stayed armed and the foreground
+        // cache kept pointing at YouTube, so the next unlock could show a stranded cover over
+        // whatever was on screen. Screen-off now always cleans up; the Shorts scan re-covers on
+        // its next tick if the user really is still on a Short.
         handler.removeCallbacks(webScanRunnable)
         handler.removeCallbacks(recheckRunnable)
         handler.removeCallbacks(confirmForegroundRunnable)
@@ -1213,15 +1231,14 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (!SettingsStore.blockYoutubeShorts(applicationContext) || !quickBlockActive() ||
             lastForegroundPkg != YOUTUBE_PKG
         ) {
-            if (shortsCovering) {
-                shortsCovering = false
-                withContext(Dispatchers.Main) { overlay.remove() }
-            }
+            if (shortsCovering) withContext(Dispatchers.Main) { overlay.remove() }
             return
         }
+        // shortsCovering is derived from the visible cover, so raising and removing it IS the
+        // state change — there is no flag left to keep in step (and no window in which one says
+        // "covered" while nothing is).
         val onShorts = isShortsOnScreen()
         if (onShorts && !shortsCovering) {
-            shortsCovering = true
             withContext(Dispatchers.Main) {
                 showBlockScreen(
                     title = "Shorts blocked",
@@ -1231,7 +1248,6 @@ class BlockerAccessibilityService : AccessibilityService() {
                 )
             }
         } else if (!onShorts && shortsCovering) {
-            shortsCovering = false
             withContext(Dispatchers.Main) { overlay.remove() }
         }
     }
@@ -1336,12 +1352,10 @@ class BlockerAccessibilityService : AccessibilityService() {
         lastWebText = null
         if (wasShorts) {
             // The Shorts cover is scoped to the player, so it must NOT be held until the user
-            // leaves YouTube — the rest of the app is meant to keep working. Hand ownership
-            // back to its scan instead: without clearing this flag the scan believed Shorts
-            // was still covered when the cover had gone, and since it only acts on the
-            // not-covered → covered transition it never drew it again. Shorts was then
-            // browsable until the user navigated out of Shorts and back in.
-            shortsCovering = false
+            // leaves YouTube — the rest of the app is meant to keep working. Taking it down
+            // hands ownership straight back to its scan, which redraws it on the next tick if
+            // the user is still on a Short. (shortsCovering is derived from the visible cover
+            // now, so there is no flag to clear here: removing it IS the state change.)
             overlay.remove()
             performGlobalAction(GLOBAL_ACTION_HOME)
         } else {

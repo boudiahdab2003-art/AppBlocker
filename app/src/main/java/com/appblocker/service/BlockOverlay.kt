@@ -44,17 +44,22 @@ internal class BlockOverlay(private val context: Context) {
     }
     private val handler = Handler(Looper.getMainLooper())
 
-    private var view: View? = null
+    // Written on the main thread (all window work is), but read from the service's background
+    // scans too — scanShorts asks isShowing/isAppBlock/counterKey to decide whether a Shorts
+    // cover is up. Volatile so those reads see the current value rather than a stale one.
+    @Volatile private var view: View? = null
     private var preInflated: View? = null
 
     /** True while a cover is attached. */
     val isShowing: Boolean get() = view != null
 
     /** True when the visible cover is a whole-app block (not a web/word/purchase/Shorts cover). */
+    @Volatile
     var isAppBlock = false
         private set
 
     /** The attempt-counter key the visible cover was raised for, or null. */
+    @Volatile
     var counterKey: String? = null
         private set
 
