@@ -52,6 +52,12 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
    ourselves) are never blocked by *any* layer, including a keyword lockout.
 7. Home/the launcher is always honoured — the user must never be trapped under a cover.
 8. Derive state from the overlay where possible; don't mirror it in a flag.
+9. **Elapsed time is measured monotonically.** Anything of the form "has N passed since X" uses
+   `SystemClock.elapsedRealtime()` — in the service, via `stopwatchNow()`. The wall clock is only
+   for genuine calendar facts (schedule windows, day stamps, notification throttles), and a
+   deadline that must survive a reboot goes through `GuardedDeadline`/`SessionClock`. The user can
+   move the wall clock; a negative interval reads as "no time has passed", which silently freezes
+   whatever the timer was guarding. This has now been the cause of three separate sweeps' findings.
 
 ## Device quirks these invariants exist for
 
@@ -164,19 +170,67 @@ that is wrong is not.
   grep for the *primitive* (`System.currentTimeMillis()` compared against a stored value) rather
   than for the feature.
 
+### Swept in the fifth "bug hunt" (25 Jul 2026)
+
+Two targets: the web/keyword scan, and the previous sweep's own prescription — **grep for the
+primitive, not the feature.** The grep is what paid, and it found the clock bug a *third* time.
+
+- every in-memory timer in the watcher — **1 bug, 6 sites, and a working bypass of Strict Mode.**
+  `lastGuardBounceAt`, `lastBlockAt`, `webScanQueuedAt`, `dismissedAt`, `lastCountedAt` and
+  `exitStartedAt` were all wall-clock stopwatches. A backward clock change makes each interval
+  negative, which reads as "no time has passed", so each froze in the state that does nothing:
+  no cover raised, no scan on a busy page, no re-block, no re-count, and the exit watcher holding
+  its cover forever (invariant 7). A forward change lapsed them all at once — the v1.95
+  double-block returning.
+  - **The bypass:** `strictRemaining()` is clock-proof, so a Strict session can't be shortened —
+    but `handleStrictSettingsGuard` *returns `true`, claiming it bounced, without bouncing* while
+    its throttle is live. Get bounced once, set the clock back (Date & time is not a guarded page),
+    and the Accessibility toggle is reachable. Nothing else defends that toggle.
+  - Fixed via `stopwatchNow()`, whose KDoc is the extraction: it names what each timer guards and
+    states the boundary between the three clocks. Note the *newer* throttles (`isLauncherPkg`,
+    `imePackage`, `refreshCurrentLocation`) already had this right — only the older cover
+    machinery was wrong, which is why a feature-shaped search never found it.
+- the Shorts check — **1 bug.** `isShortsOnScreen()` returned a plain `Boolean`, and `scanShorts`
+  *removes* the cover on false. Both routine ways of failing to read the screen — a null root, and
+  our own cover reporting as the active window — answered false, so the cover came off while the
+  user was still on a Short and the next scan put it back: a flicker with a watchable gap each
+  cycle. Now `Boolean?`, null changing nothing. Invariants 1 and 4, in the one scan never swept.
+  - Exhausting `MAX_NODES` deliberately still answers **false**, not null: the screen *was*
+    readable, the walk is breadth-first and the reel markers sit high in the tree, whereas null
+    there would risk stranding a Shorts cover over ordinary YouTube — visible over-blocking, and
+    harder to escape. Decided, not defaulted.
+- `UsageTracker.addInterval` — **1 bug, a dated hang.** A local day is 25 hours on the DST
+  fall-back day, so an interval can sit past `dayStart + 24h`; the hour index was coerced into
+  0..23 while `hourEnd` came from the *coerced* hour, putting that end behind the cursor. The step
+  went negative (corrupting a bucket), then exactly zero, and the loop never terminated — Insights
+  and the coach hanging on a pegged core, once a year, in late October. Now clamped, with a
+  "never take a non-positive step" guard. Made `internal` and **tested** (`UsageTrackerTest`, four
+  cases with `timeout` asserting termination) — the only finding of this sweep that is testable.
+- `WebContentFilter.check` layering, the `lastWebText` dedup, `shouldScanPkg` and the scan's
+  suppression gates — clean.
+
+**Considered and deliberately left** (so the next sweep doesn't re-litigate them):
+
+- `extractVisibleText` adds `rootInActiveWindow` on top of the `windows` roots, so when `windows`
+  is populated the active tree can be walked twice, burning half the 400-node budget. Harmless on
+  this device (`windows` is empty without `flagRetrieveInteractiveWindows`, which is deliberately
+  not set) and not worth changing scan coverage for.
+- `adultDomains`/`adultKeywords` match page text with plain `contains`, not whole-word, so a page
+  merely mentioning a listed domain can be blocked. That is *over*-blocking, which the owner sees
+  and can report — his call, not a silent defect.
+- `MAX_NODES`/`MAX_TEXT` cap how deep any scan reads, so text far down a large page is never
+  examined. A real limit, but the intended battery trade-off rather than a bug.
+
 ### Not yet swept
 
-- `UsageTracker` (its day rollover and the session reconstruction from usage events)
-- the web/keyword scan itself (`WebContentFilter`, `extractVisibleText`, browser URL reading)
 - the updater itself (`Updater`, version comparison, download/install) — `UpdatePause` is done
 - the location condition (`inLocation`, `ensureLocationUpdates`, fix freshness)
 - the UI's own live state: `resumeTick` re-reads, and the several screens that cache
-  service/prefs state in `remember` blocks. The fourth sweep touched only the adult-pack gate;
+  service/prefs state in `remember` blocks. Sweeps four and five touched only the adult-pack gate;
   the pattern (a `remember` holding a decision that time or the service can invalidate) is
-  everywhere and is worth a sweep of its own.
-- the remaining `System.currentTimeMillis()` deadline comparisons, now that two of them were
-  bypassable. Notification throttles are fine (a wrong clock only re-notifies); anything the user
-  benefits from skipping is not.
+  everywhere and is worth a sweep of its own. **Best remaining candidate.**
+- `UsageTracker` beyond `addInterval`: the caching layers (`usedTodayCache`, the per-day
+  memoisation) and `sessionStatsToday`'s interval merging.
 
 ### A pattern worth generalising from the second sweep
 
@@ -203,8 +257,13 @@ new time-dependent logic needs that seam or it cannot be tested here.**
   bypass appearing twice. Do the same for the next repeat offender — the natural candidate is
   "given an event and what's on screen, should the cover change?", which is decidable from plain
   values and would lock in invariants 1–4.
-- **Grep for the primitive, not the feature.** Both clock bypasses were local re-implementations
-  of something `SessionClock` already did safely, so no search for the *concept* found them. A
-  search for the raw ingredient (`System.currentTimeMillis()` against a stored number) would have.
+- **Grep for the primitive, not the feature.** All three clock findings were local
+  re-implementations of something `SessionClock` already did safely, so no search for the *concept*
+  found them. A search for the raw ingredient (`System.currentTimeMillis()` against a stored
+  number) found the third one immediately — **this is the highest-yield move in the file so far.**
+  Generalise it: pick a primitive the code gets wrong somewhere, and grep every use of it.
+- **When one instance is found, enumerate all of them before fixing.** Sweep 1 fixed the keyword
+  lockout alone; sweep 4 then found the adult gate, and sweep 5 found six more. Three releases for
+  one mistake. Had the first sweep grepped the primitive, all eight would have gone out together.
 - The owner is non-technical: don't ask him which code to change. Ask only about behaviour
   he can judge (e.g. "should two opens ten seconds apart count once or twice?").

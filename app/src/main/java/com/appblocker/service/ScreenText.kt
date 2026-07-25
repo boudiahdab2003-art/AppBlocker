@@ -31,12 +31,22 @@ private val SHORTS_ID_MARKERS = listOf(
 )
 
 /**
- * True if the YouTube Shorts player (the "reel" surface) is currently on screen. We match
- * the player's view-ids, not the always-present "Shorts" nav tab.
+ * Whether the YouTube Shorts player (the "reel" surface) is on screen: true / false / **null
+ * meaning "can't tell"**. We match the player's view-ids, not the always-present "Shorts" nav tab.
+ *
+ * The three-way answer matters because the caller *removes* a cover on a false, and there are two
+ * routine ways to be unable to read the screen at all — an unreadable tree mid-churn, and our own
+ * non-focusable cover reporting as the active window (a documented quirk of this device, and the
+ * cover is up in exactly the situation this gets asked in). Both used to answer "false", i.e.
+ * "not on Shorts", so the cover came off while the user was still watching one. Same
+ * can't-tell-is-not-a-no mistake as the covers parked on the home screen in v1.96.
  */
-internal fun AccessibilityService.isShortsOnScreen(): Boolean {
-    val root = rootInActiveWindow ?: return false
-    if (root.packageName != YOUTUBE_PKG) return false
+internal fun AccessibilityService.isShortsOnScreen(): Boolean? {
+    val root = rootInActiveWindow ?: return null
+    val active = root.packageName?.toString()
+    // Our own window says nothing about what is behind it; never reconcile to ourselves.
+    if (active == packageName) return null
+    if (active != YOUTUBE_PKG) return false
     val queue = ArrayDeque<AccessibilityNodeInfo>()
     queue.add(root)
     var visited = 0
@@ -48,6 +58,10 @@ internal fun AccessibilityService.isShortsOnScreen(): Boolean {
         }
         for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
     }
+    // Deliberately "no", not "can't tell", even when the walk stopped at MAX_NODES: the screen WAS
+    // readable, we just didn't finish it, and the walk is breadth-first while the reel markers are
+    // player/container ids high in the tree. Answering null here would instead risk stranding a
+    // Shorts cover over ordinary YouTube — a visible over-block, and the harder one to get out of.
     return false
 }
 

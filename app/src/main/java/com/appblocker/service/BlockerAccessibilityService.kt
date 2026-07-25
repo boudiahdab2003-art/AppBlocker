@@ -128,6 +128,38 @@ class BlockerAccessibilityService : AccessibilityService() {
             focusBootCount, DeviceBoot.count(applicationContext),
         )
 
+    /**
+     * The clock every in-memory timer in this service measures elapsed time against.
+     *
+     * All of them are stopwatches — "have 1.5 seconds passed since the last bounce?" — and all
+     * of them used to read `System.currentTimeMillis()`, which the user (and the network) can
+     * move at will. A **backward** change makes every one of those subtractions negative, and
+     * since a negative interval reads as "no time has passed at all", each timer sticks in
+     * whichever state suppresses action:
+     *
+     *  - [lastGuardBounceAt]: the Strict-Mode guard believes it is already bouncing, so it stops
+     *    bouncing — leaving the Accessibility page reachable and the whole service switchable
+     *    off. The Strict *session* is clock-proof ([strictRemaining] uses [SessionClock]), so
+     *    this throttle was the way around it.
+     *  - [lastBlockAt]: `handleAppBlock` returns early, so the app-block cover is never raised.
+     *  - [webScanQueuedAt]: the debounce's max-wait never fires, so a never-quiet page postpones
+     *    the word/site scan indefinitely — the exact bug that cap was added to fix.
+     *  - [dismissedAt] / [lastCountedAt]: the post-dismiss grace and the attempt-count dedup
+     *    never lapse, so nothing re-blocks and nothing re-counts.
+     *  - [exitStartedAt]: the exit watcher never reaches its give-up, holding the cover up
+     *    indefinitely — the one thing invariant 7 says must never happen.
+     *
+     * A forward change does the opposite: every window lapses at once, which is the v1.95
+     * double-block and double-count returning.
+     *
+     * Deliberately NOT for everything. Persisted deadlines can't use this (it resets on reboot) —
+     * those go through [com.appblocker.data.GuardedDeadline] or [SessionClock], which anchor to
+     * both clocks. Genuine calendar facts must stay on the wall clock: schedule windows (see
+     * [blockReason]), day stamps, and the notification throttles, where a wrong clock only means
+     * notifying again.
+     */
+    private fun stopwatchNow(): Long = SystemClock.elapsedRealtime()
+
     // Zeroes the focus row once the session it describes has expired, so a stale deadline
     // can never resurrect after a reboot with a wrong wall clock. Re-checks at fire time:
     // only a genuinely expired session is cleared — Strict stays un-stoppable while active.
@@ -184,7 +216,7 @@ class BlockerAccessibilityService : AccessibilityService() {
             // Another path already took the cover down (the launcher's own window event runs
             // through handleAppBlock), so there is nothing left to hold: stop asking for HOME.
             if (!overlay.isShowing) return finishExit(left = true)
-            val since = System.currentTimeMillis() - exitStartedAt
+            val since = stopwatchNow() - exitStartedAt
             // Hold on for the full window only while we can SEE the app is still in front.
             // When we can't tell, let go quickly — holding a cover up on no evidence is what
             // left it sitting over the home screen.
@@ -647,7 +679,7 @@ class BlockerAccessibilityService : AccessibilityService() {
             webScanQueuedAt = 0L
             return
         }
-        val now = System.currentTimeMillis()
+        val now = stopwatchNow()
         if (webScanQueuedAt == 0L) webScanQueuedAt = now
         val delay =
             if (now - webScanQueuedAt >= WEB_SCAN_MAX_WAIT_MS) 0L else WEB_SCAN_DEBOUNCE_MS
@@ -683,7 +715,7 @@ class BlockerAccessibilityService : AccessibilityService() {
             overlay.remove() // left the blocked app — take the cover down
             return
         }
-        val now = System.currentTimeMillis()
+        val now = stopwatchNow()
         if (pkg == lastBlockedPkg && now - lastBlockAt < 1500) return
         lastBlockedPkg = pkg
         lastBlockAt = now
@@ -711,7 +743,10 @@ class BlockerAccessibilityService : AccessibilityService() {
         val danger = byClass || guardScreenIsDangerous()
         if (!danger) return false
 
-        val now = System.currentTimeMillis()
+        // Monotonic, not the wall clock: this throttle claims "already bouncing" WITHOUT
+        // bouncing, so a backward clock change used to turn it into a permanent "yes" — and
+        // with the guard silent, the Accessibility toggle it exists to defend was reachable.
+        val now = stopwatchNow()
         if (now - lastGuardBounceAt < 1500) return true // already bouncing this page
         lastGuardBounceAt = now
         if (DEBUG) Log.d(TAG, "strict guard bounce: pkg=$pkg class=$className byClass=$byClass")
@@ -1268,8 +1303,13 @@ class BlockerAccessibilityService : AccessibilityService() {
         // shortsCovering is derived from the visible cover, so raising and removing it IS the
         // state change — there is no flag left to keep in step (and no window in which one says
         // "covered" while nothing is).
+        // Three-way: null means the screen couldn't be read at all (see isShortsOnScreen), and
+        // that must change nothing — taking the cover down on no evidence is what left Shorts
+        // playing uncovered, with the next scan putting the cover straight back (a flicker, and
+        // a watchable gap each time round). Leaving it up strands nothing: "Got it" removes it,
+        // and scheduleShortsScan removes it as soon as YouTube stops being foreground.
         val onShorts = isShortsOnScreen()
-        if (onShorts && !shortsCovering) {
+        if (onShorts == true && !shortsCovering) {
             withContext(Dispatchers.Main) {
                 showBlockScreen(
                     title = "Shorts blocked",
@@ -1278,7 +1318,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                     counterKey = CoverGate.SHORTS_KEY,
                 )
             }
-        } else if (!onShorts && shortsCovering) {
+        } else if (onShorts == false && shortsCovering) {
             withContext(Dispatchers.Main) { overlay.remove() }
         }
     }
@@ -1287,12 +1327,12 @@ class BlockerAccessibilityService : AccessibilityService() {
      *  which owns the rules (and is unit-tested, see CoverGateTest). */
     private fun dismissSuppressed(counterKey: String): Boolean = CoverGate.suppressed(
         counterKey, dismissedKey, dismissedPkg, lastForegroundPkg,
-        System.currentTimeMillis() - dismissedAt,
+        stopwatchNow() - dismissedAt,
     )
 
     /** The key-agnostic timing half, for the web scan. */
     private fun withinDismissWindow(): Boolean = CoverGate.inGrace(
-        dismissedPkg, lastForegroundPkg, System.currentTimeMillis() - dismissedAt,
+        dismissedPkg, lastForegroundPkg, stopwatchNow() - dismissedAt,
     )
 
     /**
@@ -1322,7 +1362,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         // Is this a NEW block, or the same one being drawn again because the user never got
         // out of the app? Only a new one records an attempt (the cover reads the running total
         // itself) and rolls a fresh quote — otherwise one open read as two.
-        val now = System.currentTimeMillis()
+        val now = stopwatchNow()
         val fresh = CoverGate.shouldCount(
             offenceKey, lastCountedOffence, now - lastCountedAt, resumingOffence,
         )
@@ -1376,7 +1416,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         val wasShorts = overlay.counterKey == CoverGate.SHORTS_KEY
         dismissedKey = overlay.counterKey
         dismissedPkg = lastForegroundPkg
-        dismissedAt = System.currentTimeMillis()
+        dismissedAt = stopwatchNow()
         lastBlockedPkg = null
         // Re-arm word detection: coming back to the page that was just blocked must
         // block again, not read as "already handled" via the text dedup.
@@ -1406,7 +1446,7 @@ class BlockerAccessibilityService : AccessibilityService() {
             return
         }
         exitTarget = pkg
-        exitStartedAt = System.currentTimeMillis()
+        exitStartedAt = stopwatchNow()
         exitHomeTries = 1
         performGlobalAction(GLOBAL_ACTION_HOME)
         handler.removeCallbacks(exitRunnable)
@@ -1433,7 +1473,7 @@ class BlockerAccessibilityService : AccessibilityService() {
             // no new quote, without the plain cooldown having to be long enough to reach it.
             resumingOffence = lastCountedOffence
             val untilGraceEnds = CoverGate.DISMISS_GRACE_STUCK_MS -
-                (System.currentTimeMillis() - dismissedAt)
+                (stopwatchNow() - dismissedAt)
             handler.removeCallbacks(recheckRunnable)
             handler.postDelayed(recheckRunnable, untilGraceEnds.coerceAtLeast(0L) + 250L)
         }
