@@ -21,7 +21,7 @@ object UnlockCounter {
         // Prune old days so the file doesn't grow forever.
         prefs.all.keys.forEach { k ->
             val day = k.removePrefix("day_").toIntOrNull() ?: return@forEach
-            if (today - day > KEEP_DAYS) editor.remove(k)
+            if (dayGap(today, day) > KEEP_DAYS) editor.remove(k)
         }
         editor.apply()
         return count

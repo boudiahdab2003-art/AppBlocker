@@ -18,7 +18,7 @@ object LaunchCounter {
         // ~KEEP_DAYS so the file doesn't grow forever (e.g. long-uninstalled apps).
         if (storedDay != today) {
             prefs.all.forEach { (key, value) ->
-                if (key.startsWith("day_") && value is Int && today - value > KEEP_DAYS) {
+                if (key.startsWith("day_") && value is Int && dayGap(today, value) > KEEP_DAYS) {
                     val stale = key.removePrefix("day_")
                     editor.remove("day_$stale").remove("count_$stale")
                 }

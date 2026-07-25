@@ -24,9 +24,13 @@ object MoodStore {
         val prefs = prefs(context)
         val today = todayStamp()
         return (0 until days).mapNotNull { ago ->
-            val rating = prefs.getInt("rating_${today - ago}", -1)
+            // stampDaysAgo, not `today - ago`: day-stamps aren't a linear count, so subtracting
+            // produced stamps that never existed once the year rolled over — the whole history
+            // read as empty for the first week of January.
+            val stamp = stampDaysAgo(today, ago)
+            val rating = prefs.getInt("rating_$stamp", -1)
             if (rating < 0) null
-            else Triple(ago, rating, prefs.getString("note_${today - ago}", "") ?: "")
+            else Triple(ago, rating, prefs.getString("note_$stamp", "") ?: "")
         }
     }
 
@@ -39,7 +43,7 @@ object MoodStore {
             .putString("note_$today", note.trim())
         prefs.all.keys.forEach { k ->
             val stamp = k.substringAfter('_').toIntOrNull() ?: return@forEach
-            if ((k.startsWith("rating_") || k.startsWith("note_")) && today - stamp > KEEP_DAYS) {
+            if ((k.startsWith("rating_") || k.startsWith("note_")) && dayGap(today, stamp) > KEEP_DAYS) {
                 editor.remove(k)
             }
         }
