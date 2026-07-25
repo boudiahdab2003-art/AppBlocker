@@ -65,4 +65,47 @@ class ProtectionStateTest {
             ProtectionState.OK,
             protectionState(true, lastEventAt = now - (2 * hour - 1), now = now, usedMinutesSinceLastEvent = 120),
         )
+
+    // ---- paused after an update ----------------------------------------------------------
+    // Every update switches blocking off until the user reactivates it. This used to report OK,
+    // so the app blocked nothing while insisting it was fine — after every single release.
+
+    @Test fun pausedAfterAnUpdateIsNotHealthy() =
+        assertEquals(
+            ProtectionState.PAUSED,
+            protectionState(
+                true, lastEventAt = now - 60_000L, now = now,
+                usedMinutesSinceLastEvent = 1, updatePaused = true,
+            ),
+        )
+
+    /** A disabled service outranks it: reactivating achieves nothing while the toggle is off. */
+    @Test fun disabledOutranksPaused() =
+        assertEquals(
+            ProtectionState.OFF,
+            protectionState(
+                enabled = false, lastEventAt = now, now = now,
+                usedMinutesSinceLastEvent = 0, updatePaused = true,
+            ),
+        )
+
+    /** Paused outranks stalled: it's the specific, self-inflicted cause with an obvious fix. */
+    @Test fun pausedOutranksStalled() =
+        assertEquals(
+            ProtectionState.PAUSED,
+            protectionState(
+                true, lastEventAt = now - 3 * hour, now = now,
+                usedMinutesSinceLastEvent = 40, updatePaused = true,
+            ),
+        )
+
+    /** And it must not fire when nothing is paused — the default keeps every case above honest. */
+    @Test fun notPausedIsUnaffected() =
+        assertEquals(
+            ProtectionState.OK,
+            protectionState(
+                true, lastEventAt = now - 60_000L, now = now,
+                usedMinutesSinceLastEvent = 1, updatePaused = false,
+            ),
+        )
 }

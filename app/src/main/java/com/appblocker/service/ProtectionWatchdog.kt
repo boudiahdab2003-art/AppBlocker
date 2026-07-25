@@ -29,7 +29,10 @@ object ProtectionWatchdog {
         } else {
             null
         }
-        return protectionState(enabled, lastEventAt, now, usedMinutes)
+        return protectionState(
+            enabled, lastEventAt, now, usedMinutes,
+            updatePaused = SettingsStore.updatePaused(context),
+        )
     }
 
     /**
@@ -53,6 +56,10 @@ object ProtectionWatchdog {
             // signature of an OEM battery manager killing it. Toggling accessibility off/on
             // revives it, which is what the alert sends the user to do.
             ProtectionState.STALLED -> ProtectionNotifier.notifyStalled(context, force)
+            // Off after an update, pending reactivation. Worth an alert precisely because it is
+            // self-inflicted and easy to forget: the app was doing nothing at all, and saying it
+            // was fine, until the user happened to open the Blocking tab.
+            ProtectionState.PAUSED -> ProtectionNotifier.notifyPaused(context, force)
         }
     }
 }
