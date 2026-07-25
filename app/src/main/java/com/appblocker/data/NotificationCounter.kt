@@ -20,7 +20,7 @@ object NotificationCounter {
         val editor = prefs.edit().putInt(key(today), count)
         prefs.all.keys.forEach { k ->
             val day = k.removePrefix("day_").toIntOrNull() ?: return@forEach
-            if (today - day > KEEP_DAYS) editor.remove(k)
+            if (dayGap(today, day) > KEEP_DAYS) editor.remove(k)
         }
         editor.apply()
         return count

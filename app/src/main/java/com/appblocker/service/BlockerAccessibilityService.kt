@@ -32,6 +32,7 @@ import com.appblocker.data.BlockerDatabase
 import com.appblocker.data.DeviceBoot
 import com.appblocker.data.FocusState
 import com.appblocker.data.InstalledAppsRepository
+import com.appblocker.data.KeywordLockout
 import com.appblocker.data.LaunchCounter
 import com.appblocker.data.OwnUi
 import com.appblocker.data.QuickSession
@@ -51,8 +52,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -233,13 +236,11 @@ class BlockerAccessibilityService : AccessibilityService() {
     // cooldown can stay short enough that a real second open still counts.
     private var resumingOffence: String? = null
 
-    // Apps where a blocked word was caught: the whole app stays locked — any page, any
-    // text — until the expiry time. Guarded by its own lock (written from the background
-    // scan, read from the main thread); mirrored to prefs so restarts don't lift it.
-    private val keywordLockouts = mutableMapOf<String, Long>()
-    // The word that triggered each app's lockout, so re-entry can name it too. In-memory only
-    // (guarded by the keywordLockouts lock) — after a reboot it falls back to a generic line.
-    private val keywordLockoutWords = mutableMapOf<String, String>()
+    // Apps where a blocked word was caught: the whole app stays locked — any page, any text —
+    // until it expires. Guarded by its own lock (written from the background scan, read from the
+    // main thread); mirrored to prefs so restarts don't lift it. The word that triggered each
+    // one rides along in the record rather than in a second map, so the two can't drift.
+    private val keywordLockouts = mutableMapOf<String, KeywordLockout>()
 
     @Volatile private var lastForegroundPkg: String? = null
     @Volatile private var lastLocation: Location? = null
@@ -353,25 +354,34 @@ class BlockerAccessibilityService : AccessibilityService() {
             QuickSession.state(this).active ||
             schedules.any { it.enabled && pkg in it.packages }
 
-    /** Millis left on [pkg]'s keyword lockout, or 0 when it isn't locked. */
+    /** Millis left on [pkg]'s keyword lockout, or 0 when it isn't locked. Uses the same
+     *  clock-change-proof reckoning as sessions, so winding the device clock forward can no
+     *  longer lift the lockout early — see [KeywordLockout]. */
     private fun keywordLockoutRemaining(pkg: String): Long = synchronized(keywordLockouts) {
-        ((keywordLockouts[pkg] ?: 0L) - System.currentTimeMillis()).coerceAtLeast(0L)
+        keywordLockouts[pkg]?.remaining(DeviceBoot.count(applicationContext)) ?: 0L
     }
 
     /** The word that triggered [pkg]'s lockout, if still remembered (in-memory only). */
     private fun keywordLockoutWord(pkg: String): String? = synchronized(keywordLockouts) {
-        keywordLockoutWords[pkg]
+        keywordLockouts[pkg]?.word
     }
 
     /** Locks [pkg] for [KEYWORD_LOCKOUT_MS] after a blocked [word] was caught in it. */
     private fun addKeywordLockout(pkg: String, word: String?) {
-        val now = System.currentTimeMillis()
+        val nowRt = SystemClock.elapsedRealtime()
+        val nowWall = System.currentTimeMillis()
+        val boot = DeviceBoot.count(applicationContext)
         synchronized(keywordLockouts) {
-            keywordLockouts.entries.removeAll { it.value <= now }
-            keywordLockoutWords.keys.retainAll(keywordLockouts.keys)
-            keywordLockouts[pkg] = now + KEYWORD_LOCKOUT_MS
-            if (word != null) keywordLockoutWords[pkg] = word else keywordLockoutWords.remove(pkg)
-            SettingsStore.setKeywordLockouts(applicationContext, keywordLockouts.toMap())
+            keywordLockouts.entries.removeAll { it.value.remaining(boot) <= 0L }
+            keywordLockouts[pkg] = KeywordLockout(
+                realtimeStart = nowRt,
+                realtimeEnd = nowRt + KEYWORD_LOCKOUT_MS,
+                wallStart = nowWall,
+                wallEnd = nowWall + KEYWORD_LOCKOUT_MS,
+                bootCount = boot,
+                word = word,
+            )
+            SettingsStore.setKeywordLockouts(applicationContext, keywordLockouts.toMap(), boot)
         }
     }
 
@@ -403,9 +413,13 @@ class BlockerAccessibilityService : AccessibilityService() {
         allowlistMode = SettingsStore.quickBlockAllowlist(this)
         essentialPackages = findEssentialPackages(this)
         // Restore unexpired keyword lockouts — a service rebind must not unlock an app early.
-        val now = System.currentTimeMillis()
+        // Filtered on the same reckoning that decides whether one is running, not on the wall
+        // clock, or a clock change could drop a live lockout here instead of at the check.
+        val boot = DeviceBoot.count(this)
         synchronized(keywordLockouts) {
-            keywordLockouts.putAll(SettingsStore.keywordLockouts(this).filterValues { it > now })
+            keywordLockouts.putAll(
+                SettingsStore.keywordLockouts(this).filterValues { it.remaining(boot) > 0L }
+            )
         }
         // React to the user flipping the toggles on the Blocked-words screen without a restart.
         val sp = getSharedPreferences("appblocker_prefs", Context.MODE_PRIVATE)
@@ -453,7 +467,26 @@ class BlockerAccessibilityService : AccessibilityService() {
             } else {
                 handler.post { stopLocationUpdates() }
             }
-        }.launchIn(scope)
+        }
+            // This flow IS the watcher's view of reality — the rules, the Strict session, the
+            // blocked words and the schedules. Without a retry, one throw anywhere in it (a bad
+            // row, a database hiccup, anything in the transform above) ended the collection for
+            // good: the scope's handler logged it, blocking carried on with whatever it last
+            // saw, and nothing ever refreshed again. A newly blocked app would never block, an
+            // ended Strict session would never lift, and the watchdog would report everything
+            // healthy because events were still arriving. Silent, total, and permanent until the
+            // service happened to be restarted.
+            //
+            // So: log it, wait, and re-collect. Room re-reads current state on re-subscribe, so
+            // a retry always resyncs rather than resuming from a stale point. The delay grows to
+            // a cap so a persistently failing database can't spin.
+            .retryWhen { cause, attempt ->
+                Log.w(TAG, "rule flow failed (attempt $attempt) — retrying", cause)
+                runCatching { ServiceHealth.recordError(applicationContext, "ruleFlow", cause) }
+                delay((RULE_FLOW_RETRY_MS * (attempt + 1)).coerceAtMost(RULE_FLOW_RETRY_MAX_MS))
+                true
+            }
+            .launchIn(scope)
         // Warm the block overlay off the connect path (inflate only, NOT addView), so the
         // very first block doesn't pay layout inflation while the blocked app is visible.
         handler.post { overlay.warmUp(::onCoverDismissed) }
@@ -1467,6 +1500,11 @@ class BlockerAccessibilityService : AccessibilityService() {
         private const val WEB_SCAN_MAX_WAIT_MS = 700L
         // How long an app stays fully locked after a blocked word was caught in it.
         private const val KEYWORD_LOCKOUT_MS = 30 * 60_000L
+
+        // Backoff for re-collecting the rule flow after it throws — grows per attempt to a cap
+        // so a persistently failing database can't spin.
+        private const val RULE_FLOW_RETRY_MS = 2_000L
+        private const val RULE_FLOW_RETRY_MAX_MS = 60_000L
 
         // The trip Home after "Got it": how often to check whether we're off the blocked app
         // yet, when to re-ask for HOME, and when to give up so the user can never be trapped.

@@ -154,23 +154,26 @@ object SettingsStore {
 
     private const val KEY_KEYWORD_LOCKOUTS = "keyword_lockouts"
 
-    /** Apps under a keyword lockout (a blocked word was caught in them), as package →
-     *  expiry epoch millis. Persisted so a service or phone restart doesn't lift the lock. */
-    fun keywordLockouts(context: Context): Map<String, Long> =
+    /** Apps under a keyword lockout (a blocked word was caught in them). Persisted so a service
+     *  or phone restart doesn't lift the lock; see [KeywordLockout] for the anchoring, which is
+     *  clock-change-proof rather than a bare wall-clock deadline. */
+    internal fun keywordLockouts(context: Context): Map<String, KeywordLockout> =
         prefs(context).getStringSet(KEY_KEYWORD_LOCKOUTS, emptySet()).orEmpty()
-            .mapNotNull { entry ->
-                val split = entry.lastIndexOf('|')
-                if (split <= 0) return@mapNotNull null
-                val until = entry.substring(split + 1).toLongOrNull() ?: return@mapNotNull null
-                entry.substring(0, split) to until
-            }.toMap()
+            .mapNotNull { KeywordLockout.decode(it) }
+            .toMap()
 
-    fun setKeywordLockouts(context: Context, value: Map<String, Long>) =
-        prefs(context).edit().putStringSet(
-            KEY_KEYWORD_LOCKOUTS,
-            value.filterValues { it > System.currentTimeMillis() }
-                .map { (pkg, until) -> "$pkg|$until" }.toSet(),
-        ).apply()
+    /** [currentBootCount] so expired entries are dropped on the same clock rules that decide
+     *  whether a lockout is still running — filtering on the wall clock here would undo the
+     *  clock-proofing by pruning a live lockout whose deadline merely looks past. */
+    internal fun setKeywordLockouts(
+        context: Context,
+        value: Map<String, KeywordLockout>,
+        currentBootCount: Int,
+    ) = prefs(context).edit().putStringSet(
+        KEY_KEYWORD_LOCKOUTS,
+        value.filterValues { it.remaining(currentBootCount) > 0L }
+            .map { (pkg, lockout) -> lockout.encode(pkg) }.toSet(),
+    ).apply()
 
     private const val KEY_PROTECTION_LAST_NOTIFIED = "protection_last_notified_at"
 

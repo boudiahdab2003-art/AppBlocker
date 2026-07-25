@@ -96,7 +96,7 @@ object Goals {
         prefs.all.keys.forEach { k ->
             if (!k.startsWith("gused_")) return@forEach
             val day = k.substringAfterLast('_').toIntOrNull() ?: return@forEach
-            if (today - day > KEEP_DAYS) editor.remove(k)
+            if (dayGap(today, day) > KEEP_DAYS) editor.remove(k)
         }
         editor.apply()
     }
