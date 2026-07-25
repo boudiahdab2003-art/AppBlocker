@@ -23,6 +23,7 @@ object ProtectionNotifier {
     private const val NOTIF_ID = 1001
     // Its own id so the "stalled" alert can't silently replace (or be replaced by) the "off" one.
     private const val NOTIF_ID_STALLED = 1002
+    private const val NOTIF_ID_PAUSED = 1003
 
     // Once shown, don't nag again until this much time has passed while still disabled.
     private val MIN_RENOTIFY_MS = TimeUnit.HOURS.toMillis(4)
@@ -75,6 +76,7 @@ object ProtectionNotifier {
             bannerHeadline = "PROTECTION OFF",
             bannerSubtitle = "Blocking has stopped",
             action = "Turn on",
+            requestCode = NOTIF_ID,
         )
         manager.notify(NOTIF_ID, notification)
         // Stamp the cooldown only after actually posting, so a failed post never suppresses a
@@ -109,8 +111,41 @@ object ProtectionNotifier {
             bannerHeadline = "BLOCKING STALLED",
             bannerSubtitle = "Your phone may have stopped it",
             action = "Fix it",
+            requestCode = NOTIF_ID_STALLED,
         )
         manager.notify(NOTIF_ID_STALLED, notification)
+        SettingsStore.setProtectionLastNotifiedAt(context, now)
+    }
+
+    /**
+     * Posts the "paused after an update, blocking is off" alert.
+     *
+     * Every update switches blocking off until the user reactivates it, and until now the only
+     * hint was a banner on the Blocking tab — so an update could leave the app blocking nothing
+     * while its own status row said "Protection active". This is the alert for that.
+     */
+    @SuppressLint("MissingPermission") // guarded by the areNotificationsEnabled() check below.
+    fun notifyPaused(context: Context, force: Boolean = false) {
+        val manager = NotificationManagerCompat.from(context)
+        if (!manager.areNotificationsEnabled()) return
+
+        val now = System.currentTimeMillis()
+        if (!force) {
+            val last = SettingsStore.protectionLastNotifiedAt(context)
+            if (now - last < MIN_RENOTIFY_MS) return
+        }
+
+        val notification = build(
+            context,
+            title = "Blocking is paused after the update",
+            collapsed = "Tap to turn it back on",
+            bannerHeadline = "BLOCKING IS OFF",
+            bannerSubtitle = "Paused since the app updated",
+            action = "Turn it back on",
+            requestCode = NOTIF_ID_PAUSED,
+            openPermissions = false, // Reactivate is on the Blocking tab, which is where we land
+        )
+        manager.notify(NOTIF_ID_PAUSED, notification)
         SettingsStore.setProtectionLastNotifiedAt(context, now)
     }
 
@@ -130,6 +165,7 @@ object ProtectionNotifier {
             bannerHeadline = "NOTIFICATIONS ON",
             bannerSubtitle = "Alerts are working",
             action = "Open",
+            requestCode = NOTIF_ID,
         )
         manager.notify(NOTIF_ID, notification)
     }
@@ -141,13 +177,23 @@ object ProtectionNotifier {
         bannerHeadline: String,
         bannerSubtitle: String,
         action: String,
+        /** Distinct per notification, because PendingIntent matching IGNORES extras: with a
+         *  shared request code and FLAG_UPDATE_CURRENT, whichever notification was built last
+         *  would silently rewrite where the others' taps go. Passing the notification id keeps
+         *  each one's destination its own. */
+        requestCode: Int,
+        /** Where tapping should land. The permissions screen is right for a disabled or stalled
+         *  service, but wrong for the after-update pause: Reactivate lives on the Blocking tab,
+         *  which is where opening the app plainly already goes (tab 0). Sending someone to a
+         *  permissions screen with nothing to fix is worse than not linking at all. */
+        openPermissions: Boolean = true,
     ): android.app.Notification {
         val fixIntent = Intent(context, MainActivity::class.java).apply {
-            putExtra(MainActivity.EXTRA_OPEN_PERMISSIONS, true)
+            if (openPermissions) putExtra(MainActivity.EXTRA_OPEN_PERMISSIONS, true)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
         val pendingIntent = PendingIntent.getActivity(
-            context, 0, fixIntent,
+            context, requestCode, fixIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         // Collapsed: small round badge. Expanded: the full-width branded banner instead — no wall
@@ -175,11 +221,13 @@ object ProtectionNotifier {
             .build()
     }
 
-    /** Clears both alerts — blocking being healthy means neither one still applies. */
+    /** Clears every alert — blocking being healthy means none of them still applies. Missing an id
+     *  here would leave a stale "blocking is off" notification sitting there after it was fixed. */
     fun cancel(context: Context) {
         NotificationManagerCompat.from(context).apply {
             cancel(NOTIF_ID)
             cancel(NOTIF_ID_STALLED)
+            cancel(NOTIF_ID_PAUSED)
         }
     }
 }

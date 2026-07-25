@@ -50,6 +50,7 @@ import androidx.compose.ui.platform.TextToolbarStatus
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.appblocker.data.DeviceBoot
 import com.appblocker.data.SettingsStore
 import kotlinx.coroutines.delay
 
@@ -74,21 +75,27 @@ fun KeywordsScreen(
     // 24-hour cooling-off on turning the adult pack off: passing the gate only REQUESTS the
     // off. The pack keeps filtering for OFF_DELAY_MS; then the switch works for OFF_WINDOW_MS,
     // after which the request expires and the gate starts over. Cancelling is always allowed.
-    var offRequestAt by remember { mutableStateOf(SettingsStore.adultPackOffRequestedAt(context)) }
-    var now by remember { mutableStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(offRequestAt) {
-        while (offRequestAt > 0L) {
-            now = System.currentTimeMillis()
-            if (now >= offRequestAt + OFF_DELAY_MS + OFF_WINDOW_MS) {
-                offRequestAt = 0L
-                SettingsStore.setAdultPackOffRequestedAt(context, 0L)
-                break
-            }
-            delay(30_000)
+    // Both moments are derived from one clock-proof record rather than compared against
+    // System.currentTimeMillis(): winding the device clock forward a day used to skip the whole
+    // cooling-off, which made the app's strongest protection its cheapest to switch off.
+    val boot = remember { DeviceBoot.count(context) }
+    var offRequest by remember { mutableStateOf(SettingsStore.adultPackOffRequest(context)) }
+    // Ticks the countdown; `remaining` is what actually decides, so this only drives redraws.
+    var tick by remember { mutableStateOf(0) }
+    val untilUnlock = offRequest?.remaining(boot) ?: 0L
+    val untilExpiry = offRequest?.remaining(boot, extraMs = OFF_WINDOW_MS) ?: 0L
+    val offReady = offRequest != null && untilUnlock <= 0L
+    LaunchedEffect(offRequest, tick) {
+        if (offRequest == null) return@LaunchedEffect
+        if (untilExpiry <= 0L) {
+            // The whole request lapsed — the gate starts over.
+            offRequest = null
+            SettingsStore.clearAdultPackOffRequest(context)
+            return@LaunchedEffect
         }
+        delay(30_000)
+        tick++
     }
-    val offUnlockAt = offRequestAt + OFF_DELAY_MS
-    val offReady = offRequestAt > 0L && now >= offUnlockAt
 
     Box(Modifier.fillMaxSize().background(com.appblocker.ui.theme.appBackground())) {
         Scaffold(
@@ -175,16 +182,16 @@ fun KeywordsScreen(
                                 // pending turn-off request.
                                 adultPack = true
                                 SettingsStore.setAdultWordsPack(context, true)
-                                offRequestAt = 0L
-                                SettingsStore.setAdultPackOffRequestedAt(context, 0L)
+                                offRequest = null
+                                SettingsStore.clearAdultPackOffRequest(context)
                             } else if (offReady) {
                                 // Gate passed AND the 24-hour cooling-off served — the off
                                 // finally happens.
                                 adultPack = false
                                 SettingsStore.setAdultWordsPack(context, false)
-                                offRequestAt = 0L
-                                SettingsStore.setAdultPackOffRequestedAt(context, 0L)
-                            } else if (offRequestAt == 0L) {
+                                offRequest = null
+                                SettingsStore.clearAdultPackOffRequest(context)
+                            } else if (offRequest == null) {
                                 // Turning it OFF starts at the type-and-wait gate. The switch
                                 // stays visibly ON; confirming only starts the cooling-off.
                                 showDisableGate = true
@@ -192,7 +199,7 @@ fun KeywordsScreen(
                             // else: request pending — the row below shows the remaining wait.
                         },
                     )
-                    if (offRequestAt > 0L) {
+                    if (offRequest != null) {
                         Row(
                             Modifier.fillMaxWidth().padding(top = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -200,18 +207,18 @@ fun KeywordsScreen(
                             Text(
                                 if (offReady) {
                                     "You can turn the pack off now — tap the switch. This " +
-                                        "unlock expires in ${fmtHoursMinutes(offRequestAt + OFF_DELAY_MS + OFF_WINDOW_MS - now)}."
+                                        "unlock expires in ${fmtHoursMinutes(untilExpiry)}."
                                 } else {
                                     "Turn-off requested. The pack keeps protecting you for " +
-                                        "another ${fmtHoursMinutes(offUnlockAt - now)}."
+                                        "another ${fmtHoursMinutes(untilUnlock)}."
                                 },
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.weight(1f),
                             )
                             TextButton(onClick = {
-                                offRequestAt = 0L
-                                SettingsStore.setAdultPackOffRequestedAt(context, 0L)
+                                offRequest = null
+                                SettingsStore.clearAdultPackOffRequest(context)
                             }) { Text("Cancel") }
                         }
                     }
@@ -243,8 +250,8 @@ fun KeywordsScreen(
                     // Passing the gate does NOT turn the pack off — it starts the 24-hour
                     // cooling-off. The pack keeps filtering until it's served and the owner
                     // flips the switch within the follow-up window.
-                    offRequestAt = System.currentTimeMillis()
-                    SettingsStore.setAdultPackOffRequestedAt(context, offRequestAt)
+                    SettingsStore.setAdultPackOffRequest(context, OFF_DELAY_MS, boot)
+                    offRequest = SettingsStore.adultPackOffRequest(context)
                     showDisableGate = false
                 },
             )

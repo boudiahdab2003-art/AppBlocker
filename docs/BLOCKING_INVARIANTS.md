@@ -88,8 +88,9 @@ that is wrong is not.
 ### Swept in the first "bug hunt" (25 Jul 2026, merged as `a9282c9`, not yet released)
 
 - keyword-lockout state — **1 bug**: a bare wall-clock deadline, so winding the device clock
-  forward lifted the lockout. Now anchored via `SessionClock` in `data/KeywordLockout.kt`, which
-  also folds the triggering word in (one less parallel map).
+  forward lifted the lockout. Now anchored via `SessionClock` in `data/GuardedDeadline.kt` (named
+  `KeywordLockout.kt` until the fourth sweep found the second instance), which also folds the
+  triggering word in (one less parallel map).
 - session / timer bookkeeping — clean. One suspected `SessionClock.elapsed` weakness was a
   **misdiagnosis**: capping the post-reboot wall path changes nothing (`elapsed >= total` fires
   either way) and `remaining` is equally exposed, since a forward jump zeroes `wallEnd - nowWall`.
@@ -104,18 +105,90 @@ that is wrong is not.
   the watchdog reported healthy because it only checks that events arrive. Now `retryWhen` with
   backoff.
 
+### Swept in the second "bug hunt" (25 Jul 2026)
+
+- `ProtectionWatchdog` / `ServiceHealth` — **2 bugs.**
+  - The swallowed errors were **written and never read by anything**. `recordError`'s own comment
+    promised "a recurring bug is visible rather than invisible", and no screen showed it — the
+    quiet failure it warned about. This is precisely the gap that let the rule-flow bug hide.
+    The Profile screen now shows a row whenever the count is above zero, with the last message and
+    a tap to clear, so a problem becomes reportable ("it says 12 errors").
+  - `checkAndNotify` was **unguarded**, and runs from the app's own resume effect as well as the
+    boot receiver and worker — so a throw from posting a notification (OEM notification managers
+    do) would crash the app on open. The thing that warns you blocking has stopped must not be
+    able to take the app down. Now `guarded`, and the usage-stats read inside `state()` treats
+    failure as "can't tell", which already means never a false STALLED.
+- schedule evaluation — **1 bug.** A Wi-Fi schedule naming a specific network can *never* match
+  without location access: Android returns `<unknown ssid>` instead of the name, which silently
+  compares unequal. The editor said so only in grey small print and never checked whether the
+  permission was actually granted; it now warns properly and offers the grant. Enforcement
+  recognises the placeholder explicitly — there is nothing better to do there, since blocking on
+  an unreadable name would block on *every* Wi-Fi.
+- `timeWindowContains` / `scheduleWindowContains` — clean, including the v1.93 overnight
+  previous-day fix and zero-length windows. `USAGE_LIMIT` / `LAUNCH_COUNT` thresholds — clean.
+  `ProtectionState` thresholds and `ProtectionScheduler` — clean.
+
+### Swept in the third "bug hunt" (25 Jul 2026)
+
+- `UpdatePause` and the protection-status reporting — **1 bug, and the worst-consequence one
+  found.** Every update switches *all* blocking off until the user taps Reactivate (deliberate —
+  see `UpdatePause`), and the only thing that said so was a banner on the Blocking tab. The
+  watchdog reported OK, the Profile hero pill said "Protection active", and no notification
+  fired. So after every release the app blocked nothing **and actively insisted it was healthy**,
+  until the owner happened to open one particular tab — a state reached four times on the day it
+  was found. `ProtectionState` gained `PAUSED` (ranked below `OFF`, above `STALLED`), the watchdog
+  notifies via `ProtectionNotifier.notifyPaused`, and the pill carries the real state.
+  - Same shape as the second sweep's two findings, found by the same question. It is not that the
+    pause was wrong; it is that **the pause was invisible to every mechanism meant to report it.**
+  - A bug this change would otherwise have *introduced*, worth remembering: every notification
+    built its `PendingIntent` with `requestCode = 0`, and **PendingIntent matching ignores
+    extras** — so with `FLAG_UPDATE_CURRENT` the new alert would have silently rewritten where the
+    other alerts' taps went. Each now passes its own notification id.
+
+### Swept in the fourth "bug hunt" (25 Jul 2026)
+
+- the adult-word pack's 24-hour off delay — **1 bug, the same one as the first sweep's, in the
+  app's most deliberately hardened protection.** `adultPackOffRequestedAt` was a bare epoch-millis
+  stamp compared against `System.currentTimeMillis()`, so winding the clock forward a day skipped
+  the whole cooling-off the v1.84 changelog promises ("the pack keeps protecting you for another
+  24 hours"). The strongest protection was the cheapest to switch off.
+- **Because the same mistake had now been made twice, the fix generalised rather than
+  duplicated** — the standing guidance below, applied. `KeywordLockout` became
+  `data/GuardedDeadline.kt`: `word` → `note`, plus a `starting(durationMs, boot, note)` factory
+  and an `extraMs` parameter, so the gate derives both of its moments ("the 24h wait is over" and
+  "the follow-up window has lapsed too") from one record instead of two comparisons. Anything else
+  needing a deadline the user shouldn't be able to skip belongs there, not in a third copy.
+- Why it was missed twice: both instances were **local re-implementations of an idea that already
+  had a hardened home** (`SessionClock`). Neither was near the code that got fixed, and neither
+  used its vocabulary — so grepping for the concept found nothing. The generalisable move is to
+  grep for the *primitive* (`System.currentTimeMillis()` compared against a stored value) rather
+  than for the feature.
+
 ### Not yet swept
 
-- schedule evaluation (`Schedule`, `TimeWindow`, Wi-Fi/location conditions)
 - `UsageTracker` (its day rollover and the session reconstruction from usage events)
 - the web/keyword scan itself (`WebContentFilter`, `extractVisibleText`, browser URL reading)
-- the updater and `UpdatePause`
-- `ProtectionWatchdog` / `ServiceHealth` — note it checks event liveness only, which is why the
-  rule-flow bug above was invisible to it. Worth asking what else it cannot see.
+- the updater itself (`Updater`, version comparison, download/install) — `UpdatePause` is done
+- the location condition (`inLocation`, `ensureLocationUpdates`, fix freshness)
+- the UI's own live state: `resumeTick` re-reads, and the several screens that cache
+  service/prefs state in `remember` blocks. The fourth sweep touched only the adult-pack gate;
+  the pattern (a `remember` holding a decision that time or the service can invalidate) is
+  everywhere and is worth a sweep of its own.
+- the remaining `System.currentTimeMillis()` deadline comparisons, now that two of them were
+  bypassable. Notification throttles are fine (a wrong clock only re-notifies); anything the user
+  benefits from skipping is not.
 
-### Lesson from this sweep
+### A pattern worth generalising from the second sweep
 
-`KeywordLockout.remaining()` read the clocks internally, so CI failed on a test that *could not*
+Both watchdog bugs were the same shape: **a safety mechanism that can fail silently, or take down
+what it protects.** When auditing, ask of anything defensive — the watchdog, `guarded`,
+`ServiceHealth`, the update pause — *"if this itself broke, would anyone ever know?"* That question
+found more than reading the blocking logic did.
+
+### Lesson from the first sweep
+
+`GuardedDeadline.remaining()` (then named `KeywordLockout`) read the clocks internally, so CI failed
+on a test that *could not*
 pass: unit tests run with `isReturnDefaultValues = true`, so `SystemClock.elapsedRealtime()`
 returns 0 while `System.currentTimeMillis()` is real — every lockout looks post-reboot and the
 monotonic branch is unreachable. `SessionClock` has a `...At(now)` seam for exactly this. **Any
@@ -126,8 +199,12 @@ new time-dependent logic needs that seam or it cannot be tested here.**
 - **Batch findings into one release.** Five releases in one day (v1.94→v1.98) was too many, and
   came from shipping each fix the moment it was ready. Audit, collect, then release once.
 - **Extract before fixing, when logic has broken twice.** `CoverGate` came out of the
-  double-block work and made its rules testable. Do the same for the next repeat offender —
-  the natural candidate is "given an event and what's on screen, should the cover change?",
-  which is decidable from plain values and would lock in invariants 1–4.
+  double-block work and made its rules testable; `GuardedDeadline` came out of the same clock
+  bypass appearing twice. Do the same for the next repeat offender — the natural candidate is
+  "given an event and what's on screen, should the cover change?", which is decidable from plain
+  values and would lock in invariants 1–4.
+- **Grep for the primitive, not the feature.** Both clock bypasses were local re-implementations
+  of something `SessionClock` already did safely, so no search for the *concept* found them. A
+  search for the raw ingredient (`System.currentTimeMillis()` against a stored number) would have.
 - The owner is non-technical: don't ask him which code to change. Ask only about behaviour
   he can judge (e.g. "should two opens ten seconds apart count once or twice?").

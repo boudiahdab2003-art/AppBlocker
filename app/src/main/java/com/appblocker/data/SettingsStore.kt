@@ -144,22 +144,44 @@ object SettingsStore {
     fun setTemplateWordsPurged(context: Context) =
         prefs(context).edit().putBoolean("template_words_purged", true).apply()
 
-    /** Epoch millis when the owner passed the adult-pack turn-off gate (0 = no pending
-     *  request). The pack keeps filtering through the cooling-off; see KeywordsScreen. */
-    fun adultPackOffRequestedAt(context: Context): Long =
-        prefs(context).getLong("adult_pack_off_requested_at", 0L)
+    private const val KEY_ADULT_OFF_REQUEST = "adult_pack_off_request"
 
-    fun setAdultPackOffRequestedAt(context: Context, value: Long) =
-        prefs(context).edit().putLong("adult_pack_off_requested_at", value).apply()
+    /**
+     * The pending "turn the adult pack off" request, or null when there is none.
+     *
+     * Anchored via [GuardedDeadline] rather than the bare epoch-millis this used to be. The 24-hour
+     * cooling-off is the app's most deliberately hardened protection — the changelog promises "the
+     * pack keeps protecting you for another 24 hours" — and comparing a stored timestamp against
+     * `System.currentTimeMillis()` meant winding the clock forward a day skipped it entirely. The
+     * keyword lockout had the identical hole; that is why the anchoring is now one shared type.
+     */
+    internal fun adultPackOffRequest(context: Context): GuardedDeadline? =
+        prefs(context).getString(KEY_ADULT_OFF_REQUEST, null)
+            ?.let { GuardedDeadline.decode(it)?.second }
+
+    /** Records a request starting now, lasting [delayMs] before the switch works. */
+    internal fun setAdultPackOffRequest(context: Context, delayMs: Long, bootCount: Int) =
+        prefs(context).edit().putString(
+            KEY_ADULT_OFF_REQUEST,
+            GuardedDeadline.starting(delayMs, bootCount).encode(ADULT_OFF_KEY),
+        ).apply()
+
+    internal fun clearAdultPackOffRequest(context: Context) =
+        prefs(context).edit().remove(KEY_ADULT_OFF_REQUEST)
+            .remove("adult_pack_off_requested_at") // retire the old wall-clock-only key
+            .apply()
+
+    /** GuardedDeadline.encode needs a key; this record only ever holds one. */
+    private const val ADULT_OFF_KEY = "adult"
 
     private const val KEY_KEYWORD_LOCKOUTS = "keyword_lockouts"
 
     /** Apps under a keyword lockout (a blocked word was caught in them). Persisted so a service
-     *  or phone restart doesn't lift the lock; see [KeywordLockout] for the anchoring, which is
+     *  or phone restart doesn't lift the lock; see [GuardedDeadline] for the anchoring, which is
      *  clock-change-proof rather than a bare wall-clock deadline. */
-    internal fun keywordLockouts(context: Context): Map<String, KeywordLockout> =
+    internal fun keywordLockouts(context: Context): Map<String, GuardedDeadline> =
         prefs(context).getStringSet(KEY_KEYWORD_LOCKOUTS, emptySet()).orEmpty()
-            .mapNotNull { KeywordLockout.decode(it) }
+            .mapNotNull { GuardedDeadline.decode(it) }
             .toMap()
 
     /** [currentBootCount] so expired entries are dropped on the same clock rules that decide
@@ -167,7 +189,7 @@ object SettingsStore {
      *  clock-proofing by pruning a live lockout whose deadline merely looks past. */
     internal fun setKeywordLockouts(
         context: Context,
-        value: Map<String, KeywordLockout>,
+        value: Map<String, GuardedDeadline>,
         currentBootCount: Int,
     ) = prefs(context).edit().putStringSet(
         KEY_KEYWORD_LOCKOUTS,

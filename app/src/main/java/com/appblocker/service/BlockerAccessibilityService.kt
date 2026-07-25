@@ -31,8 +31,8 @@ import com.appblocker.data.BlockedKeyword
 import com.appblocker.data.BlockerDatabase
 import com.appblocker.data.DeviceBoot
 import com.appblocker.data.FocusState
+import com.appblocker.data.GuardedDeadline
 import com.appblocker.data.InstalledAppsRepository
-import com.appblocker.data.KeywordLockout
 import com.appblocker.data.LaunchCounter
 import com.appblocker.data.OwnUi
 import com.appblocker.data.QuickSession
@@ -240,7 +240,7 @@ class BlockerAccessibilityService : AccessibilityService() {
     // until it expires. Guarded by its own lock (written from the background scan, read from the
     // main thread); mirrored to prefs so restarts don't lift it. The word that triggered each
     // one rides along in the record rather than in a second map, so the two can't drift.
-    private val keywordLockouts = mutableMapOf<String, KeywordLockout>()
+    private val keywordLockouts = mutableMapOf<String, GuardedDeadline>()
 
     @Volatile private var lastForegroundPkg: String? = null
     @Volatile private var lastLocation: Location? = null
@@ -356,31 +356,23 @@ class BlockerAccessibilityService : AccessibilityService() {
 
     /** Millis left on [pkg]'s keyword lockout, or 0 when it isn't locked. Uses the same
      *  clock-change-proof reckoning as sessions, so winding the device clock forward can no
-     *  longer lift the lockout early — see [KeywordLockout]. */
+     *  longer lift the lockout early — see [GuardedDeadline]. */
     private fun keywordLockoutRemaining(pkg: String): Long = synchronized(keywordLockouts) {
         keywordLockouts[pkg]?.remaining(DeviceBoot.count(applicationContext)) ?: 0L
     }
 
     /** The word that triggered [pkg]'s lockout, if still remembered (in-memory only). */
     private fun keywordLockoutWord(pkg: String): String? = synchronized(keywordLockouts) {
-        keywordLockouts[pkg]?.word
+        keywordLockouts[pkg]?.note
     }
 
     /** Locks [pkg] for [KEYWORD_LOCKOUT_MS] after a blocked [word] was caught in it. */
     private fun addKeywordLockout(pkg: String, word: String?) {
-        val nowRt = SystemClock.elapsedRealtime()
-        val nowWall = System.currentTimeMillis()
         val boot = DeviceBoot.count(applicationContext)
         synchronized(keywordLockouts) {
             keywordLockouts.entries.removeAll { it.value.remaining(boot) <= 0L }
-            keywordLockouts[pkg] = KeywordLockout(
-                realtimeStart = nowRt,
-                realtimeEnd = nowRt + KEYWORD_LOCKOUT_MS,
-                wallStart = nowWall,
-                wallEnd = nowWall + KEYWORD_LOCKOUT_MS,
-                bootCount = boot,
-                word = word,
-            )
+            keywordLockouts[pkg] =
+                GuardedDeadline.starting(KEYWORD_LOCKOUT_MS, boot, note = word)
             SettingsStore.setKeywordLockouts(applicationContext, keywordLockouts.toMap(), boot)
         }
     }
@@ -993,6 +985,12 @@ class BlockerAccessibilityService : AccessibilityService() {
         val wm = applicationContext.getSystemService(WIFI_SERVICE) as? WifiManager ?: return false
         @Suppress("DEPRECATION")
         val ssid = wm.connectionInfo?.ssid?.trim('"') ?: return false
+        // Android hands back "<unknown ssid>" rather than the real name unless we hold location
+        // access (and location services are on). Comparing that against the target just quietly
+        // returns false, so a named-network schedule looks fine and never blocks — the schedule
+        // editor now checks the permission up front and says so, because there is nothing useful
+        // to do about it here: blocking on an unreadable name would block on EVERY Wi-Fi.
+        if (ssid.equals(UNKNOWN_SSID, ignoreCase = true) || ssid.isBlank()) return false
         return ssid.equals(target, ignoreCase = true)
     }
 
@@ -1571,6 +1569,9 @@ class BlockerAccessibilityService : AccessibilityService() {
         )
 
         private const val YOUTUBE_PKG = "com.google.android.youtube"
+
+        // What WifiManager reports instead of the network name when we lack location access.
+        private const val UNKNOWN_SSID = "<unknown ssid>"
 
     }
 }

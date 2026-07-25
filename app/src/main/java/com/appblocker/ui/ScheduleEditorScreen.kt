@@ -222,10 +222,47 @@ fun ScheduleEditorScreen(
                             label = { Text("Wi-Fi name (SSID)") }, singleLine = true, enabled = editable,
                             shape = RoundedCornerShape(28.dp), modifier = Modifier.fillMaxWidth(),
                         )
-                        Text("Reading a specific network's name needs the Location permission.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 4.dp))
+                        // Android refuses to reveal the network name without location access, and
+                        // hands back a placeholder instead — so a named-network schedule silently
+                        // never matches. It used to say so only as grey small print, which is easy
+                        // to miss and doesn't say whether the permission is actually granted. Now
+                        // it checks, and offers the grant, the way the Location type does.
+                        val wifiTick = resumeTick()
+                        val hasLoc = remember(wifiTick) { hasLocation(context) }
+                        val wifiLocLauncher = rememberLauncherForActivityResult(
+                            ActivityResultContracts.RequestPermission()
+                        ) { /* state re-reads on resume */ }
+                        if (hasLoc) {
+                            Text("Reading a specific network's name needs the Location permission.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 4.dp))
+                        } else {
+                            Spacer(Modifier.padding(top = 8.dp))
+                            Box(
+                                Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+                                    .background(MaterialTheme.colorScheme.errorContainer)
+                                    .padding(14.dp),
+                            ) {
+                                Column {
+                                    Text("This schedule won't work yet",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onErrorContainer)
+                                    Spacer(Modifier.padding(top = 2.dp))
+                                    Text("Android only reveals which Wi-Fi network you're on if " +
+                                        "AppBlocker has location access. Without it this schedule " +
+                                        "can never match. Use “Any Wi-Fi network” instead, or " +
+                                        "grant access below.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onErrorContainer)
+                                }
+                            }
+                            Spacer(Modifier.padding(top = 8.dp))
+                            GradientButton(text = "Grant location access", enabled = editable, onClick = {
+                                wifiLocLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                            })
+                        }
                     }
                     Spacer(Modifier.padding(top = 12.dp))
                 }
