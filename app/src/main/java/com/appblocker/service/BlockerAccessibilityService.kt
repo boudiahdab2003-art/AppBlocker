@@ -203,6 +203,21 @@ class BlockerAccessibilityService : AccessibilityService() {
         }
     }
 
+    // Re-reads what is actually in front after a window-state event was rejected as unconfirmed
+    // (see onForegroundChanged). Deliberately trusts the window tree rather than the event that
+    // triggered it, so a genuine app switch that merely lost the race is picked up a beat later
+    // instead of waiting for the next event — and a stray background event resolves to whatever
+    // the user really has open. Cannot recurse: the re-entry's package IS the active window, so
+    // it passes the confirmation.
+    private val confirmForegroundRunnable = Runnable {
+        guarded(applicationContext, "confirmForeground") {
+            val actual = rootInActiveWindow?.packageName?.toString()
+            if (actual != null && actual != packageName && actual != lastForegroundPkg) {
+                onForegroundChanged(actual, null)
+            }
+        }
+    }
+
     // The offence most recently recorded as an attempt, and when — so one open is one attempt
     // however many times the cover has to be redrawn to keep the user out. Keyed by offence
     // rather than by counter key, so a blocked word and the app lockout it creates count once
@@ -487,14 +502,37 @@ class BlockerAccessibilityService : AccessibilityService() {
             !isLauncherPkg(pkg) &&
             rootInActiveWindow?.packageName?.toString() != pkg
         ) return
-        // A late window-state event from the app we just LEFT (its window finishing its
-        // teardown after HOME landed) used to read as a fresh open: it re-blocked over the
-        // home screen and counted another open against LAUNCH_COUNT limits. Only trust it if
-        // that app really is on screen. Deliberately narrow — it applies to the just-dismissed
-        // package only, so a normal open is never second-guessed and blocking never lags.
-        if (pkg != null && pkg == dismissedPkg && pkg != lastForegroundPkg &&
-            System.currentTimeMillis() - dismissedAt < STRAGGLER_MS && !stillOnScreen(pkg)
-        ) return
+        // A window-state event is NOT proof that its package is what the user is looking at.
+        // Background apps emit them routinely — a message arriving, a service window, an
+        // activity transitioning behind whatever is actually in front. The content-changed
+        // branch in handleEvent has always confirmed against the real active window before
+        // trusting a package ("so a background repaint can't hijack the cache"); this path
+        // never did.
+        //
+        // In Blocklist mode that was survivable: a stray package usually has no rule, so it
+        // only tore a cover down. In Allowlist mode EVERY app is blockable, so it cut both
+        // ways — a stray event from a non-allowed app threw a cover over the user's real
+        // screen (including our own UI), and one from an allowed app removed a legitimate
+        // cover, which the real app's next event re-raised. That was the residual flashing.
+        //
+        // stillOnScreen is deliberately permissive: an unreadable window tree, or our own
+        // cover, both count as yes — so this only rejects a package the tree positively
+        // contradicts, and an app that hides its tree is never left unblocked. Launchers stay
+        // exempt for the same reason as the guard above: Home must always be honored.
+        // (Checked even when pkg == lastForegroundPkg: while our own UI is in front the cache is
+        // deliberately stale — handleEvent ignores our package — so a stray event from the app
+        // the cache still points at would otherwise sail straight through. isLauncherPkg is
+        // second because it can cost a PackageManager query, and only a rejection needs it.)
+        if (pkg != null && !stillOnScreen(pkg) && !isLauncherPkg(pkg)) {
+            // The Strict escape-hatch guard still runs: it is about a dangerous page *opening*,
+            // it has its own bounce throttle, and being early there is the safe direction.
+            handleStrictSettingsGuard(pkg, className)
+            // A real switch can simply have lost the race with the window tree, so re-read the
+            // tree shortly rather than waiting for whatever event happens to come next.
+            handler.removeCallbacks(confirmForegroundRunnable)
+            handler.postDelayed(confirmForegroundRunnable, CONFIRM_MS)
+            return
+        }
         if (pkg != null && pkg != lastForegroundPkg) {
             lastForegroundPkg = pkg
             LaunchCounter.recordOpen(applicationContext, pkg) // for LAUNCH_COUNT
@@ -828,6 +866,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (shortsCovering) return
         handler.removeCallbacks(webScanRunnable)
         handler.removeCallbacks(recheckRunnable)
+        handler.removeCallbacks(confirmForegroundRunnable)
         webScanJob?.cancel()
         webScanQueuedAt = 0L
         // Stop trying to send a screened-off phone Home, and release the attempt dedup: the
@@ -1330,6 +1369,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         handler.removeCallbacks(recheckRunnable)
         handler.removeCallbacks(focusClearRunnable)
         handler.removeCallbacks(exitRunnable)
+        handler.removeCallbacks(confirmForegroundRunnable)
         exitTarget = null
         // Stop location updates so they don't leak past the service (battery + privacy).
         stopLocationUpdates()
@@ -1372,9 +1412,9 @@ class BlockerAccessibilityService : AccessibilityService() {
         private const val EXIT_RETRY2_MS = 1_400L
         private const val EXIT_GIVE_UP_MS = 2_500L
         private const val EXIT_BLIND_GIVE_UP_MS = 800L
-        // How long after a dismissal a window-state event from that app is treated as a
-        // possible straggler and has to be confirmed against the real active window.
-        private const val STRAGGLER_MS = 15_000L
+        // How soon to re-read the window tree after rejecting an unconfirmed window-state
+        // event, so a real app switch that lost the race still blocks promptly.
+        private const val CONFIRM_MS = 200L
 
         // Throttle for isLauncherPkg's on-miss launcher re-detection.
         private const val LAUNCHER_REFRESH_MS = 30_000L
