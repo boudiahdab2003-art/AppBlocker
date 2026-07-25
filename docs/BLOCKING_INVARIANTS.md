@@ -267,10 +267,156 @@ anyone enumerating the rest. Both findings below **fail open**, which is the inv
   `AppRoot`, so Strict starting mid-edit does lock the controls. The remaining staleness is
   cosmetic (a toggle read on entry), not a blocking hole.
 
+### Swept in the seventh "bug hunt" (25 Jul 2026)
+
+Primitive grepped: **data with an age, trusted without checking that age.** Every other cached
+reading in the app has a TTL (`usedTodayCache` 15s, `cachedImePkg` 10s, the tips cache, the
+watchdog's own `lastEventAt`). Exactly one did not.
+
+- the location condition — **1 bug, both directions.** `lastLocation` was set once and trusted
+  forever. `considerLocation`'s guard only stops an *older* fix overwriting a newer one; it does
+  nothing when **no** new fix arrives, which is the normal state of a stationary phone. So a fix
+  taken at the blocked place kept blocking everywhere the user went afterwards (visible — "it
+  blocks me at work"), and a fix taken away from the place meant returning to it never started
+  blocking (invisible, therefore never reported).
+  - The rule moved into `locationFixUsable` in `BlockDecision.kt` — pure, unit-tested
+    (`LocationFreshnessTest`), and measured in `elapsedRealtime` nanos per invariant 9, because a
+    location's age must not be measurable with a clock the user can move. A fix dated in the future
+    is unusable rather than infinitely fresh.
+  - **The ceiling needed a second change to be safe.** `requestLocationUpdates` used a 25 m
+    displacement filter on *both* providers, so a stationary phone received nothing and the fix
+    only stayed current via `refreshCurrentLocation` — which is API 30+ only, and minSdk is 24. On
+    an older phone the ceiling alone would have converted "stale but probably right" into "no
+    blocking at all". NETWORK now updates on time alone (`minDistance = 0f`; cell/Wi-Fi derived, so
+    cheap), giving a heartbeat on every API level. GPS keeps its filter — that radio is the
+    expensive one.
+  - `stopLocationUpdates` now also clears the position: having stopped tracking, keeping one meant
+    a schedule re-enabled later decided from where the phone was before it was switched off.
+- the updater — **clean, and now pinned.** `isNewer` is correctly numeric per component, so
+  `1.100 > 1.99`. Worth stating because the version numbering crossed exactly that boundary in this
+  release and *every* fix reaches the phone through this one function: a string comparison would
+  have silenced the updater permanently. Four boundary cases added to `UpdaterTest`.
+- the Location schedule editor — clean. It already warns when background location is missing, and
+  is in fact what the Wi-Fi warning was modelled on (sweep 2). The sibling-instance lesson had
+  already been applied here.
+
+**Considered and deliberately left:**
+
+- When the ceiling trips, `inLocation` answers false (not blocked) — the same as no fix. Blocking on
+  an unknown position would block the app *everywhere*, which is the wrong failure for a
+  place-scoped rule. But note this is a **silent** stop: a Location schedule whose fixes have dried
+  up simply does nothing, and nothing says so. The permission case is warned about in the editor;
+  the "permission granted but no fixes arriving" case is not. That is the next thing worth building
+  here, and it needs UI, not a bug fix.
+
+### Swept in the eighth "bug hunt" (25 Jul 2026)
+
+Primitive grepped: **work that outlives the state it was started for.** Enumerate every
+`postDelayed` and every `scope.launch` against every cancellation site, then ask what each one does
+if it completes *after* the thing it was about to act on is gone.
+
+Visibility is genuinely sound — everything shared between the main thread and the background scan
+is `@Volatile`, including `BlockOverlay`'s fields. The bug was lifecycle, not memory model.
+
+- the Shorts scan's lifetime — **1 bug, two symptoms, and the sibling asymmetry again.**
+  `webScanJob` is cancelled in three places; `shortsScanJob` was cancelled in **none** (only
+  self-superseded), and `scanShorts` raised its cover with **no main-thread re-confirmation** — the
+  guard `scanWebContent` has always had.
+  - Swipe Home while a scan is in flight → the cover lands **on the home screen**, and an attempt is
+    counted. Visible, and matches symptoms reported repeatedly.
+  - Lock the phone while a scan is in flight → `onScreenOff` does its whole cleanup, then the
+    resumed coroutine raises a cover with nothing left to take it down: a stranded cover on unlock.
+    **That is the v1.98 bug arriving by a different route** — fixed then for the flag path, still
+    open on the coroutine path.
+  - Fixed with both halves, because cancellation alone is racy (a coroutine past its last suspension
+    point still completes): re-confirm `lastForegroundPkg == YOUTUBE_PKG && stillOnScreen(...)`
+    inside the Main block, *and* cancel the job where the web scan cancels its own — on screen-off
+    and on leaving YouTube. `onScreenOff` also now cancels `shortsScanRunnable`, the one queued
+    callback it was missing.
+  - Note which half catches which symptom: `onScreenOff` nulls `lastForegroundPkg`, so the cache
+    check catches the lock case; `stillOnScreen` asks the window tree, so it catches an app switch
+    whose window event never arrived — the HyperOS quirk this whole file exists for.
+
+**Considered and deliberately left:**
+
+- `handler.postDelayed({ … }, 1500)` in `handleStrictSettingsGuard` is an anonymous lambda, so it
+  can never be cancelled and is the only scheduled callback not wrapped in `guarded`. Harmless as
+  written — `overlay.remove()` wraps `removeView` in `runCatching`, and its post-teardown effect
+  (taking down a non-app-block cover) is what you'd want anyway. Worth naming it if it ever grows a
+  side effect; an uncancellable callback is a liability even when today's body is safe.
+- `onDestroy` calls `scope.cancel()`, so every background scan dies with the service. Only the
+  *screen-off* path needed per-job cancellation.
+
+### Swept in the ninth "bug hunt" (25 Jul 2026)
+
+Method: **diff the three block entry points against each other.** `handleAppBlock` has been audited in
+six sweeps; `handlePurchaseBlock` and `handleStrictSettingsGuard` in none. Sibling asymmetry has been
+the highest-yield shape in this file, and both siblings were unexamined.
+
+- the deferred-confirmation path loses the event's class name — **1 bug.**
+  `confirmForegroundRunnable` called `onForegroundChanged(actual, null)`. Trusting the window tree
+  over the event is correct about the *package*; discarding the **class name** was accidental, and
+  the tree cannot supply one. Consequence, ranked by how the three checks cope:
+  - `handlePurchaseBlock` is className-**only** (`className?.lowercase() ?: return false`), so an
+    in-app purchase sheet that lost the race with the window tree was **never covered** — and
+    nothing re-checks purchases afterwards (`recheckRunnable` only re-runs `handleAppBlock`), so it
+    stayed uncovered for as long as the sheet was open. Invisible, and `blockPurchases` is opt-in so
+    it would never have been noticed.
+  - `handleStrictSettingsGuard` survived the identical race, for two reasons worth copying: it is
+    deliberately still called *inside* the gate with the real className, **and** it has an
+    on-screen-text fallback (`guardScreenIsDangerous`) beside its className fast path — added
+    because "OEMs name these activities unpredictably".
+  - Fixed by carrying the className through the deferral, keyed to the package it described so one
+    app's class can never be applied to whatever else turned out to be in front.
+
+**Considered and deliberately left:**
+
+- **Purchase detection is still className-only, with no second chance.** The right fix is the Strict
+  guard's shape — a text fallback scoped to `com.android.vending` — but that needs Play's actual
+  sheet strings, which cannot be verified from a cloud session, and a wrong marker would cover the
+  Play Store's ordinary app pages. Over-blocking the Play Store is the visible, annoying failure, so
+  guessing here is worse than the gap. Needs a look at the real sheet on the device.
+  `PURCHASE_HINTS` ("acquire", "purchase", "billing") does match Play's real billing activity
+  (`…finsky.billing.acquire.SheetActivity`), so the common path works.
+- The content-changed fast path passes `event.className`, which for a content event is the *view's*
+  class, not the activity's — harmless (it simply never matches a purchase hint) but worth knowing
+  before trusting className on that path.
+
+### Swept in the tenth "bug hunt" (25 Jul 2026)
+
+Different method: **audit the day's own changes.** Sweeps 5–9 plus the coach upgrade all shipped
+unreviewed in one session, and new code is where bug density is highest. This is also the only sweep
+whose findings are self-inflicted, which is the point — the method has to work on the person using it.
+
+- **1 bug, mine, from the coach upgrade.** Raising the read ceiling to 120s while both call sites
+  still did `repeat(2)` unconditionally tripled the worst-case wait: ~4.5 minutes of "Thinking…"
+  before the user saw anything, up from ~90s. The retry's purpose is transient blips (a 5xx, a
+  truncated response); a **timeout** is the one failure where retrying is both slowest and least
+  likely to help, since the far end already had the full window. Now `retryWorthwhile` skips the
+  retry only for timeouts, and the ceiling is 90s (still 3× the expected reply time).
+- Two slips caught *while writing that fix*, both worth recording because they are the shape of
+  thing that ships silently:
+  - `return@repeat` **continues** the loop rather than abandoning it, so the first version of the
+    fix was a no-op. Replaced with an explicit `while` + `break`.
+  - The first `retryWorthwhile` read `t != null && …`, which would have stopped retrying the case
+    the retry exists for: `runCatching` treats a blank reply or an unparsable tips array as
+    *success holding null*, so the exception is null there. The null case must answer **true**.
+- Verified clean in my own work: `lastLocation` has exactly one decision reader (`freshLocation`),
+  so sweep 7's ceiling has no bypass; nothing in the service compares a `stopwatchNow()` field
+  against the wall clock; `pendingClassName` cannot be applied to the wrong package.
+
+**Considered and deliberately left:**
+
+- `CoachChatViewModel.coachModel()` reads prefs synchronously during composition and won't recompose
+  if the model changes mid-session. It is a diagnostic line in a dialog opened after a reply, so it
+  is always fresh enough in practice; making it reactive would cost more than it is worth.
+- The advice ledger is a `StringSet`, which is unordered and deduplicates. Sorting by day stamp
+  recovers the ordering that matters, and two identical pieces of advice on one day collapsing into
+  one is the desirable outcome anyway.
+
 ### Not yet swept
 
-- the updater itself (`Updater`, version comparison, download/install) — `UpdatePause` is done
-- the location condition (`inLocation`, `ensureLocationUpdates`, fix freshness)
+- the updater's download/install path (`download`, FileProvider hand-off) — `isNewer` is done
 - the UI's own live state: `resumeTick` re-reads, and the several screens that cache
   service/prefs state in `remember` blocks. Sweeps four and five touched only the adult-pack gate;
   the pattern (a `remember` holding a decision that time or the service can invalidate) is

@@ -47,7 +47,26 @@ object AiCoach {
     // failed exactly the answers this upgrade is for. The chat screen shows a typing indicator
     // throughout, and tips serve the cached list while refreshing, so a long wait is visible
     // rather than a freeze.
-    private const val DEEP_READ_TIMEOUT_MS = 120_000
+    //
+    // 90s, not the 120s first written: a reply is expected within ~30s, so this is already 3x
+    // headroom, and the ceiling is what the user actually waits through when a request hangs.
+    private const val DEEP_READ_TIMEOUT_MS = 90_000
+
+    /**
+     * Whether a failed attempt is worth repeating.
+     *
+     * The retry exists for transient blips — a 5xx, a dropped connection, a truncated response
+     * that wouldn't parse. A **timeout** is none of those: it means the far end already had the
+     * full read window and didn't answer, so a second go is the least likely to help and by far
+     * the most expensive. With deep thinking the read ceiling is [DEEP_READ_TIMEOUT_MS], so
+     * retrying one doubled the worst case to minutes of "Thinking…" before the user saw anything.
+     *
+     * Note the null case must answer **true**: a call can succeed and still yield nothing usable
+     * (an unparsable tips array, a blank reply), and that is precisely the blip the retry is for.
+     * Only a timeout is excluded.
+     */
+    private fun retryWorthwhile(t: Throwable?): Boolean =
+        t !is java.io.InterruptedIOException // SocketTimeoutException extends this; null => true
 
     /** How hard the model should think before answering. The coach wants depth over speed; bulk
      *  jobs like app categorisation want neither. Mapped per model generation in [postWithThinking]
@@ -247,15 +266,20 @@ object AiCoach {
             val goals = Goals.all(ctx).map { it.label() }
             val profile = runCatching { CoachProfile.promptText(ctx) }.getOrDefault("")
             val name = SettingsStore.userName(ctx).substringBefore(' ')
-            // One retry to ride out transient blips, same as the updater.
-            repeat(2) {
-                runCatching {
+            // One retry to ride out transient blips, same as the updater — but never after a
+            // timeout (see retryWorthwhile). A while loop, not repeat(2): `return@repeat` would
+            // continue to the next attempt rather than abandon it, which is the opposite.
+            var triesLeft = 2
+            while (triesLeft-- > 0) {
+                val attempt = runCatching {
                     fetchTips(ctx, key, summary, setup, goals, profile, name)
-                }.getOrNull()?.let { tips ->
+                }
+                attempt.getOrNull()?.let { tips ->
                     prefs.edit().putString(
                         "tips", "$today|${System.currentTimeMillis()}|${JSONArray(tips)}").apply()
                     return@withContext tips
                 }
+                if (!retryWorthwhile(attempt.exceptionOrNull())) break
             }
             cached?.let { parseTips(it.json) } // stale tips beat no tips
         }
@@ -334,8 +358,9 @@ object AiCoach {
                 .put("contents", contents)
                 .put("generationConfig", JSONObject().put("responseMimeType", "application/json"))
 
-            repeat(2) {
-                runCatching {
+            var triesLeft = 2
+            while (triesLeft-- > 0) {
+                val attempt = runCatching {
                     val obj = JSONObject(callGemini(ctx, key, body, COACH_CHAIN))
                     val reply = obj.getString("reply").trim()
                     obj.optJSONArray("goals")?.let { g -> applyGoalUpdate(ctx, g) }
@@ -350,7 +375,9 @@ object AiCoach {
                             .filter { it.isNotBlank() }.take(3)
                     } ?: emptyList()
                     if (reply.isBlank()) null else CoachReply(reply, suggestions)
-                }.getOrNull()?.let { return@withContext it }
+                }
+                attempt.getOrNull()?.let { return@withContext it }
+                if (!retryWorthwhile(attempt.exceptionOrNull())) break
             }
             null
         }

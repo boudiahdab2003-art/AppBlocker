@@ -255,10 +255,28 @@ class BlockerAccessibilityService : AccessibilityService() {
         guarded(applicationContext, "confirmForeground") {
             val actual = rootInActiveWindow?.packageName?.toString()
             if (actual != null && actual != packageName && actual != lastForegroundPkg) {
-                onForegroundChanged(actual, null)
+                // Carry the deferred event's className over — but ONLY when the tree resolved to
+                // the same package it described, since a class name belongs to one app and must
+                // never be applied to whatever else turned out to be in front.
+                //
+                // Trusting the tree over the event is right about the *package*; it was never
+                // meant to discard the class name, which the tree cannot supply at all. Passing
+                // null here silently disabled every className-dependent check on this path — and
+                // handlePurchaseBlock is className-ONLY (`?: return false`), so an in-app purchase
+                // sheet that lost the race with the window tree was never covered, and nothing
+                // re-checks purchases afterwards. The Strict guard survived the same race only
+                // because it has an on-screen-text fallback beside its className fast path.
+                val carried = pendingClassName.takeIf { actual == pendingClassNamePkg }
+                pendingClassName = null
+                pendingClassNamePkg = null
+                onForegroundChanged(actual, carried)
             }
         }
     }
+
+    // The deferred event's class name and the package it described — see confirmForegroundRunnable.
+    @Volatile private var pendingClassName: String? = null
+    @Volatile private var pendingClassNamePkg: String? = null
 
     // The offence most recently recorded as an attempt, and when — so one open is one attempt
     // however many times the cover has to be redrawn to keep the user out. Keyed by offence
@@ -621,7 +639,11 @@ class BlockerAccessibilityService : AccessibilityService() {
             // it has its own bounce throttle, and being early there is the safe direction.
             handleStrictSettingsGuard(pkg, className)
             // A real switch can simply have lost the race with the window tree, so re-read the
-            // tree shortly rather than waiting for whatever event happens to come next.
+            // tree shortly rather than waiting for whatever event happens to come next. Keep the
+            // class name with it: the re-read can confirm the package but can never recover the
+            // class, and losing it disables the purchase check entirely (see the runnable).
+            pendingClassNamePkg = pkg
+            pendingClassName = className
             handler.removeCallbacks(confirmForegroundRunnable)
             handler.postDelayed(confirmForegroundRunnable, CONFIRM_MS)
             return
@@ -696,6 +718,10 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (!SettingsStore.blockYoutubeShorts(this) || !quickBlockActive() ||
             lastForegroundPkg != YOUTUBE_PKG
         ) {
+            // Leaving YouTube: a scan already running there must not put its cover up over
+            // whatever came next. scheduleWebScan has cancelled its job here all along; this one
+            // never did, which is how a Shorts cover could land on the home screen.
+            shortsScanJob?.cancel()
             // Only ever takes down the Shorts cover itself — shortsCovering is now derived from
             // what is actually up, so this can no longer remove an app-block cover that replaced
             // it (which happened when YouTube became fully blocked while Shorts was covered).
@@ -1023,9 +1049,13 @@ class BlockerAccessibilityService : AccessibilityService() {
         // whatever was on screen. Screen-off now always cleans up; the Shorts scan re-covers on
         // its next tick if the user really is still on a Short.
         handler.removeCallbacks(webScanRunnable)
+        handler.removeCallbacks(shortsScanRunnable)
         handler.removeCallbacks(recheckRunnable)
         handler.removeCallbacks(confirmForegroundRunnable)
         webScanJob?.cancel()
+        // The Shorts scan was the one thing screen-off never stopped — so it could finish after
+        // all the cleanup below and raise a cover with nothing left to take it down.
+        shortsScanJob?.cancel()
         webScanQueuedAt = 0L
         // Stop trying to send a screened-off phone Home, and release the attempt dedup: the
         // next unlock starts clean, so a fresh open of the app is a fresh attempt.
@@ -1056,9 +1086,21 @@ class BlockerAccessibilityService : AccessibilityService() {
         return ssid.equals(target, ignoreCase = true)
     }
 
-    /** True if the last known location is within the schedule's radius. */
+    /**
+     * The last fix, or null when there is none **or it is too old to mean anything** — see
+     * [locationFixUsable], which is where the rule and the reasoning live (and is unit-tested).
+     *
+     * A fix with no expiry is not "the phone's location", it is "a place the phone once was".
+     */
+    private fun freshLocation(): Location? = lastLocation?.takeIf {
+        locationFixUsable(it.elapsedRealtimeNanos, SystemClock.elapsedRealtimeNanos())
+    }
+
+    /** True if the last *usable* fix is within the schedule's radius. An unusable one answers
+     *  false — the same as no fix — because a location we can't vouch for must not decide either
+     *  way, and blocking on an unknown position would block the app everywhere. */
     private fun inLocation(s: Schedule): Boolean {
-        val loc = lastLocation ?: return false
+        val loc = freshLocation() ?: return false
         val out = FloatArray(1)
         Location.distanceBetween(loc.latitude, loc.longitude, s.latitude, s.longitude, out)
         return out[0] <= s.radiusMeters
@@ -1084,7 +1126,16 @@ class BlockerAccessibilityService : AccessibilityService() {
             // service's life — wasting battery and holding a location subscription).
             val listener = LocationListener { considerLocation(it) }
             locationListener = listener
-            lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 30_000L, 25f, listener)
+            // NETWORK has no displacement filter on purpose. With one, a STATIONARY phone gets no
+            // updates at all — the filter needs 25m of movement — so the fix only stayed current
+            // thanks to refreshCurrentLocation, which is API 30+ only. Below that (minSdk is 24)
+            // the fix could age indefinitely while sitting still, which is exactly the state the
+            // freshness ceiling now rejects: without this the ceiling would turn a stale-but-right
+            // fix into no blocking at all on older phones. Network fixes are cell/Wi-Fi derived,
+            // so time-based updates here are cheap.
+            lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 30_000L, 0f, listener)
+            // GPS keeps the filter: that radio is the expensive one, and NETWORK above already
+            // guarantees a heartbeat.
             lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 30_000L, 25f, listener)
         }
     }
@@ -1097,6 +1148,9 @@ class BlockerAccessibilityService : AccessibilityService() {
             locationListener = null
         }
         locationRequested = false
+        // Drop the position too. We have stopped tracking, so holding one means a schedule
+        // re-enabled later would decide from where the phone was before it was switched off.
+        lastLocation = null
     }
 
     /** Adopts [loc] only if it's at least as recent as the current fix (prevents a stale provider
@@ -1338,12 +1392,26 @@ class BlockerAccessibilityService : AccessibilityService() {
         val onShorts = isShortsOnScreen()
         if (onShorts == true && !shortsCovering) {
             withContext(Dispatchers.Main) {
-                showBlockScreen(
-                    title = "Shorts blocked",
-                    message = "YouTube Shorts is blocked. The rest of YouTube still works.",
-                    packageName = null,
-                    counterKey = CoverGate.SHORTS_KEY,
-                )
+                // Re-confirm on the main thread before covering anything — the same guard
+                // scanWebContent has always had, and this scan was missing.
+                //
+                // Everything above ran on a background thread, so the world can have moved on
+                // while it did: the user can swipe Home (cover raised over the home screen, plus a
+                // counted attempt) or lock the phone (onScreenOff does its whole cleanup, and THEN
+                // this raises a cover nothing is left to tidy — a stranded cover on unlock, which
+                // is the v1.98 bug arriving by a different route).
+                //
+                // Both halves are load-bearing: onScreenOff nulls lastForegroundPkg, which catches
+                // the lock case, and stillOnScreen catches a real app switch — including one whose
+                // window event never arrived, since it asks the window tree rather than the cache.
+                if (lastForegroundPkg == YOUTUBE_PKG && stillOnScreen(YOUTUBE_PKG)) {
+                    showBlockScreen(
+                        title = "Shorts blocked",
+                        message = "YouTube Shorts is blocked. The rest of YouTube still works.",
+                        packageName = null,
+                        counterKey = CoverGate.SHORTS_KEY,
+                    )
+                }
             }
         } else if (onShorts == false && shortsCovering) {
             withContext(Dispatchers.Main) { overlay.remove() }
