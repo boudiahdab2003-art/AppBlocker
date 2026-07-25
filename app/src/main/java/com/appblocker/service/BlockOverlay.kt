@@ -66,7 +66,13 @@ internal class BlockOverlay(private val context: Context) {
         if (view == null && preInflated == null) preInflated = newView(onClose)
     }
 
-    /** Draws/updates the cover instantly. Returns false if it can't be drawn. */
+    /**
+     * Draws/updates the cover instantly. Returns false if it can't be drawn.
+     *
+     * [freshBlock] false means this is the *same* block being redrawn (the app came back
+     * because Home never landed), so the quote stays put — re-rolling it would read as a
+     * second, separate block.
+     */
     fun show(
         packageName: String?,
         title: String,
@@ -75,6 +81,7 @@ internal class BlockOverlay(private val context: Context) {
         isAppBlock: Boolean,
         onClose: () -> Unit,
         iconLoader: (String) -> Bitmap?,
+        freshBlock: Boolean = true,
     ): Boolean = try {
         this.counterKey = counterKey
         this.isAppBlock = isAppBlock
@@ -100,20 +107,23 @@ internal class BlockOverlay(private val context: Context) {
         // Masthead: every dodged open counts as ~3 minutes of life back.
         v.findViewById<TextView>(R.id.overlay_stat_number).text =
             (AttemptCounter.totalToday(context) * MINUTES_PER_DODGE).toString()
-        // Fresh motivation every time the cover appears (the view is reused across blocks).
-        val quote = Quotes.random()
-        v.findViewById<TextView>(R.id.overlay_quote).apply {
-            text = quote.text
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, Quotes.sizeSpFor(quote.text))
-        }
-        v.findViewById<TextView>(R.id.overlay_quote_author).apply {
-            text = "— ${quote.author}"
-            // Brand blue→violet sweep across the author line.
-            val width = paint.measureText(text.toString()).coerceAtLeast(1f)
-            paint.shader = LinearGradient(
-                0f, 0f, width, 0f,
-                0xFF2E7BFF.toInt(), 0xFF7C5CFF.toInt(), Shader.TileMode.CLAMP,
-            )
+        // Fresh motivation every time a NEW block appears (the view is reused across blocks).
+        val quoteView = v.findViewById<TextView>(R.id.overlay_quote)
+        if (freshBlock || quoteView.text.isNullOrBlank()) {
+            val quote = Quotes.random()
+            quoteView.apply {
+                text = quote.text
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, Quotes.sizeSpFor(quote.text))
+            }
+            v.findViewById<TextView>(R.id.overlay_quote_author).apply {
+                text = "— ${quote.author}"
+                // Brand blue→violet sweep across the author line.
+                val width = paint.measureText(text.toString()).coerceAtLeast(1f)
+                paint.shader = LinearGradient(
+                    0f, 0f, width, 0f,
+                    0xFF2E7BFF.toInt(), 0xFF7C5CFF.toInt(), Shader.TileMode.CLAMP,
+                )
+            }
         }
         val iconView = v.findViewById<ImageView>(R.id.overlay_icon)
         // Our own mark must be the launcher icon the user actually picked (icon switcher),
@@ -140,6 +150,10 @@ internal class BlockOverlay(private val context: Context) {
         }
         view = null
         counterKey = null
+        // Must be cleared too: the Strict-guard safety net checks isAppBlock on its own (no
+        // isShowing beside it), so a value left over from the last app block made it a no-op
+        // and could strand a "Locked during Strict Mode" cover.
+        isAppBlock = false
     }
 
     /** Inflates the cover and wires its Close button (not yet attached). */
