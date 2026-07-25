@@ -45,6 +45,11 @@ object ServiceHealth {
      * An error the service swallowed instead of dying on. Kept (with a count) so a recurring
      * bug is visible rather than invisible — swallowing errors silently would trade a loud
      * failure for a quiet one.
+     *
+     * "Visible" needs somewhere to actually look, and for a while there was none: nothing read
+     * these back, so the store was written and never surfaced — the quiet failure this comment
+     * warns about. The Profile screen now shows a row whenever the count is above zero, which is
+     * what makes a recurring problem reportable ("it says 12 errors") instead of invisible.
      */
     fun recordError(context: Context, where: String, t: Throwable) {
         val p = prefs(context)
@@ -56,6 +61,11 @@ object ServiceHealth {
     }
 
     fun errorCount(context: Context): Int = prefs(context).getInt(KEY_ERROR_COUNT, 0)
+
+    /** Forgets the recorded errors, so the Profile row goes quiet until something new breaks. */
+    fun clearErrors(context: Context) = prefs(context).edit()
+        .remove(KEY_LAST_ERROR_AT).remove(KEY_LAST_ERROR).remove(KEY_ERROR_COUNT)
+        .apply()
 
     fun lastError(context: Context): String? = prefs(context).getString(KEY_LAST_ERROR, null)
 

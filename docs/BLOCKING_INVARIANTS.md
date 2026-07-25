@@ -104,14 +104,44 @@ that is wrong is not.
   the watchdog reported healthy because it only checks that events arrive. Now `retryWhen` with
   backoff.
 
+### Swept in the second "bug hunt" (25 Jul 2026)
+
+- `ProtectionWatchdog` / `ServiceHealth` — **2 bugs.**
+  - The swallowed errors were **written and never read by anything**. `recordError`'s own comment
+    promised "a recurring bug is visible rather than invisible", and no screen showed it — the
+    quiet failure it warned about. This is precisely the gap that let the rule-flow bug hide.
+    The Profile screen now shows a row whenever the count is above zero, with the last message and
+    a tap to clear, so a problem becomes reportable ("it says 12 errors").
+  - `checkAndNotify` was **unguarded**, and runs from the app's own resume effect as well as the
+    boot receiver and worker — so a throw from posting a notification (OEM notification managers
+    do) would crash the app on open. The thing that warns you blocking has stopped must not be
+    able to take the app down. Now `guarded`, and the usage-stats read inside `state()` treats
+    failure as "can't tell", which already means never a false STALLED.
+- schedule evaluation — **1 bug.** A Wi-Fi schedule naming a specific network can *never* match
+  without location access: Android returns `<unknown ssid>` instead of the name, which silently
+  compares unequal. The editor said so only in grey small print and never checked whether the
+  permission was actually granted; it now warns properly and offers the grant. Enforcement
+  recognises the placeholder explicitly — there is nothing better to do there, since blocking on
+  an unreadable name would block on *every* Wi-Fi.
+- `timeWindowContains` / `scheduleWindowContains` — clean, including the v1.93 overnight
+  previous-day fix and zero-length windows. `USAGE_LIMIT` / `LAUNCH_COUNT` thresholds — clean.
+  `ProtectionState` thresholds and `ProtectionScheduler` — clean.
+
 ### Not yet swept
 
-- schedule evaluation (`Schedule`, `TimeWindow`, Wi-Fi/location conditions)
 - `UsageTracker` (its day rollover and the session reconstruction from usage events)
 - the web/keyword scan itself (`WebContentFilter`, `extractVisibleText`, browser URL reading)
 - the updater and `UpdatePause`
-- `ProtectionWatchdog` / `ServiceHealth` — note it checks event liveness only, which is why the
-  rule-flow bug above was invisible to it. Worth asking what else it cannot see.
+- the location condition (`inLocation`, `ensureLocationUpdates`, fix freshness)
+- the UI's own live state: `resumeTick` re-reads, and the several screens that cache
+  service/prefs state in `remember` blocks
+
+### A pattern worth generalising from the second sweep
+
+Both watchdog bugs were the same shape: **a safety mechanism that can fail silently, or take down
+what it protects.** When auditing, ask of anything defensive — the watchdog, `guarded`,
+`ServiceHealth`, the update pause — *"if this itself broke, would anyone ever know?"* That question
+found more than reading the blocking logic did.
 
 ### Lesson from this sweep
 

@@ -28,6 +28,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -67,6 +68,7 @@ import com.appblocker.Dist
 import com.appblocker.data.AppIcons
 import com.appblocker.data.AttemptCounter
 import com.appblocker.data.PinStore
+import com.appblocker.data.ServiceHealth
 import com.appblocker.data.SettingsStore
 import com.appblocker.service.AccessibilityUtil
 import com.appblocker.service.ProtectionState
@@ -98,6 +100,9 @@ fun ProfileScreen(
     val protectionOk = remember(resumeTick) { protectionOk(context) }
     var adminOn by remember(resumeTick) { mutableStateOf(isDeviceAdminActive(context)) }
     val blocksToday = remember(resumeTick) { AttemptCounter.summary(context).sumOf { it.today } }
+    // Swallowed-error report, re-read on resume like the rest of this screen's live state.
+    var healthErrors by remember(resumeTick) { mutableStateOf(ServiceHealth.errorCount(context)) }
+    val healthError = remember(resumeTick) { ServiceHealth.lastError(context) }
     var showSetPin by remember { mutableStateOf(false) }
     var userName by remember(resumeTick) { mutableStateOf(SettingsStore.userName(context)) }
     var showRename by remember { mutableStateOf(false) }
@@ -137,6 +142,23 @@ fun ProfileScreen(
         }
 
         SectionTitle("Protection")
+        // Only appears when the blocker has actually swallowed something. These errors were being
+        // recorded and never read by anything, which is how a broken blocker could look perfectly
+        // healthy — blocking carries on by design when one goes wrong, so without a row like this
+        // there is nothing to notice.
+        if (healthErrors > 0) {
+            SettingCard {
+                ProfileRow(
+                    icon = Icons.Filled.Warning,
+                    title = if (healthErrors == 1) "Blocking hit 1 error" else "Blocking hit $healthErrors errors",
+                    subtitle = (healthError ?: "Unknown") +
+                        "\nBlocking kept running. Tap to clear once you've reported it.",
+                    chevron = true,
+                    enabled = !locked,
+                    onClick = { ServiceHealth.clearErrors(context); healthErrors = 0 },
+                )
+            }
+        }
         SettingCard {
             ProfileRow(
                 icon = Icons.Filled.Lock,

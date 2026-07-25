@@ -993,6 +993,12 @@ class BlockerAccessibilityService : AccessibilityService() {
         val wm = applicationContext.getSystemService(WIFI_SERVICE) as? WifiManager ?: return false
         @Suppress("DEPRECATION")
         val ssid = wm.connectionInfo?.ssid?.trim('"') ?: return false
+        // Android hands back "<unknown ssid>" rather than the real name unless we hold location
+        // access (and location services are on). Comparing that against the target just quietly
+        // returns false, so a named-network schedule looks fine and never blocks — the schedule
+        // editor now checks the permission up front and says so, because there is nothing useful
+        // to do about it here: blocking on an unreadable name would block on EVERY Wi-Fi.
+        if (ssid.equals(UNKNOWN_SSID, ignoreCase = true) || ssid.isBlank()) return false
         return ssid.equals(target, ignoreCase = true)
     }
 
@@ -1571,6 +1577,9 @@ class BlockerAccessibilityService : AccessibilityService() {
         )
 
         private const val YOUTUBE_PKG = "com.google.android.youtube"
+
+        // What WifiManager reports instead of the network name when we lack location access.
+        private const val UNKNOWN_SSID = "<unknown ssid>"
 
     }
 }
