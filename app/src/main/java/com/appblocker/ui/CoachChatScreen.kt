@@ -150,6 +150,7 @@ fun CoachChatScreen(onBack: () -> Unit, vm: CoachChatViewModel = viewModel()) {
     if (showProfile) {
         ProfileDialog(
             profile = profile,
+            model = vm.coachModel(),
             onForget = { vm.clearProfile(); showProfile = false },
             onClose = { showProfile = false },
         )
@@ -160,6 +161,10 @@ fun CoachChatScreen(onBack: () -> Unit, vm: CoachChatViewModel = viewModel()) {
 @Composable
 private fun ProfileDialog(
     profile: Map<String, String>,
+    /** Which Gemini model actually answered last, or null before the first reply. Shown because
+     *  the model chain degrades silently by design (see AiCoach.ModelChain) — without this there
+     *  is no way to tell a working upgrade from a quiet fall-back to the fast model. */
+    model: String?,
     onForget: () -> Unit,
     onClose: () -> Unit,
 ) {
@@ -167,13 +172,13 @@ private fun ProfileDialog(
         onDismissRequest = onClose,
         title = { Text("What your coach knows") },
         text = {
-            if (profile.isEmpty()) {
-                Text("Nothing yet — the more you chat, the better your coach knows you.")
-            } else {
-                Column(
-                    Modifier.verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
+            Column(
+                Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                if (profile.isEmpty()) {
+                    Text("Nothing yet — the more you chat, the better your coach knows you.")
+                } else {
                     profile.forEach { (key, value) ->
                         Column {
                             Text(key.replace('_', ' ').replaceFirstChar { it.uppercase() },
@@ -184,6 +189,10 @@ private fun ProfileDialog(
                                 color = MaterialTheme.colorScheme.onSurface)
                         }
                     }
+                }
+                model?.let {
+                    Text("Brain: $it", style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         },

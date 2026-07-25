@@ -1,6 +1,7 @@
 package com.appblocker.data
 
 import android.content.Context
+import android.util.Log
 import com.appblocker.BuildConfig
 import com.appblocker.service.UsageTracker
 import java.net.HttpURLConnection
@@ -32,15 +33,71 @@ data class CoachReply(val reply: String, val suggestions: List<String>)
  * request per message.
  */
 object AiCoach {
+    private const val TAG = "AiCoach"
     private const val PREFS = "ai_coach"
-    // Newest flash model first; if the user's key doesn't serve it yet, one automatic
-    // fallback to the previous generation (remembered for a week, then re-probed).
-    private const val PRIMARY_MODEL = "gemini-3.5-flash"
-    private const val FALLBACK_MODEL = "gemini-2.5-flash"
     private const val MODEL_REPROBE_MS = 7L * 24 * 60 * 60 * 1000
-    private const val MAX_HISTORY_STORED = 40 // persisted chat turns
-    private const val MAX_HISTORY_SENT = 16 // turns sent per request (keeps replies fast)
+    // Sent per request. The coach model has a large context window and the system prompt carries
+    // the durable context, but continuity is most of what makes the coach feel like it knows the
+    // user — a 16-turn window was the main reason it seemed to forget mid-conversation.
+    private const val MAX_HISTORY_STORED = 120 // persisted chat turns
+    private const val MAX_HISTORY_SENT = 40 // turns sent per request
     private const val TIPS_TTL_MS = 60 * 60 * 1000L // tips refresh every hour
+    private const val READ_TIMEOUT_MS = 30_000
+    // Deep-thinking replies are expected to take tens of seconds; the old 30s ceiling would have
+    // failed exactly the answers this upgrade is for. The chat screen shows a typing indicator
+    // throughout, and tips serve the cached list while refreshing, so a long wait is visible
+    // rather than a freeze.
+    private const val DEEP_READ_TIMEOUT_MS = 120_000
+
+    /** How hard the model should think before answering. The coach wants depth over speed; bulk
+     *  jobs like app categorisation want neither. Mapped per model generation in [postWithThinking]
+     *  because 2.x takes a numeric `thinkingBudget` and 3.x a `thinkingLevel` enum. */
+    internal enum class Thinking { OFF, HIGH }
+
+    /**
+     * An ordered list of models to try, best first, plus how hard to think.
+     *
+     * Two things make this a chain rather than a constant. **One:** the same pipe serves the coach
+     * and [AiCategorizer], and they want opposite trade-offs — deep reasoning over the user's data
+     * versus a cheap, fast label for a package name. **Two:** Gemini model ids churn, and this app
+     * is built in an environment that cannot reach the API to check which ids are live. So rather
+     * than betting on one id, the chain is tried in order and the first that answers is remembered
+     * for [MODEL_REPROBE_MS] — an id that does not exist costs one 404, once a week.
+     *
+     * That means the ids below are a *preference order*, not a verified list. To pin an exact
+     * model, put it first; the rest stay as the safety net.
+     */
+    internal data class ModelChain(
+        val name: String,
+        val models: List<String>,
+        val thinking: Thinking,
+    )
+
+    /** The coach: best available Pro model, thinking hard. Flash entries are the last resort so a
+     *  wrong guess degrades to today's behaviour instead of to no coach at all. */
+    internal val COACH_CHAIN = ModelChain(
+        name = "coach",
+        models = listOf(
+            "gemini-3.5-pro",
+            "gemini-3-pro",
+            "gemini-2.5-pro",
+            "gemini-3.5-flash",
+            "gemini-2.5-flash",
+        ),
+        thinking = Thinking.HIGH,
+    )
+
+    /** Bulk/utility work (app categorisation): fast tier, no thinking — unchanged behaviour. */
+    internal val UTILITY_CHAIN = ModelChain(
+        name = "utility",
+        models = listOf("gemini-3.5-flash", "gemini-2.5-flash"),
+        thinking = Thinking.OFF,
+    )
+
+    /** The model that last answered for [chain] — so the owner can confirm the upgrade actually
+     *  landed on a Pro model rather than silently falling through to Flash. */
+    internal fun lastModelUsed(ctx: Context, chain: ModelChain = COACH_CHAIN): String? =
+        p(ctx).getString("model_ok_${chain.name}", null)
 
     // --- Server proxy (docs/SERVER.md #1) ---
     // When a proxy URL is baked in (BuildConfig, from gradle.properties), the coach routes
@@ -101,6 +158,58 @@ object AiCoach {
     }
 
     fun clearChat(ctx: Context) = p(ctx).edit().remove("chat").apply()
+
+    // --- What the coach has advised (so it can follow its own advice up) ---
+
+    private const val KEY_ADVICE = "advice_log"
+    private const val MAX_ADVICE = 10
+
+    /**
+     * The last few things the coach recommended, each stamped with the day it said it.
+     *
+     * Without this the coach had no idea whether its own advice was ever taken: it could re-suggest
+     * a limit the user set days ago, and it could never say "that 45-minute cap you added on Monday
+     * is holding". A real coach remembers what they told you — this is the smallest thing that makes
+     * it one. Kept deliberately short and dated so it stays a memory, not a transcript.
+     *
+     * Stored as `dayStamp|text` lines, newest last, in the same device-only prefs as the rest of the
+     * coach's data. An unparsable line is dropped rather than breaking the list.
+     */
+    internal fun adviceLog(ctx: Context): List<Pair<Int, String>> =
+        p(ctx).getStringSet(KEY_ADVICE, emptySet()).orEmpty()
+            .mapNotNull { entry ->
+                val sep = entry.indexOf('|')
+                val day = entry.take(sep.coerceAtLeast(0)).toIntOrNull() ?: return@mapNotNull null
+                val text = entry.substring(sep + 1).takeIf { it.isNotBlank() }
+                    ?: return@mapNotNull null
+                day to text
+            }
+            .sortedBy { it.first }
+
+    private fun recordAdvice(ctx: Context, text: String) {
+        val trimmed = text.trim().take(200)
+        if (trimmed.isBlank()) return
+        val kept = (adviceLog(ctx) + (todayStamp() to trimmed)).takeLast(MAX_ADVICE)
+        p(ctx).edit().putStringSet(
+            KEY_ADVICE, kept.map { (day, t) -> "$day|$t" }.toSet(),
+        ).apply()
+    }
+
+    /** The ledger as prompt lines ("- 3 days ago: …"), or "" when the coach hasn't advised yet. */
+    private fun advicePromptText(ctx: Context): String {
+        val today = todayStamp()
+        return adviceLog(ctx).joinToString("\n") { (day, text) ->
+            val ago = dayGap(today, day)
+            val when_ = when {
+                ago <= 0 -> "today"
+                ago == 1 -> "yesterday"
+                else -> "$ago days ago"
+            }
+            "- $when_: $text"
+        }
+    }
+
+    fun clearAdviceLog(ctx: Context) = p(ctx).edit().remove(KEY_ADVICE).apply()
 
     /** Parsed tips cache entry: the day it was fetched, when, and the raw JSON array. */
     private data class TipsCache(val day: Int, val fetchedAt: Long, val json: String)
@@ -165,7 +274,8 @@ object AiCoach {
             val first = SettingsStore.userName(ctx).substringBefore(' ')
             val system = buildString {
                 appendLine("You are the AI Coach inside AppBlocker, a screen-time app on the phone of ${SettingsStore.userName(ctx)}. Today is $today, and the time right now is $nowTime — the day is still in progress.")
-                appendLine("Personality: warm, celebratory, direct — a coach who is genuinely proud when $first makes progress. Lead with the most positive TRUE thing in the data (a streak alive, a goal hit, a number down vs last week) before advice or bad news. Use $first's first name naturally, not in every message. You may use at most 2 fitting emojis per reply (like a party popper, flame, flexed arm, check mark, or chart-down) — never more, and never inside heading lines. Structure any reply longer than two sentences: short heading lines ending in ':', bullet lines starting with '- ', numbered step lines starting with '1. ' '2. ' for ordered plans, blank lines between sections, and **bold** around the key numbers, app names and the single most important phrase. No other markdown (#, backticks, tables). Keep replies under 80 words — EXCEPT when the user asks for a report, a summary, or a plan: then reply up to 200 words using that structure so it reads like a clean report. Ask at most one question per reply.")
+                appendLine("Personality: warm, celebratory, direct — a coach who is genuinely proud when $first makes progress. Lead with the most positive TRUE thing in the data (a streak alive, a goal hit, a number down vs last week) before advice or bad news. Use $first's first name naturally, not in every message.")
+                appendLine("How to write: like a person talking, not like a form. Short natural paragraphs. Match the length to what was asked — a sentence or two for a small question, more when $first asks for a plan, a report or an explanation, and don't pad to fill space. Use a list ONLY when you are genuinely enumerating steps or options; never break an ordinary thought into bullets. **Bold** at most one thing that really matters (usually a number) — not by rule, and not in every reply. No headings unless the reply is long enough to genuinely need them. No other markdown (#, backticks, tables). At most 2 fitting emojis, often zero. Ask at most one question per reply. Vary how you open — never start consecutive replies the same way.")
                 appendLine("Your job: help the user understand their usage, agree on goals together, and track progress against those goals using the data below. Suggest specific app features with concrete settings when they would help.")
                 appendLine("Today's numbers are PARTIAL — the day is not over. Never declare a daily goal hit today or call today a win; the strongest claim allowed is \"on track\", tied to the clock (like \"only 40m by 14:00\"). Judge today against \"by this same time yesterday\" rather than full-day averages, and treat a phone-free stretch that includes the night as sleep, not willpower. Finished days (yesterday, streaks, weekly trends) are fair game to celebrate.")
                 appendLine("When the user wants a goal or plan for the week: propose ONE specific, measurable weekly goal grounded in the data (for example a daily-average target around 10-20% below their current average — realistic, not drastic), then give a concrete plan: which apps to limit with which feature and what setting, and what to check each day. Save the goal via the goals field prefixed 'This week: '. When a weekly goal already exists, report progress against it using the per-day numbers.")
@@ -186,6 +296,15 @@ object AiCoach {
                 appendLine("The user's usage data:")
                 appendLine(runCatching { usageSummary(ctx) }.getOrDefault("(unavailable)"))
                 appendLine()
+                val advice = runCatching { advicePromptText(ctx) }.getOrDefault("")
+                if (advice.isBlank()) {
+                    appendLine("You have not given $first any concrete advice yet.")
+                } else {
+                    appendLine("What YOU advised recently, and when you said it:")
+                    appendLine(advice)
+                    appendLine("Check your own advice against what actually happened since — the per-day numbers above cover the last 7 days. If a suggestion was taken and worked, say so with the number. If it was taken and did NOT help, admit that and change the plan rather than repeating it. If it was clearly never acted on, ask once, without nagging. Never re-suggest something you already recommended as if it were a new idea.")
+                }
+                appendLine()
                 val goalsText = runCatching { Goals.promptSummary(ctx) }.getOrDefault("")
                 appendLine(
                     if (goalsText.isBlank())
@@ -193,7 +312,7 @@ object AiCoach {
                     else "The user's goals, tracked live by the app (hit = the day FINISHES under the target — today's value is live and today is not finished):\n$goalsText"
                 )
                 appendLine()
-                appendLine("Reply ONLY with a JSON object: {\"reply\": string, \"goals\": array (optional), \"suggestions\": array of up to 3 short strings (optional), \"profile\": object (optional)}. \"goals\" REPLACES the user's whole goal list and must contain OBJECTS: {\"kind\": \"screen_time\" or \"app\" or \"unlocks\", \"minutes\": integer daily target (for unlocks, the unlock count), \"app\": the exact app name, only for kind app}. Include \"goals\" ONLY when the user agreed to add, change, complete or drop a goal — and when you do, also include the existing goals being kept. Goals must be measurable daily targets; never invent one the user didn't agree to. \"suggestions\" are follow-up messages the user might want to send next, phrased in the user's own voice (like \"Show me my weekly report\" or \"Which app should I limit first?\"), each under 40 characters, relevant to where the conversation is. \"profile\" is a flat object of short plain-text facts to remember about the user forever. Include ONLY keys you are adding or changing — existing keys are kept automatically; set a key to \"\" to forget it. Use snake_case keys, preferring: why_blocking, temptation_apps, temptation_times, replacement_activities, work_study_rhythm, motivation_style, wins, personal_notes. Values under 200 characters. Never store anything the user asks you to forget.")
+                appendLine("Reply ONLY with a JSON object: {\"reply\": string, \"goals\": array (optional), \"suggestions\": array of up to 3 short strings (optional), \"profile\": object (optional), \"advice\": string (optional)}. \"advice\" is ONE short line recording what you just recommended, written ONLY when this reply contained a concrete recommendation or plan — it is how you remember your own advice and follow it up later. Never write \"advice\" for a reply that was only conversation, encouragement or an answer to a question. \"goals\" REPLACES the user's whole goal list and must contain OBJECTS: {\"kind\": \"screen_time\" or \"app\" or \"unlocks\", \"minutes\": integer daily target (for unlocks, the unlock count), \"app\": the exact app name, only for kind app}. Include \"goals\" ONLY when the user agreed to add, change, complete or drop a goal — and when you do, also include the existing goals being kept. Goals must be measurable daily targets; never invent one the user didn't agree to. \"suggestions\" are follow-up messages the user might want to send next, phrased in the user's own voice (like \"Show me my weekly report\" or \"Which app should I limit first?\"), each under 40 characters, relevant to where the conversation is. \"profile\" is a flat object of short plain-text facts to remember about the user forever. Include ONLY keys you are adding or changing — existing keys are kept automatically; set a key to \"\" to forget it. Use snake_case keys, preferring: why_blocking, temptation_apps, temptation_times, replacement_activities, work_study_rhythm, motivation_style, wins, personal_notes. Values under 200 characters. Never store anything the user asks you to forget.")
             }
 
             // Gemini wants contents to start with a user turn; drop any leading model greeting.
@@ -217,11 +336,14 @@ object AiCoach {
 
             repeat(2) {
                 runCatching {
-                    val obj = JSONObject(callGemini(ctx, key, body))
+                    val obj = JSONObject(callGemini(ctx, key, body, COACH_CHAIN))
                     val reply = obj.getString("reply").trim()
                     obj.optJSONArray("goals")?.let { g -> applyGoalUpdate(ctx, g) }
                     obj.optJSONObject("profile")?.let { pr ->
                         runCatching { CoachProfile.merge(ctx, pr) }
+                    }
+                    obj.optString("advice").takeIf { it.isNotBlank() }?.let { a ->
+                        runCatching { recordAdvice(ctx, a) }
                     }
                     val suggestions = obj.optJSONArray("suggestions")?.let { s ->
                         (0 until s.length()).map { s.getString(it).trim() }
@@ -454,7 +576,7 @@ object AiCoach {
         name: String,
     ): List<String>? {
         val prompt = buildString {
-            appendLine("You are $name's personal screen-time coach inside an app-blocker app. Based on their usage data, reply with ONLY a JSON array of 2 or 3 short tips (strings, max 120 characters each). Tone: celebratory and progress-first — if any number improved, a goal was hit, or a streak is alive, the FIRST tip must celebrate it with the real number. Each tip must be specific to the data, actionable, encouraging, plain language. You may use at most ONE emoji per tip (like a party popper, flame, flexed arm, check mark, or chart-down). Each tip is ONE plain sentence: no markdown, no ** marks, no headings. Recommend the app's features BY NAME with concrete settings where they'd help, but never suggest something already set up. Use what you know about $name to make tips feel personal.")
+            appendLine("You are $name's personal screen-time coach inside an app-blocker app. Based on their usage data, reply with ONLY a JSON array of 2 or 3 short tips (strings, max 120 characters each). Tone: celebratory and progress-first — if any number improved, a goal was hit, or a streak is alive, the FIRST tip must celebrate it with the real number. Each tip must be specific to THIS data and sound like a person who has actually looked at it — name the app, the hour or the number that prompted it. Never write a tip that would be true for any user; if a tip would still make sense with different numbers, it is too generic to send. Each tip is ONE plain sentence: no markdown, no ** marks, no headings. At most ONE emoji per tip, and only when it fits. Recommend the app's features BY NAME with concrete settings where they'd help, but never suggest something already set up. Use what you know about $name to make tips feel personal.")
             appendLine("The time right now is ${SimpleDateFormat("H:mm", Locale.US).format(Date())} — today's numbers are partial, the day is not over. Celebrate only FINISHED wins (yesterday's goal hit, a streak, a week-over-week drop); for today say \"on track\" at most, never \"goal hit\", and never praise a phone-free stretch that was just the night's sleep.")
             appendLine()
             appendLine(FEATURE_CATALOG)
@@ -473,75 +595,120 @@ object AiCoach {
             .put("contents", JSONArray().put(JSONObject()
                 .put("parts", JSONArray().put(JSONObject().put("text", prompt)))))
             .put("generationConfig", JSONObject().put("responseMimeType", "application/json"))
-        return parseTips(callGemini(ctx, key, body))
+        return parseTips(callGemini(ctx, key, body, COACH_CHAIN))
     }
 
     /**
-     * Sends [body] (WITHOUT a thinkingConfig — it's injected per model here) to the best
-     * available Gemini model and returns the text part. Primary model first with low
-     * thinking (fast replies); on a model-not-available error, falls back one generation
-     * and remembers that for a week. Internal so other Gemini-backed features (e.g.
-     * [AiCategorizer]) reuse the same pipe. Throws on total failure.
+     * Sends [body] (WITHOUT a thinkingConfig — it's injected per model here) to the best model
+     * [chain] offers and returns the text part.
+     *
+     * [chain] decides both which models to try and how hard they think, because this same pipe
+     * serves the coach and [AiCategorizer] and they want opposite things — pass [COACH_CHAIN] for
+     * anything the user reads, [UTILITY_CHAIN] (the default) for bulk work. Throws on total failure.
      */
-    internal fun callGemini(ctx: Context, key: String, body: JSONObject): String {
+    internal fun callGemini(
+        ctx: Context,
+        key: String,
+        body: JSONObject,
+        chain: ModelChain = UTILITY_CHAIN,
+    ): String {
         return try {
-            attemptWithModelFallback(ctx, key, body, viaProxy = proxyOn())
+            attemptWithModelFallback(ctx, key, body, viaProxy = proxyOn(), chain = chain)
         } catch (e: Exception) {
             // Proxy had a transient problem (VM down, timeout, 5xx) but the user also set their
             // own key → try Google directly once so the coach still answers. A 4xx (auth/bad
             // request) is not transient, so we don't retry those.
             val transient = !(e.message ?: "").contains("HTTP 4")
             if (proxyOn() && transient && apiKey(ctx).isNotBlank()) {
-                attemptWithModelFallback(ctx, apiKey(ctx), body, viaProxy = false)
+                attemptWithModelFallback(ctx, apiKey(ctx), body, viaProxy = false, chain = chain)
             } else throw e
         }
     }
 
-    /** The primary-then-fallback model logic, over either the proxy or a direct Google call. */
+    /**
+     * Walks [chain] in preference order and returns the first model's answer, over either the proxy
+     * or a direct Google call.
+     *
+     * The winner is remembered per chain for [MODEL_REPROBE_MS] and tried first next time, so the
+     * cost of listing an id that this key doesn't serve is one 404 a week — not one per request.
+     * Only a *model-unavailable* error walks the chain: anything else (auth, quota, a bad request,
+     * the proxy being down) is the caller's problem and is rethrown immediately, because retrying
+     * it on four more models would just multiply the same failure.
+     */
     private fun attemptWithModelFallback(
-        ctx: Context, key: String, body: JSONObject, viaProxy: Boolean,
+        ctx: Context, key: String, body: JSONObject, viaProxy: Boolean, chain: ModelChain,
     ): String {
         val prefs = p(ctx)
-        val useFallbackFirst = prefs.getString("model_ok", null) == FALLBACK_MODEL &&
-            System.currentTimeMillis() - prefs.getLong("model_ok_at", 0) < MODEL_REPROBE_MS
-        val first = if (useFallbackFirst) FALLBACK_MODEL else PRIMARY_MODEL
-        return try {
-            postWithThinking(key, body, first, viaProxy)
-        } catch (e: Exception) {
-            val modelMissing = (e.message ?: "").let {
-                it.contains("HTTP 404") || it.contains("NOT_FOUND") || it.contains("not found")
+        val okKey = "model_ok_${chain.name}"
+        val okAtKey = "model_ok_at_${chain.name}"
+        val remembered = prefs.getString(okKey, null)
+            ?.takeIf { System.currentTimeMillis() - prefs.getLong(okAtKey, 0) < MODEL_REPROBE_MS }
+            ?.takeIf { it in chain.models } // a chain edit retires the old winner
+        val order =
+            if (remembered == null) chain.models
+            else listOf(remembered) + chain.models.filter { it != remembered }
+
+        var last: Exception? = null
+        for (model in order) {
+            try {
+                val out = postWithThinking(key, body, model, viaProxy, chain.thinking)
+                if (model != remembered) {
+                    prefs.edit().putString(okKey, model)
+                        .putLong(okAtKey, System.currentTimeMillis()).apply()
+                }
+                if (BuildConfig.DEBUG) Log.d(TAG, "${chain.name} answered by $model")
+                return out
+            } catch (e: Exception) {
+                last = e
+                if (!modelUnavailable(e)) throw e
+                if (BuildConfig.DEBUG) Log.d(TAG, "${chain.name}: $model unavailable, trying next")
             }
-            if (first == PRIMARY_MODEL && modelMissing) {
-                val out = postWithThinking(key, body, FALLBACK_MODEL, viaProxy)
-                prefs.edit().putString("model_ok", FALLBACK_MODEL)
-                    .putLong("model_ok_at", System.currentTimeMillis()).apply()
-                out
-            } else throw e
         }
+        throw last ?: java.io.IOException("no models configured for ${chain.name}")
     }
 
-    /** Adds the model-appropriate low-thinking config (the silent "thinking" pause is the main
-     *  latency cost); if the server rejects the field (400), retries once without it. */
-    private fun postWithThinking(key: String, body: JSONObject, model: String, viaProxy: Boolean): String {
+    /** "This key/endpoint doesn't serve that model" — the only error worth trying another one for. */
+    private fun modelUnavailable(e: Exception): Boolean = (e.message ?: "").let {
+        it.contains("HTTP 404") || it.contains("NOT_FOUND") || it.contains("not found")
+    }
+
+    /** Adds the thinking config for [thinking], mapped per model generation: 2.x takes a numeric
+     *  `thinkingBudget` (0 = off, -1 = dynamic), 3.x a `thinkingLevel` enum. If the server rejects
+     *  the field (400 — an unknown level, or a model that doesn't take one), retries once without
+     *  it, which leaves that model's own default thinking in place. */
+    private fun postWithThinking(
+        key: String, body: JSONObject, model: String, viaProxy: Boolean, thinking: Thinking,
+    ): String {
         val tuned = JSONObject(body.toString())
         val gen = tuned.optJSONObject("generationConfig")
             ?: JSONObject().also { tuned.put("generationConfig", it) }
+        val legacy = model.startsWith("gemini-2.")
         gen.put(
             "thinkingConfig",
-            if (model.startsWith("gemini-2.")) JSONObject().put("thinkingBudget", 0)
-            else JSONObject().put("thinkingLevel", "low"),
+            when {
+                legacy && thinking == Thinking.HIGH -> JSONObject().put("thinkingBudget", -1)
+                legacy -> JSONObject().put("thinkingBudget", 0)
+                thinking == Thinking.HIGH -> JSONObject().put("thinkingLevel", "high")
+                else -> JSONObject().put("thinkingLevel", "low")
+            },
         )
+        // A model thinking hard takes far longer than the old always-low setting did, and a read
+        // timeout shorter than the answer would turn every good reply into a failure.
+        val readMs = if (thinking == Thinking.HIGH) DEEP_READ_TIMEOUT_MS else READ_TIMEOUT_MS
         return try {
-            post(key, tuned.toString(), model, viaProxy)
+            post(key, tuned.toString(), model, viaProxy, readMs)
         } catch (e: Exception) {
-            if ((e.message ?: "").contains("HTTP 400")) post(key, body.toString(), model, viaProxy)
+            if ((e.message ?: "").contains("HTTP 400"))
+                post(key, body.toString(), model, viaProxy, readMs)
             else throw e
         }
     }
 
     /** POSTs [body] to one Gemini [model] and returns the text part (throws with the HTTP
      *  code + error body in the message on failure, so callers can route fallbacks). */
-    private fun post(key: String, body: String, model: String, viaProxy: Boolean): String {
+    private fun post(
+        key: String, body: String, model: String, viaProxy: Boolean, readMs: Int,
+    ): String {
         val conn = (URL(endpoint(model, viaProxy)).openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             setRequestProperty("Content-Type", "application/json")
@@ -550,7 +717,7 @@ object AiCoach {
             if (viaProxy) setRequestProperty("Authorization", "Bearer ${BuildConfig.COACH_PROXY_SECRET}")
             else setRequestProperty("x-goog-api-key", key)
             connectTimeout = 15_000
-            readTimeout = 30_000
+            readTimeout = readMs
             doOutput = true
         }
         conn.outputStream.use { it.write(body.toByteArray()) }

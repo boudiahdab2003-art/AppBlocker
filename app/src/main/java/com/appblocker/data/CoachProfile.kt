@@ -13,8 +13,10 @@ import org.json.JSONObject
 object CoachProfile {
     private const val PREFS = "ai_coach" // shared with AiCoach
     private const val KEY = "profile"
-    private const val MAX_FIELDS = 24
-    private const val MAX_VALUE_LEN = 200
+    // Raised alongside the coach's model upgrade: a deeper model notices more worth remembering,
+    // and the old ceilings truncated facts mid-sentence.
+    private const val MAX_FIELDS = 40
+    private const val MAX_VALUE_LEN = 400
 
     private fun p(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
