@@ -696,6 +696,10 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (!SettingsStore.blockYoutubeShorts(this) || !quickBlockActive() ||
             lastForegroundPkg != YOUTUBE_PKG
         ) {
+            // Leaving YouTube: a scan already running there must not put its cover up over
+            // whatever came next. scheduleWebScan has cancelled its job here all along; this one
+            // never did, which is how a Shorts cover could land on the home screen.
+            shortsScanJob?.cancel()
             // Only ever takes down the Shorts cover itself — shortsCovering is now derived from
             // what is actually up, so this can no longer remove an app-block cover that replaced
             // it (which happened when YouTube became fully blocked while Shorts was covered).
@@ -1023,9 +1027,13 @@ class BlockerAccessibilityService : AccessibilityService() {
         // whatever was on screen. Screen-off now always cleans up; the Shorts scan re-covers on
         // its next tick if the user really is still on a Short.
         handler.removeCallbacks(webScanRunnable)
+        handler.removeCallbacks(shortsScanRunnable)
         handler.removeCallbacks(recheckRunnable)
         handler.removeCallbacks(confirmForegroundRunnable)
         webScanJob?.cancel()
+        // The Shorts scan was the one thing screen-off never stopped — so it could finish after
+        // all the cleanup below and raise a cover with nothing left to take it down.
+        shortsScanJob?.cancel()
         webScanQueuedAt = 0L
         // Stop trying to send a screened-off phone Home, and release the attempt dedup: the
         // next unlock starts clean, so a fresh open of the app is a fresh attempt.
@@ -1362,12 +1370,26 @@ class BlockerAccessibilityService : AccessibilityService() {
         val onShorts = isShortsOnScreen()
         if (onShorts == true && !shortsCovering) {
             withContext(Dispatchers.Main) {
-                showBlockScreen(
-                    title = "Shorts blocked",
-                    message = "YouTube Shorts is blocked. The rest of YouTube still works.",
-                    packageName = null,
-                    counterKey = CoverGate.SHORTS_KEY,
-                )
+                // Re-confirm on the main thread before covering anything — the same guard
+                // scanWebContent has always had, and this scan was missing.
+                //
+                // Everything above ran on a background thread, so the world can have moved on
+                // while it did: the user can swipe Home (cover raised over the home screen, plus a
+                // counted attempt) or lock the phone (onScreenOff does its whole cleanup, and THEN
+                // this raises a cover nothing is left to tidy — a stranded cover on unlock, which
+                // is the v1.98 bug arriving by a different route).
+                //
+                // Both halves are load-bearing: onScreenOff nulls lastForegroundPkg, which catches
+                // the lock case, and stillOnScreen catches a real app switch — including one whose
+                // window event never arrived, since it asks the window tree rather than the cache.
+                if (lastForegroundPkg == YOUTUBE_PKG && stillOnScreen(YOUTUBE_PKG)) {
+                    showBlockScreen(
+                        title = "Shorts blocked",
+                        message = "YouTube Shorts is blocked. The rest of YouTube still works.",
+                        packageName = null,
+                        counterKey = CoverGate.SHORTS_KEY,
+                    )
+                }
             }
         } else if (onShorts == false && shortsCovering) {
             withContext(Dispatchers.Main) { overlay.remove() }

@@ -309,6 +309,44 @@ watchdog's own `lastEventAt`). Exactly one did not.
   the "permission granted but no fixes arriving" case is not. That is the next thing worth building
   here, and it needs UI, not a bug fix.
 
+### Swept in the eighth "bug hunt" (25 Jul 2026)
+
+Primitive grepped: **work that outlives the state it was started for.** Enumerate every
+`postDelayed` and every `scope.launch` against every cancellation site, then ask what each one does
+if it completes *after* the thing it was about to act on is gone.
+
+Visibility is genuinely sound — everything shared between the main thread and the background scan
+is `@Volatile`, including `BlockOverlay`'s fields. The bug was lifecycle, not memory model.
+
+- the Shorts scan's lifetime — **1 bug, two symptoms, and the sibling asymmetry again.**
+  `webScanJob` is cancelled in three places; `shortsScanJob` was cancelled in **none** (only
+  self-superseded), and `scanShorts` raised its cover with **no main-thread re-confirmation** — the
+  guard `scanWebContent` has always had.
+  - Swipe Home while a scan is in flight → the cover lands **on the home screen**, and an attempt is
+    counted. Visible, and matches symptoms reported repeatedly.
+  - Lock the phone while a scan is in flight → `onScreenOff` does its whole cleanup, then the
+    resumed coroutine raises a cover with nothing left to take it down: a stranded cover on unlock.
+    **That is the v1.98 bug arriving by a different route** — fixed then for the flag path, still
+    open on the coroutine path.
+  - Fixed with both halves, because cancellation alone is racy (a coroutine past its last suspension
+    point still completes): re-confirm `lastForegroundPkg == YOUTUBE_PKG && stillOnScreen(...)`
+    inside the Main block, *and* cancel the job where the web scan cancels its own — on screen-off
+    and on leaving YouTube. `onScreenOff` also now cancels `shortsScanRunnable`, the one queued
+    callback it was missing.
+  - Note which half catches which symptom: `onScreenOff` nulls `lastForegroundPkg`, so the cache
+    check catches the lock case; `stillOnScreen` asks the window tree, so it catches an app switch
+    whose window event never arrived — the HyperOS quirk this whole file exists for.
+
+**Considered and deliberately left:**
+
+- `handler.postDelayed({ … }, 1500)` in `handleStrictSettingsGuard` is an anonymous lambda, so it
+  can never be cancelled and is the only scheduled callback not wrapped in `guarded`. Harmless as
+  written — `overlay.remove()` wraps `removeView` in `runCatching`, and its post-teardown effect
+  (taking down a non-app-block cover) is what you'd want anyway. Worth naming it if it ever grows a
+  side effect; an uncancellable callback is a liability even when today's body is safe.
+- `onDestroy` calls `scope.cancel()`, so every background scan dies with the service. Only the
+  *screen-off* path needed per-job cancellation.
+
 ### Not yet swept
 
 - the updater's download/install path (`download`, FileProvider hand-off) — `isNewer` is done
