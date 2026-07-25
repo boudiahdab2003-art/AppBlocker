@@ -1,5 +1,7 @@
 package com.appblocker.data
 
+import android.os.SystemClock
+
 /**
  * One app's keyword lockout: it stays fully blocked for a while after a blocked word was caught
  * in it.
@@ -24,9 +26,23 @@ internal data class KeywordLockout(
     val word: String? = null,
 ) {
     /** Millis left, 0 when expired — monotonic within a boot, guarded wall clock after one. */
-    fun remaining(currentBootCount: Int): Long = SessionClock.remaining(
-        realtimeStart, realtimeEnd, wallStart, wallEnd, bootCount, currentBootCount,
+    fun remaining(currentBootCount: Int): Long = remainingAt(
+        currentBootCount, SystemClock.elapsedRealtime(), System.currentTimeMillis(),
     )
+
+    /**
+     * [remaining] with the clocks passed in, mirroring [SessionClock.remainingAt].
+     *
+     * The seam is the point: unit tests run with `isReturnDefaultValues = true`, so an un-mocked
+     * `SystemClock.elapsedRealtime()` silently returns 0 while `System.currentTimeMillis()` is the
+     * real JVM clock. Reading them inside made this untestable — the monotonic branch could never
+     * be reached, because nowRt of 0 always looks like a reboot.
+     */
+    internal fun remainingAt(currentBootCount: Int, nowRt: Long, nowWall: Long): Long =
+        SessionClock.remainingAt(
+            realtimeStart, realtimeEnd, wallStart, wallEnd,
+            bootCount, currentBootCount, nowRt, nowWall,
+        )
 
     /** `pkg|rtStart|rtEnd|wallStart|wallEnd|boot`. Package names cannot contain '|'. */
     fun encode(pkg: String): String =

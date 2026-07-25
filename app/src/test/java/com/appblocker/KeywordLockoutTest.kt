@@ -34,25 +34,61 @@ class KeywordLockoutTest {
     )
 
     // --- the anchoring ---
+    // These use remainingAt so both clocks are explicit. remaining() reads the real ones, and
+    // under isReturnDefaultValues SystemClock.elapsedRealtime() is 0 while currentTimeMillis()
+    // is genuine — which makes every lockout look post-reboot and nothing deterministic.
+
+    private val halfHour = 30 * 60_000L
 
     @Test
-    fun `a fresh lockout is running`() {
-        // Same boot, so the monotonic anchor is used and the wall clock is irrelevant.
-        assertEquals(true, lockout().remaining(boot) > 0L)
+    fun `a fresh lockout is running on the monotonic clock`() {
+        // Same boot, 10 minutes in. The wall clock is deliberately absurd (far past) to prove
+        // it is not consulted — this is the bypass that used to work.
+        val remaining = lockout().remainingAt(boot, nowRt = 1_000L + 10 * 60_000L, nowWall = 1L)
+        assertEquals(20 * 60_000L, remaining)
     }
 
     @Test
-    fun `a lockout from a different boot falls back to the wall clock`() {
-        // A reboot resets the monotonic clock, so the saved realtime anchors mean nothing —
-        // the guarded wall-clock deadline is the only information left.
-        val stale = lockout(bootCount = boot - 1)
-        assertEquals(0L, stale.remaining(boot))
+    fun `winding the wall clock forward does not lift a lockout`() {
+        // The whole point of the fix: same boot, only 1 minute elapsed monotonically, but the
+        // wall clock has jumped a year. 29 minutes must still be left.
+        val remaining = lockout().remainingAt(
+            boot, nowRt = 1_000L + 60_000L, nowWall = 1_700_000_000_000L + 365L * 86_400_000L,
+        )
+        assertEquals(29 * 60_000L, remaining)
     }
 
     @Test
-    fun `an expired lockout reports zero, never negative`() {
-        val done = lockout(rtStart = 0L, durationMs = 0L, wallStart = 1L)
-        assertEquals(0L, done.remaining(boot))
+    fun `a lockout expires on the monotonic clock`() {
+        assertEquals(0L, lockout().remainingAt(boot, nowRt = 1_000L + halfHour, nowWall = 1L))
+        assertEquals(0L, lockout().remainingAt(boot, nowRt = 1_000L + halfHour * 9, nowWall = 1L))
+    }
+
+    @Test
+    fun `after a reboot it falls back to the guarded wall clock`() {
+        // A reboot resets the monotonic clock, so the saved realtime anchors mean nothing.
+        val l = lockout(bootCount = boot - 1)
+        // Wall clock 10 minutes in: 20 left.
+        assertEquals(
+            20 * 60_000L,
+            l.remainingAt(boot, nowRt = 0L, nowWall = 1_700_000_000_000L + 10 * 60_000L),
+        )
+        // Wall clock past the end: expired.
+        assertEquals(0L, l.remainingAt(boot, nowRt = 0L, nowWall = 1_700_000_000_000L + halfHour))
+    }
+
+    @Test
+    fun `a wall clock reading before the lockout even started is treated as expired`() {
+        // Impossible, so it means the clock is wrong — SessionClock's guard, inherited here.
+        val l = lockout(bootCount = boot - 1)
+        assertEquals(0L, l.remainingAt(boot, nowRt = 0L, nowWall = 1_699_999_000_000L))
+    }
+
+    @Test
+    fun `remaining never exceeds the lockout's own length`() {
+        // A backward clock jump post-reboot must not stretch a 30-minute lockout into days.
+        val l = lockout(bootCount = boot - 1)
+        assertEquals(true, l.remainingAt(boot, nowRt = 0L, nowWall = 1_700_000_100_000L) <= halfHour)
     }
 
     // --- the stored format ---
@@ -75,17 +111,21 @@ class KeywordLockoutTest {
     fun `the old expiry-only form is still readable`() {
         // Pre-upgrade entries were "pkg|expiryEpochMillis". Dropping them would have unlocked
         // apps early on the very update that fixed the bypass.
-        val future = System.currentTimeMillis() + 10 * 60_000L
-        val (decodedPkg, decoded) = KeywordLockout.decode("$pkg|$future")!!
+        val deadline = 1_700_000_000_000L
+        val (decodedPkg, decoded) = KeywordLockout.decode("$pkg|$deadline")!!
         assertEquals(pkg, decodedPkg)
         assertEquals(-1, decoded.bootCount) // forces SessionClock's wall-clock path
-        assertEquals(true, decoded.remaining(boot) > 0L)
+        assertEquals(
+            10 * 60_000L,
+            decoded.remainingAt(boot, nowRt = 0L, nowWall = deadline - 10 * 60_000L),
+        )
     }
 
     @Test
     fun `an expired old-form entry is not running`() {
-        val past = System.currentTimeMillis() - 1_000L
-        assertEquals(0L, KeywordLockout.decode("$pkg|$past")!!.second.remaining(boot))
+        val deadline = 1_700_000_000_000L
+        val legacy = KeywordLockout.decode("$pkg|$deadline")!!.second
+        assertEquals(0L, legacy.remainingAt(boot, nowRt = 0L, nowWall = deadline + 1_000L))
     }
 
     @Test
