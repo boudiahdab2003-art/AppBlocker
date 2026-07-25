@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.96
+- Fixes the block screen flashing on your home screen and over AppBlocker's own screens after turning on Allowlist mode. This was our fault in 1.95: the new 'keep the block screen up until you've really left the app' behaviour had no way to tell you'd already reached your home screen, because the swipe-up Home gesture tells apps nothing and the block screen itself can look like the app in front. Not knowing was treated as 'still in the app', so the screen was held for a couple of seconds over your home screen every time you tapped 'Got it' - and in Allowlist mode you tap it constantly. It's now only held on when the app can actually be seen to still be in front. Also: AppBlocker's own screens can no longer be covered, your home screen and phone app can no longer be blocked in Allowlist mode, and the apps that must always keep working there are now protected against every kind of block, including a blocked-word lockout.
+
 ## v1.95
 - Fixes being blocked twice for one open. Tapping 'Got it' now keeps the block screen up until your phone has really left the app, instead of taking it away and hoping the trip Home lands - so you never get a second block screen for a single open, and one open is counted once (your 'minutes reclaimed' moves by 3, not 6). Also fixes YouTube Shorts staying uncovered after you tapped 'Got it', a blocked word counting as two attempts, and a late message from an app you had just left throwing the block screen over your home screen.
 
