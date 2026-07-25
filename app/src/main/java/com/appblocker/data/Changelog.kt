@@ -13,6 +13,11 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.98", "Jul 25, 2026", "The notification shade no longer breaks a block", listOf(
+        "Pulling down your notification shade over a block screen used to take the block screen away — and when you closed the shade again, the blocked app was counted as a brand-new attempt, adding another 3 minutes to your 'minutes reclaimed'. Pressing a volume key or getting a notification pop-up did the same. This affected both Blocking modes, not just Allowlist.",
+        "The reason: the shade, the volume dialog, notification pop-ups and your keyboard all genuinely become 'the thing in front' as far as Android is concerned. The blocker took that as you having left the blocked app, so it packed the block screen away. But they don't replace the app — they sit on top of it, and the app underneath is still just as blocked.",
+        "Those are now recognised for what they are, so the block screen stays put underneath them, nothing gets counted twice, and returning to the app no longer adds a phantom 'open' to your daily open limits. Going to your home screen, or switching to a genuinely different app, still puts the block screen away as it always did.",
+    )),
     VersionLog("1.97", "Jul 25, 2026", "The last of the Allowlist flashing", listOf(
         "Fixes the rest of it: turning Allowlist mode on could still put a block screen over AppBlocker's own screens, and you could still catch a flash in an app you'd allowed, like WhatsApp.",
         "One cause behind both. Android tells the blocker 'this app's window changed' — but apps send that in the background too, when a message arrives or something reloads behind what you're actually looking at. The blocker took every one of those as 'this is the app in front of you now'. In your old Blocklist setup that rarely mattered, because a random background app usually isn't one you'd blocked. In Allowlist mode everything is blockable, so a background app could get you a block screen over whatever you were really doing — and a background app you'd ALLOWED could make a legitimate block screen disappear, which the real app then brought straight back. That's the flash.",

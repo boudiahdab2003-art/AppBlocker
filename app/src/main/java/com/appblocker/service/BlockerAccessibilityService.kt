@@ -94,6 +94,9 @@ class BlockerAccessibilityService : AccessibilityService() {
     // Negative cache for isLauncherPkg, so its throttled re-detection only runs on new packages.
     @Volatile private var knownNonLauncherPkgs: Set<String> = emptySet()
     @Volatile private var lastLauncherRefreshAt = 0L
+    // The current keyboard, cached for isTransientSurface's hot path — see imePackage().
+    @Volatile private var cachedImePkg: String? = null
+    @Volatile private var lastImeRefreshAt = 0L
     // Whether blocked words are matched in every app (default) or browsers only. Cached here
     // and refreshed by a prefs listener so the toggle applies without restarting the service.
     @Volatile private var keywordsEverywhere: Boolean = true
@@ -288,7 +291,13 @@ class BlockerAccessibilityService : AccessibilityService() {
             // a stale package is never (re-)blocked over the home screen. (Our own overlay
             // window may report as the active window; never "reconcile" to ourselves.)
             val actual = rootInActiveWindow?.packageName?.toString()
-            if (actual != null && actual != packageName && actual != pkg) {
+            // A transient surface (shade, volume dialog, keyboard) may be the active window
+            // while the app underneath is unchanged — reconciling to it would make this tick
+            // decide the user had left, and remove a legitimate cover. Leave the cache alone
+            // and let the next tick see the real app again. See isTransientSurface.
+            if (actual != null && actual != packageName && actual != pkg &&
+                !isTransientSurface(actual)
+            ) {
                 lastForegroundPkg = actual
                 pkg = actual
             }
@@ -488,6 +497,20 @@ class BlockerAccessibilityService : AccessibilityService() {
      *  fast path; the `pkg != lastForegroundPkg` guard keeps recordOpen at exactly one
      *  count per open regardless of which event type wins the race. */
     private fun onForegroundChanged(pkg: String?, className: String?) {
+        // A transient surface is not a foreground app — the notification shade, volume dialog,
+        // heads-up notifications and the keyboard sit ON TOP of whatever is already open. They
+        // do genuinely become the active window, so v1.97's confirmation lets them through
+        // (correctly — they really are in front), and everything downstream then treated them
+        // as "the user went somewhere else":
+        //   - handleAppBlock found them unblocked and tore a live cover down, exposing the
+        //     blocked app the moment the shade closed. The re-block that followed counted as a
+        //     fresh attempt — confirmed on device: opening the shade over a block screen
+        //     "counted a new block and added 3 mins".
+        //   - they became lastForegroundPkg, so returning to the app counted a phantom open
+        //     against its daily open limit, and the mid-use re-check was cancelled.
+        // None of that is a foreground change, so stop before any of it. Whatever is underneath
+        // has not stopped being blocked, and the surface is drawn over our cover anyway.
+        if (pkg != null && isTransientSurface(pkg)) return
         // Keep a live app-block cover rock-solid. A blocked app runs behind the (non-focusable)
         // cover and can spit out stray windows — a system/floating popup, a splash, a different-
         // package sub-window — whose window-state event carries a package that isn't blocked.
@@ -801,6 +824,36 @@ class BlockerAccessibilityService : AccessibilityService() {
         // blocks the home screen for the rest of the service's life.
         if (looked) knownNonLauncherPkgs = knownNonLauncherPkgs + pkg
         return false
+    }
+
+    /**
+     * True when [pkg] is a surface that appears *over* the current app rather than replacing
+     * it — the notification shade, volume dialog and heads-up notifications (System UI), system
+     * dialogs ("android"), and the keyboard. Seeing one of these is not the user leaving.
+     *
+     * Deliberately much narrower than [isEssentialAllowed]: Settings and the dialer are also
+     * essentials, but navigating to them IS leaving the app, so they must still take a cover
+     * down. The keyboard is read live, like everywhere else, since it can be swapped.
+     */
+    private fun isTransientSurface(pkg: String): Boolean =
+        pkg in TRANSIENT_SURFACES || pkg == imePackage()
+
+    /**
+     * The current keyboard, cached on a throttle. [isTransientSurface] is asked on every
+     * window-state event and [currentImePackage] reads Settings.Secure through a content
+     * provider, which is too much for that path.
+     *
+     * [isEssentialAllowed] deliberately keeps reading it live: there, staleness could block a
+     * just-swapped keyboard and stop the user typing, whereas here the worst case is a cover
+     * briefly coming down for a keyboard we haven't noticed yet.
+     */
+    private fun imePackage(): String? {
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastImeRefreshAt >= IME_REFRESH_MS) {
+            lastImeRefreshAt = now
+            cachedImePkg = currentImePackage(this)
+        }
+        return cachedImePkg
     }
 
     /** True when [pkg] must never be blocked in Allowlist mode: ourselves, the launcher, the
@@ -1418,6 +1471,9 @@ class BlockerAccessibilityService : AccessibilityService() {
 
         // Throttle for isLauncherPkg's on-miss launcher re-detection.
         private const val LAUNCHER_REFRESH_MS = 30_000L
+        // Throttle for the cached keyboard package (see imePackage). Short, so a keyboard swap
+        // is noticed quickly, but enough to keep Settings.Secure off the per-event path.
+        private const val IME_REFRESH_MS = 10_000L
 
         // Browsers whose on-screen content the web filter can read; others are "unsupported".
         private val SUPPORTED_BROWSERS = setOf("com.android.chrome")
@@ -1426,6 +1482,12 @@ class BlockerAccessibilityService : AccessibilityService() {
         // recents — shows app labels) and Settings (Settings→Apps lists every app's name; a
         // keyword that's also an app name would lock the user out of managing the phone).
         private val KEYWORD_SCAN_EXCLUDED = setOf("com.android.systemui", "com.android.settings")
+
+        // Packages whose windows sit on top of whatever app is open instead of replacing it —
+        // System UI (shade, volume dialog, heads-up notifications, recents) and the system
+        // dialog host. The current keyboard joins them at runtime; see isTransientSurface.
+        // Settings and the dialer are deliberately absent: they are real destinations.
+        private val TRANSIENT_SURFACES = setOf("com.android.systemui", "android")
 
         // Activity-name fragments that identify the Google Play purchase/billing sheet.
         private val PURCHASE_HINTS = listOf("acquire", "purchase", "billing")
