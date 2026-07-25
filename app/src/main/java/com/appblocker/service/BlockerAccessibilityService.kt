@@ -94,6 +94,9 @@ class BlockerAccessibilityService : AccessibilityService() {
     // Negative cache for isLauncherPkg, so its throttled re-detection only runs on new packages.
     @Volatile private var knownNonLauncherPkgs: Set<String> = emptySet()
     @Volatile private var lastLauncherRefreshAt = 0L
+    // The current keyboard, cached for isTransientSurface's hot path — see imePackage().
+    @Volatile private var cachedImePkg: String? = null
+    @Volatile private var lastImeRefreshAt = 0L
     // Whether blocked words are matched in every app (default) or browsers only. Cached here
     // and refreshed by a prefs listener so the toggle applies without restarting the service.
     @Volatile private var keywordsEverywhere: Boolean = true
@@ -266,7 +269,17 @@ class BlockerAccessibilityService : AccessibilityService() {
 
     // YouTube Shorts: when on, cover the Shorts player but leave the rest of YouTube usable.
     @Volatile private var shortsScanJob: Job? = null
-    private var shortsCovering = false
+    /**
+     * Whether the cover currently up is the YouTube-Shorts one.
+     *
+     * Derived, never stored. This used to be a separate flag the Shorts scan set and cleared,
+     * which made it a second source of truth about a thing the overlay already knows — and when
+     * the two drifted, three different paths acted on the lie: scheduleShortsScan tore down a
+     * real app-block cover, screen-off skipped its entire cleanup, and the re-check's
+     * home-screen cleanup refused to run. Asking the overlay cannot drift.
+     */
+    private val shortsCovering: Boolean
+        get() = overlay.isShowing && overlay.counterKey == CoverGate.SHORTS_KEY
     private val shortsScanRunnable = Runnable {
         guarded(applicationContext, "shortsScan") {
             shortsScanJob?.cancel()
@@ -288,7 +301,13 @@ class BlockerAccessibilityService : AccessibilityService() {
             // a stale package is never (re-)blocked over the home screen. (Our own overlay
             // window may report as the active window; never "reconcile" to ourselves.)
             val actual = rootInActiveWindow?.packageName?.toString()
-            if (actual != null && actual != packageName && actual != pkg) {
+            // A transient surface (shade, volume dialog, keyboard) may be the active window
+            // while the app underneath is unchanged — reconciling to it would make this tick
+            // decide the user had left, and remove a legitimate cover. Leave the cache alone
+            // and let the next tick see the real app again. See isTransientSurface.
+            if (actual != null && actual != packageName && actual != pkg &&
+                !isTransientSurface(actual)
+            ) {
                 lastForegroundPkg = actual
                 pkg = actual
             }
@@ -488,6 +507,20 @@ class BlockerAccessibilityService : AccessibilityService() {
      *  fast path; the `pkg != lastForegroundPkg` guard keeps recordOpen at exactly one
      *  count per open regardless of which event type wins the race. */
     private fun onForegroundChanged(pkg: String?, className: String?) {
+        // A transient surface is not a foreground app — the notification shade, volume dialog,
+        // heads-up notifications and the keyboard sit ON TOP of whatever is already open. They
+        // do genuinely become the active window, so v1.97's confirmation lets them through
+        // (correctly — they really are in front), and everything downstream then treated them
+        // as "the user went somewhere else":
+        //   - handleAppBlock found them unblocked and tore a live cover down, exposing the
+        //     blocked app the moment the shade closed. The re-block that followed counted as a
+        //     fresh attempt — confirmed on device: opening the shade over a block screen
+        //     "counted a new block and added 3 mins".
+        //   - they became lastForegroundPkg, so returning to the app counted a phantom open
+        //     against its daily open limit, and the mid-use re-check was cancelled.
+        // None of that is a foreground change, so stop before any of it. Whatever is underneath
+        // has not stopped being blocked, and the surface is drawn over our cover anyway.
+        if (pkg != null && isTransientSurface(pkg)) return
         // Keep a live app-block cover rock-solid. A blocked app runs behind the (non-focusable)
         // cover and can spit out stray windows — a system/floating popup, a splash, a different-
         // package sub-window — whose window-state event carries a package that isn't blocked.
@@ -603,7 +636,10 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (!SettingsStore.blockYoutubeShorts(this) || !quickBlockActive() ||
             lastForegroundPkg != YOUTUBE_PKG
         ) {
-            if (shortsCovering) { shortsCovering = false; overlay.remove() }
+            // Only ever takes down the Shorts cover itself — shortsCovering is now derived from
+            // what is actually up, so this can no longer remove an app-block cover that replaced
+            // it (which happened when YouTube became fully blocked while Shorts was covered).
+            if (shortsCovering) overlay.remove()
             return
         }
         handler.removeCallbacks(shortsScanRunnable)
@@ -803,6 +839,36 @@ class BlockerAccessibilityService : AccessibilityService() {
         return false
     }
 
+    /**
+     * True when [pkg] is a surface that appears *over* the current app rather than replacing
+     * it — the notification shade, volume dialog and heads-up notifications (System UI), system
+     * dialogs ("android"), and the keyboard. Seeing one of these is not the user leaving.
+     *
+     * Deliberately much narrower than [isEssentialAllowed]: Settings and the dialer are also
+     * essentials, but navigating to them IS leaving the app, so they must still take a cover
+     * down. The keyboard is read live, like everywhere else, since it can be swapped.
+     */
+    private fun isTransientSurface(pkg: String): Boolean =
+        pkg in TRANSIENT_SURFACES || pkg == imePackage()
+
+    /**
+     * The current keyboard, cached on a throttle. [isTransientSurface] is asked on every
+     * window-state event and [currentImePackage] reads Settings.Secure through a content
+     * provider, which is too much for that path.
+     *
+     * [isEssentialAllowed] deliberately keeps reading it live: there, staleness could block a
+     * just-swapped keyboard and stop the user typing, whereas here the worst case is a cover
+     * briefly coming down for a keyboard we haven't noticed yet.
+     */
+    private fun imePackage(): String? {
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastImeRefreshAt >= IME_REFRESH_MS) {
+            lastImeRefreshAt = now
+            cachedImePkg = currentImePackage(this)
+        }
+        return cachedImePkg
+    }
+
     /** True when [pkg] must never be blocked in Allowlist mode: ourselves, the launcher, the
      *  current keyboard, and the core system/dialer set. Keeps the phone usable. */
     private fun isEssentialAllowed(pkg: String): Boolean =
@@ -863,7 +929,12 @@ class BlockerAccessibilityService : AccessibilityService() {
      *  genuinely blocked app is re-blocked by its own window-state event when reopened.
      *  Shorts covers are owned by their own scan — left alone. */
     private fun onScreenOff() {
-        if (shortsCovering) return
+        // This used to bail out entirely while a Shorts cover was up, to leave the Shorts scan's
+        // state alone. The effect was that locking the phone mid-Shorts skipped ALL of the
+        // cleanup below: the cover stayed attached, the timers stayed armed and the foreground
+        // cache kept pointing at YouTube, so the next unlock could show a stranded cover over
+        // whatever was on screen. Screen-off now always cleans up; the Shorts scan re-covers on
+        // its next tick if the user really is still on a Short.
         handler.removeCallbacks(webScanRunnable)
         handler.removeCallbacks(recheckRunnable)
         handler.removeCallbacks(confirmForegroundRunnable)
@@ -1160,15 +1231,14 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (!SettingsStore.blockYoutubeShorts(applicationContext) || !quickBlockActive() ||
             lastForegroundPkg != YOUTUBE_PKG
         ) {
-            if (shortsCovering) {
-                shortsCovering = false
-                withContext(Dispatchers.Main) { overlay.remove() }
-            }
+            if (shortsCovering) withContext(Dispatchers.Main) { overlay.remove() }
             return
         }
+        // shortsCovering is derived from the visible cover, so raising and removing it IS the
+        // state change — there is no flag left to keep in step (and no window in which one says
+        // "covered" while nothing is).
         val onShorts = isShortsOnScreen()
         if (onShorts && !shortsCovering) {
-            shortsCovering = true
             withContext(Dispatchers.Main) {
                 showBlockScreen(
                     title = "Shorts blocked",
@@ -1178,7 +1248,6 @@ class BlockerAccessibilityService : AccessibilityService() {
                 )
             }
         } else if (!onShorts && shortsCovering) {
-            shortsCovering = false
             withContext(Dispatchers.Main) { overlay.remove() }
         }
     }
@@ -1283,12 +1352,10 @@ class BlockerAccessibilityService : AccessibilityService() {
         lastWebText = null
         if (wasShorts) {
             // The Shorts cover is scoped to the player, so it must NOT be held until the user
-            // leaves YouTube — the rest of the app is meant to keep working. Hand ownership
-            // back to its scan instead: without clearing this flag the scan believed Shorts
-            // was still covered when the cover had gone, and since it only acts on the
-            // not-covered → covered transition it never drew it again. Shorts was then
-            // browsable until the user navigated out of Shorts and back in.
-            shortsCovering = false
+            // leaves YouTube — the rest of the app is meant to keep working. Taking it down
+            // hands ownership straight back to its scan, which redraws it on the next tick if
+            // the user is still on a Short. (shortsCovering is derived from the visible cover
+            // now, so there is no flag to clear here: removing it IS the state change.)
             overlay.remove()
             performGlobalAction(GLOBAL_ACTION_HOME)
         } else {
@@ -1418,6 +1485,9 @@ class BlockerAccessibilityService : AccessibilityService() {
 
         // Throttle for isLauncherPkg's on-miss launcher re-detection.
         private const val LAUNCHER_REFRESH_MS = 30_000L
+        // Throttle for the cached keyboard package (see imePackage). Short, so a keyboard swap
+        // is noticed quickly, but enough to keep Settings.Secure off the per-event path.
+        private const val IME_REFRESH_MS = 10_000L
 
         // Browsers whose on-screen content the web filter can read; others are "unsupported".
         private val SUPPORTED_BROWSERS = setOf("com.android.chrome")
@@ -1426,6 +1496,12 @@ class BlockerAccessibilityService : AccessibilityService() {
         // recents — shows app labels) and Settings (Settings→Apps lists every app's name; a
         // keyword that's also an app name would lock the user out of managing the phone).
         private val KEYWORD_SCAN_EXCLUDED = setOf("com.android.systemui", "com.android.settings")
+
+        // Packages whose windows sit on top of whatever app is open instead of replacing it —
+        // System UI (shade, volume dialog, heads-up notifications, recents) and the system
+        // dialog host. The current keyboard joins them at runtime; see isTransientSurface.
+        // Settings and the dialer are deliberately absent: they are real destinations.
+        private val TRANSIENT_SURFACES = setOf("com.android.systemui", "android")
 
         // Activity-name fragments that identify the Google Play purchase/billing sheet.
         private val PURCHASE_HINTS = listOf("acquire", "purchase", "billing")
