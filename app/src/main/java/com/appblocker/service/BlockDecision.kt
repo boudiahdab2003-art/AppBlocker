@@ -154,3 +154,35 @@ internal fun decideBlock(i: BlockInputs): BlockReason? {
 
     return null
 }
+
+/** How old a location fix may be and still be treated as "where the phone is now".
+ *
+ *  Chosen against how fixes actually arrive, not as a round number: while a Location schedule is
+ *  enabled the service pulls a single fresh fix at most once a minute (on API 30+) and subscribes
+ *  for updates every 30s, so in normal operation the fix is seconds old. Fifteen minutes therefore
+ *  never trips by accident — it trips only when location has genuinely stopped being delivered
+ *  (services off, permission downgraded to foreground-only, provider dead). */
+internal const val LOCATION_MAX_AGE_MS = 15 * 60_000L
+
+/**
+ * Whether a location fix is recent enough to decide blocking with.
+ *
+ * There used to be no such check at all: `lastLocation` was set once and trusted forever, in both
+ * directions. A fix taken at the blocked place kept blocking everywhere the user went afterwards
+ * (visible, and the reason "it blocks me at work" would be reported), and a fix taken away from the
+ * place meant returning to it never started blocking (invisible, so never reported). The existing
+ * guard only stopped an *older* fix from overwriting a newer one — it did nothing when no new fix
+ * arrived at all, which is the normal state of a stationary phone.
+ *
+ * Both clocks are `elapsedRealtime` nanos, which is monotonic (invariant 9): a location's age must
+ * not be measurable with a clock the user can move. A fix that claims to be from the future is
+ * treated as unusable rather than as infinitely fresh.
+ */
+internal fun locationFixUsable(
+    fixElapsedNanos: Long,
+    nowElapsedNanos: Long,
+    maxAgeMs: Long = LOCATION_MAX_AGE_MS,
+): Boolean {
+    val ageMs = (nowElapsedNanos - fixElapsedNanos) / 1_000_000L
+    return ageMs in 0..maxAgeMs
+}

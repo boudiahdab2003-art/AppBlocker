@@ -1056,9 +1056,21 @@ class BlockerAccessibilityService : AccessibilityService() {
         return ssid.equals(target, ignoreCase = true)
     }
 
-    /** True if the last known location is within the schedule's radius. */
+    /**
+     * The last fix, or null when there is none **or it is too old to mean anything** — see
+     * [locationFixUsable], which is where the rule and the reasoning live (and is unit-tested).
+     *
+     * A fix with no expiry is not "the phone's location", it is "a place the phone once was".
+     */
+    private fun freshLocation(): Location? = lastLocation?.takeIf {
+        locationFixUsable(it.elapsedRealtimeNanos, SystemClock.elapsedRealtimeNanos())
+    }
+
+    /** True if the last *usable* fix is within the schedule's radius. An unusable one answers
+     *  false — the same as no fix — because a location we can't vouch for must not decide either
+     *  way, and blocking on an unknown position would block the app everywhere. */
     private fun inLocation(s: Schedule): Boolean {
-        val loc = lastLocation ?: return false
+        val loc = freshLocation() ?: return false
         val out = FloatArray(1)
         Location.distanceBetween(loc.latitude, loc.longitude, s.latitude, s.longitude, out)
         return out[0] <= s.radiusMeters
@@ -1084,7 +1096,16 @@ class BlockerAccessibilityService : AccessibilityService() {
             // service's life — wasting battery and holding a location subscription).
             val listener = LocationListener { considerLocation(it) }
             locationListener = listener
-            lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 30_000L, 25f, listener)
+            // NETWORK has no displacement filter on purpose. With one, a STATIONARY phone gets no
+            // updates at all — the filter needs 25m of movement — so the fix only stayed current
+            // thanks to refreshCurrentLocation, which is API 30+ only. Below that (minSdk is 24)
+            // the fix could age indefinitely while sitting still, which is exactly the state the
+            // freshness ceiling now rejects: without this the ceiling would turn a stale-but-right
+            // fix into no blocking at all on older phones. Network fixes are cell/Wi-Fi derived,
+            // so time-based updates here are cheap.
+            lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 30_000L, 0f, listener)
+            // GPS keeps the filter: that radio is the expensive one, and NETWORK above already
+            // guarantees a heartbeat.
             lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 30_000L, 25f, listener)
         }
     }
@@ -1097,6 +1118,9 @@ class BlockerAccessibilityService : AccessibilityService() {
             locationListener = null
         }
         locationRequested = false
+        // Drop the position too. We have stopped tracking, so holding one means a schedule
+        // re-enabled later would decide from where the phone was before it was switched off.
+        lastLocation = null
     }
 
     /** Adopts [loc] only if it's at least as recent as the current fix (prevents a stale provider

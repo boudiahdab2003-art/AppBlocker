@@ -267,10 +267,51 @@ anyone enumerating the rest. Both findings below **fail open**, which is the inv
   `AppRoot`, so Strict starting mid-edit does lock the controls. The remaining staleness is
   cosmetic (a toggle read on entry), not a blocking hole.
 
+### Swept in the seventh "bug hunt" (25 Jul 2026)
+
+Primitive grepped: **data with an age, trusted without checking that age.** Every other cached
+reading in the app has a TTL (`usedTodayCache` 15s, `cachedImePkg` 10s, the tips cache, the
+watchdog's own `lastEventAt`). Exactly one did not.
+
+- the location condition — **1 bug, both directions.** `lastLocation` was set once and trusted
+  forever. `considerLocation`'s guard only stops an *older* fix overwriting a newer one; it does
+  nothing when **no** new fix arrives, which is the normal state of a stationary phone. So a fix
+  taken at the blocked place kept blocking everywhere the user went afterwards (visible — "it
+  blocks me at work"), and a fix taken away from the place meant returning to it never started
+  blocking (invisible, therefore never reported).
+  - The rule moved into `locationFixUsable` in `BlockDecision.kt` — pure, unit-tested
+    (`LocationFreshnessTest`), and measured in `elapsedRealtime` nanos per invariant 9, because a
+    location's age must not be measurable with a clock the user can move. A fix dated in the future
+    is unusable rather than infinitely fresh.
+  - **The ceiling needed a second change to be safe.** `requestLocationUpdates` used a 25 m
+    displacement filter on *both* providers, so a stationary phone received nothing and the fix
+    only stayed current via `refreshCurrentLocation` — which is API 30+ only, and minSdk is 24. On
+    an older phone the ceiling alone would have converted "stale but probably right" into "no
+    blocking at all". NETWORK now updates on time alone (`minDistance = 0f`; cell/Wi-Fi derived, so
+    cheap), giving a heartbeat on every API level. GPS keeps its filter — that radio is the
+    expensive one.
+  - `stopLocationUpdates` now also clears the position: having stopped tracking, keeping one meant
+    a schedule re-enabled later decided from where the phone was before it was switched off.
+- the updater — **clean, and now pinned.** `isNewer` is correctly numeric per component, so
+  `1.100 > 1.99`. Worth stating because the version numbering crossed exactly that boundary in this
+  release and *every* fix reaches the phone through this one function: a string comparison would
+  have silenced the updater permanently. Four boundary cases added to `UpdaterTest`.
+- the Location schedule editor — clean. It already warns when background location is missing, and
+  is in fact what the Wi-Fi warning was modelled on (sweep 2). The sibling-instance lesson had
+  already been applied here.
+
+**Considered and deliberately left:**
+
+- When the ceiling trips, `inLocation` answers false (not blocked) — the same as no fix. Blocking on
+  an unknown position would block the app *everywhere*, which is the wrong failure for a
+  place-scoped rule. But note this is a **silent** stop: a Location schedule whose fixes have dried
+  up simply does nothing, and nothing says so. The permission case is warned about in the editor;
+  the "permission granted but no fixes arriving" case is not. That is the next thing worth building
+  here, and it needs UI, not a bug fix.
+
 ### Not yet swept
 
-- the updater itself (`Updater`, version comparison, download/install) — `UpdatePause` is done
-- the location condition (`inLocation`, `ensureLocationUpdates`, fix freshness)
+- the updater's download/install path (`download`, FileProvider hand-off) — `isNewer` is done
 - the UI's own live state: `resumeTick` re-reads, and the several screens that cache
   service/prefs state in `remember` blocks. Sweeps four and five touched only the adult-pack gate;
   the pattern (a `remember` holding a decision that time or the service can invalidate) is
