@@ -196,10 +196,11 @@ class BlockerAccessibilityService : AccessibilityService() {
         }
     }
 
-    // The counter key most recently recorded as an attempt, and when — so one open is one
-    // attempt however many times the cover has to be redrawn to keep the user out. See
-    // CoverGate.shouldCount.
-    private var lastCountedKey: String? = null
+    // The offence most recently recorded as an attempt, and when — so one open is one attempt
+    // however many times the cover has to be redrawn to keep the user out. Keyed by offence
+    // rather than by counter key, so a blocked word and the app lockout it creates count once
+    // between them. See showBlockScreen and CoverGate.shouldCount.
+    private var lastCountedOffence: String? = null
     private var lastCountedAt = 0L
 
     // Apps where a blocked word was caught: the whole app stays locked — any page, any
@@ -614,7 +615,10 @@ class BlockerAccessibilityService : AccessibilityService() {
         // Safety net: a null-package cover has no owner to auto-remove it, so if HOME is slow or
         // suppressed (MIUI), take it down anyway. The normal path is the launcher's window-state
         // event → handleAppBlock → removeBlockOverlay.
-        handler.postDelayed({ if (!overlay.isAppBlock) overlay.remove() }, 1500)
+        // Not while the exit watcher is holding a cover, though: guard covers aren't app blocks,
+        // so this would pull one out from under a "Got it" that is still trying to get the user
+        // out of Settings.
+        handler.postDelayed({ if (!overlay.isAppBlock && !exiting()) overlay.remove() }, 1500)
         return true
     }
 
@@ -1010,7 +1014,14 @@ class BlockerAccessibilityService : AccessibilityService() {
                 // must not be a free pass back in. A blocked WEBSITE is gentler: cover the page
                 // so the site stays blocked every visit, but don't lock the whole browser.
                 if (!hit.site) addKeywordLockout(pkg, hit.word)
-                showBlockScreen(title = hit.title, message = hit.message, packageName = null, counterKey = "web")
+                // Recorded under "web" (Insights shows one "Websites" row), but the OFFENCE is
+                // this app: the lockout just added makes handleAppBlock raise a second,
+                // package-keyed "Locked" cover moments from now, and one blocked word must not
+                // count as two attempts. A site hit adds no lockout, so nothing follows it.
+                showBlockScreen(
+                    title = hit.title, message = hit.message, packageName = null,
+                    counterKey = "web", offenceKey = pkg,
+                )
             } else lastWebText = null // left during the scan — don't cover what's there now
         }
     }
@@ -1090,11 +1101,22 @@ class BlockerAccessibilityService : AccessibilityService() {
         dismissedPkg, lastForegroundPkg, System.currentTimeMillis() - dismissedAt,
     )
 
+    /**
+     * Raises the block cover. [counterKey] is what the attempt is *recorded* under (a package,
+     * or a synthetic key like "web" that Insights renders as its own row); [offenceKey] is what
+     * counts as one event, and defaults to the same thing.
+     *
+     * They differ where one offence legitimately produces two covers under two names: a blocked
+     * word raises the "web" cover AND locks the whole app, so the package-keyed "Locked" cover
+     * follows seconds later. Passing the app as the offence for the word cover makes the pair
+     * count once, while each still gets recorded where it belongs.
+     */
     private fun showBlockScreen(
         title: String,
         message: String?,
         packageName: String?,
         counterKey: String,
+        offenceKey: String = counterKey,
     ) {
         // One cover = one recorded entry. The page/app behind a cover keeps emitting events
         // (feeds churn, activities transition), and each used to re-record an "attempt" and
@@ -1107,10 +1129,10 @@ class BlockerAccessibilityService : AccessibilityService() {
         // out of the app? Only a new one records an attempt (the cover reads the running total
         // itself) and rolls a fresh quote — otherwise one open read as two.
         val now = System.currentTimeMillis()
-        val fresh = CoverGate.shouldCount(counterKey, lastCountedKey, now - lastCountedAt)
+        val fresh = CoverGate.shouldCount(offenceKey, lastCountedOffence, now - lastCountedAt)
         if (fresh) {
             AttemptCounter.record(applicationContext, counterKey)
-            lastCountedKey = counterKey
+            lastCountedOffence = offenceKey
             lastCountedAt = now
         }
         val label = packageName?.let { loadLabel(it) }
@@ -1153,8 +1175,8 @@ class BlockerAccessibilityService : AccessibilityService() {
      * until it actually gets there — see [exitRunnable].
      */
     private fun onCoverDismissed() {
-        // Read before anything is torn down — remove() clears both.
-        val appBlock = overlay.isAppBlock
+        // Read before anything is torn down — remove() clears it.
+        val wasShorts = overlay.counterKey == CoverGate.SHORTS_KEY
         dismissedKey = overlay.counterKey
         dismissedPkg = lastForegroundPkg
         dismissedAt = System.currentTimeMillis()
@@ -1162,10 +1184,22 @@ class BlockerAccessibilityService : AccessibilityService() {
         // Re-arm word detection: coming back to the page that was just blocked must
         // block again, not read as "already handled" via the text dedup.
         lastWebText = null
-        // Only a whole-app cover is the thing keeping the user out of an app, so only it is
-        // worth holding until they're really out. The web/word/purchase/guard covers sit over
-        // one page inside an app their own scan owns, and go down as they always did.
-        if (appBlock) startExit(dismissedPkg) else startExit(null)
+        if (wasShorts) {
+            // The Shorts cover is scoped to the player, so it must NOT be held until the user
+            // leaves YouTube — the rest of the app is meant to keep working. Hand ownership
+            // back to its scan instead: without clearing this flag the scan believed Shorts
+            // was still covered when the cover had gone, and since it only acts on the
+            // not-covered → covered transition it never drew it again. Shorts was then
+            // browsable until the user navigated out of Shorts and back in.
+            shortsCovering = false
+            overlay.remove()
+            performGlobalAction(GLOBAL_ACTION_HOME)
+        } else {
+            // Everything else — a whole app, a page, the purchase sheet, a Settings page we
+            // bounced out of — is held until the user is really off the app it covered, so a
+            // swallowed HOME can't leave the thing we were covering exposed.
+            startExit(dismissedPkg)
+        }
     }
 
     /** Begins the trip Home for [pkg], holding the cover until we're off it. With no app to
@@ -1191,7 +1225,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         exitTarget = null
         handler.removeCallbacks(exitRunnable)
         if (left) {
-            lastCountedKey = null
+            lastCountedOffence = null
         } else {
             // HOME never landed and the user is still in the blocked app. The cover has to come
             // down (never trap anyone), so schedule the re-check for just after the dismiss

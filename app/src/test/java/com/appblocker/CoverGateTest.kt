@@ -101,15 +101,15 @@ class CoverGateTest {
 
     @Test
     fun `the first block of a target counts`() {
-        assertTrue(CoverGate.shouldCount(app, lastCountedKey = null, sinceLastCountMs = 0L))
+        assertTrue(CoverGate.shouldCount(app, lastCountedOffence = null, sinceLastCountMs = 0L))
     }
 
     @Test
     fun `redrawing the same block does not count twice`() {
-        assertFalse(CoverGate.shouldCount(app, lastCountedKey = app, sinceLastCountMs = 0L))
+        assertFalse(CoverGate.shouldCount(app, lastCountedOffence = app, sinceLastCountMs = 0L))
         assertFalse(
             CoverGate.shouldCount(
-                app, lastCountedKey = app, sinceLastCountMs = CoverGate.COUNT_COOLDOWN_MS - 1,
+                app, lastCountedOffence = app, sinceLastCountMs = CoverGate.COUNT_COOLDOWN_MS - 1,
             )
         )
     }
@@ -118,13 +118,24 @@ class CoverGateTest {
     fun `a genuine later open of the same app counts again`() {
         assertTrue(
             CoverGate.shouldCount(
-                app, lastCountedKey = app, sinceLastCountMs = CoverGate.COUNT_COOLDOWN_MS,
+                app, lastCountedOffence = app, sinceLastCountMs = CoverGate.COUNT_COOLDOWN_MS,
             )
         )
     }
 
     @Test
     fun `a different target counts even inside the cooldown`() {
-        assertTrue(CoverGate.shouldCount(other, lastCountedKey = app, sinceLastCountMs = 0L))
+        assertTrue(CoverGate.shouldCount(other, lastCountedOffence = app, sinceLastCountMs = 0L))
+    }
+
+    @Test
+    fun `a blocked word and the app lockout it creates count once between them`() {
+        // The word cover is recorded under "web" but declares the APP as its offence, because
+        // the lockout it adds makes a second, package-keyed "Locked" cover follow seconds later.
+        // Counting the offence rather than the recorded key is what keeps that pair to one.
+        assertTrue(CoverGate.shouldCount(app, lastCountedOffence = null, sinceLastCountMs = 0L))
+        assertFalse(CoverGate.shouldCount(app, lastCountedOffence = app, sinceLastCountMs = 3_000L))
+        // Whereas keying on what each was recorded under would have counted both.
+        assertTrue(CoverGate.shouldCount(app, lastCountedOffence = "web", sinceLastCountMs = 3_000L))
     }
 }

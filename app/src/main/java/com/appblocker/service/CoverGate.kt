@@ -66,17 +66,20 @@ internal object CoverGate {
     }
 
     /**
-     * Whether raising a cover for [counterKey] should record a new attempt. False while the
-     * same key is still inside [COUNT_COOLDOWN_MS], so a cover that has to be redrawn — the
-     * app re-blocking because Home never landed, a stray event, a mid-use re-check — doesn't
-     * inflate the count (and with it the cover's "minutes reclaimed" and the Insights totals).
+     * Whether a cover raised for [offenceKey] should record a new attempt. False while the same
+     * offence is still inside [COUNT_COOLDOWN_MS], so a cover that has to be redrawn — the app
+     * re-blocking because Home never landed, a stray event, a mid-use re-check, or a second
+     * cover for the same offence under a different name — doesn't inflate the count (and with
+     * it the cover's "minutes reclaimed" and the Insights totals).
      *
-     * [lastCountedKey] is the key counted most recently and [sinceLastCountMs] how long ago;
-     * a different key always counts, since that is a different target being blocked.
+     * The offence is not always the key the attempt is *recorded* under; see the service's
+     * showBlockScreen. [lastCountedOffence] is the offence counted most recently and
+     * [sinceLastCountMs] how long ago; a different offence always counts, since that is a
+     * different target being blocked.
      */
     fun shouldCount(
-        counterKey: String,
-        lastCountedKey: String?,
+        offenceKey: String,
+        lastCountedOffence: String?,
         sinceLastCountMs: Long,
-    ): Boolean = counterKey != lastCountedKey || sinceLastCountMs >= COUNT_COOLDOWN_MS
+    ): Boolean = offenceKey != lastCountedOffence || sinceLastCountMs >= COUNT_COOLDOWN_MS
 }
