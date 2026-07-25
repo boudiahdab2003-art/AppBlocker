@@ -85,13 +85,41 @@ that is wrong is not.
 - foreground-cache writes (3 sites) — clean
 - open counting, attempt counting — clean
 
+### Swept in the first "bug hunt" (25 Jul 2026, merged as `a9282c9`, not yet released)
+
+- keyword-lockout state — **1 bug**: a bare wall-clock deadline, so winding the device clock
+  forward lifted the lockout. Now anchored via `SessionClock` in `data/KeywordLockout.kt`, which
+  also folds the triggering word in (one less parallel map).
+- session / timer bookkeeping — clean. One suspected `SessionClock.elapsed` weakness was a
+  **misdiagnosis**: capping the post-reboot wall path changes nothing (`elapsed >= total` fires
+  either way) and `remaining` is equally exposed, since a forward jump zeroes `wallEnd - nowWall`.
+  Post-reboot the wall clock is the only information there is. **Do not "fix" this again.**
+- the counting stores — **1 bug, wider than it looked**: day-stamps (`yyyy*1000 + dayOfYear`) were
+  being *subtracted* in five stores. Fine for equality, meaningless across a year boundary, so
+  pruning wiped everything through January and `MoodStore` read history from stamps that never
+  existed. `dayGap`/`stampDaysAgo` added. Blocking unaffected — daily open limits use equality.
+- service lifecycle / rule flow — **1 bug, the worst found so far**: the
+  `combine(rules, focus, keywords, schedules).launchIn(scope)` flow had no retry. One throw ended
+  it permanently; the safety net logged it and blocking carried on with stale rules forever, while
+  the watchdog reported healthy because it only checks that events arrive. Now `retryWhen` with
+  backoff.
+
 ### Not yet swept
 
-- session / timer bookkeeping (`QuickSession`, `FocusState`, `SessionClock` callers)
-- keyword-lockout state (`keywordLockouts`, its prefs mirror, expiry)
-- the counting stores (`AttemptCounter`, `LaunchCounter`, `UsageTracker` day rollover)
 - schedule evaluation (`Schedule`, `TimeWindow`, Wi-Fi/location conditions)
-- service lifecycle: `onServiceConnected` / `onDestroy` / rebind-after-update state
+- `UsageTracker` (its day rollover and the session reconstruction from usage events)
+- the web/keyword scan itself (`WebContentFilter`, `extractVisibleText`, browser URL reading)
+- the updater and `UpdatePause`
+- `ProtectionWatchdog` / `ServiceHealth` — note it checks event liveness only, which is why the
+  rule-flow bug above was invisible to it. Worth asking what else it cannot see.
+
+### Lesson from this sweep
+
+`KeywordLockout.remaining()` read the clocks internally, so CI failed on a test that *could not*
+pass: unit tests run with `isReturnDefaultValues = true`, so `SystemClock.elapsedRealtime()`
+returns 0 while `System.currentTimeMillis()` is real — every lockout looks post-reboot and the
+monotonic branch is unreachable. `SessionClock` has a `...At(now)` seam for exactly this. **Any
+new time-dependent logic needs that seam or it cannot be tested here.**
 
 ## Standing guidance
 
