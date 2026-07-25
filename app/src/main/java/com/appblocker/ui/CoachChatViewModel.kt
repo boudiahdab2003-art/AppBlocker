@@ -91,8 +91,15 @@ class CoachChatViewModel(app: Application) : AndroidViewModel(app) {
         _suggestions.value = DEFAULT_SUGGESTIONS
     }
 
+    /** The Gemini model that last answered, for the "what your coach knows" dialog. */
+    fun coachModel(): String? = AiCoach.lastModelUsed(getApplication())
+
     fun clearProfile() {
         CoachProfile.clear(getApplication())
+        // "Forget what you know about me" has to include what the coach ADVISED, or it would keep
+        // referring back to past advice while claiming to know nothing about the user. Deliberately
+        // not cleared by clearChat: like the profile, this is memory rather than conversation.
+        AiCoach.clearAdviceLog(getApplication())
         _profile.value = emptyMap()
     }
 

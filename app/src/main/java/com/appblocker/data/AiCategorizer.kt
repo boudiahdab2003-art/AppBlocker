@@ -59,7 +59,11 @@ object AiCategorizer {
                 .put("generationConfig", JSONObject().put("responseMimeType", "application/json"))
 
             runCatching {
-                val answer = JSONObject(AiCoach.callGemini(ctx, key, body))
+                // Deliberately the utility chain: this is a bulk, throwaway label for a package
+                // name, so it wants the fast tier and no thinking — the opposite of the coach.
+                val answer = JSONObject(
+                    AiCoach.callGemini(ctx, key, body, AiCoach.UTILITY_CHAIN),
+                )
                 val editor = prefs.edit()
                 val result = mutableMapOf<String, AppCategory>()
                 val askedPkgs = pending.mapTo(HashSet()) { it.packageName }
