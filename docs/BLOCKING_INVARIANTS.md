@@ -58,6 +58,10 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
    deadline that must survive a reboot goes through `GuardedDeadline`/`SessionClock`. The user can
    move the wall clock; a negative interval reads as "no time has passed", which silently freezes
    whatever the timer was guarding. This has now been the cause of three separate sweeps' findings.
+10. **An empty or failed answer is not data.** Every package/asset query in this app swallows its
+    errors into an empty collection, and "no browsers", "no launcher", "no adult words" is never
+    true. Adopting one silently fails *open*. Adopt a result only when it is non-empty, keep the
+    previous value, and record the failure (`refreshPackageSets`, `WebContentFilter.get`).
 
 ## Device quirks these invariants exist for
 
@@ -220,6 +224,48 @@ primitive, not the feature.** The grep is what paid, and it found the clock bug 
   and can report — his call, not a silent defect.
 - `MAX_NODES`/`MAX_TEXT` cap how deep any scan reads, so text far down a large page is never
   examined. A real limit, but the intended battery trade-off rather than a bug.
+
+### Swept in the sixth "bug hunt" (25 Jul 2026)
+
+Primitive grepped this time: **a failure or empty result treated as authoritative data** —
+`runCatching { … }.getOrDefault(emptySet()/emptyList())` and friends. Chosen because it had
+already caused two findings (the launcher set in sweep 3, the Wi-Fi SSID in sweep 2) without
+anyone enumerating the rest. Both findings below **fail open**, which is the invisible direction.
+
+- `WebContentFilter.get` — **1 bug.** Every list is read through `runCatching`, so a failed asset
+  read produced an *empty* list, which matches nothing while the adult switches still say ON. That
+  empty filter was then cached in `INSTANCE` **and** pinned by the service's `by lazy`, so one
+  transient failure disabled the adult layers for the rest of the process's life. No crash, no
+  warning, and the one protection with a 24-hour cooling-off doing nothing.
+  - Not hypothetical here specifically: the in-app updater installs a new APK over a service that
+    keeps running, and an asset path replaced under a live process is exactly when reads fail —
+    which is also when `UpdatePause` switches every other layer off, leaving this one alone.
+  - `readLines` now returns `null` on failure (distinct from a legitimately empty file), `get`
+    refuses to cache a partial load, the service resolves `filter` per use instead of holding a
+    `lazy`, and the first failure is recorded in `ServiceHealth` — visible on Profile since sweep 2.
+- `browserPackages` / `launcherPackages` direct assignment — **1 bug.** `isLauncherPkg` already
+  refuses to trust an empty answer (sweep 3's fix), but the two sites that assign the sets outright
+  — `onServiceConnected` and the package-change receiver — did not. An empty browser set makes
+  every browser an ordinary app: no adult site list, no blocked-app websites, no
+  unsupported-browser block, and during the after-update pause no scanning at all. Nothing else
+  re-detects browsers, so it stays wrong until the next install or removal. Now both sets go
+  through `refreshPackageSets()`, which adopts a result only when it is non-empty.
+  - **This is the "enumerate every instance" guidance failing in real time:** sweep 3 fixed the
+    rule in one function and left the sibling assignments alone, three sweeps ago.
+
+**Considered and deliberately left:**
+
+- `currentImePackage` returns null on failure — but it is read live on every use and self-heals on
+  the next read, and its failure direction is *over*-blocking (the keyboard not rescued in
+  Allowlist mode), which the owner can see and report.
+- `AppVersion.code` returns `-1`, but `UpdatePause.checkVersionChange` already early-returns on a
+  negative, so a failed read cannot spuriously arm the pause. Correct as written.
+- `findEssentialPackages` starts from a hardcoded set, so a failed dialer resolve can never empty
+  it. Correct as written.
+- The UI's `remember { }`-without-`resumeTick` caches in `BlockEditorScreen`/`BlockingScreen`/
+  `KeywordsScreen`: checked, and `strictActive` reaches all of them as a live flow from
+  `AppRoot`, so Strict starting mid-edit does lock the controls. The remaining staleness is
+  cosmetic (a toggle read on entry), not a blocking hole.
 
 ### Not yet swept
 

@@ -78,7 +78,11 @@ class BlockerAccessibilityService : AccessibilityService() {
                 runCatching { ServiceHealth.recordError(applicationContext, "scan", t) }
             }
     )
-    private val filter by lazy { WebContentFilter.get(applicationContext) }
+    // Resolved per use rather than held in a `lazy`: WebContentFilter.get() refuses to cache a
+    // filter whose word lists failed to load, and a lazy here would have pinned that broken one
+    // for the service's whole life — undoing the retry. After a successful load this is one
+    // volatile read.
+    private val filter: WebContentFilter get() = WebContentFilter.get(applicationContext)
 
     @Volatile private var rules: Map<String, AppRule> = emptyMap()
     // Strict/Focus deadline anchored to the monotonic clock (clock-change-proof) with a
@@ -429,8 +433,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         // The service is rebound right after an update installs, so detect it here too —
         // the pause arms even if the app itself isn't opened.
         UpdatePause.checkVersionChange(this)
-        browserPackages = findBrowserPackages(this)
-        launcherPackages = findLauncherPackages(this)
+        refreshPackageSets()
         keywordsEverywhere = SettingsStore.keywordsEverywhere(this)
         adultPackOn = SettingsStore.adultWordsPack(this)
         updatePaused = SettingsStore.updatePaused(this)
@@ -870,6 +873,31 @@ class BlockerAccessibilityService : AccessibilityService() {
     /** Minutes-from-midnight → "9:00" / "17:30". */
     private fun hm(m: Int): String = "%d:%02d".format(m / 60, m % 60)
 
+    /**
+     * Re-detects the browser and launcher sets, treating an **empty** answer as a failure rather
+     * than as data. Both finders swallow errors as `emptySet` (see PackageSets), and neither "this
+     * phone has no browser" nor "no home screen" is ever true — so an empty result means the query
+     * failed, and adopting it silently switches protections off:
+     *
+     *  - an empty browser set makes every browser look like an ordinary app: no adult site list,
+     *    no blocked-app websites, no unsupported-browser block, and during the after-update pause
+     *    no scanning at all — which is exactly when the adult layer is the only one still meant to
+     *    be running. Nothing else re-detects browsers, so it would stay wrong until the next app
+     *    install or removal.
+     *  - an empty launcher set makes Allowlist mode block the home screen.
+     *
+     * [isLauncherPkg] already applies this rule to its own refresh (v1.96); this carries it to the
+     * two places that assign the sets directly, which is where it was missed.
+     */
+    private fun refreshPackageSets() {
+        findBrowserPackages(applicationContext).takeIf { it.isNotEmpty() }
+            ?.let { browserPackages = it }
+        findLauncherPackages(applicationContext).takeIf { it.isNotEmpty() }?.let {
+            launcherPackages = it
+            knownNonLauncherPkgs = emptySet() // a fresh answer retires every earlier guess
+        }
+    }
+
     /** Launcher check that self-heals after a default-launcher change: the set is built at
      *  service start, so on an unknown package it re-detects (throttled) before declaring it
      *  not-a-launcher, caching negatives to keep the hot paths cheap. Thread-safe. */
@@ -945,9 +973,8 @@ class BlockerAccessibilityService : AccessibilityService() {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
                 scope.launch {
-                    browserPackages = findBrowserPackages(applicationContext)
-                    launcherPackages = findLauncherPackages(applicationContext)
                     knownNonLauncherPkgs = emptySet() // a new install may be a launcher
+                    refreshPackageSets()
                 }
             }
         }
