@@ -255,10 +255,28 @@ class BlockerAccessibilityService : AccessibilityService() {
         guarded(applicationContext, "confirmForeground") {
             val actual = rootInActiveWindow?.packageName?.toString()
             if (actual != null && actual != packageName && actual != lastForegroundPkg) {
-                onForegroundChanged(actual, null)
+                // Carry the deferred event's className over — but ONLY when the tree resolved to
+                // the same package it described, since a class name belongs to one app and must
+                // never be applied to whatever else turned out to be in front.
+                //
+                // Trusting the tree over the event is right about the *package*; it was never
+                // meant to discard the class name, which the tree cannot supply at all. Passing
+                // null here silently disabled every className-dependent check on this path — and
+                // handlePurchaseBlock is className-ONLY (`?: return false`), so an in-app purchase
+                // sheet that lost the race with the window tree was never covered, and nothing
+                // re-checks purchases afterwards. The Strict guard survived the same race only
+                // because it has an on-screen-text fallback beside its className fast path.
+                val carried = pendingClassName.takeIf { actual == pendingClassNamePkg }
+                pendingClassName = null
+                pendingClassNamePkg = null
+                onForegroundChanged(actual, carried)
             }
         }
     }
+
+    // The deferred event's class name and the package it described — see confirmForegroundRunnable.
+    @Volatile private var pendingClassName: String? = null
+    @Volatile private var pendingClassNamePkg: String? = null
 
     // The offence most recently recorded as an attempt, and when — so one open is one attempt
     // however many times the cover has to be redrawn to keep the user out. Keyed by offence
@@ -621,7 +639,11 @@ class BlockerAccessibilityService : AccessibilityService() {
             // it has its own bounce throttle, and being early there is the safe direction.
             handleStrictSettingsGuard(pkg, className)
             // A real switch can simply have lost the race with the window tree, so re-read the
-            // tree shortly rather than waiting for whatever event happens to come next.
+            // tree shortly rather than waiting for whatever event happens to come next. Keep the
+            // class name with it: the re-read can confirm the package but can never recover the
+            // class, and losing it disables the purchase check entirely (see the runnable).
+            pendingClassNamePkg = pkg
+            pendingClassName = className
             handler.removeCallbacks(confirmForegroundRunnable)
             handler.postDelayed(confirmForegroundRunnable, CONFIRM_MS)
             return

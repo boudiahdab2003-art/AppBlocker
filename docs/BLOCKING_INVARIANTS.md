@@ -347,6 +347,41 @@ is `@Volatile`, including `BlockOverlay`'s fields. The bug was lifecycle, not me
 - `onDestroy` calls `scope.cancel()`, so every background scan dies with the service. Only the
   *screen-off* path needed per-job cancellation.
 
+### Swept in the ninth "bug hunt" (25 Jul 2026)
+
+Method: **diff the three block entry points against each other.** `handleAppBlock` has been audited in
+six sweeps; `handlePurchaseBlock` and `handleStrictSettingsGuard` in none. Sibling asymmetry has been
+the highest-yield shape in this file, and both siblings were unexamined.
+
+- the deferred-confirmation path loses the event's class name — **1 bug.**
+  `confirmForegroundRunnable` called `onForegroundChanged(actual, null)`. Trusting the window tree
+  over the event is correct about the *package*; discarding the **class name** was accidental, and
+  the tree cannot supply one. Consequence, ranked by how the three checks cope:
+  - `handlePurchaseBlock` is className-**only** (`className?.lowercase() ?: return false`), so an
+    in-app purchase sheet that lost the race with the window tree was **never covered** — and
+    nothing re-checks purchases afterwards (`recheckRunnable` only re-runs `handleAppBlock`), so it
+    stayed uncovered for as long as the sheet was open. Invisible, and `blockPurchases` is opt-in so
+    it would never have been noticed.
+  - `handleStrictSettingsGuard` survived the identical race, for two reasons worth copying: it is
+    deliberately still called *inside* the gate with the real className, **and** it has an
+    on-screen-text fallback (`guardScreenIsDangerous`) beside its className fast path — added
+    because "OEMs name these activities unpredictably".
+  - Fixed by carrying the className through the deferral, keyed to the package it described so one
+    app's class can never be applied to whatever else turned out to be in front.
+
+**Considered and deliberately left:**
+
+- **Purchase detection is still className-only, with no second chance.** The right fix is the Strict
+  guard's shape — a text fallback scoped to `com.android.vending` — but that needs Play's actual
+  sheet strings, which cannot be verified from a cloud session, and a wrong marker would cover the
+  Play Store's ordinary app pages. Over-blocking the Play Store is the visible, annoying failure, so
+  guessing here is worse than the gap. Needs a look at the real sheet on the device.
+  `PURCHASE_HINTS` ("acquire", "purchase", "billing") does match Play's real billing activity
+  (`…finsky.billing.acquire.SheetActivity`), so the common path works.
+- The content-changed fast path passes `event.className`, which for a content event is the *view's*
+  class, not the activity's — harmless (it simply never matches a purchase hint) but worth knowing
+  before trusting className on that path.
+
 ### Not yet swept
 
 - the updater's download/install path (`download`, FileProvider hand-off) — `isNewer` is done
