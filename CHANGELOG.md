@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.95
+- Fixes being blocked twice for one open. Tapping 'Got it' now keeps the block screen up until your phone has really left the app, instead of taking it away and hoping the trip Home lands - so you never get a second block screen for a single open, and one open is counted once (your 'minutes reclaimed' moves by 3, not 6). Also fixes YouTube Shorts staying uncovered after you tapped 'Got it', a blocked word counting as two attempts, and a late message from an app you had just left throwing the block screen over your home screen.
+
 ## v1.94
 - Fixes how the guide cards look: the thinker's name and the headline beside it no longer leave a big empty gap when the headline is too long for one line, and the big number on numbered rules now sits next to the rule's title instead of floating in the middle.
 
