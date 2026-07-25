@@ -149,6 +149,41 @@ class BlockDecisionTest {
         assertNull(decideBlock(inputs(allowlistMode = true, isEssential = true)))
     }
 
+    /**
+     * "Never" has to mean never — including layers checked before the allowlist branch. A
+     * keyword lockout used to win, and lockouts are keyed by the last foreground package, which
+     * can be stale; one landing on the launcher covered the home screen.
+     */
+    @Test fun allowlistEssentialsSurviveAKeywordLockout() {
+        assertNull(
+            decideBlock(
+                inputs(
+                    allowlistMode = true, isEssential = true,
+                    lockoutRemainingMs = 10 * 60_000L, lockoutWord = "porn",
+                )
+            )
+        )
+        // Still locked when it isn't an essential — the guarantee is scoped, not a hole.
+        assertEquals(
+            "Locked",
+            decideBlock(
+                inputs(allowlistMode = true, lockoutRemainingMs = 10 * 60_000L)
+            )?.title,
+        )
+    }
+
+    /** Same for schedules, which are checked after the allowlist branch. */
+    @Test fun allowlistEssentialsSurviveASchedule() {
+        assertNull(
+            decideBlock(
+                inputs(
+                    allowlistMode = true, isEssential = true,
+                    schedules = listOf(schedule(ScheduleType.TIME)), conditionMet = true,
+                )
+            )
+        )
+    }
+
     @Test fun allowlistSaysStrictWhenStrictIsRunning() {
         assertEquals("Strict Mode", decideBlock(inputs(allowlistMode = true, strict = true))?.title)
     }

@@ -18,6 +18,12 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.HOME" />
         </intent>
+        <!-- Allowlist mode must never block the phone app. Without this declared, the
+             ACTION_DIAL lookup in findEssentialPackages() is filtered to null on Android 11+
+             and the dialer silently never makes it into the essentials. -->
+        <intent>
+            <action android:name="android.intent.action.DIAL" />
+        </intent>
     </queries>
 
     <!-- Lets the block screen appear over the blocked app. -->

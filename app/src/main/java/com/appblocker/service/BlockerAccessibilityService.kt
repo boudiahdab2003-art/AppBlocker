@@ -33,6 +33,7 @@ import com.appblocker.data.DeviceBoot
 import com.appblocker.data.FocusState
 import com.appblocker.data.InstalledAppsRepository
 import com.appblocker.data.LaunchCounter
+import com.appblocker.data.OwnUi
 import com.appblocker.data.QuickSession
 import com.appblocker.data.SOCIAL_DOMAINS
 import com.appblocker.data.Schedule
@@ -171,16 +172,22 @@ class BlockerAccessibilityService : AccessibilityService() {
 
         private fun runGuarded() {
             val target = exitTarget ?: return
+            val view = exitView(target)
             // Off the blocked app — the cover has done its job.
-            if (leftApp(target)) return finishExit(left = true)
+            if (view == ExitView.LEFT) return finishExit(left = true)
             // Another path already took the cover down (the launcher's own window event runs
             // through handleAppBlock), so there is nothing left to hold: stop asking for HOME.
             if (!overlay.isShowing) return finishExit(left = true)
             val since = System.currentTimeMillis() - exitStartedAt
+            // Hold on for the full window only while we can SEE the app is still in front.
+            // When we can't tell, let go quickly — holding a cover up on no evidence is what
+            // left it sitting over the home screen.
+            val confirmed = view == ExitView.STILL_THERE
+            val limit = if (confirmed) EXIT_GIVE_UP_MS else EXIT_BLIND_GIVE_UP_MS
             // Never trap the user: give up and let the dismiss grace take over. (Staying in
             // the app then re-covers it once the grace lapses — but as the SAME block, so it
             // isn't counted again.)
-            if (since >= EXIT_GIVE_UP_MS) return finishExit(left = false)
+            if (since >= limit) return finishExit(left = false, confirmed = confirmed)
             // HOME can be swallowed or arrive late (slow transition, split-screen, HyperOS).
             // Ask again at the two thresholds rather than on every poll.
             val tries = when {
@@ -736,12 +743,25 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (pkg in launcherPackages) return true
         if (pkg in knownNonLauncherPkgs) return false
         val now = SystemClock.elapsedRealtime()
+        var looked = false
         if (now - lastLauncherRefreshAt >= LAUNCHER_REFRESH_MS) {
             lastLauncherRefreshAt = now
-            launcherPackages = findLauncherPackages(this)
-            if (pkg in launcherPackages) return true
+            val found = findLauncherPackages(this)
+            if (found.isNotEmpty()) {
+                looked = true
+                launcherPackages = found
+                // A fresh, trustworthy answer retires every earlier guess — otherwise a package
+                // written off before the set was populated stays written off.
+                knownNonLauncherPkgs = emptySet()
+                if (pkg in found) return true
+            }
         }
-        knownNonLauncherPkgs = knownNonLauncherPkgs + pkg
+        // Only remember a NO that was actually established. Caching one from a throttled lookup
+        // (we never asked) or an empty result (the query failed — findLauncherPackages swallows
+        // errors as emptySet) is permanent: the cache is otherwise only cleared when a package
+        // is installed or removed. Getting this wrong for the home package means Allowlist mode
+        // blocks the home screen for the rest of the service's life.
+        if (looked) knownNonLauncherPkgs = knownNonLauncherPkgs + pkg
         return false
     }
 
@@ -1031,30 +1051,60 @@ class BlockerAccessibilityService : AccessibilityService() {
         }
     }
 
+    /** What the exit watcher can tell about the app it is trying to get the user out of. */
+    private enum class ExitView {
+        /** Positively somewhere else — the cover has done its job. */
+        LEFT,
+
+        /** Positively still in the app — worth holding the cover and asking for HOME again. */
+        STILL_THERE,
+
+        /** No idea. Must NOT be treated as STILL_THERE; see [exitView]. */
+        BLIND,
+    }
+
     /**
-     * Whether we can see that the user is off [target] — the exit watcher's question, which is
-     * not the inverse of [stillOnScreen]: that one answers "may I cover this?", where an
-     * unreadable window must mean "yes, carry on blocking". Here only a positive sighting of
-     * something else counts, because holding the cover a moment too long is harmless while
-     * dropping it too early is the bug being fixed.
+     * What we can see about whether the user is off [target]. Three answers, not two — and that
+     * is the whole point. "Can't tell" used to be lumped in with "still there", so the cover was
+     * held for the full give-up window on no evidence, which parked it over the home screen
+     * after every "Got it" (worst in Allowlist mode, where nearly everything is blocked and
+     * "Got it" gets tapped constantly).
      *
-     * Our own (non-focusable) cover can itself report as the active window, and that says
-     * nothing about what is behind it — so in that case, and when the window tree can't be read
-     * at all, the event-fed foreground cache is the signal instead. Main thread only.
+     * Both signals go blind together on this device at exactly the wrong moment: our own
+     * (non-focusable) cover can itself report as the active window, which says nothing about
+     * what is behind it, and the event-fed cache doesn't move because gesture-nav Home often
+     * emits no window-state event at all. Hence BLIND, handled by letting go quickly rather
+     * than holding on.
+     *
+     * Note this is not the inverse of [stillOnScreen], which answers a different question
+     * ("may I cover this?", where unreadable must mean "yes, carry on blocking").
+     * Main thread only.
      */
-    private fun leftApp(target: String): Boolean {
-        val actual = rootInActiveWindow?.packageName?.toString()
-        if (actual != null && actual != target && actual != packageName) return true
-        val cached = lastForegroundPkg
-        return cached != null && cached != target
+    private fun exitView(target: String): ExitView {
+        val active = rootInActiveWindow?.packageName?.toString()
+        // A readable window that isn't ours settles it either way.
+        if (active != null && active != packageName) {
+            return if (active == target) ExitView.STILL_THERE else ExitView.LEFT
+        }
+        // Our own UI is in front (not merely our cover): they are out of the app. See OwnUi.
+        if (OwnUi.visible) return ExitView.LEFT
+        // The event-fed cache is evidence only when it has actually moved off the target.
+        lastForegroundPkg?.let { if (it != target) return ExitView.LEFT }
+        // The active window is our own cover (or unreadable) and the cache hasn't moved:
+        // nothing here says whether the app is still in front.
+        return ExitView.BLIND
     }
 
     /** Best-effort "is [pkg] still what the user sees" — guards covers fired from cached state
      *  (the debounced scan) after a gesture-nav Home that produced no window-state event. An
-     *  unreadable root counts as yes, and so does our own overlay window. Main thread only. */
+     *  unreadable root counts as yes, and so does our own *cover* (the app is still behind it).
+     *  Our own *UI* does not: the user walked into AppBlocker, so the cached app is not what
+     *  they're looking at, and covering it here landed a block screen on our own screens. The
+     *  two are the same package, so [OwnUi] is the only way to tell. Main thread only. */
     private fun stillOnScreen(pkg: String): Boolean {
         val actual = rootInActiveWindow?.packageName?.toString() ?: return true
-        return actual == pkg || actual == packageName
+        if (actual == pkg) return true
+        return actual == packageName && !OwnUi.visible
     }
 
     /**
@@ -1228,15 +1278,18 @@ class BlockerAccessibilityService : AccessibilityService() {
 
     /** Ends the exit watch and takes the cover down. [left] is whether the user actually got
      *  off the blocked app: on a real exit the attempt dedup is released, so a deliberate
-     *  re-open counts as the new attempt it is. */
-    private fun finishExit(left: Boolean) {
+     *  re-open counts as the new attempt it is. [confirmed] says whether a non-exit was
+     *  *seen* (the app really is still in front) rather than merely un-disproved — only a seen
+     *  one may schedule anything, since acting on a package we can't vouch for is how covers
+     *  ended up over the home screen. */
+    private fun finishExit(left: Boolean, confirmed: Boolean = false) {
         exitTarget = null
         handler.removeCallbacks(exitRunnable)
         if (left) {
             lastCountedOffence = null
             resumingOffence = null
-        } else {
-            // HOME never landed and the user is still in the blocked app. The cover has to come
+        } else if (confirmed) {
+            // HOME never landed and the user IS still in the blocked app. The cover has to come
             // down (never trap anyone), so schedule the re-check for just after the dismiss
             // grace lapses — otherwise the app would stay uncovered until the ordinary 30s
             // tick. Mark that redraw as a resume so it lands as the SAME block: no new attempt,
@@ -1247,6 +1300,8 @@ class BlockerAccessibilityService : AccessibilityService() {
             handler.removeCallbacks(recheckRunnable)
             handler.postDelayed(recheckRunnable, untilGraceEnds.coerceAtLeast(0L) + 250L)
         }
+        // Blind non-exit: schedule nothing. If the app really is still there it keeps emitting
+        // events, and the ordinary re-check armed when the cover went up is the backstop.
         lastBlockedPkg = null
         overlay.remove()
     }
@@ -1308,13 +1363,15 @@ class BlockerAccessibilityService : AccessibilityService() {
 
         // The trip Home after "Got it": how often to check whether we're off the blocked app
         // yet, when to re-ask for HOME, and when to give up so the user can never be trapped.
-        // The give-up is deliberately short: it is also the worst case for how long the cover
-        // can sit over the home screen when HOME worked but neither signal in leftApp() can
-        // confirm it. The ordinary paths resolve on the first poll or two.
+        // Two give-ups, because "the app is still in front" and "we can't tell" are different
+        // situations (see ExitView). The blind one is short: it bounds how long the cover can
+        // sit over the home screen when HOME worked but nothing can confirm it, which is what
+        // made the cover flash up on Home after every "Got it".
         private const val EXIT_POLL_MS = 200L
         private const val EXIT_RETRY1_MS = 600L
         private const val EXIT_RETRY2_MS = 1_400L
         private const val EXIT_GIVE_UP_MS = 2_500L
+        private const val EXIT_BLIND_GIVE_UP_MS = 800L
         // How long after a dismissal a window-state event from that app is treated as a
         // possible straggler and has to be confirmed against the real active window.
         private const val STRAGGLER_MS = 15_000L
