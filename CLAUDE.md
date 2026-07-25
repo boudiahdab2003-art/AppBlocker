@@ -31,6 +31,20 @@ and keep its "Where we are right now" section updated as we progress. The `play`
 build flavor already exists (no self-update, no location schedules) as the
 Play-safe starting point.
 
+## "Bug hunt" — go looking for blocking bugs
+
+When the owner says **"bug hunt"** (or asks to look for bugs/errors), he means: audit the
+blocking watcher for bugs *before* he hits them, rather than fixing only what he reports.
+Read **docs/BLOCKING_INVARIANTS.md** first — it holds the invariants the code depends on, the
+two mistake-shapes every past bug reduced to, the grep-by-kind audit method that works, which
+areas have already been swept, and which are still untouched. Keep its "Swept so far" /
+"Not yet swept" sections updated.
+
+Two things that make this worth doing: the watcher has **no test coverage** and can't have any
+as written, and **under-blocking is invisible to the owner** — he notices a block screen that
+shouldn't be there, never one that failed to appear. Assume his bug reports under-represent
+the real count. Batch what you find into **one** release.
+
 ## Spare server
 
 A free-tier GCP VM (e2-micro, Debian 12, us-east1-b) is available for future
