@@ -13,6 +13,14 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.96", "Jul 25, 2026", "Allowlist mode stops flashing the block screen", listOf(
+        "Fixes the block screen flashing up on your home screen and over AppBlocker's own screens after turning on Allowlist mode. This was our fault in 1.95: the new 'keep the block screen up until you've really left the app' behaviour had no way to tell that you'd already reached your home screen, because on your phone the swipe-up Home gesture tells apps nothing at all and the block screen itself can look like the app that's in front. Not knowing was treated as 'you're still in the app', so the screen was held for a couple of seconds over your home screen — every single time you tapped 'Got it'. In Allowlist mode almost everything is blocked, so you tap 'Got it' constantly and it looked like flashing.",
+        "Now the block screen is only held on when the app can actually be seen to still be in front. When it genuinely can't tell, it steps aside straight away rather than sitting there.",
+        "AppBlocker's own screens can no longer be covered by a block screen. The blocker couldn't tell its own settings screens apart from its own block screen — both are the same app — so being in AppBlocker was mistaken for 'the blocked app is still up'.",
+        "Your home screen can no longer be blocked in Allowlist mode. If the check for 'which apps are home screens' ever failed or was skipped, the answer 'not a home screen' was remembered permanently, and from then on Allowlist mode treated your home screen as just another app to block.",
+        "Your phone app can no longer be blocked in Allowlist mode either — one of the two ways it was recognised silently stopped working on newer Android versions.",
+        "And the apps that must always keep working in Allowlist mode — your home screen, keyboard, phone, Settings and AppBlocker itself — are now protected against every kind of block, including a blocked-word lockout, which used to be able to override that protection.",
+    )),
     VersionLog("1.95", "Jul 25, 2026", "No more being blocked twice for one open", listOf(
         "Opening a blocked app could block you twice: the block screen appeared, you tapped 'Got it', and a few seconds later it appeared all over again — and both showings were counted, so your 'minutes reclaimed' jumped by 6 instead of 3 and Insights over-reported how often you'd tried.",
         "The cause was that 'Got it' took the block screen away and asked the phone to go Home as two separate things. When the Home request didn't land — which happens on this phone, where the gesture-navigation Home often tells apps nothing at all — the blocked app was left sitting there with nothing covering it, and the blocker then treated it as a brand new attempt and blocked it again.",

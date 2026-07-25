@@ -59,6 +59,15 @@ internal fun decideBlock(i: BlockInputs): BlockReason? {
     // any Strict session — see UpdatePause).
     if (i.updatePaused) return null
 
+    // The phone has to stay usable, so the essentials — ourselves, the launcher, the current
+    // keyboard, the dialer, System UI, Settings — are never blocked by ANY layer. This has to
+    // come before the lockout branch below: lockouts are keyed by the last foreground package,
+    // which can be stale, and one landing on the launcher would otherwise cover the home
+    // screen. (Only consulted in Allowlist mode, where the lambda is already being used and
+    // everything is blocked by default; Blocklist mode blocks only what the user picked, so
+    // asking would cost a Settings read on every decision for no benefit.)
+    if (i.allowlistMode && i.isEssential()) return null
+
     // Keyword lockout: a blocked word was caught in this app recently, so the whole app
     // stays locked — no page inside it is reachable until the lockout runs out.
     if (i.lockoutRemainingMs > 0L) {
@@ -72,8 +81,10 @@ internal fun decideBlock(i: BlockInputs): BlockReason? {
     }
 
     if (i.allowlistMode) {
-        // Allowlist: block anything that isn't explicitly allowed and isn't an essential.
-        if (i.quickEnforcing && !i.isEssential() && i.rule?.isAllowed != true) {
+        // Allowlist: block anything that isn't explicitly allowed. Essentials already returned
+        // above, so they need no second check here — and isEssential() reads the current
+        // keyboard from Settings, so asking twice per decision is worth avoiding.
+        if (i.quickEnforcing && i.rule?.isAllowed != true) {
             return BlockReason(
                 if (i.strict) "Strict Mode" else "Blocked",
                 "Only your allowed apps work right now.",

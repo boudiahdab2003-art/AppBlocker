@@ -18,6 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
 import com.appblocker.data.InstalledAppsRepository
+import com.appblocker.data.OwnUi
 import com.appblocker.data.SettingsStore
 import com.appblocker.data.UpdatePause
 import com.appblocker.service.ProtectionNotifier
@@ -74,6 +75,18 @@ class MainActivity : ComponentActivity() {
 
     // MainActivity is singleTask, so tapping the notification while the app is already running
     // delivers here instead of a fresh onCreate — forward the extra the same way.
+    // Tells the blocking watcher that what's in front is our own UI and not a block cover over
+    // some app — the two are the same package, so it can't tell them apart on its own. See OwnUi.
+    override fun onResume() {
+        super.onResume()
+        OwnUi.visible = true
+    }
+
+    override fun onPause() {
+        super.onPause()
+        OwnUi.visible = false
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
