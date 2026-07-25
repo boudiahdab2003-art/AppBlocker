@@ -13,6 +13,13 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.95", "Jul 25, 2026", "No more being blocked twice for one open", listOf(
+        "Opening a blocked app could block you twice: the block screen appeared, you tapped 'Got it', and a few seconds later it appeared all over again — and both showings were counted, so your 'minutes reclaimed' jumped by 6 instead of 3 and Insights over-reported how often you'd tried.",
+        "The cause was that 'Got it' took the block screen away and asked the phone to go Home as two separate things. When the Home request didn't land — which happens on this phone, where the gesture-navigation Home often tells apps nothing at all — the blocked app was left sitting there with nothing covering it, and the blocker then treated it as a brand new attempt and blocked it again.",
+        "Now 'Got it' means 'get me out of here': the block screen stays up until your phone is really off the blocked app, asking for Home again if the first try was ignored. So the app is never left uncovered, and you never see a second block screen for a single open. (If Home genuinely can't be reached, the screen still steps aside after a few seconds so you can never get stuck.)",
+        "One open is now counted once, no matter how many times the screen has to be drawn to keep you out — so the 'minutes reclaimed' number and your Insights attempt counts are honest. Deliberately opening a blocked app again still counts as the new attempt it is.",
+        "Also fixed: a late message from an app you'd just left could throw the block screen over your home screen and add a phantom 'open' to your daily open limits.",
+    )),
     VersionLog("1.94", "Jul 24, 2026", "Guide cards line up properly again", listOf(
         "In the Scenarios guides and the Dopamine detox, the thinker's name and the headline next to it were laid out badly whenever the headline was too long for one line: the name dropped to the bottom line and left a big empty gap above it. Now they sit side by side when they fit, and the headline moves onto its own line under the name when it doesn't — which is what you'll see at larger font sizes.",
         "The big number on the numbered rules and steps now sits beside the rule's title instead of floating in the middle of a long paragraph.",

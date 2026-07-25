@@ -156,6 +156,52 @@ class BlockerAccessibilityService : AccessibilityService() {
     @Volatile private var dismissedPkg: String? = null
     @Volatile private var dismissedAt = 0L
 
+    // The app the user is being taken out of after "Got it", or null when we're not mid-exit.
+    // "Got it" does not mean "take the cover away", it means "get me out of here": the cover
+    // stays up until the phone is really off the blocked app. It used to come down immediately
+    // and independently of GLOBAL_ACTION_HOME — so whenever HOME didn't land (this phone's
+    // gesture nav often reports nothing at all), the blocked app was left fully usable with no
+    // cover, and the watcher then re-blocked it seconds later as a BRAND-NEW block: a second
+    // cover, a fresh quote and a second counted attempt for one single open.
+    @Volatile private var exitTarget: String? = null
+    private var exitStartedAt = 0L
+    private var exitHomeTries = 0
+    private val exitRunnable = object : Runnable {
+        override fun run() = guarded(applicationContext, "exit") { runGuarded() }
+
+        private fun runGuarded() {
+            val target = exitTarget ?: return
+            // Off the blocked app — the cover has done its job.
+            if (leftApp(target)) return finishExit(left = true)
+            // Another path already took the cover down (the launcher's own window event runs
+            // through handleAppBlock), so there is nothing left to hold: stop asking for HOME.
+            if (!overlay.isShowing) return finishExit(left = true)
+            val since = System.currentTimeMillis() - exitStartedAt
+            // Never trap the user: give up and let the dismiss grace take over. (Staying in
+            // the app then re-covers it once the grace lapses — but as the SAME block, so it
+            // isn't counted again.)
+            if (since >= EXIT_GIVE_UP_MS) return finishExit(left = false)
+            // HOME can be swallowed or arrive late (slow transition, split-screen, HyperOS).
+            // Ask again at the two thresholds rather than on every poll.
+            val tries = when {
+                since >= EXIT_RETRY2_MS -> 3
+                since >= EXIT_RETRY1_MS -> 2
+                else -> 1
+            }
+            if (exitHomeTries < tries) {
+                exitHomeTries = tries
+                performGlobalAction(GLOBAL_ACTION_HOME)
+            }
+            handler.postDelayed(this, EXIT_POLL_MS)
+        }
+    }
+
+    // The counter key most recently recorded as an attempt, and when — so one open is one
+    // attempt however many times the cover has to be redrawn to keep the user out. See
+    // CoverGate.shouldCount.
+    private var lastCountedKey: String? = null
+    private var lastCountedAt = 0L
+
     // Apps where a blocked word was caught: the whole app stays locked — any page, any
     // text — until the expiry time. Guarded by its own lock (written from the background
     // scan, read from the main thread); mirrored to prefs so restarts don't lift it.
@@ -427,6 +473,14 @@ class BlockerAccessibilityService : AccessibilityService() {
             pkg != null && pkg != lastForegroundPkg &&
             !isLauncherPkg(pkg) &&
             rootInActiveWindow?.packageName?.toString() != pkg
+        ) return
+        // A late window-state event from the app we just LEFT (its window finishing its
+        // teardown after HOME landed) used to read as a fresh open: it re-blocked over the
+        // home screen and counted another open against LAUNCH_COUNT limits. Only trust it if
+        // that app really is on screen. Deliberately narrow — it applies to the just-dismissed
+        // package only, so a normal open is never second-guessed and blocking never lags.
+        if (pkg != null && pkg == dismissedPkg && pkg != lastForegroundPkg &&
+            System.currentTimeMillis() - dismissedAt < STRAGGLER_MS && !stillOnScreen(pkg)
         ) return
         if (pkg != null && pkg != lastForegroundPkg) {
             lastForegroundPkg = pkg
@@ -747,6 +801,9 @@ class BlockerAccessibilityService : AccessibilityService() {
         handler.removeCallbacks(recheckRunnable)
         webScanJob?.cancel()
         webScanQueuedAt = 0L
+        // Stop trying to send a screened-off phone Home, and release the attempt dedup: the
+        // next unlock starts clean, so a fresh open of the app is a fresh attempt.
+        if (exiting()) finishExit(left = true)
         if (overlay.isShowing) {
             lastBlockedPkg = null
             overlay.remove()
@@ -917,7 +974,8 @@ class BlockerAccessibilityService : AccessibilityService() {
             withContext(Dispatchers.Main) {
                 if (lastForegroundPkg == pkg && stillOnScreen(pkg)) {
                     showBlockScreen(title = "Shorts blocked",
-                        message = "YouTube Shorts is blocked.", packageName = null, counterKey = "shorts")
+                        message = "YouTube Shorts is blocked.", packageName = null,
+                        counterKey = CoverGate.SHORTS_KEY)
                 } else lastWebText = null // left during the scan — don't cover what's there now
             }
             return
@@ -957,6 +1015,24 @@ class BlockerAccessibilityService : AccessibilityService() {
         }
     }
 
+    /**
+     * Whether we can see that the user is off [target] — the exit watcher's question, which is
+     * not the inverse of [stillOnScreen]: that one answers "may I cover this?", where an
+     * unreadable window must mean "yes, carry on blocking". Here only a positive sighting of
+     * something else counts, because holding the cover a moment too long is harmless while
+     * dropping it too early is the bug being fixed.
+     *
+     * Our own (non-focusable) cover can itself report as the active window, and that says
+     * nothing about what is behind it — so in that case, and when the window tree can't be read
+     * at all, the event-fed foreground cache is the signal instead. Main thread only.
+     */
+    private fun leftApp(target: String): Boolean {
+        val actual = rootInActiveWindow?.packageName?.toString()
+        if (actual != null && actual != target && actual != packageName) return true
+        val cached = lastForegroundPkg
+        return cached != null && cached != target
+    }
+
     /** Best-effort "is [pkg] still what the user sees" — guards covers fired from cached state
      *  (the debounced scan) after a gesture-nav Home that produced no window-state event. An
      *  unreadable root counts as yes, and so does our own overlay window. Main thread only. */
@@ -993,7 +1069,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                     title = "Shorts blocked",
                     message = "YouTube Shorts is blocked. The rest of YouTube still works.",
                     packageName = null,
-                    counterKey = "shorts",
+                    counterKey = CoverGate.SHORTS_KEY,
                 )
             }
         } else if (!onShorts && shortsCovering) {
@@ -1002,27 +1078,17 @@ class BlockerAccessibilityService : AccessibilityService() {
         }
     }
 
-    /** True while a just-dismissed cover's re-show should stay suppressed: always for the
-     *  first 1.5s (event stragglers during the trip Home), and for up to 8s while the
-     *  dismissed app is STILL foreground — on tablets the HOME action can land slowly (or
-     *  not at all in split-screen), and the old flat 2.5s window let the very next event
-     *  re-block, showing the cover "twice". Once the user actually leaves (foreground moves
-     *  off the dismissed app), a fresh open blocks instantly again; deliberately staying in
-     *  the blocked app still re-blocks after 8s. Only matches the dismissed key/package —
-     *  a DIFFERENT app opened right after still blocks instantly.
-     *  (Shorts covers are exempt — their scan tracks covering state in shortsCovering, and
-     *  suppressing a show here would desync it and leave Shorts uncovered.) */
-    private fun dismissSuppressed(counterKey: String): Boolean {
-        if (counterKey == "shorts") return false
-        if (counterKey != dismissedKey && counterKey != dismissedPkg) return false
-        return withinDismissWindow()
-    }
+    /** True while a just-dismissed cover's re-show should stay suppressed — see [CoverGate],
+     *  which owns the rules (and is unit-tested, see CoverGateTest). */
+    private fun dismissSuppressed(counterKey: String): Boolean = CoverGate.suppressed(
+        counterKey, dismissedKey, dismissedPkg, lastForegroundPkg,
+        System.currentTimeMillis() - dismissedAt,
+    )
 
-    /** The timing half of [dismissSuppressed]: still inside the post-"Got it" grace. */
-    private fun withinDismissWindow(): Boolean {
-        val since = System.currentTimeMillis() - dismissedAt
-        return since < 1_500 || (since < 8_000 && lastForegroundPkg == dismissedPkg)
-    }
+    /** The key-agnostic timing half, for the web scan. */
+    private fun withinDismissWindow(): Boolean = CoverGate.inGrace(
+        dismissedPkg, lastForegroundPkg, System.currentTimeMillis() - dismissedAt,
+    )
 
     private fun showBlockScreen(
         title: String,
@@ -1037,8 +1103,16 @@ class BlockerAccessibilityService : AccessibilityService() {
         // Same guard for a JUST-dismissed cover: Close goes HOME, but the blocked app stays
         // on screen for the transition and would re-block/re-count immediately.
         if (dismissSuppressed(counterKey)) return
-        // Recorded for the counter's own sake — the cover reads the running total itself.
-        AttemptCounter.record(applicationContext, counterKey)
+        // Is this a NEW block, or the same one being drawn again because the user never got
+        // out of the app? Only a new one records an attempt (the cover reads the running total
+        // itself) and rolls a fresh quote — otherwise one open read as two.
+        val now = System.currentTimeMillis()
+        val fresh = CoverGate.shouldCount(counterKey, lastCountedKey, now - lastCountedAt)
+        if (fresh) {
+            AttemptCounter.record(applicationContext, counterKey)
+            lastCountedKey = counterKey
+            lastCountedAt = now
+        }
         val label = packageName?.let { loadLabel(it) }
         val msg = message ?: label?.let { "$it is blocked" } ?: "This is blocked right now."
         // Instant overlay; fall back to the Activity only if the overlay can't be drawn.
@@ -1051,6 +1125,7 @@ class BlockerAccessibilityService : AccessibilityService() {
             isAppBlock = packageName != null,
             onClose = ::onCoverDismissed,
             iconLoader = ::loadIcon,
+            freshBlock = fresh,
         )
         if (!drawn) {
             startActivity(
@@ -1074,12 +1149,12 @@ class BlockerAccessibilityService : AccessibilityService() {
 
     /**
      * "Got it" on the cover: remember what was dismissed (so the app still on screen during
-     * the trip Home can't instantly re-block), take the cover down and go Home. Tablets
-     * sometimes swallow the first HOME (split-screen/slow transition), leaving the blocked app
-     * up until the dismiss grace lapses — which read as a second block — so retry once if the
-     * foreground hasn't moved.
+     * the trip Home can't instantly re-block), ask the phone to go Home, and keep the cover up
+     * until it actually gets there — see [exitRunnable].
      */
     private fun onCoverDismissed() {
+        // Read before anything is torn down — remove() clears both.
+        val appBlock = overlay.isAppBlock
         dismissedKey = overlay.counterKey
         dismissedPkg = lastForegroundPkg
         dismissedAt = System.currentTimeMillis()
@@ -1087,14 +1162,52 @@ class BlockerAccessibilityService : AccessibilityService() {
         // Re-arm word detection: coming back to the page that was just blocked must
         // block again, not read as "already handled" via the text dedup.
         lastWebText = null
-        overlay.remove()
-        performGlobalAction(GLOBAL_ACTION_HOME)
-        handler.postDelayed({
-            if (dismissedPkg != null && lastForegroundPkg == dismissedPkg) {
-                performGlobalAction(GLOBAL_ACTION_HOME)
-            }
-        }, 800)
+        // Only a whole-app cover is the thing keeping the user out of an app, so only it is
+        // worth holding until they're really out. The web/word/purchase/guard covers sit over
+        // one page inside an app their own scan owns, and go down as they always did.
+        if (appBlock) startExit(dismissedPkg) else startExit(null)
     }
+
+    /** Begins the trip Home for [pkg], holding the cover until we're off it. With no app to
+     *  watch for, the cover just goes down as before. */
+    private fun startExit(pkg: String?) {
+        if (pkg == null) {
+            overlay.remove()
+            performGlobalAction(GLOBAL_ACTION_HOME)
+            return
+        }
+        exitTarget = pkg
+        exitStartedAt = System.currentTimeMillis()
+        exitHomeTries = 1
+        performGlobalAction(GLOBAL_ACTION_HOME)
+        handler.removeCallbacks(exitRunnable)
+        handler.postDelayed(exitRunnable, EXIT_POLL_MS)
+    }
+
+    /** Ends the exit watch and takes the cover down. [left] is whether the user actually got
+     *  off the blocked app: on a real exit the attempt dedup is released, so a deliberate
+     *  re-open counts as the new attempt it is. */
+    private fun finishExit(left: Boolean) {
+        exitTarget = null
+        handler.removeCallbacks(exitRunnable)
+        if (left) {
+            lastCountedKey = null
+        } else {
+            // HOME never landed and the user is still in the blocked app. The cover has to come
+            // down (never trap anyone), so schedule the re-check for just after the dismiss
+            // grace lapses — otherwise the app would stay uncovered until the ordinary 30s
+            // tick. It re-covers as the SAME block: no new attempt, no new quote.
+            val untilGraceEnds = CoverGate.DISMISS_GRACE_STUCK_MS -
+                (System.currentTimeMillis() - dismissedAt)
+            handler.removeCallbacks(recheckRunnable)
+            handler.postDelayed(recheckRunnable, untilGraceEnds.coerceAtLeast(0L) + 250L)
+        }
+        lastBlockedPkg = null
+        overlay.remove()
+    }
+
+    /** Whether the exit watcher is currently holding a cover up. */
+    private fun exiting(): Boolean = exitTarget != null
 
     // Launch-warmed cache first (label + icon already decoded); PackageManager fallback for
     // packages that aren't in it (repo not loaded in this process, or non-launchable apps).
@@ -1116,6 +1229,8 @@ class BlockerAccessibilityService : AccessibilityService() {
         handler.removeCallbacks(shortsScanRunnable)
         handler.removeCallbacks(recheckRunnable)
         handler.removeCallbacks(focusClearRunnable)
+        handler.removeCallbacks(exitRunnable)
+        exitTarget = null
         // Stop location updates so they don't leak past the service (battery + privacy).
         stopLocationUpdates()
         prefsListener?.let {
@@ -1145,6 +1260,19 @@ class BlockerAccessibilityService : AccessibilityService() {
         private const val WEB_SCAN_MAX_WAIT_MS = 700L
         // How long an app stays fully locked after a blocked word was caught in it.
         private const val KEYWORD_LOCKOUT_MS = 30 * 60_000L
+
+        // The trip Home after "Got it": how often to check whether we're off the blocked app
+        // yet, when to re-ask for HOME, and when to give up so the user can never be trapped.
+        // The give-up is deliberately short: it is also the worst case for how long the cover
+        // can sit over the home screen when HOME worked but neither signal in leftApp() can
+        // confirm it. The ordinary paths resolve on the first poll or two.
+        private const val EXIT_POLL_MS = 200L
+        private const val EXIT_RETRY1_MS = 600L
+        private const val EXIT_RETRY2_MS = 1_400L
+        private const val EXIT_GIVE_UP_MS = 2_500L
+        // How long after a dismissal a window-state event from that app is treated as a
+        // possible straggler and has to be confirmed against the real active window.
+        private const val STRAGGLER_MS = 15_000L
 
         // Throttle for isLauncherPkg's on-miss launcher re-detection.
         private const val LAUNCHER_REFRESH_MS = 30_000L
