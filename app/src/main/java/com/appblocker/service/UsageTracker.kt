@@ -164,12 +164,30 @@ object UsageTracker {
         return IntArray(24) { (buckets[it] / 60_000L).toInt() }
     }
 
-    private fun addInterval(buckets: LongArray, from: Long, to: Long, dayStart: Long) {
+    /**
+     * Adds [from]..[to] into the 24 hourly [buckets] measured from [dayStart].
+     *
+     * Internal (not private) so [UsageTrackerTest] can pin the termination rule below.
+     *
+     * **A local day is not always 24 hours long.** On the DST fall-back day it is 25, so
+     * `now - startOfToday()` — and therefore an interval's ends — can legitimately sit past
+     * `dayStart + 24h`. The hour index used to be `coerceIn(0, 23)` while `hourEnd` was computed
+     * from the *coerced* hour, so once past that point `hourEnd` was behind `s`: the step went
+     * negative (corrupting a bucket), then exactly zero, and the loop spun forever. Once a year,
+     * the Insights screen and the coach would hang on a pegged core.
+     *
+     * So: clamp the interval to the buckets that exist, and never take a non-positive step. The
+     * 25th hour's usage is dropped — there is nowhere in a 24-bucket chart to put it.
+     */
+    internal fun addInterval(buckets: LongArray, from: Long, to: Long, dayStart: Long) {
+        val end = min(to, dayStart + 24 * 3_600_000L)
         var s = max(from, dayStart)
-        while (s < to) {
-            val hour = ((s - dayStart) / 3_600_000L).toInt().coerceIn(0, 23)
+        while (s < end) {
+            val hour = ((s - dayStart) / 3_600_000L).toInt()
+            if (hour !in buckets.indices) break
             val hourEnd = dayStart + (hour + 1) * 3_600_000L
-            val seg = min(to, hourEnd) - s
+            val seg = min(end, hourEnd) - s
+            if (seg <= 0L) break // the step must always make progress
             buckets[hour] += seg
             s += seg
         }

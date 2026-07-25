@@ -1,6 +1,7 @@
 package com.appblocker.service
 
 import android.content.Context
+import com.appblocker.data.ServiceHealth
 
 /**
  * Decides whether some on-screen text (a web address or search query) should be
@@ -98,23 +99,56 @@ class WebContentFilter internal constructor(
     companion object {
         @Volatile private var INSTANCE: WebContentFilter? = null
 
-        fun get(context: Context): WebContentFilter =
-            INSTANCE ?: synchronized(this) {
-                INSTANCE ?: WebContentFilter(
-                    readLines(context, "adult_domains.txt"),
-                    readLines(context, "adult_keywords.txt"),
-                    readLines(context, "adult_words_pack.txt").map(::normalizeArabic),
-                ).also { INSTANCE = it }
-            }
+        /** So a permanently broken asset doesn't write to prefs on every scan. */
+        @Volatile private var loadFailureReported = false
 
-        private fun readLines(context: Context, asset: String): List<String> =
+        /**
+         * The shared filter, built from the bundled lists.
+         *
+         * **A filter that failed to load is deliberately not cached.** Every list is read through
+         * [runCatching], so a failure produced an empty list — and an empty list matches nothing
+         * while the adult switches still say ON. Caching that turned one transient read failure
+         * into the adult layers being silently off for the rest of the process's life: no crash,
+         * no warning, and blocking that fails *open*. Nobody would ever know, because a block that
+         * never happens is invisible.
+         *
+         * Not hypothetical for this app in particular: the in-app updater installs a new APK over
+         * a service that keeps running, and an asset path replaced under a live process is exactly
+         * when reads fail. That is also the moment [com.appblocker.data.UpdatePause] switches every
+         * other layer off, leaving the adult layer as the only thing still meant to be working.
+         *
+         * So a partial load is returned but not kept: the next scan tries again, and the failure
+         * is recorded once in [ServiceHealth], which the Profile screen surfaces.
+         */
+        fun get(context: Context): WebContentFilter {
+            INSTANCE?.let { return it }
+            return synchronized(this) {
+                INSTANCE ?: run {
+                    val domains = readLines(context, "adult_domains.txt")
+                    val keywords = readLines(context, "adult_keywords.txt")
+                    val pack = readLines(context, "adult_words_pack.txt")?.map(::normalizeArabic)
+                    val loaded = domains != null && keywords != null && pack != null
+                    WebContentFilter(domains.orEmpty(), keywords.orEmpty(), pack.orEmpty())
+                        .also { if (loaded) INSTANCE = it }
+                }
+            }
+        }
+
+        /** Null when the asset could not be read at all — distinct from a legitimately empty
+         *  file, so [get] can tell "nothing to match" from "we failed to look". */
+        private fun readLines(context: Context, asset: String): List<String>? =
             runCatching {
                 context.assets.open(asset).bufferedReader().useLines { lines ->
                     lines.map { it.trim().lowercase() }
                         .filter { it.isNotEmpty() && !it.startsWith("#") }
                         .toList()
                 }
-            }.getOrDefault(emptyList())
+            }.onFailure {
+                if (!loadFailureReported) {
+                    loadFailureReported = true
+                    ServiceHealth.recordError(context, "assets/$asset", it)
+                }
+            }.getOrNull()
 
         /** Whole-word substring search: a match only counts when it isn't glued to another
          *  letter/digit on either side (works for Latin and Arabic alike). */
