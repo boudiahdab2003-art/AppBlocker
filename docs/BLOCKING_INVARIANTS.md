@@ -382,6 +382,38 @@ the highest-yield shape in this file, and both siblings were unexamined.
   class, not the activity's — harmless (it simply never matches a purchase hint) but worth knowing
   before trusting className on that path.
 
+### Swept in the tenth "bug hunt" (25 Jul 2026)
+
+Different method: **audit the day's own changes.** Sweeps 5–9 plus the coach upgrade all shipped
+unreviewed in one session, and new code is where bug density is highest. This is also the only sweep
+whose findings are self-inflicted, which is the point — the method has to work on the person using it.
+
+- **1 bug, mine, from the coach upgrade.** Raising the read ceiling to 120s while both call sites
+  still did `repeat(2)` unconditionally tripled the worst-case wait: ~4.5 minutes of "Thinking…"
+  before the user saw anything, up from ~90s. The retry's purpose is transient blips (a 5xx, a
+  truncated response); a **timeout** is the one failure where retrying is both slowest and least
+  likely to help, since the far end already had the full window. Now `retryWorthwhile` skips the
+  retry only for timeouts, and the ceiling is 90s (still 3× the expected reply time).
+- Two slips caught *while writing that fix*, both worth recording because they are the shape of
+  thing that ships silently:
+  - `return@repeat` **continues** the loop rather than abandoning it, so the first version of the
+    fix was a no-op. Replaced with an explicit `while` + `break`.
+  - The first `retryWorthwhile` read `t != null && …`, which would have stopped retrying the case
+    the retry exists for: `runCatching` treats a blank reply or an unparsable tips array as
+    *success holding null*, so the exception is null there. The null case must answer **true**.
+- Verified clean in my own work: `lastLocation` has exactly one decision reader (`freshLocation`),
+  so sweep 7's ceiling has no bypass; nothing in the service compares a `stopwatchNow()` field
+  against the wall clock; `pendingClassName` cannot be applied to the wrong package.
+
+**Considered and deliberately left:**
+
+- `CoachChatViewModel.coachModel()` reads prefs synchronously during composition and won't recompose
+  if the model changes mid-session. It is a diagnostic line in a dialog opened after a reply, so it
+  is always fresh enough in practice; making it reactive would cost more than it is worth.
+- The advice ledger is a `StringSet`, which is unordered and deduplicates. Sorting by day stamp
+  recovers the ordering that matters, and two identical pieces of advice on one day collapsing into
+  one is the desirable outcome anyway.
+
 ### Not yet swept
 
 - the updater's download/install path (`download`, FileProvider hand-off) — `isNewer` is done
