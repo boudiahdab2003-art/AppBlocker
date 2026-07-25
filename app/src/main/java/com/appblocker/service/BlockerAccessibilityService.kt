@@ -202,6 +202,11 @@ class BlockerAccessibilityService : AccessibilityService() {
     // between them. See showBlockScreen and CoverGate.shouldCount.
     private var lastCountedOffence: String? = null
     private var lastCountedAt = 0L
+    // Set when "Got it" failed to get the user out and the cover has to go back up for the same
+    // offence — that redraw is one sitting, not a second attempt. Kept separate from the plain
+    // cooldown so this allowance applies only where it's known to be needed, and so the ordinary
+    // cooldown can stay short enough that a real second open still counts.
+    private var resumingOffence: String? = null
 
     // Apps where a blocked word was caught: the whole app stays locked — any page, any
     // text — until the expiry time. Guarded by its own lock (written from the background
@@ -1129,7 +1134,10 @@ class BlockerAccessibilityService : AccessibilityService() {
         // out of the app? Only a new one records an attempt (the cover reads the running total
         // itself) and rolls a fresh quote — otherwise one open read as two.
         val now = System.currentTimeMillis()
-        val fresh = CoverGate.shouldCount(offenceKey, lastCountedOffence, now - lastCountedAt)
+        val fresh = CoverGate.shouldCount(
+            offenceKey, lastCountedOffence, now - lastCountedAt, resumingOffence,
+        )
+        if (offenceKey == resumingOffence) resumingOffence = null // one-shot: this was the redraw
         if (fresh) {
             AttemptCounter.record(applicationContext, counterKey)
             lastCountedOffence = offenceKey
@@ -1226,11 +1234,14 @@ class BlockerAccessibilityService : AccessibilityService() {
         handler.removeCallbacks(exitRunnable)
         if (left) {
             lastCountedOffence = null
+            resumingOffence = null
         } else {
             // HOME never landed and the user is still in the blocked app. The cover has to come
             // down (never trap anyone), so schedule the re-check for just after the dismiss
             // grace lapses — otherwise the app would stay uncovered until the ordinary 30s
-            // tick. It re-covers as the SAME block: no new attempt, no new quote.
+            // tick. Mark that redraw as a resume so it lands as the SAME block: no new attempt,
+            // no new quote, without the plain cooldown having to be long enough to reach it.
+            resumingOffence = lastCountedOffence
             val untilGraceEnds = CoverGate.DISMISS_GRACE_STUCK_MS -
                 (System.currentTimeMillis() - dismissedAt)
             handler.removeCallbacks(recheckRunnable)

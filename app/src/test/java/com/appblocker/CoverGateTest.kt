@@ -124,6 +124,43 @@ class CoverGateTest {
     }
 
     @Test
+    fun `the plain cooldown stays short enough to count a real second open`() {
+        // It only has to absorb event bursts. Padding it far enough to reach the resume redraw
+        // below is what made two separate urges read as one, so that case is handled explicitly.
+        assertTrue(CoverGate.COUNT_COOLDOWN_MS < CoverGate.RESUME_GRACE_MS)
+        assertTrue(CoverGate.shouldCount(app, lastCountedOffence = app, sinceLastCountMs = 6_000L))
+    }
+
+    @Test
+    fun `a cover put back up because Home failed is not a second attempt`() {
+        // Give-up is ~2.5s after the dismissal and the redraw lands ~8s after that, measured
+        // from the FIRST count — so this is past the plain cooldown and only the resume marker
+        // can recognise it.
+        assertFalse(
+            CoverGate.shouldCount(
+                app, lastCountedOffence = app, sinceLastCountMs = 11_000L, resumingOffence = app,
+            )
+        )
+    }
+
+    @Test
+    fun `the resume allowance is bounded and applies only to that offence`() {
+        // A marker left set can delay a count but never lose one indefinitely...
+        assertTrue(
+            CoverGate.shouldCount(
+                app, lastCountedOffence = app,
+                sinceLastCountMs = CoverGate.RESUME_GRACE_MS, resumingOffence = app,
+            )
+        )
+        // ...and it never covers a different app.
+        assertTrue(
+            CoverGate.shouldCount(
+                other, lastCountedOffence = other, sinceLastCountMs = 6_000L, resumingOffence = app,
+            )
+        )
+    }
+
+    @Test
     fun `a different target counts even inside the cooldown`() {
         assertTrue(CoverGate.shouldCount(other, lastCountedOffence = app, sinceLastCountMs = 0L))
     }
