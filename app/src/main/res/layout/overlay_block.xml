@@ -16,6 +16,7 @@
 
         <!-- Kicker: shield badge + what happened, magazine-label style. -->
         <LinearLayout
+            android:id="@+id/el_kicker"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
@@ -49,6 +50,12 @@
         </LinearLayout>
 
         <!-- Masthead: today's win, giant editorial serif. -->
+        <LinearLayout
+            android:id="@+id/el_number"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
         <TextView
             android:id="@+id/overlay_stat_number"
             android:layout_width="wrap_content"
@@ -70,8 +77,11 @@
             android:textColor="@color/block_accent"
             android:textSize="15sp" />
 
+        </LinearLayout>
+
         <!-- The hero: the quote owns the screen, editorial serif. -->
         <LinearLayout
+            android:id="@+id/el_quote"
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
@@ -101,6 +111,7 @@
 
         <!-- Context footer: small app icon + what's blocked + attempt counts. -->
         <LinearLayout
+            android:id="@+id/el_app"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"

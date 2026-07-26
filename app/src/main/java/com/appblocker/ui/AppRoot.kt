@@ -108,6 +108,10 @@ fun AppRoot(openPermissionsOnStart: Boolean = false) {
     val protectionTick = resumeTick()
     LaunchedEffect(protectionTick) { ProtectionWatchdog.checkAndNotify(context, force = true) }
 
+    // Coming back from the "allow install unknown apps" screen resumes an update that was
+    // waiting on it. No-op unless one is waiting.
+    LaunchedEffect(protectionTick) { updateVm.onResumed() }
+
     // System back closes an open editor overlay instead of exiting the app.
     BackHandler(enabled = overlay != null) { overlay = null }
 
@@ -152,7 +156,8 @@ fun AppRoot(openPermissionsOnStart: Boolean = false) {
             is Overlay.IconPicker ->
                 IconPickerScreen(onBack = { overlay = null })
             is Overlay.BlockThemePicker ->
-                BlockThemePickerScreen(onBack = { overlay = null })
+                BlockThemePickerScreen(
+                    strictActive = strictActive, onBack = { overlay = null })
             is Overlay.NewSchedule ->
                 ScheduleEditorScreen(
                     type = o.type, existing = null, strictActive = strictActive,
@@ -216,8 +221,13 @@ fun AppRoot(openPermissionsOnStart: Boolean = false) {
     // Global download progress while an update is being fetched.
     (updateState as? UpdateState.Downloading)?.let { dl ->
         AlertDialog(
+            // Not dismissable by tapping away — an accidental tap shouldn't abandon a download.
+            // Cancel is explicit, and it has to exist: this dialog covers the screen, so without
+            // it a stalled transfer leaves nothing to tap.
             onDismissRequest = {},
-            confirmButton = {},
+            confirmButton = {
+                TextButton(onClick = { updateVm.cancelDownload() }) { Text("Cancel") }
+            },
             title = { Text("Downloading update") },
             text = { Text("${dl.percent}%") },
         )

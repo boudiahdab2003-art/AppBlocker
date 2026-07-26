@@ -3,14 +3,28 @@ package com.appblocker.data
 import android.content.Context
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
- * "Blocking pauses after an update": when a new version starts for the first time, ALL blocking
- * is switched off until the user taps Reactivate on the Blocking tab — and a running Strict
- * session ENDS (owner's choice: a fresh version is a clean slate; this only fires on a real
- * version change, so reinstalling the same APK is not an escape hatch). One exception, enforced
- * in the service: the adult-content layer stays on (its off-switch is intentionally hard).
+ * "Blocking pauses after an update": when a new version starts for the first time, ALL blocking is
+ * switched off until the user taps Reactivate on the Blocking tab. One exception, enforced in the
+ * service: the adult-content layer stays on (its off-switch is intentionally hard).
+ *
+ * **A running Strict session survives the update, and suppresses the pause entirely** (owner's
+ * decision). Earlier versions did the opposite — an update ENDED the session — with the reasoning
+ * that a fresh version is a clean slate, and that reinstalling the same APK could not be used as an
+ * escape hatch because the pause only fires on a real version change. True as far as it went, but
+ * it missed the case that matters here: releases are frequent, so *whenever an unreleased version
+ * existed*, a Strict session could be ended in two taps from inside the app — Update, install,
+ * session gone. Every other protective control is locked during Strict; this one was the way out.
+ *
+ * The pause is therefore skipped rather than the session being cleared. That keeps blocking on
+ * across the update, and it keeps every *report* of the pause honest by construction: nothing
+ * downstream has to learn about Strict, because [SettingsStore.updatePaused] is never set while a
+ * session is running. (The watchdog notification, the Blocking-tab banner and the Profile status
+ * row all read that flag directly and would otherwise announce that blocking was off while Strict
+ * was actively enforcing it.)
  */
 object UpdatePause {
 
@@ -23,31 +37,52 @@ object UpdatePause {
         if (current < 0L) return
         val last = SettingsStore.lastSeenVersionCode(context)
         if (last != current) {
-            SettingsStore.setLastSeenVersionCode(context, current)
             if (last != -1L) {
-                SettingsStore.setUpdatePaused(context, true)
-                // Durable intent to end any running Strict session, set BEFORE attempting:
-                // prefs writes survive a broadcast receiver's process teardown, the DB
-                // coroutine below may not.
-                SettingsStore.setStrictClearPending(context, true)
+                // Durable intent, written BEFORE anything is attempted: prefs writes survive a
+                // broadcast receiver's process teardown, the coroutine below may not.
+                SettingsStore.setUpdatePausePending(context, true)
+                // A version change means the downloaded APK has served its purpose. It is tens of
+                // megabytes and was previously kept until the next update overwrote it.
+                Updater.discardDownload(context)
             }
+            // Recorded LAST, deliberately. Recording it first meant that a process killed between
+            // the two writes — a real risk here, since this also runs from a broadcast receiver —
+            // left the version already updated and the pause never armed, with no second chance:
+            // the next start sees last == current and concludes nothing changed. Writing it last
+            // makes the whole thing re-runnable, and re-running it is harmless.
+            SettingsStore.setLastSeenVersionCode(context, current)
         }
-        // Runs on EVERY call (app open, service reconnect, install broadcast) — a clear
-        // whose process died mid-write is retried until it actually lands. The flag is
-        // consumed only after the conditional write returns. The version predicate is part of
-        // that single database operation, so a current-version Strict session survives no
-        // matter whether it is written before or after this coroutine reaches Room.
-        if (SettingsStore.strictClearPending(context)) {
-            val appContext = context.applicationContext
-            CoroutineScope(Dispatchers.IO).launch {
-                BlockerDatabase.get(appContext).focusDao()
-                    .clearStrictSessionCreatedBefore(current)
-                SettingsStore.setStrictClearPending(appContext, false)
-            }
+        resolvePendingPause(context)
+    }
+
+    /**
+     * Turns a pending pause into a real one — unless a Strict session is running, in which case the
+     * session keeps blocking on and the pause is dropped.
+     *
+     * Runs on EVERY call (app open, service reconnect, install broadcast), so a decision whose
+     * process died before it landed is retried until it does. Arming the pause asynchronously is
+     * safe in a way that clearing a Strict session never was: the pause switches blocking OFF, so
+     * being a few milliseconds late is harmless, while being wrong is not.
+     */
+    private fun resolvePendingPause(context: Context) {
+        if (!SettingsStore.updatePausePending(context)) return
+        val app = context.applicationContext
+        CoroutineScope(Dispatchers.IO).launch {
+            if (!strictSessionRunning(app)) SettingsStore.setUpdatePaused(app, true)
+            // Consumed only after the decision above has been made, so an interrupted run
+            // re-decides rather than silently dropping the pause.
+            SettingsStore.setUpdatePausePending(app, false)
         }
     }
-}
 
-/** Pure form of the version predicate enforced atomically by [FocusDao]. */
-internal fun strictSessionNeedsUpdateClear(sessionVersion: Long, currentVersion: Long): Boolean =
-    sessionVersion < currentVersion
+    /** Reads the Strict row and asks [SessionClock] — the same clock-change-proof rule the watcher
+     *  enforces with, rather than a second opinion about what "running" means. */
+    private suspend fun strictSessionRunning(context: Context): Boolean {
+        val state = BlockerDatabase.get(context).focusDao().get().first() ?: return false
+        return SessionClock.remaining(
+            state.realtimeStartMillis, state.realtimeEndMillis,
+            state.startTimeMillis, state.endTimeMillis,
+            state.bootCount, DeviceBoot.count(context),
+        ) > 0L
+    }
+}

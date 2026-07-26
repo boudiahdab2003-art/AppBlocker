@@ -234,7 +234,9 @@ fun ProfileScreen(
                 title = "Block screen",
                 subtitle = "Current: ${currentBlockLayout.label} in ${currentBlockTheme.label}. Change what's on the block screen and its colour.",
                 chevron = true,
-                enabled = true, // cosmetic — allowed even during Strict, like the icon above
+                // No longer purely cosmetic: hiding the pieces that make the screen
+                // persuasive belongs with everything else Strict Mode freezes.
+                enabled = !locked,
                 onClick = onOpenBlockThemePicker,
             )
         }

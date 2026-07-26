@@ -14,11 +14,9 @@ interface FocusDao {
     @Upsert
     suspend fun set(state: FocusState)
 
-    /** Atomically clears only Strict state created before [currentVersion]. */
-    @Query(
-        "UPDATE focus_state SET endTimeMillis = 0, realtimeStartMillis = 0, " +
-            "realtimeEndMillis = 0, startTimeMillis = 0, bootCount = -1, " +
-            "appVersionCode = -1 WHERE id = 0 AND appVersionCode < :currentVersion"
-    )
-    suspend fun clearStrictSessionCreatedBefore(currentVersion: Long): Int
+    // There was a clearStrictSessionCreatedBefore(currentVersion) here, used when an app update
+    // ended a running Strict session. Updates no longer do that — the session survives and
+    // suppresses the after-update pause instead (see UpdatePause) — so the query is gone rather
+    // than left available for something to call by accident. FocusState.appVersionCode is kept:
+    // it records which version created a session, which is worth having regardless.
 }

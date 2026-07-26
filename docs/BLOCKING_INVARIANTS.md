@@ -88,6 +88,11 @@ For each site ask: *what does this assume about what's on screen, and who owns t
 changing?* The removals are where the bugs were — a raise that is wrong is visible, a removal
 that is wrong is not.
 
+Outside the watcher the same method transfers: enumerate the *primitives the feature is built
+from*, not the feature. For the updater (sweep 12) that was every `openConnection`, every write to
+a fixed path, every version comparison, and every platform call with a minSdk floor — four greps,
+six findings.
+
 ### Swept so far (25 Jul 2026)
 
 - cover raises (6 sites) — clean
@@ -445,9 +450,60 @@ against each other. Sibling sets, which is where nearly everything has been foun
 - `usedMinutesToday`'s 15s cache is keyed on `elapsedRealtime` and self-heals across midnight
   within the TTL, since `todaySnapshot` re-queries from the new `startOfToday()`.
 
+### Swept in the twelfth "bug hunt" (26 Jul 2026) — the updater
+
+First sweep of the updater. Method: enumerate the primitives an updater is made of rather than
+reading it narratively — every `openConnection`, every write to a fixed path, every version
+comparison, every API call with a minSdk floor. Six findings, none of them ever reported, which
+is exactly the profile of this area: **a broken updater looks like "nothing happened"**, and
+"nothing happened" is not something the owner reports as a bug.
+
+- **A complete download is not an APK — 1 real bug.** `Updater.download` checked the byte count
+  only, and only when the server declared one (`Content-Length` is optional), and never checked
+  the HTTP status at all. A captive portal — hotel/café Wi-Fi — answers *every* request with a
+  complete, correctly-sized 200 login page, which was written to `update.apk` and handed to the
+  installer. Fixed by requiring `HTTP_OK` and checking the file begins with the ZIP local-file
+  header. The magic-byte check is the only integrity check that *always* runs.
+  - `Updater.looksLikeApk(ByteArray)` is `internal` **so it can be tested** — the same reason
+    `addInterval` was made internal in sweep 5. It is the only testable part of this path.
+- **Granting install permission dead-ended — 1 real bug.** `downloadAndInstall` returned silently
+  after opening the permission screen. Coming back: the once-per-launch prompt was gone (already
+  dismissed, `checkedOnce` set), the state still read `Available`, so the tap had visibly done
+  nothing. The release is now held and resumed from `onResumed()`, wired to the existing
+  `resumeTick` in `AppRoot`. **This one only bites on a phone that has never installed an update**,
+  which is why it survived a year of the owner updating successfully.
+- **The after-update pause could be lost — same shape as ever.** `checkVersionChange` wrote the
+  new version code *before* arming the pause; a process death between the two prefs writes left
+  the version recorded and the pause unarmed, permanently (the next start sees
+  `last == current`). The Strict-clear two lines below **already** used "write the durable intent
+  first" and said so in its comment. Sibling asymmetry, in adjacent lines of the same function.
+- **`canRequestPackageInstalls()` is API 26; minSdk is 24** — a `NoSuchMethodError`, not a
+  `false`. Latent (the owner is on 15) but it is a real crash on any 7.x device, and `lint` does
+  not run in the Build check so nothing would have caught it. Guarded.
+- Two smaller ones: the modal download dialog had **no Cancel** (nothing to tap on a stalled
+  transfer — the fix needs `ensureActive()` in the copy loop, or Cancel would hide a transfer
+  that kept running), and the downloaded APK was **never deleted**.
+
+**Considered and left:** `latest()` reports "couldn't reach the update server" when the release
+simply has no `.apk` attached, so a half-failed publish is indistinguishable from a network
+failure; and its two retries have no delay between them, so a transient blip is unlikely to be
+ridden out. Both cosmetic beside the above.
+
+**Verified clean:** the FileProvider hand-off. `app/src/github/res/xml/file_paths.xml` really does
+declare both `external-files-path` and `files-path`, so `download`'s fallback to internal storage
+when external is unmounted can genuinely be served — the comment claiming this is accurate. The
+provider is correctly confined to the `github` flavour along with `REQUEST_INSTALL_PACKAGES`.
+
+**Still open — a question for the owner, not a code fix.** The update row in Profile and the
+launch prompt are **not** locked during Strict Mode (`enabled` there ignores `locked`, unlike
+every other protective row), and installing an update deliberately **ends** a running Strict
+session (`UpdatePause`). So whenever an unreleased version exists, a Strict session can be ended
+in two taps from inside the app. `UpdatePause`'s KDoc argues it is not an escape hatch because
+"reinstalling the same APK" won't do it — true, and it does not address the case where a genuinely
+newer release *is* available, which for this repo is often.
+
 ### Not yet swept
 
-- the updater's download/install path (`download`, FileProvider hand-off) — `isNewer` is done
 - the UI's own live state: `resumeTick` re-reads, and the several screens that cache
   service/prefs state in `remember` blocks. Sweeps four and five touched only the adult-pack gate;
   the pattern (a `remember` holding a decision that time or the service can invalidate) is

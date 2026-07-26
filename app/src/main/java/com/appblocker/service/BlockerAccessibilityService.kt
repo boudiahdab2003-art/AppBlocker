@@ -120,9 +120,14 @@ class BlockerAccessibilityService : AccessibilityService() {
     @Volatile private var essentialPackages: Set<String> = emptySet()
     private var prefsListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
 
-    /** True while the after-update pause suspends blocking. An update also ENDS any running
-     *  Strict session (UpdatePause zeroes the row); the strictRemaining() guard here only
-     *  covers the brief moment before that async clear lands. */
+    /**
+     * True while the after-update pause suspends blocking.
+     *
+     * Strict always wins. [UpdatePause] no longer arms the pause at all while a session is running
+     * (an update used to end the session instead), so this guard is now for the other order: the
+     * pause is armed, and *then* a Strict session is started before Reactivate is tapped. Starting
+     * one has to mean blocking, whatever the pause says.
+     */
     private fun updatePauseActive(): Boolean =
         updatePaused && strictRemaining() <= 0L
 
