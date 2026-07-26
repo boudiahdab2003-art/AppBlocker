@@ -25,6 +25,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
 import com.appblocker.R
 import com.appblocker.data.AppRule
+import com.appblocker.data.AdminPrompt
 import com.appblocker.data.AttemptCounter
 import com.appblocker.data.BlockMode
 import com.appblocker.data.BlockLog
@@ -945,8 +946,20 @@ class BlockerAccessibilityService : AccessibilityService() {
      * restores the protection without re-opening the bug.
      */
     private fun removalScreenIsDangerous(): Boolean {
+        // We opened Android's device-admin ACTIVATION screen ourselves moments ago. That screen
+        // says "device admin" and carries an "Uninstall app" button, so it matches every marker
+        // below — and bouncing it made uninstall protection impossible to switch ON, which is
+        // worse than not guarding at all: the app reported itself protected either way.
+        // Knowing we opened it beats reading the wording, which differs by OEM and is translated.
+        if (AdminPrompt.recentlyRequested()) return false
+
         val text = guardScreenText()
         if (!text.contains("appblocker")) return false
+        // Backstop for reaching that same screen by another route, in English builds: an
+        // activation prompt says "activate" and never "deactivate". Checked in this order because
+        // "deactivate" CONTAINS "activate" — the naive test would have exempted the deactivation
+        // screen, which is the one page here that must always bounce.
+        if (text.contains("activate") && !text.contains("deactivate")) return false
         return REMOVAL_TEXT_MARKERS.any { text.contains(it) }
     }
 
