@@ -200,6 +200,19 @@ fun ScheduleEditorScreen(
                         StepperField("minutes", mins, "m", min = 0, max = 59, step = 5,
                             enabled = editable, modifier = Modifier.weight(1f)) { limit = hours * 60 + it }
                     }
+                    // A daily limit is measured from Android's usage statistics, and reading them
+                    // needs the "usage access" special permission. Without it the app sees zero
+                    // minutes for every app, so the limit is never reached and this schedule
+                    // silently never blocks. That permission is listed as optional elsewhere in
+                    // the app (it only powers Insights there) — for THIS schedule type it is
+                    // required, and nothing said so. Same failure the Wi-Fi and Location types
+                    // already warn about; this was the third one, left out.
+                    val usageTick = resumeTick()
+                    val hasUsage = remember(usageTick) { hasUsageAccess(context) }
+                    if (!hasUsage) {
+                        Spacer(Modifier.padding(top = 12.dp))
+                        UsageAccessWarning { openUsageAccess(context) }
+                    }
                     Spacer(Modifier.padding(top = 12.dp))
                 }
                 ScheduleType.LAUNCH_COUNT -> item {
@@ -483,6 +496,39 @@ private fun BackgroundLocationWarning(onFix: () -> Unit) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onErrorContainer)
         }
+    }
+}
+
+/** Same shape as [BackgroundLocationWarning] — this schedule type cannot work at all yet. */
+@Composable
+private fun UsageAccessWarning(onFix: () -> Unit) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.errorContainer)
+            .clickable(onClick = onFix)
+            .padding(14.dp),
+    ) {
+        Column {
+            Text("This schedule won't work yet",
+                style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onErrorContainer)
+            Spacer(Modifier.padding(top = 2.dp))
+            Text("A daily limit is measured from Android's usage statistics, which AppBlocker " +
+                "can't read yet. Until you allow it, every app looks like zero minutes and this " +
+                "schedule can never block. Tap to open settings, then switch AppBlocker on.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onErrorContainer)
+        }
+    }
+}
+
+private fun openUsageAccess(context: Context) {
+    runCatching {
+        context.startActivity(
+            Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
     }
 }
 

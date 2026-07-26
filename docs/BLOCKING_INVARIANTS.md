@@ -414,6 +414,37 @@ whose findings are self-inflicted, which is the point — the method has to work
   recovers the ordering that matters, and two identical pieces of advice on one day collapsing into
   one is the desirable outcome anyway.
 
+### Swept in the eleventh "bug hunt" (25 Jul 2026)
+
+Method: diff the **five counting stores** against each other, then the **five schedule types**
+against each other. Sibling sets, which is where nearly everything has been found.
+
+- **Usage-limit schedules silently never block without usage access — 1 bug, and the third
+  instance of a class already fixed twice.** `usedMinutesToday` returns **0** when
+  `todaySnapshot` is null (no `PACKAGE_USAGE_STATS`), so every app looks like zero minutes, the
+  limit is never reached, and the schedule does nothing. The editor never checked. Worse, that
+  permission is presented as *optional* elsewhere in the app (`Permissions.kt` marks it
+  `essential = false`, because it otherwise only powers Insights) — so a user has every reason to
+  skip it, and no way to learn it silently disabled a schedule they set.
+  - The Wi-Fi type got this warning in sweep 2; the Location type already had one. This was the
+    third sibling and had nothing. Fixed with the same component shape and a deep link to
+    `ACTION_USAGE_ACCESS_SETTINGS`.
+  - Note `LAUNCH_COUNT` genuinely does **not** need it — `LaunchCounter` counts accessibility
+    events, not usage stats. So of the five schedule types, three depend on a permission and now
+    all three say so.
+
+**Verified clean, so a later sweep can skip them:**
+
+- The counting stores diff clean. `AttemptCounter` is the one that doesn't prune, and that is
+  correct: its `total_` counts are lifetime by design, and growth is bounded by the number of
+  distinct targets ever blocked.
+- `LaunchCounter` inflation via the notification shade — **checked and already fixed.**
+  `onForegroundChanged` early-returns on a transient surface at the very top (before the cache
+  update *and* `recordOpen`), and its comment names the open limit explicitly. v1.98's claim that
+  the shade "no longer adds a phantom open" is accurate.
+- `usedMinutesToday`'s 15s cache is keyed on `elapsedRealtime` and self-heals across midnight
+  within the TTL, since `todaySnapshot` re-queries from the new `startOfToday()`.
+
 ### Not yet swept
 
 - the updater's download/install path (`download`, FileProvider hand-off) — `isNewer` is done
