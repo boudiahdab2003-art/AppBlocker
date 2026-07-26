@@ -789,23 +789,24 @@ class BlockerAccessibilityService : AccessibilityService() {
 
         val cn = className?.lowercase().orEmpty()
         val byClass = STRICT_GUARD_HINTS.any { cn.contains(it) }
-        // Strict keeps the original, broad rule: the *kind* of page is enough, whoever it is
-        // about. The always-on guard additionally requires the page to be OURS — see aboutUs().
         val danger = if (strict) {
+            // Strict keeps the broad rule: the *kind* of page is enough, whoever it is about.
+            // A Strict session is opt-in and ends by itself, so over-blocking is affordable there.
             byClass || guardScreenIsDangerous()
         } else {
-            // Accessibility pages are decided ONLY by ourOwnServicePage(). Three earlier versions
-            // used the class name or "the page mentions us" here, and all three bounced the
-            // services LIST — which names every installed service, ours included — locking the
-            // owner out of every other accessibility app he uses.
+            // The always-on guard covers exactly three screens: the ones that actually END
+            // protection. Everything else it used to cover was collateral.
             //
-            // The second arm is for the device-admin and app-info pages, where our description is
-            // not shown and "our name beside a dangerous control" is the right test. It excludes
-            // accessibility class names so it cannot resurrect the bug above.
-            // `== true` because null means "couldn't read", which must not bounce (see aboutUs).
-            ourOwnServicePage() ||
-                (byClass && !cn.contains("accessibilit") && aboutUs() == true) ||
-                removalScreenIsDangerous()
+            // The lesson of six attempts is that the App-info page is the wrong target. It is a
+            // HUB — battery, permissions, storage, notifications and uninstall on one page — so
+            // guarding it to protect one button costs the owner all the rest. Worse, it is
+            // self-defeating: this app *asks* him to set battery to "no restrictions" so blocking
+            // survives, and then blocked the page where that is done. Force-stop is given up with
+            // it, which is an accepted trade — the service restarts by itself, whereas battery
+            // and permission settings are ones the owner is told to change.
+            ourOwnServicePage() ||                 // our accessibility page: the real off-switch
+                uninstallConfirmation(pkg) ||      // the "uninstall this app?" dialog
+                deviceAdminRemoval(cn)             // deactivating device admin
         }
         if (!danger) return false
 
@@ -929,38 +930,27 @@ class BlockerAccessibilityService : AccessibilityService() {
     }
 
     /**
-     * True on a page that is about **removing or disabling AppBlocker** — uninstall, force-stop,
-     * or the device-admin deactivation screen — identified by our name beside one of those
-     * actions rather than by a class name.
+     * The system's "do you want to uninstall this app?" dialog, for us.
      *
-     * This exists because class names are not enough on the owner's phone. HyperOS routes these
-     * through generic containers (`SubSettings`, the MIUI security centre) whose names match
-     * nothing in [STRICT_GUARD_HINTS], so the class-based arm silently covers nothing there — and
-     * v1.106 removed the text fallback from the non-Strict path while fixing the accessibility
-     * list, which left the uninstall route unguarded on exactly the device this app runs on. The
-     * owner found that within the hour: "I can simply turn it off and uninstall it."
-     *
-     * Deliberately its OWN marker list rather than reusing [GUARD_TEXT_MARKERS]. That list
-     * contains the accessibility words, and matching those on screen text is what bounced the
-     * services list through three releases. Removal words cannot appear on that list, so this
-     * restores the protection without re-opening the bug.
+     * Matched by *package* rather than by wording: the installer packages exist for one purpose,
+     * so being in one of them and naming us is enough, and nothing here depends on a string that
+     * an OEM translates or rephrases.
      */
-    private fun removalScreenIsDangerous(): Boolean {
-        // We opened Android's device-admin ACTIVATION screen ourselves moments ago. That screen
-        // says "device admin" and carries an "Uninstall app" button, so it matches every marker
-        // below — and bouncing it made uninstall protection impossible to switch ON, which is
-        // worse than not guarding at all: the app reported itself protected either way.
-        // Knowing we opened it beats reading the wording, which differs by OEM and is translated.
-        if (AdminPrompt.recentlyRequested()) return false
+    private fun uninstallConfirmation(pkg: String): Boolean =
+        pkg in INSTALLER_PACKAGES && aboutUs() == true
 
-        val text = guardScreenText()
-        if (!text.contains("appblocker")) return false
-        // Backstop for reaching that same screen by another route, in English builds: an
-        // activation prompt says "activate" and never "deactivate". Checked in this order because
-        // "deactivate" CONTAINS "activate" — the naive test would have exempted the deactivation
-        // screen, which is the one page here that must always bounce.
-        if (text.contains("activate") && !text.contains("deactivate")) return false
-        return REMOVAL_TEXT_MARKERS.any { text.contains(it) }
+    /**
+     * The device-admin screen, when it is about *removing* our admin rather than adding it.
+     *
+     * [AdminPrompt] is what separates the two, and it is knowledge rather than a guess: the
+     * activation prompt is one WE opened, moments earlier. Reading the screen cannot do this —
+     * "deactivate" contains "activate", and both are translated. Guarding the activation prompt
+     * meant uninstall protection could never be switched on at all (v1.107).
+     */
+    private fun deviceAdminRemoval(cn: String): Boolean {
+        if (!cn.contains("deviceadmin") && !cn.contains("device_admin")) return false
+        if (AdminPrompt.recentlyRequested()) return false
+        return aboutUs() == true
     }
 
     /** True if the current page is an off-switch danger page — us, next to an accessibility /
@@ -1852,6 +1842,12 @@ class BlockerAccessibilityService : AccessibilityService() {
 
         // Packages that host the Strict-Mode escape hatches (system Settings, MIUI's security
         // center, and the package uninstaller flows).
+        /** The uninstall confirmation lives in one of these and nowhere else. */
+        private val INSTALLER_PACKAGES = setOf(
+            "com.miui.packageinstaller", "com.android.packageinstaller",
+            "com.google.android.packageinstaller",
+        )
+
         private val GUARD_PACKAGES = setOf(
             "com.android.settings",
             "com.miui.securitycenter", "com.miui.securitycore",
@@ -1869,20 +1865,6 @@ class BlockerAccessibilityService : AccessibilityService() {
          *  guardScreenText(). If that string is ever reworded, reword this with it. */
         private const val OUR_SERVICE_DESCRIPTION_FRAGMENT = "appblocker uses this to detect"
 
-        /**
-         * Words that only appear where AppBlocker can be removed or switched off: the uninstall
-         * confirmation, the app-info page's force-stop, and the device-admin deactivation screen.
-         *
-         * Kept apart from [GUARD_TEXT_MARKERS] on purpose — that list includes the accessibility
-         * words, and matching those against screen text is precisely what blocked the services
-         * list in 1.102 through 1.105. Nothing here can appear on that list.
-         */
-        private val REMOVAL_TEXT_MARKERS = listOf(
-            "uninstall", "force stop", "force-stop", "deactivate", "device admin",
-            // Arabic, folded the same way guardScreenText() folds the screen: إلغاء التثبيت
-            // (uninstall), فرض الإيقاف (force stop), مسؤول الجهاز (device admin).
-            "الغاء التثبيت", "فرض الايقاف", "ايقاف اجباري", "مسئول الجهاز", "مسءول الجهاز",
-        )
 
         private val STRICT_GUARD_HINTS = listOf(
             "accessibilit", "deviceadmin", "device_admin",
