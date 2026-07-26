@@ -5,11 +5,11 @@ import android.content.Intent
 import android.provider.Settings
 import android.widget.Toast
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,18 +28,18 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.SelfImprovement
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.SelfImprovement
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -73,9 +73,9 @@ import com.appblocker.data.SettingsStore
 import com.appblocker.service.AccessibilityUtil
 import com.appblocker.service.ProtectionState
 import com.appblocker.service.ProtectionWatchdog
+import com.appblocker.ui.theme.AppCard
 import com.appblocker.ui.theme.AppGradients
 import com.appblocker.ui.theme.LocalThemeController
-import com.appblocker.ui.theme.softGlow
 
 @Composable
 fun ProfileScreen(
@@ -556,18 +556,10 @@ private fun SectionTitle(text: String) {
 
 @Composable
 private fun SettingCard(content: @Composable () -> Unit) {
-    // Same card language as the Blocking tab: soft glow + faint outline, not a flat box.
-    Box(
-        Modifier.fillMaxWidth()
-            .softGlow(RoundedCornerShape(20.dp), elevation = 4.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .border(
-                1.dp,
-                MaterialTheme.colorScheme.outline.copy(alpha = 0.25f),
-                RoundedCornerShape(20.dp),
-            )
-    ) { Column { content() } }
+    // The shared card (theme/Dimens.kt) IS this card language — soft glow, faint outline, 20dp.
+    // Six screens had grown their own copy of it, which is how their corner radii drifted apart.
+    // No padding: these cards hold full-bleed rows that draw their own.
+    AppCard(elevation = 4.dp, contentPadding = PaddingValues(0.dp)) { content() }
 }
 
 /** An iconed settings row with an optional On/Off status badge and/or chevron.

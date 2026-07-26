@@ -4,4 +4,21 @@
     <!-- Pre-Compose window background (light default; -night overrides to navy). Follows the
          SYSTEM setting since the manifest theme is resolved before we read the app pref. -->
     <color name="window_bg">#F5F7FB</color>
+
+    <!-- The block screen (res/layout/overlay_block.xml) is an XML layout, so it cannot read the
+         Compose theme and had these values written into it as raw hex. That made them a second
+         source of truth for colours the app already defines: retune the brand and the surface the
+         user sees most would silently keep the old palette. Naming them here does not link the two
+         automatically — nothing can, across that boundary — but it puts them somewhere findable
+         with the Compose original named beside each, so a change to one is a change you can see is
+         needed in the other.
+
+         Keep in step with: -->
+    <!-- AppGradients.AccentEnd (ui/theme/Gradients.kt) — the violet end of the brand gradient. -->
+    <color name="block_accent">#7C5CFF</color>
+    <!-- DarkColors.onSurfaceVariant (ui/theme/Theme.kt) — secondary text on a dark surface. -->
+    <color name="block_text_secondary">#B9C2D0</color>
+    <!-- Primary text on the block screen. Always white: the cover is always dark, whatever the
+         app theme, so this one does NOT track onSurface. -->
+    <color name="block_text_primary">#FFFFFF</color>
 </resources>

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -33,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.appblocker.ui.theme.AppCard
 import com.appblocker.ui.theme.AppGradients
 import com.appblocker.ui.theme.softGlow
 
@@ -111,13 +113,8 @@ internal fun GuideSectionLabel(numeral: String, text: String) {
 /** Plain surface card with a hairline border — the base every guide card is built on. */
 @Composable
 internal fun GuideCard(top: Dp, content: @Composable () -> Unit) {
-    val shape = RoundedCornerShape(20.dp)
-    Column(
-        Modifier.fillMaxWidth().padding(top = top).clip(shape)
-            .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), shape)
-            .padding(16.dp),
-    ) { content() }
+    // Flat (no glow) — guide cards sit in a long scroll where a lift on every one is noise.
+    AppCard(modifier = Modifier.padding(top = top), elevation = 0.dp) { content() }
 }
 
 /**

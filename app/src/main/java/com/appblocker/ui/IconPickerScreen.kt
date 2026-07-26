@@ -39,6 +39,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.appblocker.data.AppIcons
 import com.appblocker.ui.theme.AppGradients
+import com.appblocker.ui.theme.AppShapes
 
 /** Profile ▸ App icon: full-page chooser. Tapping a tile switches the launcher icon (and the
  *  block screen, which mirrors it); you can try several before leaving. */
@@ -97,7 +98,7 @@ private fun IconTile(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
-    val shape = RoundedCornerShape(22.dp)
+    val shape = AppShapes.card
     Column(
         modifier
             .clip(shape)
