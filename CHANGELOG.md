@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.100
+- The AI coach is much smarter. It uses the best model available, thinks properly before answering (replies take 10-30 seconds now), writes like a person instead of a form letter, remembers far more of your conversation, and remembers its own advice so it can actually follow it up. You can also design your own block screen: four layouts crossed with four colours, in Profile > Block screen. Underneath, seven rounds of bug hunting. The important one: setting your phone's clock backwards used to switch off the guard protecting the Accessibility page during Strict Mode - the page where AppBlocker can be turned off entirely. Also fixed: blocking could stop reacting to your rules permanently after a single error; the adult filter and browser detection could silently fail open; a daily-limit schedule could never block without usage access and never said so; in-app purchase screens could be missed entirely; and location schedules trusted your phone's position forever.
+
 ## v1.99
 - Six problems found by going looking for them, none of them reported. The biggest: after every update blocking was completely off until you tapped Reactivate, and nothing else told you — Profile still said "Protection active" and no notification arrived. Also fixed: blocking could stop reacting to your rules permanently after a single error; two protections were skippable by winding the phone's clock forward (the adult pack's 24-hour wait and the 30-minute lockout after a blocked word); errors the app swallowed were recorded and never shown to anyone; a Wi-Fi schedule naming a specific network could never match without location access; and your history could be wiped around New Year.
 
