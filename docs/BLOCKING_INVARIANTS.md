@@ -529,6 +529,25 @@ written down in this file and read as a note rather than a bug** — sweep 5 abo
 - **The generalisable question**, and the one sweep 5 should have asked: for each defence, *what
   turns it off, and what defends that?* Strict guarded the toggle; nothing guarded Strict's absence.
   The equivalent question is still open for the VPN layer if it ships.
+- **Third finding, from the owner asking what it actually blocked (v1.103).** The widened guard
+  inherited Strict's rule that the *kind* of page is enough — `STRICT_GUARD_HINTS` matches a class
+  name with no check that the page concerns AppBlocker. Bounded and opt-in under Strict; but
+  always-on by default it meant **every app's App-info page and the whole Accessibility section**
+  were bounced, so force-stopping a frozen app cost a 2-hour wait. Nobody asked for that, and it
+  went unnoticed because the release was described in terms of what it *defended*, not what it
+  *cost*. Narrowed via `aboutUs()`; **Strict deliberately keeps the broad rule**, being a bounded
+  lock the owner sets on purpose.
+  - Worth naming as a shape: **widening a defence's trigger also widens its collateral**, and the
+    collateral is the part you don't think to describe. When a Strict-only rule is promoted to
+    always-on, re-ask what it forbids on an ordinary day, not what it protects on a bad one.
+  - `aboutUs()` **fails closed** (an unreadable screen answers "ours") for the invariant-6 reason:
+    a wrong yes is visible and waitable, a wrong no is invisible and total.
+  - **Two under-blocking risks this created, both still live and worth a future sweep.** Android
+    only builds nodes for *rendered* rows, so our row is genuinely absent from a long scrollable
+    list until scrolled to — caught, in theory, only by the content-event re-check falling through
+    to the text path. And the text walk is budget-capped; it was raised to 800 nodes / 8000 chars
+    because a settings list can be long, but a cap is still a cap. Neither is covered by a test,
+    because the watcher has none.
 
 ### Not yet swept
 
@@ -538,6 +557,23 @@ written down in this file and read as a note rather than a bug** — sweep 5 abo
   everywhere and is worth a sweep of its own. **Best remaining candidate.**
 - `UsageTracker` beyond `addInterval`: the caching layers (`usedTodayCache`, the per-day
   memoisation) and `sessionStatsToday`'s interval merging.
+
+### Swallowed errors now leave the device (v1.103)
+
+`guarded` still records to `ServiceHealth`, and now also queues a redacted report that
+`BugReportSender` posts to a private issue tracker. This partly answers the standing question
+below — *"if this itself broke, would anyone ever know?"* — for the one case where the answer was
+reliably **no**: an error the watcher swallowed on a phone whose owner cannot see under-blocking.
+
+Three things a future sweep should check rather than assume:
+- **The reporter must never be load-bearing.** A failure inside `BugReportSender` is swallowed and
+  deliberately **not** reported, or a dead endpoint becomes an infinite loop. If someone later
+  wraps the sender in `guarded`, that loop is exactly what they will create.
+- **The redaction is an allow-list and must stay one.** `BugReport` never reads
+  `Throwable.message`; `BugReportTest` fails if it does. The temptation to "just include the
+  message, it's usually fine" is the whole risk, on an app whose keyword list is adult words.
+- **Dedup keys off a stack frame**, so a bug reporting from a *changing* line would slip past it.
+  The per-day cap is the backstop; it has no test because the queue needs a `Context`.
 
 ### A pattern worth generalising from the second sweep
 

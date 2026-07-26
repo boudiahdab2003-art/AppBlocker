@@ -101,7 +101,15 @@ jobs:
       # app is compiled once instead of twice — testing debug and then building release used to
       # cost a full extra compile (~90s) for a variant that was thrown away. Gradle still runs
       # the tests first and stops on failure.
+      # REPORT_* are read by app/build.gradle.kts into BuildConfig. They come from repository
+      # secrets rather than gradle.properties because this repository is public and that file is
+      # committed — see the comment beside the buildConfigField. Both are OPTIONAL: unset simply
+      # builds an APK with bug reporting switched off, so a fork or a contributor can still
+      # publish without them.
       - name: Run unit tests and build the signed APK
+        env:
+          REPORT_URL: ${{ secrets.REPORT_URL }}
+          REPORT_SECRET: ${{ secrets.REPORT_SECRET }}
         run: gradle -p . :app:testGithubReleaseUnitTest :app:assembleGithubRelease
 
       - name: Verify release signature

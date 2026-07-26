@@ -32,6 +32,21 @@ android {
             "\"${providers.gradleProperty("coachProxyUrl").getOrElse("")}\"")
         buildConfigField("String", "COACH_PROXY_SECRET",
             "\"${providers.gradleProperty("coachProxySecret").getOrElse("")}\"")
+
+        // Bug reporting (docs/SERVER.md #2). Empty = reporting off, which is the default and what
+        // every local build gets.
+        //
+        // Unlike the coach's, this secret is read from an ENVIRONMENT VARIABLE first and is
+        // deliberately NOT committed: this repository is public, and coachProxySecret sitting in
+        // gradle.properties is already readable by anyone. That was an accepted trade for a
+        // Gemini key capped by its own quota; a token that can write to the owner's issue
+        // tracker is not the same bet. The release workflow supplies REPORT_SECRET from a GitHub
+        // Actions secret. The gradle-property fallback exists only so the owner can test on his
+        // own PC without editing a tracked file.
+        buildConfigField("String", "REPORT_URL",
+            "\"${System.getenv("REPORT_URL") ?: providers.gradleProperty("reportUrl").getOrElse("")}\"")
+        buildConfigField("String", "REPORT_SECRET",
+            "\"${System.getenv("REPORT_SECRET") ?: providers.gradleProperty("reportSecret").getOrElse("")}\"")
     }
 
     // Two distribution channels, same app: "github" = the original sideloaded build with the
@@ -120,4 +135,9 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.9.1")
 
     testImplementation("junit:junit:4.13.2")
+    // The real org.json, because unitTests.isReturnDefaultValues stubs Android's out to return
+    // nulls — which would make BugReportTest's "no blocked word survives into the payload"
+    // assertion pass against an empty string and prove nothing. A redaction test that cannot
+    // fail is worse than no test.
+    testImplementation("org.json:json:20240303")
 }

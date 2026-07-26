@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.provider.Settings
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -15,7 +16,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -27,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DarkMode
@@ -79,6 +83,7 @@ import com.appblocker.data.PinStore
 import com.appblocker.data.ServiceHealth
 import com.appblocker.data.SettingsStore
 import com.appblocker.service.AccessibilityUtil
+import com.appblocker.service.BugReportSender
 import com.appblocker.service.ProtectionState
 import com.appblocker.service.ProtectionWatchdog
 import com.appblocker.ui.theme.AppCard
@@ -134,6 +139,7 @@ fun ProfileScreen(
         mutableStateOf(SettingsStore.guardUnlockRequest(context))
     }
     var showGuardGate by remember { mutableStateOf(false) }
+    var showReport by remember { mutableStateOf(false) }
     // `tick` only drives redraws of the countdown; the deadline itself is what decides.
     var guardTick by remember { mutableStateOf(0) }
     val guardUntilUnlock = guardRequest?.remaining(boot) ?: 0L
@@ -199,13 +205,35 @@ fun ProfileScreen(
                 ProfileRow(
                     icon = Icons.Filled.Warning,
                     title = if (healthErrors == 1) "Blocking hit 1 error" else "Blocking hit $healthErrors errors",
-                    subtitle = (healthError ?: "Unknown") +
-                        "\nBlocking kept running. Tap to clear once you've reported it.",
+                    subtitle = (healthError ?: "Unknown") + "\n" + (
+                        if (BugReportSender.enabled()) {
+                            "Blocking kept running. Reported automatically — tap to clear."
+                        } else {
+                            "Blocking kept running. Tap to clear once you've reported it."
+                        }
+                        ),
                     chevron = true,
                     enabled = !locked,
                     onClick = { ServiceHealth.clearErrors(context); healthErrors = 0 },
                 )
             }
+        }
+        SettingCard {
+            ProfileRow(
+                icon = Icons.Filled.BugReport,
+                title = "Report a problem",
+                subtitle = if (BugReportSender.enabled()) {
+                    "Describe what went wrong and it goes straight to the developer. " +
+                        "Never includes your blocked words, sites or app names."
+                } else {
+                    "Reporting isn't set up in this build."
+                },
+                chevron = true,
+                // Deliberately allowed during Strict: reporting a bug changes no protection, and
+                // Strict Mode is exactly when a bug is most worth hearing about.
+                enabled = BugReportSender.enabled(),
+                onClick = { showReport = true },
+            )
         }
         SettingCard {
             ProfileRow(
@@ -443,6 +471,16 @@ fun ProfileScreen(
             initial = userName,
             onSet = { newName -> SettingsStore.setUserName(context, newName); userName = newName; showRename = false },
             onDismiss = { showRename = false },
+        )
+    }
+    if (showReport) {
+        ReportProblemSheet(
+            onDismiss = { showReport = false },
+            onSend = { note ->
+                BugReportSender.reportNote(context, note)
+                showReport = false
+                Toast.makeText(context, "Sent — thank you", Toast.LENGTH_SHORT).show()
+            },
         )
     }
     if (showGuardGate) {
@@ -758,4 +796,65 @@ private fun Divider() {
         color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f),
         modifier = Modifier.padding(start = 70.dp),
     )
+}
+
+/**
+ * "Report a problem": a box to describe what went wrong, sent with the app version, Android
+ * version and device model attached.
+ *
+ * The promise under the field is load-bearing and literally true — see [com.appblocker.data.BugReport],
+ * which builds every report from a named allow-list and never reads an exception's message,
+ * because that is where a blocked word would be quoted back. Saying so here is what makes the
+ * feature usable by someone whose blocked list is the most private thing on his phone.
+ *
+ * A full screen rather than a Dialog, like [FrictionGate] and for the same device reason: dialog
+ * windows report zero insets on the owner's phone, so the keyboard would sit on top of the field.
+ */
+@Composable
+private fun ReportProblemSheet(onDismiss: () -> Unit, onSend: (String) -> Unit) {
+    var text by remember { mutableStateOf("") }
+    BackHandler { onDismiss() }
+    Column(
+        Modifier.fillMaxSize().background(com.appblocker.ui.theme.appBackground())
+            .safeDrawingPadding(),
+    ) {
+        EditorTopBar("Report a problem", onBack = onDismiss)
+        Column(
+            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+        ) {
+            Text(
+                "What happened? Anything helps — what you were doing, which app, whether a " +
+                    "block screen appeared when it shouldn't have, or didn't when it should.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(12.dp))
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                placeholder = { Text("Describe the problem") },
+                singleLine = false,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 140.dp),
+            )
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "Sent with: app version, Android version, phone model. " +
+                    "Never sent: your blocked words, the sites you visit, or which apps you block.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        GradientButton(
+            text = "Send",
+            enabled = text.isNotBlank(),
+            onClick = { onSend(text) },
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 8.dp),
+        )
+        TextButton(
+            onClick = onDismiss,
+            modifier = Modifier.align(Alignment.CenterHorizontally)
+                .padding(top = 4.dp, bottom = 12.dp),
+        ) { Text("Cancel") }
+    }
 }

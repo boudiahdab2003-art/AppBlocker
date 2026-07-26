@@ -140,12 +140,15 @@ internal class BlockOverlay(private val context: Context) {
             val quote = Quotes.random()
             quoteView.apply {
                 text = quote.text
-                // The quote's own size scales with its length; the owner's Smaller/Larger
-                // choice multiplies that rather than replacing it, so a long quote still
-                // shrinks to stay readable at whichever size was picked.
+                // Three things multiply, none of them replace: the quote's own size scales with
+                // its length, the layout scales that to its own proportions (Focus wants a
+                // quiet line, Editorial a hero), and the owner's Smaller/Larger choice scales
+                // that again. So a long quote still shrinks to stay readable whatever the
+                // layout and whichever size was picked.
                 setTextSize(
                     TypedValue.COMPLEX_UNIT_SP,
                     Quotes.sizeSpFor(quote.text) *
+                        BlockLayouts.current(context).quoteScale *
                         arrangement.factorFor(BlockArrangement.Element.QUOTE),
                 )
             }

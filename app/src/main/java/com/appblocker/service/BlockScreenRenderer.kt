@@ -122,6 +122,10 @@ internal object BlockScreenRenderer {
             BlockArrangement.QuoteAlign.LEFT -> Gravity.START
             BlockArrangement.QuoteAlign.CENTRE -> Gravity.CENTER_HORIZONTAL
             BlockArrangement.QuoteAlign.RIGHT -> Gravity.END
+            // Untouched: keep whatever the layout itself declares, exactly as Align.DEFAULT does
+            // above. This is what lets Focus centre its quote while Editorial keeps it left —
+            // writing a gravity here on every show would make the XML's value unreachable.
+            BlockArrangement.QuoteAlign.DEFAULT -> return
         }
         v.findViewById<TextView>(R.id.overlay_quote)?.gravity = gravity
         v.findViewById<TextView>(R.id.overlay_quote_author)?.let { author ->

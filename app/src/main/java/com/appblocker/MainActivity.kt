@@ -21,6 +21,7 @@ import com.appblocker.data.InstalledAppsRepository
 import com.appblocker.data.OwnUi
 import com.appblocker.data.SettingsStore
 import com.appblocker.data.UpdatePause
+import com.appblocker.service.BugReportSender
 import com.appblocker.service.ProtectionNotifier
 import com.appblocker.service.ProtectionScheduler
 import com.appblocker.ui.AppRoot
@@ -38,6 +39,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        installCrashReporter()
         ProtectionNotifier.createChannel(applicationContext)
         ProtectionScheduler.ensureScheduled(applicationContext)
         UpdatePause.checkVersionChange(applicationContext)
@@ -80,6 +82,28 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         OwnUi.visible = true
+        // Anything recorded while offline (or while crashing) goes out now. Resume is the moment
+        // a network is most likely, and the send is off the main thread and best-effort.
+        BugReportSender.flush(applicationContext)
+    }
+
+    /**
+     * Records an uncaught crash before the process dies, then hands straight on to whoever was
+     * handling crashes before us — normally Android's, which is what actually shows the dialog
+     * and kills the process.
+     *
+     * **Delegating is the whole point.** Replacing the default handler without calling it would
+     * leave a crashed app sitting there frozen instead of dying, which is a worse bug than the one
+     * being reported. The recording is wrapped as well: a reporter that throws inside a crash
+     * handler would replace a legible stack trace with its own.
+     */
+    private fun installCrashReporter() {
+        if (!BugReportSender.enabled()) return
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, error ->
+            runCatching { BugReportSender.report(applicationContext, "crash", error) }
+            previous?.uncaughtException(thread, error)
+        }
     }
 
     override fun onPause() {
