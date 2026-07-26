@@ -6,6 +6,7 @@ import android.util.TypedValue
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.content.ContextCompat
@@ -156,6 +157,24 @@ internal object BlockScreenRenderer {
                 val base = root.getTag(R.id.base_text_size_sp) as? Float
                     ?: (root.textSize / density).also { root.setTag(R.id.base_text_size_sp, it) }
                 root.setTextSize(TypedValue.COMPLEX_UNIT_SP, base * factor)
+            }
+            // Icons scale too. Without this the Size buttons looked broken on Focus, whose app
+            // piece is a 96dp icon with a line of text under it: the text moved, the picture
+            // beside it did not, and the piece as a whole barely changed. Same base-capture rule
+            // as the text above, and for the same reason — the cover's view is reused across
+            // blocks, so scaling from the CURRENT size would compound every time.
+            is ImageView -> {
+                val lp = root.layoutParams ?: return
+                val base = root.getTag(R.id.base_icon_size_px) as? IntArray
+                    ?: intArrayOf(lp.width, lp.height)
+                        .also { root.setTag(R.id.base_icon_size_px, it) }
+                // Only a fixed size scales. wrap_content / match_parent are the layout deciding
+                // from its context, and overwriting them with a number would break that.
+                if (base[0] > 0 && base[1] > 0) {
+                    lp.width = (base[0] * factor).toInt()
+                    lp.height = (base[1] * factor).toInt()
+                    root.layoutParams = lp
+                }
             }
             is ViewGroup -> for (i in 0 until root.childCount) scaleText(root.getChildAt(i), factor)
         }

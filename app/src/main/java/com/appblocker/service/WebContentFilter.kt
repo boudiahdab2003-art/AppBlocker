@@ -151,8 +151,12 @@ class WebContentFilter internal constructor(
             }.getOrNull()
 
         /** Whole-word substring search: a match only counts when it isn't glued to another
-         *  letter/digit on either side (works for Latin and Arabic alike). */
-        private fun containsWord(text: String, word: String): Boolean {
+         *  letter/digit on either side (works for Latin and Arabic alike).
+         *
+         *  Internal, like [normalizeArabic] beside it, because the watcher's off-switch guard
+         *  matches other accessibility services' labels the same way — "Files" must not fire
+         *  inside "Profiles". One matcher, so the two can't drift apart. */
+        internal fun containsWord(text: String, word: String): Boolean {
             if (word.isEmpty()) return false
             var i = text.indexOf(word)
             while (i >= 0) {

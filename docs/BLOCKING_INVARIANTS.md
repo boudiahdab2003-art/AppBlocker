@@ -569,6 +569,30 @@ for `rootInActiveWindow` and ask of each caller what it does when the tree is em
     because a settings list can be long, but a cap is still a cap. Neither is covered by a test,
     because the watcher has none.
 
+### "Mentions us" was never the right signal (v1.105)
+
+Reported as "I use other accessibility apps too" — the guard bounced the **whole** Accessibility
+section, not just AppBlocker's entry, behind a two-hour wait. TalkBack is in that section.
+
+The 1.103 narrowing asked *does this page mention appblocker?*, which fixed App-info pages (they
+name one app) but could never fix this one: **Android's Accessibility list names every installed
+service**, so the list satisfies the same test our own entry does. The signal was not weak, it
+was wrong — present on both pages by construction.
+
+`aboutUs()` now asks *does it name us and no other service?*, matching against the labels of the
+installed accessibility services (`findOtherAccessibilityLabels`, cached beside the launcher and
+browser sets and refreshed on the same package events). Same empty-answer rule as those two: an
+empty lookup keeps the previous set, because an empty one makes the list unrecognisable and
+silently restores the bug.
+
+Two things worth carrying forward:
+- **Ask what a signal is true of, not just what it is true for.** Three attempts at this guard
+  each failed on that: class-name-only matched every app's pages, "mentions us" matched the list,
+  and the fail-closed read matched every unreadable moment.
+- **Accepted weakening, chosen twice by the owner:** if an OEM build puts the on/off switch
+  directly in the list, the service can now be turned off without the guard firing. Tapping into
+  our entry still bounces, so the common route is defended.
+
 ### Not yet swept
 
 - the UI's own live state: `resumeTick` re-reads, and the several screens that cache

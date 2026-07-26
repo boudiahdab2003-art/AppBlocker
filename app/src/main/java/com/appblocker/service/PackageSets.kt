@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.Settings
 import android.telecom.TelecomManager
+import android.view.accessibility.AccessibilityManager
 
 /**
  * "Which packages are launchers / browsers / must-never-be-blocked essentials" — pure
@@ -61,6 +62,32 @@ internal fun findEssentialPackages(context: Context): Set<String> {
     }
     return set
 }
+
+/**
+ * Lowercased labels of every installed accessibility service except [ownPackage].
+ *
+ * Used by the off-switch guard to tell Android's Accessibility *list* — which names every
+ * service, ours among them — from AppBlocker's own entry, which names only us. Without this the
+ * guard cannot distinguish the two and bounces the whole section, locking the owner out of the
+ * other services he uses.
+ *
+ * Labels under four characters are dropped on purpose. A short generic one ("Bot", "Read")
+ * appearing incidentally on our own page would make the guard read that page as the list and
+ * stand down on the one screen it exists to defend. Missing the list is recoverable; failing to
+ * guard our own page is the whole hole.
+ */
+internal fun findOtherAccessibilityLabels(context: Context, ownPackage: String): Set<String> =
+    runCatching {
+        val am = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager
+        val pm = context.packageManager
+        am?.getInstalledAccessibilityServiceList().orEmpty()
+            .mapNotNull { it.resolveInfo?.serviceInfo?.applicationInfo }
+            .filter { it.packageName != ownPackage }
+            .mapNotNull { runCatching { pm.getApplicationLabel(it).toString() }.getOrNull() }
+            .map { it.trim().lowercase() }
+            .filter { it.length >= 4 }
+            .toSet()
+    }.getOrDefault(emptySet())
 
 /**
  * The package of the keyboard the user currently has selected, or null. Read live so a

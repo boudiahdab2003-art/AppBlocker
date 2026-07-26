@@ -506,9 +506,11 @@ private fun ElementRow(
         // give no clue which one does what.
         val quote = element == BlockArrangement.Element.QUOTE
         if (quote) ChipRowLabel("Size")
+        // Five chips rather than three, so tighter spacing — the labels are short (Tiny…Huge)
+        // and this keeps them on one row on a phone.
         Row(
             Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, bottom = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
         ) {
             BlockArrangement.Size.entries.forEach { option ->
                 AlignChip(
