@@ -19,7 +19,8 @@ import com.appblocker.R
  *  - the order elements sit in,
  *  - whether the stack is left-aligned or centred,
  *  - each element's text size, as a *multiplier* on what its layout declares — so a layout keeps
- *    its own proportions and "Larger" means larger relative to that design, not one fixed size.
+ *    its own proportions and "Larger" means larger relative to that design, not one fixed size,
+ *  - which side the quote's own text sits on.
  *
  * Every layout tags its logical elements with the same container ids (`el_kicker`, `el_number`,
  * `el_quote`, `el_app`), so one code path in [com.appblocker.service.BlockOverlay] applies this to
@@ -46,6 +47,16 @@ object BlockArrangement {
         LARGER("Larger", 1.25f),
     }
 
+    /** Horizontal alignment of the quote text itself (and its author line, which moves with it).
+     *  Separate from [Align]: that one moves the *stack* of pieces and only has a visible effect
+     *  on pieces narrower than the screen (the kicker, the number) — the quote already spans the
+     *  full width, so its own alignment has to be its own setting. */
+    enum class QuoteAlign(val label: String) {
+        LEFT("Left"),
+        CENTRE("Centre"),
+        RIGHT("Right"),
+    }
+
     /**
      * [order] is top to bottom and may omit elements the current layout lacks — it is matched by
      * id at apply time. [hidden] is stored rather than a "visible" flag per element so that a
@@ -56,6 +67,7 @@ object BlockArrangement {
         val hidden: Set<Element> = emptySet(),
         val align: Align = Align.DEFAULT,
         val sizes: Map<Element, Size> = emptyMap(),
+        val quoteAlign: QuoteAlign = QuoteAlign.LEFT,
     ) {
         fun isVisible(e: Element) = e !in hidden
         fun sizeOf(e: Element) = sizes[e] ?: Size.DEFAULT
@@ -65,8 +77,8 @@ object BlockArrangement {
     /** The default: every element shown, in each layout's own order, alignment untouched. */
     val DEFAULT = Arrangement()
 
-    // --- persistence: "order|hidden|align|sizes", names not ordinals so reordering an enum in a
-    // later version can't silently reinterpret someone's saved arrangement ---
+    // --- persistence: "order|hidden|align|sizes|quoteAlign", names not ordinals so reordering an
+    // enum in a later version can't silently reinterpret someone's saved arrangement ---
 
     fun load(context: Context): Arrangement {
         val raw = SettingsStore.blockArrangement(context) ?: return DEFAULT
@@ -77,6 +89,8 @@ object BlockArrangement {
             val alignPart = parts.getOrElse(2) { "" }
             // Absent in strings written before sizes existed — getOrElse, not [3].
             val sizePart = parts.getOrElse(3) { "" }
+            // Absent in strings written before quote alignment existed — getOrElse, not [4].
+            val quoteAlignPart = parts.getOrElse(4) { "" }
             val parsed = orderPart.split(',').mapNotNull { name ->
                 Element.entries.firstOrNull { it.name == name }
             }
@@ -98,6 +112,8 @@ object BlockArrangement {
                     val size = Size.entries.firstOrNull { it.name == sz } ?: return@mapNotNull null
                     element to size
                 }.toMap(),
+                quoteAlign = QuoteAlign.entries.firstOrNull { it.name == quoteAlignPart }
+                    ?: QuoteAlign.LEFT,
             )
         }.getOrDefault(DEFAULT)
     }
@@ -106,7 +122,8 @@ object BlockArrangement {
         context,
         "${a.order.joinToString(",") { it.name }}|" +
             "${a.hidden.joinToString(",") { it.name }}|${a.align.name}|" +
-            a.sizes.entries.joinToString(",") { (e, s) -> "${e.name}:${s.name}" },
+            "${a.sizes.entries.joinToString(",") { (e, s) -> "${e.name}:${s.name}" }}|" +
+            a.quoteAlign.name,
     )
 
     fun reset(context: Context) = SettingsStore.setBlockArrangement(context, null)

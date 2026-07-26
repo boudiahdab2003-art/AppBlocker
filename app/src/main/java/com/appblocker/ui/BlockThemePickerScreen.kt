@@ -154,6 +154,7 @@ fun BlockThemePickerScreen(strictActive: Boolean = false, onBack: () -> Unit) {
                     element = element,
                     visible = arrangement.isVisible(element),
                     size = arrangement.sizeOf(element),
+                    quoteAlign = arrangement.quoteAlign,
                     canMoveUp = i > 0,
                     canMoveDown = i < piecesHere.lastIndex,
                     enabled = editable,
@@ -178,6 +179,10 @@ fun BlockThemePickerScreen(strictActive: Boolean = false, onBack: () -> Unit) {
                         arrangement = arrangement.copy(
                             sizes = arrangement.sizes + (element to newSize),
                         ).also { BlockArrangement.save(context, it) }
+                    },
+                    onQuoteAlign = { newAlign ->
+                        arrangement = arrangement.copy(quoteAlign = newAlign)
+                            .also { BlockArrangement.save(context, it) }
                     },
                 )
             }
@@ -441,12 +446,14 @@ private fun ElementRow(
     element: BlockArrangement.Element,
     visible: Boolean,
     size: BlockArrangement.Size,
+    quoteAlign: BlockArrangement.QuoteAlign,
     canMoveUp: Boolean,
     canMoveDown: Boolean,
     enabled: Boolean,
     onToggle: () -> Unit,
     onMove: (Int) -> Unit,
     onSize: (BlockArrangement.Size) -> Unit,
+    onQuoteAlign: (BlockArrangement.QuoteAlign) -> Unit,
 ) {
   Column(
       Modifier.fillMaxWidth().padding(bottom = 10.dp)
@@ -484,6 +491,10 @@ private fun ElementRow(
     }
     // Size only matters for a piece that is actually on screen.
     if (visible) {
+        // The quote has two chip rows, so both are named. Two unlabelled rows of three chips
+        // give no clue which one does what.
+        val quote = element == BlockArrangement.Element.QUOTE
+        if (quote) ChipRowLabel("Size")
         Row(
             Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, bottom = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -497,8 +508,37 @@ private fun ElementRow(
                 ) { onSize(option) }
             }
         }
+        // Only the quote gets a side of its own. The screen-wide Alignment below moves the stack,
+        // which the full-width quote never visibly follows — so this is the only control that
+        // actually shifts it.
+        if (quote) {
+            ChipRowLabel("Side")
+            Row(
+                Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                BlockArrangement.QuoteAlign.entries.forEach { option ->
+                    AlignChip(
+                        label = option.label,
+                        selected = quoteAlign == option,
+                        enabled = enabled,
+                        modifier = Modifier.weight(1f),
+                    ) { onQuoteAlign(option) }
+                }
+            }
+        }
     }
   }
+}
+
+@Composable
+private fun ChipRowLabel(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 14.dp, bottom = 6.dp),
+    )
 }
 
 @Composable

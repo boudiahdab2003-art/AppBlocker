@@ -230,6 +230,51 @@ object SettingsStore {
             .map { (pkg, lockout) -> lockout.encode(pkg) }.toSet(),
     ).apply()
 
+    private const val KEY_GUARD_OFF_SWITCH = "guard_off_switch"
+
+    /**
+     * Whether the Accessibility / device-admin / app-info pages are bounced outside Strict Mode
+     * too. See [OffSwitchGuard] for what this defends and how to get past it.
+     *
+     * **Defaults to on, including for existing installs.** The owner reached the toggle on a bad
+     * day and lost the whole day's blocking to it; shipping the fix switched off by default would
+     * mean the one person it was written for never gets it. Turning it off is a deliberate,
+     * gated act — which is the point.
+     */
+    fun guardOffSwitch(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_GUARD_OFF_SWITCH, true)
+
+    fun setGuardOffSwitch(context: Context, value: Boolean) =
+        prefs(context).edit().putBoolean(KEY_GUARD_OFF_SWITCH, value).apply()
+
+    private const val KEY_GUARD_UNLOCK_REQUEST = "guard_unlock_request"
+
+    /** GuardedDeadline.encode needs a key; this record only ever holds one. */
+    private const val GUARD_UNLOCK_KEY = "guard"
+
+    /** The pending "let me reach the off-switch" request, or null when there is none. Anchored
+     *  via [GuardedDeadline] so a clock change can't serve the wait early — the same hole that
+     *  was found in the keyword lockout and the adult-pack delay. */
+    internal fun guardUnlockRequest(context: Context): GuardedDeadline? =
+        prefs(context).getString(KEY_GUARD_UNLOCK_REQUEST, null)
+            ?.let { GuardedDeadline.decode(it)?.second }
+
+    /**
+     * Records a request starting now. **Does nothing if one is already pending** — re-tapping
+     * must never restart the wait, and more importantly must never be a way to *shorten* it by
+     * catching a moment when a fresh deadline would land sooner than the standing one.
+     */
+    internal fun setGuardUnlockRequest(context: Context, delayMs: Long, bootCount: Int) {
+        if (guardUnlockRequest(context) != null) return
+        prefs(context).edit().putString(
+            KEY_GUARD_UNLOCK_REQUEST,
+            GuardedDeadline.starting(delayMs, bootCount).encode(GUARD_UNLOCK_KEY),
+        ).apply()
+    }
+
+    internal fun clearGuardUnlockRequest(context: Context) =
+        prefs(context).edit().remove(KEY_GUARD_UNLOCK_REQUEST).apply()
+
     private const val KEY_PROTECTION_LAST_NOTIFIED = "protection_last_notified_at"
 
     /** Epoch millis of the last "protection off" notification, for re-notify throttling. */

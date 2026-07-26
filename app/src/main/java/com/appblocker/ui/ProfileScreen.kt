@@ -28,11 +28,13 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.SelfImprovement
@@ -50,6 +52,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -70,6 +73,8 @@ import com.appblocker.data.AppIcons
 import com.appblocker.data.AttemptCounter
 import com.appblocker.data.BlockLayouts
 import com.appblocker.data.BlockThemes
+import com.appblocker.data.DeviceBoot
+import com.appblocker.data.OffSwitchGuard
 import com.appblocker.data.PinStore
 import com.appblocker.data.ServiceHealth
 import com.appblocker.data.SettingsStore
@@ -79,6 +84,7 @@ import com.appblocker.service.ProtectionWatchdog
 import com.appblocker.ui.theme.AppCard
 import com.appblocker.ui.theme.AppGradients
 import com.appblocker.ui.theme.LocalThemeController
+import kotlinx.coroutines.delay
 
 @Composable
 fun ProfileScreen(
@@ -117,6 +123,39 @@ fun ProfileScreen(
     val currentBlockLayout = remember(resumeTick) { BlockLayouts.current(context) }
     val themeController = LocalThemeController.current
     val locked = strictActive
+
+    // The off-switch guard, and the slow way out of it. Same shape as the adult pack's
+    // cooling-off in KeywordsScreen: the switch below only *requests* the off, and the request is
+    // served by a clock-proof deadline. Re-read on resume because the wait can be served while
+    // the app sits in the background.
+    val boot = remember { DeviceBoot.count(context) }
+    var guardOn by remember(resumeTick) { mutableStateOf(SettingsStore.guardOffSwitch(context)) }
+    var guardRequest by remember(resumeTick) {
+        mutableStateOf(SettingsStore.guardUnlockRequest(context))
+    }
+    var showGuardGate by remember { mutableStateOf(false) }
+    // `tick` only drives redraws of the countdown; the deadline itself is what decides.
+    var guardTick by remember { mutableStateOf(0) }
+    val guardUntilUnlock = guardRequest?.remaining(boot) ?: 0L
+    val guardUntilExpiry = guardRequest?.remaining(boot, extraMs = OffSwitchGuard.UNLOCK_WINDOW_MS)
+        ?: 0L
+    val guardPhase = OffSwitchGuard.phase(
+        hasRequest = guardRequest != null,
+        untilUnlock = guardUntilUnlock,
+        untilExpiry = guardUntilExpiry,
+    )
+    LaunchedEffect(guardRequest, guardTick) {
+        if (guardRequest == null) return@LaunchedEffect
+        if (guardUntilExpiry <= 0L) {
+            // The whole request lapsed — the gate starts over.
+            guardRequest = null
+            SettingsStore.clearGuardUnlockRequest(context)
+            return@LaunchedEffect
+        }
+        // Fast enough that a 15-minute wait and a 5-minute window both read as live.
+        delay(1000)
+        guardTick++
+    }
 
     // Cap the content width on wide screens (tablets) so cards don't stretch edge-to-edge.
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
@@ -207,6 +246,63 @@ fun ProfileScreen(
                     adminOn = if (wasOn) false else isDeviceAdminActive(context)
                 },
             )
+            Divider()
+            ProfileRow(
+                icon = Icons.Filled.Key,
+                title = "Guard the off-switch",
+                subtitle = when {
+                    !guardOn -> "Off. Blocking can be switched off in Settings at any moment."
+                    guardPhase == OffSwitchGuard.Phase.WAITING ->
+                        "Unlocking in ${fmtCountdown(guardUntilUnlock)}. The guard is still on."
+                    guardPhase == OffSwitchGuard.Phase.OPEN ->
+                        "Unlocked — tap to turn the guard off. Closes again in " +
+                            "${fmtCountdown(guardUntilExpiry)}."
+                    else -> "On. The Accessibility page is blocked, so blocking can't be " +
+                        "switched off on a whim. Turning this off takes " +
+                        "${OffSwitchGuard.DELAY_LABEL}."
+                },
+                badge = guardOn,
+                // Deliberately usable during Strict: the guard can only be turned *on* or have a
+                // wait started, and Strict guards these pages by itself regardless of this row.
+                enabled = true,
+                onClick = {
+                    when {
+                        // Turning protection on is always instant, and drops any pending request.
+                        !guardOn -> {
+                            guardOn = true
+                            SettingsStore.setGuardOffSwitch(context, true)
+                            guardRequest = null
+                            SettingsStore.clearGuardUnlockRequest(context)
+                        }
+                        // The wait is served — the off finally happens.
+                        guardPhase == OffSwitchGuard.Phase.OPEN -> {
+                            guardOn = false
+                            SettingsStore.setGuardOffSwitch(context, false)
+                            guardRequest = null
+                            SettingsStore.clearGuardUnlockRequest(context)
+                        }
+                        // Nothing pending: turning it off starts at the type-and-wait gate.
+                        guardPhase == OffSwitchGuard.Phase.GUARDED -> showGuardGate = true
+                        // else: waiting — the subtitle above shows the countdown.
+                    }
+                },
+            )
+            if (guardPhase == OffSwitchGuard.Phase.WAITING) {
+                Divider()
+                ProfileRow(
+                    icon = Icons.Filled.Close,
+                    title = "Cancel the unlock",
+                    subtitle = "Change your mind — the guard stays on and the wait is dropped.",
+                    chevron = true,
+                    // Backing out of lowering your guard is always instant, exactly like the
+                    // adult pack's cancel. Nothing protective is lost by allowing it.
+                    enabled = true,
+                    onClick = {
+                        guardRequest = null
+                        SettingsStore.clearGuardUnlockRequest(context)
+                    },
+                )
+            }
         }
 
         SectionTitle("Appearance")
@@ -347,6 +443,28 @@ fun ProfileScreen(
             initial = userName,
             onSet = { newName -> SettingsStore.setUserName(context, newName); userName = newName; showRename = false },
             onDismiss = { showRename = false },
+        )
+    }
+    if (showGuardGate) {
+        FrictionGate(
+            title = "Turn off the guard",
+            blurb = "This is the switch that stops you switching blocking off in a bad moment. " +
+                "To be sure it's really you and really deliberate, type the paragraph below — " +
+                "you can't paste it — and wait for the timer. Even then the guard stays on for " +
+                "another ${OffSwitchGuard.DELAY_LABEL}; after that you have " +
+                "${OffSwitchGuard.WINDOW_LABEL} to turn it off.",
+            confirmLabel = "Start the ${OffSwitchGuard.DELAY_LABEL} wait",
+            dismissLabel = "Keep it on",
+            onDismiss = { showGuardGate = false },
+            onConfirm = {
+                // Passing the gate does NOT lower the guard — it starts the wait. The guard keeps
+                // standing until that is served and the owner acts inside the window.
+                SettingsStore.setGuardUnlockRequest(
+                    context, OffSwitchGuard.UNLOCK_DELAY_MS, boot,
+                )
+                guardRequest = SettingsStore.guardUnlockRequest(context)
+                showGuardGate = false
+            },
         )
     }
     if (showTheme) {

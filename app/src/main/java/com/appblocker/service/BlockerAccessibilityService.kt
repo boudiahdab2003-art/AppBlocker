@@ -34,6 +34,7 @@ import com.appblocker.data.FocusState
 import com.appblocker.data.GuardedDeadline
 import com.appblocker.data.InstalledAppsRepository
 import com.appblocker.data.LaunchCounter
+import com.appblocker.data.OffSwitchGuard
 import com.appblocker.data.OwnUi
 import com.appblocker.data.QuickSession
 import com.appblocker.data.SOCIAL_DOMAINS
@@ -576,7 +577,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                 } else {
                     // The dangerous Settings pages often fill in their title/labels on a
                     // content event after the window opens, so re-check the guard here too.
-                    if (pkg != null) handleStrictSettingsGuard(pkg, event.className?.toString())
+                    if (pkg != null) handleSettingsGuard(pkg, event.className?.toString())
                     scheduleWebScan()
                     scheduleShortsScan()
                 }
@@ -640,9 +641,9 @@ class BlockerAccessibilityService : AccessibilityService() {
         // the cache still points at would otherwise sail straight through. isLauncherPkg is
         // second because it can cost a PackageManager query, and only a rejection needs it.)
         if (pkg != null && !stillOnScreen(pkg) && !isLauncherPkg(pkg)) {
-            // The Strict escape-hatch guard still runs: it is about a dangerous page *opening*,
+            // The escape-hatch guard still runs: it is about a dangerous page *opening*,
             // it has its own bounce throttle, and being early there is the safe direction.
-            handleStrictSettingsGuard(pkg, className)
+            handleSettingsGuard(pkg, className)
             // A real switch can simply have lost the race with the window tree, so re-read the
             // tree shortly rather than waiting for whatever event happens to come next. Keep the
             // class name with it: the re-read can confirm the package but can never recover the
@@ -662,9 +663,9 @@ class BlockerAccessibilityService : AccessibilityService() {
             ensureLocationUpdates()
         }
         if (pkg != null) {
-            // Strict Mode escape-hatch guard first (Accessibility/device-admin/app-info
+            // Off-switch escape-hatch guard first (Accessibility/device-admin/app-info
             // pages), then in-app purchase sheet, then normal app blocking.
-            if (!handleStrictSettingsGuard(pkg, className) &&
+            if (!handleSettingsGuard(pkg, className) &&
                 !handlePurchaseBlock(pkg, className)
             ) handleAppBlock(pkg)
         }
@@ -757,20 +758,31 @@ class BlockerAccessibilityService : AccessibilityService() {
     }
 
     /**
-     * While Strict Mode is active, stop the user from reaching the screens that would let them
-     * turn AppBlocker off: the Accessibility settings (disable the service = kill all blocking),
-     * the Device-admin page (deactivate = allow uninstall), and AppBlocker's own App-info page
-     * (force-stop / uninstall). We bounce them to the home screen the instant such a page opens —
-     * before they can reach the toggle. Returns true if it bounced.
+     * Stop the user from reaching the screens that would let them turn AppBlocker off: the
+     * Accessibility settings (disable the service = kill all blocking), the Device-admin page
+     * (deactivate = allow uninstall), and AppBlocker's own App-info page (force-stop / uninstall).
+     * We bounce them to the home screen the instant such a page opens — before they can reach the
+     * toggle. Returns true if it bounced.
+     *
+     * **This used to run only during Strict Mode**, which left the toggle completely undefended
+     * the rest of the time — and killing the service kills every block in the app, because all of
+     * them are enforced from here. That was a known, written-down gap
+     * (`docs/BLOCKING_INVARIANTS.md`: "Nothing else defends that toggle") until the owner walked
+     * through it on a bad day. It now also runs whenever [OffSwitchGuard] is armed.
+     *
+     * Strict is still checked **first and unconditionally**: a Strict session must never become
+     * weaker than it was, whatever the new setting says or whichever unlock window is open.
      *
      * Detection is deliberately broad (like the purchase/Shorts matchers) because OEMs — Xiaomi
      * especially — name these activities unpredictably: a className fast-path for AOSP's aliased
      * activities, plus an on-screen-text fallback for MIUI's generic SubSettings/app-info screens.
      */
-    private fun handleStrictSettingsGuard(pkg: String, className: String?): Boolean {
+    private fun handleSettingsGuard(pkg: String, className: String?): Boolean {
         val strict = strictRemaining() > 0L
-        if (!strict) return false
+        // Package check before the guard read: this runs on every foreground change, and the
+        // overwhelming majority are not Settings at all.
         if (pkg !in GUARD_PACKAGES) return false
+        if (!strict && !OffSwitchGuard.armed(applicationContext)) return false
 
         val cn = className?.lowercase().orEmpty()
         val byClass = STRICT_GUARD_HINTS.any { cn.contains(it) }
@@ -783,11 +795,18 @@ class BlockerAccessibilityService : AccessibilityService() {
         val now = stopwatchNow()
         if (now - lastGuardBounceAt < 1500) return true // already bouncing this page
         lastGuardBounceAt = now
-        if (DEBUG) Log.d(TAG, "strict guard bounce: pkg=$pkg class=$className byClass=$byClass")
+        if (DEBUG) Log.d(TAG, "settings guard bounce: pkg=$pkg class=$className byClass=$byClass")
 
+        // Name the actual reason. A cover saying "Strict Mode" on a day with no session running
+        // reads as a bug, and sends the owner looking for a session to end that doesn't exist.
         showBlockScreen(
-            title = "Locked during Strict Mode",
-            message = "You can't change this while Strict Mode is active.",
+            title = if (strict) "Locked during Strict Mode" else "This is your off-switch",
+            message = if (strict) {
+                "You can't change this while Strict Mode is active."
+            } else {
+                "Blocking guards this page. You can unlock it in AppBlocker — it takes " +
+                    "${OffSwitchGuard.DELAY_LABEL}."
+            },
             packageName = null,
             counterKey = "strict_guard",
         )
@@ -817,11 +836,19 @@ class BlockerAccessibilityService : AccessibilityService() {
             node.contentDescription?.let { if (it.isNotBlank()) sb.append(it).append(' ') }
             for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
         }
-        return sb.toString().lowercase()
+        // Folded through the same Arabic normalizer the word filter uses, so the Arabic markers
+        // can be stored in one spelling and still match the alef/ta-marbuta variants and the
+        // diacritics a Settings app actually renders.
+        return WebContentFilter.normalizeArabic(sb.toString().lowercase())
     }
 
-    /** True if the current page is a Strict-Mode danger page — our app's name next to an
-     *  accessibility / device-admin / uninstall / force-stop control. */
+    /** True if the current page is an off-switch danger page — us, next to an accessibility /
+     *  device-admin / uninstall / force-stop control.
+     *
+     *  Identity is matched on the package name as well as the label: the label is what a
+     *  translated Settings app may render differently (and what the icon-switcher aliases can
+     *  change), while "com.appblocker" is the same string in every locale and appears on the
+     *  app-info and accessibility detail pages. */
     private fun guardScreenIsDangerous(): Boolean {
         val text = guardScreenText()
         if (!text.contains("appblocker")) return false
@@ -1701,11 +1728,21 @@ class BlockerAccessibilityService : AccessibilityService() {
             "installedappdetails", "appinfodashboard",
         )
 
-        // On-screen-text markers (paired with our app label) for MIUI's generic SubSettings /
-        // app-info screens where the className alone doesn't identify the page. English only —
-        // fine for this device; add localized markers if needed.
+        // On-screen-text markers (paired with our app name) for MIUI's generic SubSettings /
+        // app-info screens where the className alone doesn't identify the page.
+        //
+        // Arabic sits alongside English because this fallback fails SILENTLY when it doesn't
+        // match: nothing errors, the page simply isn't recognised and the guard doesn't bounce.
+        // On a phone whose Settings are not in English the whole fallback was dead, leaving the
+        // className fast-path alone to defend the toggle — on HyperOS, the very build whose class
+        // names the comment above calls unpredictable. Under-blocking is invisible (see
+        // docs/BLOCKING_INVARIANTS.md), so this could not have been noticed by using the app.
         private val GUARD_TEXT_MARKERS = listOf(
             "accessibilit", "device admin", "deactivate", "uninstall", "force stop", "force-stop",
+            // Arabic: إمكانية الوصول (accessibility), إلغاء التثبيت (uninstall),
+            // إيقاف/فرض الإيقاف (stop / force stop), مسؤول الجهاز (device admin), تعطيل (disable).
+            "امكانيه الوصول", "الغاء التثبيت", "فرض الايقاف", "ايقاف اجباري",
+            "مسئول الجهاز", "مسءول الجهاز", "تعطيل",
         )
 
         private const val YOUTUBE_PKG = "com.google.android.youtube"

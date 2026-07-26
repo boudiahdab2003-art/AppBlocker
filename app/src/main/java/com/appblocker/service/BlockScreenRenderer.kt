@@ -70,6 +70,9 @@ internal object BlockScreenRenderer {
      */
     fun applyArrangement(context: Context, v: View): BlockArrangement.Arrangement {
         val arrangement = BlockArrangement.load(context)
+        // Before the early returns below, so the quote's side is applied on every layout — the
+        // ones without a quote simply find no view to align.
+        alignQuote(v, arrangement.quoteAlign)
         // The elements this layout actually has, in the owner's order. A layout without a quote
         // simply contributes nothing here.
         val present = arrangement.order.mapNotNull { element ->
@@ -102,6 +105,31 @@ internal object BlockScreenRenderer {
             BlockArrangement.Align.DEFAULT -> Unit
         }
         return arrangement
+    }
+
+    /**
+     * Puts the quote's text on the chosen side.
+     *
+     * The stack gravity above cannot do this: the quote TextView is `match_parent` wide, so moving
+     * its *parent's* gravity leaves it exactly where it was — only its own gravity moves the text
+     * inside it. The author line is the opposite case (`wrap_content`), so it moves via its layout
+     * gravity instead; setting text gravity there would do nothing, as the view is already as wide
+     * as its text. Both are set on every show for the same reason as everything else here — the
+     * view is reused across blocks, so an unset side would keep the previous choice.
+     */
+    private fun alignQuote(v: View, align: BlockArrangement.QuoteAlign) {
+        val gravity = when (align) {
+            BlockArrangement.QuoteAlign.LEFT -> Gravity.START
+            BlockArrangement.QuoteAlign.CENTRE -> Gravity.CENTER_HORIZONTAL
+            BlockArrangement.QuoteAlign.RIGHT -> Gravity.END
+        }
+        v.findViewById<TextView>(R.id.overlay_quote)?.gravity = gravity
+        v.findViewById<TextView>(R.id.overlay_quote_author)?.let { author ->
+            (author.layoutParams as? LinearLayout.LayoutParams)?.let {
+                it.gravity = gravity
+                author.layoutParams = it
+            }
+        }
     }
 
     /**

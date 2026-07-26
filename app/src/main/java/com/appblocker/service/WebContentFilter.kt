@@ -166,8 +166,12 @@ class WebContentFilter internal constructor(
         }
 
         /** Folds common Arabic spelling variants so one stored form catches them all:
-         *  alef variants → ا, ة → ه, ى → ي; strips tatweel and harakat (diacritics). */
-        private fun normalizeArabic(s: String): String {
+         *  alef variants → ا, ة → ه, ى → ي; strips tatweel and harakat (diacritics).
+         *
+         *  Internal rather than private because the watcher's off-switch guard folds Settings
+         *  page text through it too (see GUARD_TEXT_MARKERS). One folding, so a marker written
+         *  in one place can't quietly stop matching text folded in another. */
+        internal fun normalizeArabic(s: String): String {
             val sb = StringBuilder(s.length)
             for (c in s) {
                 when (c) {
