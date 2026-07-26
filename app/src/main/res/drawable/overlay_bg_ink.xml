@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- "Ink" block-screen backdrop: flat true black. Deliberately has no glow, no gradient and
+     no brand colour — the point of this theme is that there is nothing to look at. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#000000" />
+</shape>

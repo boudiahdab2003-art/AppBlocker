@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- "Paper" block-screen backdrop: the light theme's soft blue-grey wash (mirrors
+     AppGradients.backgroundLight), with a faint blue bloom from the top. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#F4F7FC" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:type="radial"
+                android:centerX="0.35"
+                android:centerY="0"
+                android:gradientRadius="95%p"
+                android:startColor="#1F2D7FF9"
+                android:endColor="#00F4F7FC" />
+        </shape>
+    </item>
+</layer-list>

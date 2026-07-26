@@ -129,7 +129,9 @@ internal fun ScheduleCard(
     ) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
-                Modifier.size(40.dp).clip(RoundedCornerShape(11.dp))
+                // 10dp, matching every other 40dp icon tile in the app (the app rounds icons at
+                // about a quarter of their size). This one alone was 11dp.
+                Modifier.size(40.dp).clip(RoundedCornerShape(10.dp))
                     .background(AppGradients.accentVertical),
                 contentAlignment = Alignment.Center,
             ) {

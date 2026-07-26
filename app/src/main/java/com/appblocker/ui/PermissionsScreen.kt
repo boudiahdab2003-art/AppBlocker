@@ -30,6 +30,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.appblocker.service.ProtectionNotifier
+import com.appblocker.ui.theme.AppShapes
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -89,7 +90,7 @@ fun PermissionsScreen(onBack: () -> Unit) {
 @Composable
 private fun PermCard(p: Perm) {
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
+        Modifier.fillMaxWidth().clip(AppShapes.card)
             .background(MaterialTheme.colorScheme.surface).padding(18.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {

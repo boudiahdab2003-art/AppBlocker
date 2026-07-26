@@ -64,6 +64,7 @@ import com.appblocker.data.Schedule
 import com.appblocker.data.ScheduleType
 import com.appblocker.data.SettingsStore
 import com.appblocker.ui.theme.AppGradients
+import com.appblocker.ui.theme.AppShapes
 import com.appblocker.ui.theme.softGlow
 import kotlinx.coroutines.delay
 
@@ -148,9 +149,9 @@ fun BlockingScreen(
             val active = configured && !paused
             Card(
                 Modifier.fillMaxWidth()
-                    .softGlow(RoundedCornerShape(22.dp), elevation = if (active) 14.dp else 4.dp)
+                    .softGlow(AppShapes.card, elevation = if (active) 14.dp else 4.dp)
                     .clickable { onEditQuickBlock() },
-                shape = RoundedCornerShape(22.dp),
+                shape = AppShapes.card,
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = if (active) BorderStroke(1.5.dp, AppGradients.accent) else null,
             ) {
@@ -226,9 +227,9 @@ fun BlockingScreen(
         item {
             Card(
                 Modifier.fillMaxWidth()
-                    .softGlow(RoundedCornerShape(22.dp), elevation = 4.dp)
+                    .softGlow(AppShapes.card, elevation = 4.dp)
                     .clickable { onOpenKeywords() },
-                shape = RoundedCornerShape(22.dp),
+                shape = AppShapes.card,
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             ) {
                 Row(

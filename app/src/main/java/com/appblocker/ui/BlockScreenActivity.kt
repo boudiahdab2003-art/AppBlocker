@@ -24,13 +24,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -42,8 +43,11 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import com.appblocker.data.AppIcons
 import com.appblocker.data.AttemptCounter
+import com.appblocker.data.BlockLayouts
+import com.appblocker.data.BlockThemes
 import com.appblocker.data.Quote
 import com.appblocker.data.Quotes
+import com.appblocker.data.backdropSolid
 import com.appblocker.ui.theme.AppBlockerTheme
 import com.appblocker.ui.theme.AppGradients
 
@@ -124,18 +128,30 @@ private fun BlockScreen(
     quote: Quote,
     onClose: () -> Unit,
 ) {
-    val primary = MaterialTheme.colorScheme.primary
+    // Follow the chosen block-screen look (Profile ▸ Block screen), exactly as the overlay does.
+    // This screen is only the fallback when the overlay can't be drawn — but for anyone who has
+    // denied the overlay permission it is the ONLY block screen they ever see, so leaving it on
+    // the default look would silently ignore their choice.
+    val theme = BlockThemes.current(LocalContext.current)
+    // This screen can't inflate the XML layouts, so it approximates the chosen one by showing
+    // or hiding the same pieces. Not pixel-identical to the overlay, but it honours the choice
+    // rather than always showing everything.
+    val layout = BlockLayouts.current(LocalContext.current)
+    val primaryText = Color(theme.primaryText)
     val quoteSize = Quotes.sizeSpFor(quote.text)
     Column(
         Modifier
             .fillMaxSize()
-            .background(AppGradients.background)
+            .background(
+                if (theme.accentGradientEnd != null) AppGradients.background
+                else SolidColor(Color(theme.backdropSolid())),
+            )
             .padding(start = 28.dp, end = 28.dp, top = 72.dp, bottom = 36.dp),
     ) {
         // Kicker: shield badge + what happened.
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
-                Modifier.size(30.dp).clip(CircleShape).background(primary),
+                Modifier.size(30.dp).clip(CircleShape).background(Color(theme.badge)),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
@@ -150,18 +166,19 @@ private fun BlockScreen(
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Black,
                 letterSpacing = 2.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = Color(theme.secondaryText),
                 modifier = Modifier.padding(start = 12.dp),
             )
         }
 
-        // Masthead: today's win, giant editorial serif.
+        // Masthead: today's win, giant editorial serif. Hidden by the layouts that drop it.
+        if (layout.showsNumber) {
         Text(
             reclaimedMinutes.toString(),
             fontSize = 120.sp,
             lineHeight = 120.sp,
             fontFamily = FontFamily.Serif,
-            color = Color.White,
+            color = primaryText,
             modifier = Modifier.padding(top = 28.dp),
         )
         Text(
@@ -169,8 +186,9 @@ private fun BlockScreen(
             fontSize = 15.sp,
             fontWeight = FontWeight.Black,
             letterSpacing = 2.2.sp,
-            color = AppGradients.AccentEnd,
+            color = Color(theme.accent),
         )
+        }
 
         // The hero quote.
         Column(
@@ -182,14 +200,18 @@ private fun BlockScreen(
                 fontSize = quoteSize.sp,
                 lineHeight = (quoteSize * 1.18f).sp,
                 fontFamily = FontFamily.Serif,
-                color = Color.White,
+                color = primaryText,
             )
             Text(
                 "— ${quote.author}".uppercase(),
                 fontSize = 17.sp,
                 fontWeight = FontWeight.Black,
                 letterSpacing = 1.5.sp,
-                style = TextStyle(brush = AppGradients.accent),
+                style = TextStyle(
+                    brush = theme.accentGradientEnd?.let {
+                        Brush.linearGradient(listOf(Color(theme.accent), Color(it)))
+                    } ?: SolidColor(Color(theme.accent)),
+                ),
                 modifier = Modifier.padding(top = 18.dp),
             )
         }
