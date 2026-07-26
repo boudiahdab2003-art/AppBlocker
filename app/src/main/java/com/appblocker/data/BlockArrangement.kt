@@ -47,11 +47,22 @@ object BlockArrangement {
         LARGER("Larger", 1.25f),
     }
 
-    /** Horizontal alignment of the quote text itself (and its author line, which moves with it).
-     *  Separate from [Align]: that one moves the *stack* of pieces and only has a visible effect
-     *  on pieces narrower than the screen (the kicker, the number) — the quote already spans the
-     *  full width, so its own alignment has to be its own setting. */
+    /**
+     * Horizontal alignment of the quote text itself (and its author line, which moves with it).
+     *
+     * Separate from [Align]: that one moves the *stack* of pieces and only has a visible effect on
+     * pieces narrower than the screen (the kicker, the number) — the quote already spans the full
+     * width, so its own alignment has to be its own setting.
+     *
+     * [DEFAULT] means "whatever this layout's XML declares", exactly like [Align.DEFAULT], and is
+     * the default for the same reason: the four layouts disagree about where a quote belongs.
+     * Editorial sets it left, Focus centres it under a centred icon. Without this member the
+     * renderer would write a gravity on every show and no layout could ever keep its own — the
+     * first version of this setting defaulted to LEFT and would have dropped a left-aligned quote
+     * into the middle of Focus's centred design.
+     */
     enum class QuoteAlign(val label: String) {
+        DEFAULT("Auto"),
         LEFT("Left"),
         CENTRE("Centre"),
         RIGHT("Right"),
@@ -67,7 +78,7 @@ object BlockArrangement {
         val hidden: Set<Element> = emptySet(),
         val align: Align = Align.DEFAULT,
         val sizes: Map<Element, Size> = emptyMap(),
-        val quoteAlign: QuoteAlign = QuoteAlign.LEFT,
+        val quoteAlign: QuoteAlign = QuoteAlign.DEFAULT,
     ) {
         fun isVisible(e: Element) = e !in hidden
         fun sizeOf(e: Element) = sizes[e] ?: Size.DEFAULT
@@ -112,8 +123,12 @@ object BlockArrangement {
                     val size = Size.entries.firstOrNull { it.name == sz } ?: return@mapNotNull null
                     element to size
                 }.toMap(),
+                // Absent in strings written before the quote had a side of its own, and in those
+                // written by v1.102, whose only "untouched" value was LEFT. DEFAULT is the right
+                // fallback for both: it hands the decision back to the layout, which on Editorial
+                // and Quote draws exactly the left-aligned quote those strings described.
                 quoteAlign = QuoteAlign.entries.firstOrNull { it.name == quoteAlignPart }
-                    ?: QuoteAlign.LEFT,
+                    ?: QuoteAlign.DEFAULT,
             )
         }.getOrDefault(DEFAULT)
     }

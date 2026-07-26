@@ -32,6 +32,17 @@ object BlockLayouts {
         val elements: Set<BlockArrangement.Element>,
         /** App icon large and centred near the top, rather than in a small row. */
         val appCentred: Boolean = false,
+        /**
+         * Multiplier on the quote's length-based size ([Quotes.sizeSpFor]), for layouts where the
+         * hero sizing would be wrong.
+         *
+         * A multiplier rather than an absolute size, for the same reason [BlockArrangement.Size]
+         * is: a long quote must still shrink itself to stay readable, so this scales that
+         * decision instead of overriding it. Needed because the quote is the one piece whose size
+         * is computed in code and therefore ignores what the XML declares — every other piece
+         * gets its size straight from the layout.
+         */
+        val quoteScale: Float = 1f,
     )
 
     val OPTIONS = listOf(
@@ -48,10 +59,18 @@ object BlockLayouts {
         BlockLayout(
             id = "focus",
             label = "Focus",
-            blurb = "Just the app, large and centred. No number, no quote — nothing to linger on.",
+            blurb = "Just the app, large and centred. No number, and the quote kept small.",
             layoutRes = R.layout.overlay_block_focus,
-            elements = setOf(BlockArrangement.Element.KICKER, BlockArrangement.Element.APP),
+            elements = setOf(
+                BlockArrangement.Element.KICKER, BlockArrangement.Element.QUOTE,
+                BlockArrangement.Element.APP,
+            ),
             appCentred = true,
+            // Well under the others: this layout stacks a 96dp icon, a 32sp app name and the
+            // kicker with no scroll view, so a hero-sized quote both fights the design and is the
+            // thing most likely to push "Got it" off a short screen. Switch the quote off in
+            // Pieces for the bare Focus this layout originally shipped as.
+            quoteScale = 0.6f,
         ),
         BlockLayout(
             id = "scoreboard",

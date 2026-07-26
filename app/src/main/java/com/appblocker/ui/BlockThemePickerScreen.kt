@@ -309,13 +309,24 @@ private fun LayoutPreview(option: BlockLayouts.BlockLayout, theme: BlockThemes.B
         else Alignment.Start,
     ) {
         if (option.appCentred) {
-            // Focus: the app icon large and centred, a line of text, nothing else.
+            // Focus: the app icon large and centred, its name, then the quote if this layout
+            // carries one — read from `elements` rather than assumed, so the miniature can't go
+            // on advertising the bare Focus after the layout gained a quote.
             Spacer(Modifier.height(6.dp))
             Box(Modifier.size(22.dp).clip(CircleShape).background(Color(theme.badge)))
             Spacer(Modifier.height(6.dp))
             Bar(width = 32.dp, height = 4.dp, color = Color(theme.primaryText))
             Spacer(Modifier.height(3.dp))
             Bar(width = 18.dp, height = 3.dp, color = Color(theme.secondaryText))
+            if (BlockArrangement.Element.QUOTE in option.elements) {
+                // Narrower and centred, mirroring how small this layout keeps its quote.
+                Spacer(Modifier.height(7.dp))
+                Bar(width = 30.dp, height = 3.dp,
+                    color = Color(theme.primaryText).copy(alpha = 0.8f))
+                Spacer(Modifier.height(2.dp))
+                Bar(width = 20.dp, height = 3.dp,
+                    color = Color(theme.primaryText).copy(alpha = 0.8f))
+            }
         } else {
             val hasNumber = BlockArrangement.Element.NUMBER in option.elements
             val hasQuote = BlockArrangement.Element.QUOTE in option.elements
@@ -624,11 +635,15 @@ private fun BlockScreenPreview(
                         v.findViewById<TextView>(R.id.overlay_stat_number)?.text = "36"
                         v.findViewById<TextView>(R.id.overlay_quote)?.apply {
                             text = "You have power over your mind — not outside events."
-                            // Mirrors BlockOverlay: the quote's length-based size, times the
-                            // owner's choice. Doing it here too is what keeps the preview honest.
+                            // Mirrors BlockOverlay: the quote's length-based size, times this
+                            // layout's own scale, times the owner's choice. Doing it here too is
+                            // what keeps the preview honest — and this line is the one place the
+                            // preview can silently drift from the real screen, since every other
+                            // pixel comes from the shared renderer.
                             setTextSize(
                                 TypedValue.COMPLEX_UNIT_SP,
                                 Quotes.sizeSpFor(text.toString()) *
+                                    BlockLayouts.byId(layoutId).quoteScale *
                                     a.factorFor(BlockArrangement.Element.QUOTE),
                             )
                         }

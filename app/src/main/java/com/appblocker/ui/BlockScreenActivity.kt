@@ -146,7 +146,9 @@ private fun BlockScreen(
     // about the Pieces switches at all.
     fun shows(e: BlockArrangement.Element) = e in layout.elements && arrangement.isVisible(e)
     val primaryText = Color(theme.primaryText)
-    val quoteSize = Quotes.sizeSpFor(quote.text)
+    // Scaled by the layout, as the overlay does — otherwise Focus's deliberately quiet quote
+    // would come back hero-sized on the one screen shown to anyone who denied the overlay.
+    val quoteSize = Quotes.sizeSpFor(quote.text) * layout.quoteScale
     Column(
         Modifier
             .fillMaxSize()
@@ -203,15 +205,22 @@ private fun BlockScreen(
         // The chosen side, mirroring what BlockScreenRenderer does to the overlay: the quote
         // spans the width so it takes a text alignment, the author line wraps its text so it
         // takes a placement instead.
+        // DEFAULT means "as the layout draws it", which this screen can't read from an XML file
+        // it never inflates — so it stands in for the layout's own choice: centred where the
+        // layout centres its app, start elsewhere. Same answer the XML gives, reached differently.
         val quoteTextAlign = when (arrangement.quoteAlign) {
             BlockArrangement.QuoteAlign.LEFT -> TextAlign.Start
             BlockArrangement.QuoteAlign.CENTRE -> TextAlign.Center
             BlockArrangement.QuoteAlign.RIGHT -> TextAlign.End
+            BlockArrangement.QuoteAlign.DEFAULT ->
+                if (layout.appCentred) TextAlign.Center else TextAlign.Start
         }
         val authorAlign = when (arrangement.quoteAlign) {
             BlockArrangement.QuoteAlign.LEFT -> Alignment.Start
             BlockArrangement.QuoteAlign.CENTRE -> Alignment.CenterHorizontally
             BlockArrangement.QuoteAlign.RIGHT -> Alignment.End
+            BlockArrangement.QuoteAlign.DEFAULT ->
+                if (layout.appCentred) Alignment.CenterHorizontally else Alignment.Start
         }
         Column(
             Modifier.fillMaxWidth().weight(1f),

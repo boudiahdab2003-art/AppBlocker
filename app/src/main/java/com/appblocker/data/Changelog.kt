@@ -13,8 +13,11 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
-    VersionLog("1.103", "Jul 26, 2026", "The guard now leaves the rest of your phone alone", listOf(
-        "Fixing an overreach in 1.102 that shipped yesterday. The new off-switch guard was blocking far more than its own page: **every** app's \"App info\" screen, and the **whole** Accessibility section — not just AppBlocker's entry in it. So force-stopping a frozen app, clearing a cache, or turning on some unrelated accessibility service all landed on a block screen and cost the full 2-hour wait.",
+    VersionLog("1.103", "Jul 26, 2026", "Focus can show a quote, and the guard leaves the rest of your phone alone", listOf(
+        "The **Focus** block screen can now carry a quote. It never could before — the quote simply wasn't part of that layout, which is why no Quote switch appeared for it in Pieces. It's there now, and you can switch it off again the same way if you want the bare version back.",
+        "It's deliberately small and centred rather than the big hero line Editorial uses. Focus stacks a large icon and the app name with no room to scroll, so a full-size quote would fight the design and could push the \"Got it\" button off the bottom of a short screen.",
+        "The quote's Side setting gained an **Auto** option, which is now the default and means \"however this layout draws it\" — left on Editorial, centred on Focus. Left, Centre and Right still override it everywhere. If you'd already picked a side, that's kept.",
+        "Also in this version, fixing an overreach from 1.102 that shipped a few hours earlier. The off-switch guard was blocking far more than its own page: **every** app's \"App info\" screen, and the **whole** Accessibility section — not just AppBlocker's entry in it. So force-stopping a frozen app, clearing a cache, or turning on some unrelated accessibility service all landed on a block screen and cost the full 2-hour wait.",
         "That was never the intention. It came from reusing Strict Mode's rule, which only cares what *kind* of page you opened, not who it's about. Inside a Strict session that's fine — you chose it and it ends by itself. As an always-on default it quietly turned ordinary phone maintenance into a two-hour errand.",
         "Now the guard checks the page is actually about AppBlocker before blocking it. Other apps' App info opens normally, the Accessibility list opens normally, and only AppBlocker's own entry bounces.",
         "Strict Mode is deliberately unchanged and still blocks all of those pages. It's a lock you set on purpose for a set length of time, and it should stay as strong as it has always been.",

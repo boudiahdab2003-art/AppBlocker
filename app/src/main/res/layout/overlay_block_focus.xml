@@ -1,8 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- "Focus" block screen: the app you tried to open, large and centred, and nothing else.
-     No minutes counter and no quote — no score to admire and no reading material, just the
-     fact and the way out. Same view ids as overlay_block.xml so BlockOverlay fills any layout
-     the same way; the ids it omits are simply absent and looked up null-safely. -->
+<!-- "Focus" block screen: the app you tried to open, large and centred. No minutes counter —
+     no score to admire, just the fact and the way out.
+     The quote is here but kept deliberately small and centred, well under Editorial's 38sp
+     (see quoteScale in BlockLayouts): this layout is the quiet one, and a hero-sized quote
+     under a 96dp icon and a 32sp app name is both off-brief and the thing most likely to push
+     "Got it" off a short screen. Switch it off in Pieces to get the original bare Focus back.
+     Same view ids as overlay_block.xml so BlockOverlay fills any layout the same way; the ids
+     a layout omits are simply absent and looked up null-safely. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -61,6 +65,37 @@
             android:fontFamily="sans-serif-black"
             android:textColor="@color/block_text_secondary"
             android:textSize="13sp" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/el_quote"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center_horizontal">
+
+        <TextView
+            android:id="@+id/overlay_quote"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="28dp"
+            android:gravity="center"
+            android:fontFamily="serif"
+            android:textColor="@color/block_text_primary"
+            android:textSize="22sp"
+            android:lineSpacingMultiplier="1.15" />
+
+        <TextView
+            android:id="@+id/overlay_quote_author"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:textAllCaps="true"
+            android:letterSpacing="0.12"
+            android:fontFamily="sans-serif-black"
+            android:textColor="@color/block_accent"
+            android:textSize="12sp" />
 
         </LinearLayout>
 
