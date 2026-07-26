@@ -3,6 +3,15 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.108
+- You can turn on uninstall protection again. The guard was blocking Android's "Activate device admin app?" screen — the one you have to pass through to switch that protection ON — so it could never be enabled, while the app still reported itself as guarded. That's the worst kind of bug this app can have, and it was mine, from 1.107.
+
+It fired because that screen says "device admin" and has an "Uninstall app" button on it, so it matched every word the guard watches for. Reading the wording can't separate "activate" from "deactivate" — one word literally contains the other, and it's translated on other phones.
+
+So the app no longer tries to read it. When you tap Prevent uninstall, the app knows it just opened that screen and stands aside for a minute. That works in any language. The deactivation screen, which the app never opens, is still guarded.
+
+After installing: Profile ▸ Prevent uninstall. If it says AppBlocker can be uninstalled right now, turn it on — that switch is what actually makes Android refuse the uninstall.
+
 ## v1.107
 - Uninstalling is guarded again. You could just switch the protection off and uninstall the app — and that was my fault, from a few hours earlier.
 
