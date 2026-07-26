@@ -839,8 +839,11 @@ private fun ReportProblemSheet(onDismiss: () -> Unit, onSend: (String) -> Unit) 
             )
             Spacer(Modifier.height(12.dp))
             Text(
-                "Sent with: app version, Android version, phone model. " +
-                    "Never sent: your blocked words, the sites you visit, or which apps you block.",
+                "Sent with: app version, Android version, phone model, and your current " +
+                    "settings — which block screen you use, whether blocking is running, and " +
+                    "how many blocks happened today.\n\n" +
+                    "Never sent: your blocked words, the sites you visit, or which apps you " +
+                    "block.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

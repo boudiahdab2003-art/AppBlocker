@@ -124,6 +124,52 @@ class BugReportTest {
         assertNotEquals(a.dedupeKey(), b.dedupeKey())
     }
 
+    // --- the settings context, which is the newest way this could leak ---
+
+    @Test
+    fun `a key that isn't on the allow-list is dropped`() {
+        // The realistic future mistake: someone adds "the word that was blocked" to the context
+        // map in the service layer, where a Context is available and the privacy rules are less
+        // in view. It must not reach a payload no matter how it got into the map.
+        val sanitized = BugReport.sanitizeContext(
+            mapOf(
+                "layout" to "focus",
+                "keyword" to secret,
+                "url" to "https://example.com/$secret",
+                "blockedApp" to "com.instagram.android",
+            ),
+        )
+        assertEquals(mapOf("layout" to "focus"), sanitized)
+    }
+
+    @Test
+    fun `a forbidden key cannot reach the body even via the factories`() {
+        val r = BugReport.fromNote(
+            "it broke", "1.103", "github", 35, "d",
+            context = mapOf("keyword" to secret, "layout" to "editorial"),
+        )
+        assertFalse(r.body().contains(secret))
+        assertTrue(r.body().contains("editorial"))
+    }
+
+    @Test
+    fun `allowed values are truncated, so nothing long slips through a permitted key`() {
+        val sanitized = BugReport.sanitizeContext(mapOf("layout" to secret.repeat(20)))
+        assertTrue((sanitized["layout"]?.length ?: 0) <= 24)
+    }
+
+    @Test
+    fun `every allowed key is a setting or a count, never content`() {
+        // A tripwire for the list itself: if someone adds a key that sounds like content, this
+        // fails and makes them argue for it in a code review rather than in a payload.
+        val contentish = listOf("keyword", "word", "url", "site", "domain", "app", "package",
+            "name", "text", "query", "title", "location")
+        val offenders = BugReport.ALLOWED_CONTEXT_KEYS.filter { key ->
+            contentish.any { key.lowercase().contains(it) }
+        }
+        assertEquals(emptyList<String>(), offenders)
+    }
+
     @Test
     fun `the payload is valid json`() {
         val json = report(IllegalArgumentException(secret)).toJson()

@@ -13,6 +13,12 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.104", "Jul 26, 2026", "Bug reports now say what the app was set to", listOf(
+        "Reports used to carry only what you typed, plus the app version, your Android version and your phone model. That's very private, but it also meant a report saying \"the block screen didn't appear\" arrived with nothing to work from — and you can't be expected to know that \"blocking was in its stalled state and usage access was off\" is the useful half of that sentence.",
+        "Reports now also include your current settings: which block screen you're using, whether blocking was actually running, whether the off-switch guard is on, how many blocks happened today, whether the adult pack is on, and whether the app has the permissions it needs.",
+        "All of those are switches you set or numbers the app counted. **None of them can contain anything you read, typed, visited or blocked** — no keywords, no websites, no app names. There's a fixed list of what's allowed to be attached, anything not on it is thrown away before sending, and a test fails the build if someone ever adds something that looks like content.",
+        "The Report screen now says all of this above the Send button, so what you're sending is on screen when you send it.",
+    )),
     VersionLog("1.103", "Jul 26, 2026", "Focus can show a quote, and the guard leaves the rest of your phone alone", listOf(
         "The **Focus** block screen can now carry a quote. It never could before — the quote simply wasn't part of that layout, which is why no Quote switch appeared for it in Pieces. It's there now, and you can switch it off again the same way if you want the bare version back.",
         "It's deliberately small and centred rather than the big hero line Editorial uses. Focus stacks a large icon and the app name with no room to scroll, so a full-size quote would fight the design and could push the \"Got it\" button off the bottom of a short screen.",

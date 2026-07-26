@@ -27,6 +27,9 @@ import org.json.JSONObject
  *  - the exception's **class name**
  *  - stack frames from our own package only
  *  - whatever free text the owner typed into the report box himself
+ *  - the app's own settings and counters, and **only** those named in [ALLOWED_CONTEXT_KEYS] —
+ *    which layout, whether the service is running, how many blocks today. Every one is a choice
+ *    the owner made or a number, never something he read, typed, visited or blocked.
  *
  * Forbidden, always: blocked keywords, quote text, URLs, on-screen text, blocked app names or
  * package names, the owner's name, location, anything from the coach conversation.
@@ -50,6 +53,12 @@ data class BugReport(
     val flavor: String,
     val androidSdk: Int,
     val device: String,
+    /**
+     * App *settings and counters* at the moment of the report — never content. Always run through
+     * [sanitizeContext], which drops any key not on the allow-list, so this cannot become a
+     * back door for the data the rest of this class is careful to exclude.
+     */
+    val context: Map<String, String> = emptyMap(),
 ) {
 
     /**
@@ -86,6 +95,7 @@ data class BugReport(
         appendLine("| Version | $appVersion ($flavor) |")
         appendLine("| Android | SDK $androidSdk |")
         appendLine("| Device | $device |")
+        context.toSortedMap().forEach { (k, v) -> appendLine("| $k | $v |") }
         if (frames.isNotEmpty()) {
             appendLine()
             appendLine("```")
@@ -113,6 +123,43 @@ data class BugReport(
         private const val MAX_NOTE = 2000
 
         /**
+         * The **only** context keys that may ever leave the device.
+         *
+         * Every one is a setting the owner chose or a count of events — "which layout", "is the
+         * service on", "how many blocks today". None of them can hold content: not a keyword, not
+         * a URL, not an app name, not a package name.
+         *
+         * This exists as a list rather than a convention because the caller that assembles the
+         * map lives in the service layer where a `Context` is available, and it would be very easy
+         * for a later change to add `"keyword" to lastBlockedWord` there and for nobody to notice.
+         * Anything not named here is dropped, so that mistake fails safe instead of publishing.
+         */
+        val ALLOWED_CONTEXT_KEYS = setOf(
+            "layout",
+            "theme",
+            "serviceOn",
+            "protection",
+            "guard",
+            "blocksToday",
+            "adultPack",
+            "scanEverywhere",
+            "overlayPermission",
+            "usageAccess",
+        )
+
+        /** Values are short by nature (an id, a boolean, a count); anything long is a sign
+         *  something unintended got in, so it is truncated as well as key-filtered. */
+        private const val MAX_CONTEXT_VALUE = 24
+
+        /**
+         * Drops every key not on [ALLOWED_CONTEXT_KEYS] and truncates what remains. The one
+         * function standing between "a helpful diagnostic" and "an accidental leak".
+         */
+        fun sanitizeContext(raw: Map<String, String>): Map<String, String> = raw
+            .filterKeys { it in ALLOWED_CONTEXT_KEYS }
+            .mapValues { (_, v) -> v.replace('\n', ' ').trim().take(MAX_CONTEXT_VALUE) }
+
+        /**
          * Builds a report from a throwable, taking **only** the class name and our own frames.
          * [t]'s message is never read; see the class KDoc for why that is not an oversight.
          */
@@ -123,6 +170,7 @@ data class BugReport(
             flavor: String,
             androidSdk: Int,
             device: String,
+            context: Map<String, String> = emptyMap(),
         ) = BugReport(
             where = where,
             errorClass = t.javaClass.name.substringAfterLast('.'),
@@ -132,6 +180,7 @@ data class BugReport(
             flavor = flavor,
             androidSdk = androidSdk,
             device = device,
+            context = sanitizeContext(context),
         )
 
         /** Builds a report the owner typed himself. */
@@ -141,6 +190,7 @@ data class BugReport(
             flavor: String,
             androidSdk: Int,
             device: String,
+            context: Map<String, String> = emptyMap(),
         ) = BugReport(
             where = "owner",
             errorClass = null,
@@ -150,6 +200,7 @@ data class BugReport(
             flavor = flavor,
             androidSdk = androidSdk,
             device = device,
+            context = sanitizeContext(context),
         )
 
         /**
