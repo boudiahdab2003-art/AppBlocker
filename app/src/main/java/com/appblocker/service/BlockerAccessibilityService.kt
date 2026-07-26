@@ -101,19 +101,6 @@ class BlockerAccessibilityService : AccessibilityService() {
     // Home-screen (launcher) apps — never keyword-scanned, see findLauncherPackages(this).
     @Volatile private var launcherPackages: Set<String> = emptySet()
 
-    /**
-     * Labels of every installed accessibility service **except ours**, lowercased.
-     *
-     * This is what tells the Accessibility *list* apart from AppBlocker's own entry in it. Both
-     * pages name AppBlocker, so "does this page mention us" — the test used until now — matches
-     * both and bounced the whole section, locking the owner out of every other service he uses
-     * behind a two-hour wait. Only our own page names us and *nobody else*.
-     *
-     * Short labels are dropped: a generic two-word name appearing incidentally on our own page
-     * would read as "this is the list" and switch the guard off on the one page it exists to
-     * defend. Being wrong that way is far worse than failing to recognise the list.
-     */
-    @Volatile private var otherServiceLabels: Set<String> = emptySet()
     // Negative cache for isLauncherPkg, so its throttled re-detection only runs on new packages.
     @Volatile private var knownNonLauncherPkgs: Set<String> = emptySet()
     @Volatile private var lastLauncherRefreshAt = 0L
@@ -806,9 +793,17 @@ class BlockerAccessibilityService : AccessibilityService() {
         val danger = if (strict) {
             byClass || guardScreenIsDangerous()
         } else {
-            // `== true` on purpose: null means "couldn't read the screen", which must not bounce.
-            // See aboutUs() — answering true there made every app's App-info page flash a cover.
-            (byClass && aboutUs() == true) || guardScreenIsDangerous()
+            // Accessibility pages are decided ONLY by ourOwnServicePage(). Three earlier versions
+            // used the class name or "the page mentions us" here, and all three bounced the
+            // services LIST — which names every installed service, ours included — locking the
+            // owner out of every other accessibility app he uses.
+            //
+            // The second arm is for the device-admin and app-info pages, where our description is
+            // not shown and "our name beside a dangerous control" is the right test. It excludes
+            // accessibility class names so it cannot resurrect the bug above.
+            // `== true` because null means "couldn't read", which must not bounce (see aboutUs).
+            ourOwnServicePage() ||
+                (byClass && !cn.contains("accessibilit") && aboutUs() == true)
         }
         if (!danger) return false
 
@@ -903,16 +898,32 @@ class BlockerAccessibilityService : AccessibilityService() {
      * rendered rows, so our row genuinely is not in the tree until it is scrolled into view. The
      * content-event re-check is what catches that too.
      */
+    /**
+     * Whether the screen is **AppBlocker's own accessibility page**, decided by our own text.
+     *
+     * Android renders a service's `android:description` on that service's detail page. Ours is
+     * [com.appblocker.R.string.accessibility_description], and it appears there and nowhere else:
+     * not on the services list, not on another service's page.
+     *
+     * **This is the point of the fourth attempt at this check.** The first three matched
+     * system-supplied text — a class name, then our app label, then other services' labels — and
+     * system text differs by OEM, by Android version and by language. Matching a string this app
+     * itself ships removes all three variables at once. It is also the first version that is
+     * locale-proof: the app has no translations, so Android shows this description in English on
+     * an Arabic phone too, while every system label around it changes.
+     *
+     * The fragment is taken from the START of the description so an OEM that truncates it behind
+     * a "More" link still matches. Unreadable screen answers false: the page has only just
+     * opened, nothing can have been tapped yet, and the content-event re-check follows in
+     * milliseconds with a populated tree (see the v1.104 note in aboutUs).
+     */
+    private fun ourOwnServicePage(): Boolean =
+        guardScreenText().contains(OUR_SERVICE_DESCRIPTION_FRAGMENT)
+
     private fun aboutUs(): Boolean? {
         val text = guardScreenText()
         if (text.isBlank()) return null
-        if (!text.contains("appblocker")) return false
-        // Naming us is not enough: Android's Accessibility LIST names every installed service,
-        // ours among them, so "mentions appblocker" is true of both the list and our own entry —
-        // and bouncing the list locks the owner out of every other accessibility service he uses,
-        // behind a two-hour wait, TalkBack included. Only our own page names us and nobody else.
-        // Whole-word, so a service called "Files" can't match inside "Profiles".
-        return otherServiceLabels.none { WebContentFilter.containsWord(text, it) }
+        return text.contains("appblocker")
     }
 
     /** True if the current page is an off-switch danger page — us, next to an accessibility /
@@ -1027,11 +1038,6 @@ class BlockerAccessibilityService : AccessibilityService() {
             launcherPackages = it
             knownNonLauncherPkgs = emptySet() // a fresh answer retires every earlier guess
         }
-        // Same empty-answer rule as the two above, and it matters more here: an empty set makes
-        // aboutUs() unable to recognise the Accessibility list, which silently returns the guard
-        // to bouncing the whole section — the exact behaviour this set exists to end.
-        findOtherAccessibilityLabels(applicationContext, packageName)
-            .takeIf { it.isNotEmpty() }?.let { otherServiceLabels = it }
     }
 
     /** Launcher check that self-heals after a default-launcher change: the set is built at
@@ -1821,6 +1827,11 @@ class BlockerAccessibilityService : AccessibilityService() {
         // fragments are best-effort for the force-stop/uninstall page — specific enough not to
         // over-match generic containers (AOSP's SPA app-info uses a shared SpaActivity we can't
         // safely match, so on that build the text fallback / device-admin block cover it instead).
+        /** A fragment from the start of R.string.accessibility_description — the text Android
+         *  shows on our service's own settings page, and on no other page. Lowercased to match
+         *  guardScreenText(). If that string is ever reworded, reword this with it. */
+        private const val OUR_SERVICE_DESCRIPTION_FRAGMENT = "appblocker uses this to detect"
+
         private val STRICT_GUARD_HINTS = listOf(
             "accessibilit", "deviceadmin", "device_admin",
             "installedappdetails", "appinfodashboard",

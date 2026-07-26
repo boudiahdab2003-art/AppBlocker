@@ -13,6 +13,13 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.106", "Jul 26, 2026", "The accessibility list really does open now", listOf(
+        "Fourth attempt at this, and the first three were the same mistake in different clothes. Sorry for the runaround.",
+        "Every previous version tried to recognise your own AppBlocker page by reading text that **Android** puts on screen — a screen name, then your app's name, then other services' names. All of that changes with the phone brand, the Android version and the language, none of which I can see from here. So I was guessing, three times.",
+        "This version matches text that **the app itself wrote**. Android shows AppBlocker's own description on AppBlocker's own accessibility page — \"AppBlocker uses this to detect when a blocked app opens…\" — and shows it nowhere else. Not on the list, not on another service's page. It's our sentence, so it doesn't change with your phone or your language.",
+        "Concretely, two real bugs in 1.105: it compared against apps' names when the list actually shows the *service* name (TalkBack's app is called \"Android Accessibility Suite\"), so it never matched anything; and if you have no other third-party accessibility service installed, its test was true of everything and blocked the list every time.",
+        "The broken check is deleted rather than left beside the new one, so nobody rebuilds the same bug from it later.",
+    )),
     VersionLog("1.105", "Jul 26, 2026", "Size buttons actually resize things now, and go further", listOf(
         "You said the size buttons on the Focus screen didn't seem to work and didn't go far enough. Both were true, for two separate reasons.",
         "**They only ever resized text.** The app icon was never touched — so on Focus, where the piece is a big icon with a small line under it, pressing Larger moved the label and left the picture exactly where it was. It looked broken because it half was. Icons now scale with everything else.",
