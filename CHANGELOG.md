@@ -3,6 +3,15 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.104
+- Fixes the block screen flashing where it shouldn't — at least one cause of it. When you open a Settings page, the app checks whether it's AppBlocker's own page before covering it, and I'd made that check guess "treat it as ours" whenever it couldn't read the screen. That ignored when the check runs: at the instant a page is opening, which is exactly when the screen usually can't be read yet. So any app's App info page could flash a cover depending on timing. It now waits instead of guessing.
+
+That can't explain covers over unblocked apps or inside AppBlocker itself, so there's a second cause still unfound — and this release is how the app tells me about it. Bug reports now include why it blocked the last few times: which part of the app raised each block screen, whether AppBlocker's own screens were in front, and whether the app being blocked was really the one on screen. None of what was blocked is recorded — no app, no word, no website.
+
+Reports also now carry your current settings: which block screen you use, whether blocking was actually running, permissions, and how many blocks today. All switches and numbers, never content.
+
+Next time it flashes, tap Report a problem and say "flashed here" — the last fifteen blocks come with it.
+
 ## v1.103
 - Bugs can now report themselves. The app already recorded every error it survived, but there was nowhere to send them — so the only way a problem reached me was you noticing and mentioning it. Errors and crashes now send themselves to a private tracker, and there's a Report a problem button in Profile for the ones you spot.
 
