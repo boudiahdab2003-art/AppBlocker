@@ -3,6 +3,13 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.101
+- You can now arrange the block screen yourself. Show, hide, resize and reorder its pieces — the minutes counter, the quote, the "Blocked" label, the app — on top of the four looks from 1.100, with a live preview that is the real block screen rather than a picture of one. The four looks are untouched; they are starting points now. Editing is locked while Strict Mode is running.
+
+Underneath, the first proper audit of the updater. It never checked that a finished download was actually an app — only its size, and only when the server stated one — so a café or hotel Wi-Fi login page could have been handed to the installer as if it were AppBlocker. Updating on a phone that had not yet been told to allow it used to dead-end silently; it now carries on by itself when you come back. The download popup has a Cancel button, the installer file is deleted once it is used, and a crash that would have hit any Android 7 phone is gone.
+
+And a hole worth knowing about: Strict Mode locks every protective setting in the app except the update button, and installing an update used to end a running Strict session. So whenever a newer version existed, Strict was two taps from over. A session now survives the update and keeps blocking — and because it does, there is nothing to reactivate afterwards.
+
 ## v1.100
 - The AI coach is much smarter. It uses the best model available, thinks properly before answering (replies take 10-30 seconds now), writes like a person instead of a form letter, remembers far more of your conversation, and remembers its own advice so it can actually follow it up. You can also design your own block screen: four layouts crossed with four colours, in Profile > Block screen. Underneath, seven rounds of bug hunting. The important one: setting your phone's clock backwards used to switch off the guard protecting the Accessibility page during Strict Mode - the page where AppBlocker can be turned off entirely. Also fixed: blocking could stop reacting to your rules permanently after a single error; the adult filter and browser detection could silently fail open; a daily-limit schedule could never block without usage access and never said so; in-app purchase screens could be missed entirely; and location schedules trusted your phone's position forever.
 
