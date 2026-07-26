@@ -77,13 +77,22 @@ object SettingsStore {
     fun setLastSeenVersionCode(context: Context, value: Long) =
         prefs(context).edit().putLong("last_seen_version", value).apply()
 
-    /** True while an update-triggered Strict-session clear hasn't landed in the DB yet —
-     *  the durable intent that lets UpdatePause retry a clear whose process was killed. */
-    fun strictClearPending(context: Context): Boolean =
-        prefs(context).getBoolean("strict_clear_pending", false)
+    /** True between noticing a version change and deciding whether the pause actually applies (it
+     *  doesn't while a Strict session is running) — the durable intent that lets [UpdatePause]
+     *  retry a decision whose process was killed before it landed.
+     *
+     *  Retires the old "strict_clear_pending", which meant the opposite: an update used to END a
+     *  running Strict session, and that flag was the intent to do so. Cleared on read so an install
+     *  carrying it doesn't hold a stale instruction forever. */
+    fun updatePausePending(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_UPDATE_PAUSE_PENDING, false)
 
-    fun setStrictClearPending(context: Context, value: Boolean) =
-        prefs(context).edit().putBoolean("strict_clear_pending", value).apply()
+    fun setUpdatePausePending(context: Context, value: Boolean) =
+        prefs(context).edit().putBoolean(KEY_UPDATE_PAUSE_PENDING, value)
+            .remove("strict_clear_pending") // retired; an update no longer ends a Strict session
+            .apply()
+
+    private const val KEY_UPDATE_PAUSE_PENDING = "update_pause_pending"
 
     /** Which launcher icon is active (Profile ▸ App icon). Ids defined in [AppIcons]. */
     fun appIcon(context: Context): String =
