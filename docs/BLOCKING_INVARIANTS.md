@@ -195,6 +195,8 @@ primitive, not the feature.** The grep is what paid, and it found the clock bug 
     but `handleStrictSettingsGuard` *returns `true`, claiming it bounced, without bouncing* while
     its throttle is live. Get bounced once, set the clock back (Date & time is not a guarded page),
     and the Accessibility toggle is reachable. Nothing else defends that toggle.
+    *(No longer true as of 26 Jul 2026 — see "The off-switch guard" below. This line sat here as a
+    known gap for a day and a half before the owner walked through it.)*
   - Fixed via `stopwatchNow()`, whose KDoc is the extraction: it names what each timer guards and
     states the boundary between the three clocks. Note the *newer* throttles (`isLauncherPkg`,
     `imePackage`, `refreshCurrentLocation`) already had this right — only the older cover
@@ -501,6 +503,32 @@ session (`UpdatePause`). So whenever an unreleased version exists, a Strict sess
 in two taps from inside the app. `UpdatePause`'s KDoc argues it is not an escape hatch because
 "reinstalling the same APK" won't do it — true, and it does not address the case where a genuinely
 newer release *is* available, which for this repo is often.
+
+### The off-switch guard (26 Jul 2026) — not a sweep, a reported relapse
+
+Not found by auditing. The owner turned the accessibility service off in Settings on a bad day and
+browsed everything he had blocked. Worth recording as its own entry because **the hole was already
+written down in this file and read as a note rather than a bug** — sweep 5 above ends with
+*"Nothing else defends that toggle."*
+
+- **What was actually wrong:** `handleStrictSettingsGuard` opened with `if (!strict) return false`.
+  Outside a Strict session nothing guarded the Accessibility page, and disabling that service
+  disables *every* block in the app — apps, keywords and websites alike, since all of them are
+  enforced from the watcher. Strict Mode was a lock on a door standing in an open field.
+- **Fixed** by `OffSwitchGuard`: the guard now also runs whenever the owner has it on (default on),
+  with the escape modelled on the adult pack's cooling-off — a typed gate, then a 15-minute
+  clock-proof wait, then a 5-minute window. `strict ||` still comes first, so Strict cannot become
+  weaker than it was.
+- **Second bug found while fixing it, never hit by anyone:** `GUARD_TEXT_MARKERS` was English-only
+  and the fallback *fails silently* when it doesn't match — on a phone whose Settings are not in
+  English the whole text path was dead, leaving only the className fast-path on HyperOS, the build
+  whose class names the code itself calls unpredictable. Arabic markers added, and the guard text
+  now folds through `WebContentFilter.normalizeArabic` so one spelling matches the variants. This is
+  the "under-blocking is invisible" rule with a new edge: **a defence keyed on English UI text is
+  invisible-by-default on a translated device**, and no amount of using the app would reveal it.
+- **The generalisable question**, and the one sweep 5 should have asked: for each defence, *what
+  turns it off, and what defends that?* Strict guarded the toggle; nothing guarded Strict's absence.
+  The equivalent question is still open for the VPN layer if it ships.
 
 ### Not yet swept
 
