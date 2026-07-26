@@ -558,6 +558,23 @@ written down in this file and read as a note rather than a bug** — sweep 5 abo
 - `UsageTracker` beyond `addInterval`: the caching layers (`usedTodayCache`, the per-day
   memoisation) and `sessionStatsToday`'s interval merging.
 
+### Swallowed errors now leave the device (v1.103)
+
+`guarded` still records to `ServiceHealth`, and now also queues a redacted report that
+`BugReportSender` posts to a private issue tracker. This partly answers the standing question
+below — *"if this itself broke, would anyone ever know?"* — for the one case where the answer was
+reliably **no**: an error the watcher swallowed on a phone whose owner cannot see under-blocking.
+
+Three things a future sweep should check rather than assume:
+- **The reporter must never be load-bearing.** A failure inside `BugReportSender` is swallowed and
+  deliberately **not** reported, or a dead endpoint becomes an infinite loop. If someone later
+  wraps the sender in `guarded`, that loop is exactly what they will create.
+- **The redaction is an allow-list and must stay one.** `BugReport` never reads
+  `Throwable.message`; `BugReportTest` fails if it does. The temptation to "just include the
+  message, it's usually fine" is the whole risk, on an app whose keyword list is adult words.
+- **Dedup keys off a stack frame**, so a bug reporting from a *changing* line would slip past it.
+  The per-day cap is the backstop; it has no test because the queue needs a `Context`.
+
 ### A pattern worth generalising from the second sweep
 
 Both watchdog bugs were the same shape: **a safety mechanism that can fail silently, or take down
