@@ -21,8 +21,8 @@ android {
         applicationId = "com.appblocker"
         minSdk = 24
         targetSdk = 35 // Google Play requires 35+ for new app submissions
-        versionCode = 106
-        versionName = "1.105"
+        versionCode = 107
+        versionName = "1.106"
 
         // AI Coach server proxy (docs/SERVER.md #1). When both are non-empty the coach routes
         // requests through our VM (which holds the Gemini key) instead of needing an on-device

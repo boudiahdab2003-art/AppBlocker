@@ -3,6 +3,15 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.106
+- The accessibility list really does open now. Fourth attempt, and the first three were the same mistake in different clothes — sorry for the runaround.
+
+Every earlier version tried to recognise AppBlocker's own accessibility page by reading text that ANDROID puts on screen: a screen name, then the app's name, then other services' names. All of that changes with the phone brand, the Android version and the language, so each fix was a guess.
+
+This version matches text the app itself wrote. Android shows AppBlocker's own description on AppBlocker's own accessibility page — "AppBlocker uses this to detect when a blocked app opens…" — and shows it nowhere else. Not on the list of downloaded services, not on another app's page. It's our sentence, so it doesn't change with your phone or your language.
+
+Two real bugs in 1.105: it compared against apps' names while the list actually shows the service name, so it matched nothing; and with no other third-party accessibility service installed, its test was true of every page and blocked the list every time. The broken check is deleted rather than left beside the new one.
+
 ## v1.105
 - Other accessibility apps are reachable again. The guard was blocking the whole Accessibility section rather than just AppBlocker's entry, so every other service — TalkBack included — sat behind a two-hour wait. It asked "does this page mention AppBlocker?", and Android's list names every installed service. It now asks "does this page name AppBlocker and nobody else?", so the list opens normally and only our own entry bounces.
 
