@@ -13,6 +13,14 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.103", "Jul 26, 2026", "The guard now leaves the rest of your phone alone", listOf(
+        "Fixing an overreach in 1.102 that shipped yesterday. The new off-switch guard was blocking far more than its own page: **every** app's \"App info\" screen, and the **whole** Accessibility section — not just AppBlocker's entry in it. So force-stopping a frozen app, clearing a cache, or turning on some unrelated accessibility service all landed on a block screen and cost the full 2-hour wait.",
+        "That was never the intention. It came from reusing Strict Mode's rule, which only cares what *kind* of page you opened, not who it's about. Inside a Strict session that's fine — you chose it and it ends by itself. As an always-on default it quietly turned ordinary phone maintenance into a two-hour errand.",
+        "Now the guard checks the page is actually about AppBlocker before blocking it. Other apps' App info opens normally, the Accessibility list opens normally, and only AppBlocker's own entry bounces.",
+        "Strict Mode is deliberately unchanged and still blocks all of those pages. It's a lock you set on purpose for a set length of time, and it should stay as strong as it has always been.",
+        "One deliberate detail: if the app can't read what's on screen at all, it now assumes the page *is* AppBlocker's and blocks it. Being bounced off a page you could have used is annoying but obvious, and you can wait it out. Failing the other way is silent and takes every block in the app down with it.",
+        "Worth being straight about the trade-off you're getting: this is the narrower, more convenient setting, and it's slightly weaker than 1.102. Recognising our own page relies on reading it, and in a long list your phone only builds the part currently on screen. If you ever reach the Accessibility toggle without a block screen appearing, tell me — that's the failure this could have, and it's the kind that doesn't announce itself.",
+    )),
     VersionLog("1.102", "Jul 26, 2026", "Blocking now guards its own off-switch", listOf(
         "Until now, everything this app does could be switched off in about five seconds. Settings ▸ Accessibility ▸ AppBlocker ▸ off, and every block is gone — apps, blocked words and websites all at once, because all of them are enforced by that one service. No PIN, no wait, no warning. That is not a small hole in the app; for those five seconds it *is* the app.",
         "Strict Mode already blocked that page, but only while a Strict session was actually running. The rest of the time nothing defended it at all. So the strongest lock in the app was guarding a door that stood, most days, in an open field.",

@@ -786,7 +786,13 @@ class BlockerAccessibilityService : AccessibilityService() {
 
         val cn = className?.lowercase().orEmpty()
         val byClass = STRICT_GUARD_HINTS.any { cn.contains(it) }
-        val danger = byClass || guardScreenIsDangerous()
+        // Strict keeps the original, broad rule: the *kind* of page is enough, whoever it is
+        // about. The always-on guard additionally requires the page to be OURS — see aboutUs().
+        val danger = if (strict) {
+            byClass || guardScreenIsDangerous()
+        } else {
+            (byClass && aboutUs()) || guardScreenIsDangerous()
+        }
         if (!danger) return false
 
         // Monotonic, not the wall clock: this throttle claims "already bouncing" WITHOUT
@@ -821,15 +827,23 @@ class BlockerAccessibilityService : AccessibilityService() {
         return true
     }
 
-    /** Lowercased visible text of the current page (rootInActiveWindow only). Kept separate from
-     *  extractVisibleText(), which strips com.android.settings (it's in KEYWORD_SCAN_EXCLUDED). */
+    /**
+     * Lowercased visible text of the current page (rootInActiveWindow only). Kept separate from
+     * extractVisibleText(), which strips com.android.settings (it's in KEYWORD_SCAN_EXCLUDED).
+     *
+     * The budget is deliberately far larger than the keyword scanner's. This walks *settings
+     * lists*, where the one row that decides the answer — ours — can sit well down a long list of
+     * apps or services, and running out of nodes before reaching it reads as "not our page" and
+     * lets the off-switch through. It only ever runs on [GUARD_PACKAGES], so the cost lands on
+     * Settings screens and nowhere else.
+     */
     private fun guardScreenText(): String {
         val root = rootInActiveWindow ?: return ""
         val sb = StringBuilder()
         val queue = ArrayDeque<AccessibilityNodeInfo>()
         queue.add(root)
         var visited = 0
-        while (queue.isNotEmpty() && visited < 300 && sb.length < 3000) {
+        while (queue.isNotEmpty() && visited < 800 && sb.length < 8000) {
             val node = queue.removeFirst()
             visited++
             node.text?.let { if (it.isNotBlank()) sb.append(it).append(' ') }
@@ -840,6 +854,32 @@ class BlockerAccessibilityService : AccessibilityService() {
         // can be stored in one spelling and still match the alef/ta-marbuta variants and the
         // diacritics a Settings app actually renders.
         return WebContentFilter.normalizeArabic(sb.toString().lowercase())
+    }
+
+    /**
+     * Whether the dangerous page in front of us is about **AppBlocker**, rather than some other
+     * app or service that merely lives on the same kind of screen.
+     *
+     * This is what lets the always-on guard leave the rest of the phone alone: without it, every
+     * app's App-info page and the whole Accessibility section were bounced, so force-stopping a
+     * frozen app or clearing a cache cost the full unlock wait. Strict Mode does *not* use this —
+     * there, the kind of page is enough.
+     *
+     * **An unreadable screen answers `true`.** That is the whole design of this function. A blank
+     * read means "we could not tell", and the two ways to be wrong are not symmetrical: a wrong
+     * `true` bounces the owner off a page they could have used, which they notice and can wait
+     * out; a wrong `false` leaves the off-switch reachable, which is invisible and undoes every
+     * block in the app. Same reasoning as `isShortsOnScreen()` answering null rather than false
+     * when the tree can't be read (docs/BLOCKING_INVARIANTS.md, sweep 5).
+     *
+     * Known limit, deliberately accepted: in a long scrollable list Android only builds nodes for
+     * rendered rows, so our row genuinely is not in the tree until it is scrolled into view. The
+     * content-event re-check (see handleEvent) is what catches it then, via the text path below.
+     */
+    private fun aboutUs(): Boolean {
+        val text = guardScreenText()
+        if (text.isBlank()) return true
+        return text.contains("appblocker")
     }
 
     /** True if the current page is an off-switch danger page — us, next to an accessibility /
