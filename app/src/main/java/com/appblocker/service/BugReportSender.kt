@@ -2,10 +2,17 @@ package com.appblocker.service
 
 import android.content.Context
 import android.os.Build
+import android.provider.Settings
 import android.util.Log
 import com.appblocker.BuildConfig
 import com.appblocker.data.BugReport
+import com.appblocker.data.AttemptCounter
+import com.appblocker.data.BlockLayouts
+import com.appblocker.data.BlockLog
+import com.appblocker.data.BlockThemes
 import com.appblocker.data.BugReportQueue
+import com.appblocker.data.SettingsStore
+import com.appblocker.ui.hasUsageAccess
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -43,6 +50,39 @@ object BugReportSender {
      *  free of Android types and therefore unit-testable. */
     fun describeDevice(): String = "${Build.MANUFACTURER} ${Build.MODEL}"
 
+    /**
+     * The app's *configuration* at the moment of the report: which look is chosen, whether
+     * blocking is actually running, what the owner has switched on, how many blocks happened
+     * today.
+     *
+     * Without this a report reads "the block screen didn't appear" with nothing to reason from —
+     * the owner cannot be expected to know that "the service was in its STALLED state and you had
+     * no usage access" is the useful half of that sentence.
+     *
+     * **Every value here is a setting or a count. None can hold content** — no keyword, no URL, no
+     * app or package name. [BugReport.sanitizeContext] drops anything whose key is not on the
+     * allow-list, so if a later change adds something it shouldn't, it never leaves the device.
+     *
+     * Deliberately reads nothing from the database. This runs on the error path, where the app is
+     * already in trouble, and a synchronous Room query there would be a new way to make things
+     * worse. That is why there is no "how many rules" or "is Strict running" — both live in Room.
+     * Everything below is SharedPreferences or a system flag.
+     */
+    fun appContext(ctx: Context): Map<String, String> = runCatching {
+        mapOf(
+            "layout" to BlockLayouts.current(ctx).id,
+            "theme" to BlockThemes.current(ctx).id,
+            "serviceOn" to AccessibilityUtil.isEnabled(ctx).toString(),
+            "protection" to ProtectionWatchdog.state(ctx).name,
+            "guard" to SettingsStore.guardOffSwitch(ctx).toString(),
+            "blocksToday" to AttemptCounter.summary(ctx).sumOf { it.today }.toString(),
+            "adultPack" to SettingsStore.adultWordsPack(ctx).toString(),
+            "scanEverywhere" to SettingsStore.keywordsEverywhere(ctx).toString(),
+            "overlayPermission" to Settings.canDrawOverlays(ctx).toString(),
+            "usageAccess" to hasUsageAccess(ctx).toString(),
+        )
+    }.getOrDefault(emptyMap())
+
     /** Records an error for later sending. Safe to call from anywhere, including the watcher. */
     fun report(context: Context, where: String, t: Throwable) {
         if (!enabled()) return
@@ -56,6 +96,8 @@ object BugReportSender {
                     flavor = BuildConfig.FLAVOR,
                     androidSdk = Build.VERSION.SDK_INT,
                     device = describeDevice(),
+                    context = appContext(context),
+                    recentBlocks = BlockLog.recent(context),
                 ),
             )
         }
@@ -73,6 +115,8 @@ object BugReportSender {
                     flavor = BuildConfig.FLAVOR,
                     androidSdk = Build.VERSION.SDK_INT,
                     device = describeDevice(),
+                    context = appContext(context),
+                    recentBlocks = BlockLog.recent(context),
                 ),
             )
             flush(context)
