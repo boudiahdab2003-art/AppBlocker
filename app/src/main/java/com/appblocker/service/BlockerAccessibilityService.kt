@@ -27,6 +27,7 @@ import com.appblocker.R
 import com.appblocker.data.AppRule
 import com.appblocker.data.AttemptCounter
 import com.appblocker.data.BlockMode
+import com.appblocker.data.BlockLog
 import com.appblocker.data.BlockedKeyword
 import com.appblocker.data.BlockerDatabase
 import com.appblocker.data.DeviceBoot
@@ -1550,6 +1551,26 @@ class BlockerAccessibilityService : AccessibilityService() {
             AttemptCounter.record(applicationContext, counterKey)
             lastCountedOffence = offenceKey
             lastCountedAt = now
+        }
+        // Diagnostic breadcrumb, recorded at the one place every cover passes through. Shape
+        // only — which path raised it, whether our own UI was in front, whether the window on
+        // screen actually matched what we were blocking. Never the app, word or page: see
+        // BlockLog. `ownUi=true` or `rootOk=false` here is what identifies a cover landing
+        // somewhere it shouldn't, which is otherwise invisible after the milliseconds it lasts.
+        runCatching {
+            BlockLog.record(
+                context = applicationContext,
+                kind = when {
+                    counterKey == "strict_guard" -> "guard"
+                    counterKey == CoverGate.SHORTS_KEY -> "shorts"
+                    packageName != null -> "app"
+                    else -> "word"
+                },
+                ownUi = OwnUi.visible,
+                rootOk = packageName == null ||
+                    rootInActiveWindow?.packageName?.toString() == packageName,
+                counted = fresh,
+            )
         }
         val label = packageName?.let { loadLabel(it) }
         val msg = message ?: label?.let { "$it is blocked" } ?: "This is blocked right now."

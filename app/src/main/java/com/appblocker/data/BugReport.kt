@@ -59,6 +59,11 @@ data class BugReport(
      * back door for the data the rest of this class is careful to exclude.
      */
     val context: Map<String, String> = emptyMap(),
+    /**
+     * The last few block screens raised, by shape only — see [BlockLog], which is where the
+     * guarantee that these lines cannot carry content lives.
+     */
+    val recentBlocks: List<String> = emptyList(),
 ) {
 
     /**
@@ -96,6 +101,15 @@ data class BugReport(
         appendLine("| Android | SDK $androidSdk |")
         appendLine("| Device | $device |")
         context.toSortedMap().forEach { (k, v) -> appendLine("| $k | $v |") }
+        if (recentBlocks.isNotEmpty()) {
+            appendLine()
+            appendLine("**Recent blocks** (newest first — `ownUi=true` or `rootOk=false` means a")
+            appendLine("cover landed somewhere it should not have):")
+            appendLine()
+            appendLine("```")
+            recentBlocks.forEach { appendLine(it) }
+            appendLine("```")
+        }
         if (frames.isNotEmpty()) {
             appendLine()
             appendLine("```")
@@ -171,6 +185,7 @@ data class BugReport(
             androidSdk: Int,
             device: String,
             context: Map<String, String> = emptyMap(),
+            recentBlocks: List<String> = emptyList(),
         ) = BugReport(
             where = where,
             errorClass = t.javaClass.name.substringAfterLast('.'),
@@ -181,6 +196,7 @@ data class BugReport(
             androidSdk = androidSdk,
             device = device,
             context = sanitizeContext(context),
+            recentBlocks = recentBlocks,
         )
 
         /** Builds a report the owner typed himself. */
@@ -191,6 +207,7 @@ data class BugReport(
             androidSdk: Int,
             device: String,
             context: Map<String, String> = emptyMap(),
+            recentBlocks: List<String> = emptyList(),
         ) = BugReport(
             where = "owner",
             errorClass = null,
@@ -201,6 +218,7 @@ data class BugReport(
             androidSdk = androidSdk,
             device = device,
             context = sanitizeContext(context),
+            recentBlocks = recentBlocks,
         )
 
         /**

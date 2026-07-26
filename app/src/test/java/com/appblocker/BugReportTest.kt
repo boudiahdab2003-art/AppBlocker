@@ -179,3 +179,42 @@ class BugReportTest {
         assertFalse(json.contains(secret))
     }
 }
+
+/**
+ * The block log answers "why did it block?" without saying *what* it blocked — the distinction
+ * the whole reporting feature rests on. Its value is that a cover landing somewhere wrong is
+ * invisible after the milliseconds it lasts, so the shape has to be recorded as it happens.
+ */
+class BlockLogTest {
+
+    @Test
+    fun `an unknown kind is recorded as other, never passed through`() {
+        // The realistic mistake: the call site is deep in the watcher where a package name is
+        // the nearest variable to hand. A stray one must not become a log line.
+        val e = com.appblocker.data.BlockLog.decode(
+            "1000|com.instagram.android|false|true|true", now = 1000,
+        )
+        assertEquals("other", e?.kind)
+    }
+
+    @Test
+    fun `a rendered line contains only fixed tokens`() {
+        val line = com.appblocker.data.BlockLog
+            .decode("1000|app|true|false|true", now = 4000)!!.render()
+        assertEquals("3s ago  app  ownUi=true  rootOk=false  counted=true", line)
+    }
+
+    @Test
+    fun `a clock jump never renders a negative age`() {
+        // Recorded "in the future" after a clock change; a human reads these against each other.
+        val e = com.appblocker.data.BlockLog.decode("9000|app|false|true|false", now = 1000)
+        assertEquals(0L, e?.agoMs)
+    }
+
+    @Test
+    fun `a malformed entry is dropped rather than crashing the report`() {
+        assertEquals(null, com.appblocker.data.BlockLog.decode("nonsense", now = 1))
+        assertEquals(null, com.appblocker.data.BlockLog.decode("1|app|true", now = 1))
+        assertEquals(null, com.appblocker.data.BlockLog.decode("x|app|true|true|true", now = 1))
+    }
+}

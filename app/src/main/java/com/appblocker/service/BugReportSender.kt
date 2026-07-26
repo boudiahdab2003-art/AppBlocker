@@ -8,6 +8,7 @@ import com.appblocker.BuildConfig
 import com.appblocker.data.BugReport
 import com.appblocker.data.AttemptCounter
 import com.appblocker.data.BlockLayouts
+import com.appblocker.data.BlockLog
 import com.appblocker.data.BlockThemes
 import com.appblocker.data.BugReportQueue
 import com.appblocker.data.SettingsStore
@@ -96,6 +97,7 @@ object BugReportSender {
                     androidSdk = Build.VERSION.SDK_INT,
                     device = describeDevice(),
                     context = appContext(context),
+                    recentBlocks = BlockLog.recent(context),
                 ),
             )
         }
@@ -114,6 +116,7 @@ object BugReportSender {
                     androidSdk = Build.VERSION.SDK_INT,
                     device = describeDevice(),
                     context = appContext(context),
+                    recentBlocks = BlockLog.recent(context),
                 ),
             )
             flush(context)
