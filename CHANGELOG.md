@@ -3,6 +3,15 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.105
+- Other accessibility apps are reachable again. The guard was blocking the whole Accessibility section rather than just AppBlocker's entry, so every other service — TalkBack included — sat behind a two-hour wait. It asked "does this page mention AppBlocker?", and Android's list names every installed service. It now asks "does this page name AppBlocker and nobody else?", so the list opens normally and only our own entry bounces.
+
+Size buttons actually resize things now. They only ever changed text, never the app icon — so on the Focus screen, which is mostly a big icon, pressing Larger moved the label and left the picture alone. It looked broken because it half was. There are also five steps now instead of three: Tiny, Small, Normal, Large, Huge.
+
+Better quotes. Several of the old ones were generic, and a few were about starting things, which has nothing to say to someone trying to stop. The list now leans on self-mastery over desire, plus new lines written for the moment you actually read that screen.
+
+And a new Twelve Steps screen in Profile — the programme in plain English, with a note under each step on what it actually asks of you. The wording is the app's own summary, not SAA's official text, which they don't permit to be reprinted; there's a link to the real thing at the top.
+
 ## v1.104
 - Fixes the block screen flashing where it shouldn't — at least one cause of it. When you open a Settings page, the app checks whether it's AppBlocker's own page before covering it, and I'd made that check guess "treat it as ours" whenever it couldn't read the screen. That ignored when the check runs: at the instant a page is opening, which is exactly when the screen usually can't be read yet. So any app's App info page could flash a cover depending on timing. It now waits instead of guessing.
 
