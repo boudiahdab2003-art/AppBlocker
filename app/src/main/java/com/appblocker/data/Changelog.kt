@@ -13,6 +13,13 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.109", "Jul 27, 2026", "The guard stops blocking pages you actually need", listOf(
+        "It was blocking your battery settings. That page has an \"Uninstall\" button at the bottom, so it matched the words the guard watches for — and blocking it is self-defeating, because this app *tells you* to set battery to \"No restrictions\" so blocking survives in the background.",
+        "The real mistake was bigger than that one page. I'd been guarding the whole **App info** screen, which is the hub for battery, permissions, storage, notifications *and* uninstall. Guarding it to protect one button costs you everything else on it.",
+        "The guard now covers exactly three screens, and they're the only three that actually end your protection: **AppBlocker's own accessibility page**, the **\"uninstall this app?\" confirmation**, and the screen for **turning off device admin**. Battery, permissions and app details are all yours again.",
+        "One thing given up on purpose: **Force stop** is no longer blocked. It's on the same page as the battery settings, and force-stopping only pauses blocking until the service restarts by itself — whereas the battery and permission settings there are ones the app asks you to change. Uninstalling is still guarded, at the confirmation dialog where it actually happens.",
+        "Strict Mode is unchanged and still blocks all of those pages.",
+    )),
     VersionLog("1.108", "Jul 27, 2026", "You can turn on uninstall protection again", listOf(
         "The guard was blocking Android's \"Activate device admin app?\" screen — the one you have to pass through to switch uninstall protection ON. So the protection could never be enabled, while the app still told you it was guarded. That is the worst kind of bug this app can have, and it was mine.",
         "It happened because that screen says \"device admin\" and has an \"Uninstall app\" button on it, so it matched every word the guard watches for. Reading the wording can't separate \"activate\" from \"deactivate\" reliably — one word literally contains the other, and it's translated on other phones.",
