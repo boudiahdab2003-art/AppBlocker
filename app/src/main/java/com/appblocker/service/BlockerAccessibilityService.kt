@@ -803,7 +803,8 @@ class BlockerAccessibilityService : AccessibilityService() {
             // accessibility class names so it cannot resurrect the bug above.
             // `== true` because null means "couldn't read", which must not bounce (see aboutUs).
             ourOwnServicePage() ||
-                (byClass && !cn.contains("accessibilit") && aboutUs() == true)
+                (byClass && !cn.contains("accessibilit") && aboutUs() == true) ||
+                removalScreenIsDangerous()
         }
         if (!danger) return false
 
@@ -924,6 +925,29 @@ class BlockerAccessibilityService : AccessibilityService() {
         val text = guardScreenText()
         if (text.isBlank()) return null
         return text.contains("appblocker")
+    }
+
+    /**
+     * True on a page that is about **removing or disabling AppBlocker** — uninstall, force-stop,
+     * or the device-admin deactivation screen — identified by our name beside one of those
+     * actions rather than by a class name.
+     *
+     * This exists because class names are not enough on the owner's phone. HyperOS routes these
+     * through generic containers (`SubSettings`, the MIUI security centre) whose names match
+     * nothing in [STRICT_GUARD_HINTS], so the class-based arm silently covers nothing there — and
+     * v1.106 removed the text fallback from the non-Strict path while fixing the accessibility
+     * list, which left the uninstall route unguarded on exactly the device this app runs on. The
+     * owner found that within the hour: "I can simply turn it off and uninstall it."
+     *
+     * Deliberately its OWN marker list rather than reusing [GUARD_TEXT_MARKERS]. That list
+     * contains the accessibility words, and matching those on screen text is what bounced the
+     * services list through three releases. Removal words cannot appear on that list, so this
+     * restores the protection without re-opening the bug.
+     */
+    private fun removalScreenIsDangerous(): Boolean {
+        val text = guardScreenText()
+        if (!text.contains("appblocker")) return false
+        return REMOVAL_TEXT_MARKERS.any { text.contains(it) }
     }
 
     /** True if the current page is an off-switch danger page — us, next to an accessibility /
@@ -1831,6 +1855,21 @@ class BlockerAccessibilityService : AccessibilityService() {
          *  shows on our service's own settings page, and on no other page. Lowercased to match
          *  guardScreenText(). If that string is ever reworded, reword this with it. */
         private const val OUR_SERVICE_DESCRIPTION_FRAGMENT = "appblocker uses this to detect"
+
+        /**
+         * Words that only appear where AppBlocker can be removed or switched off: the uninstall
+         * confirmation, the app-info page's force-stop, and the device-admin deactivation screen.
+         *
+         * Kept apart from [GUARD_TEXT_MARKERS] on purpose — that list includes the accessibility
+         * words, and matching those against screen text is precisely what blocked the services
+         * list in 1.102 through 1.105. Nothing here can appear on that list.
+         */
+        private val REMOVAL_TEXT_MARKERS = listOf(
+            "uninstall", "force stop", "force-stop", "deactivate", "device admin",
+            // Arabic, folded the same way guardScreenText() folds the screen: إلغاء التثبيت
+            // (uninstall), فرض الإيقاف (force stop), مسؤول الجهاز (device admin).
+            "الغاء التثبيت", "فرض الايقاف", "ايقاف اجباري", "مسئول الجهاز", "مسءول الجهاز",
+        )
 
         private val STRICT_GUARD_HINTS = listOf(
             "accessibilit", "deviceadmin", "device_admin",
