@@ -516,8 +516,8 @@ written down in this file and read as a note rather than a bug** — sweep 5 abo
   disables *every* block in the app — apps, keywords and websites alike, since all of them are
   enforced from the watcher. Strict Mode was a lock on a door standing in an open field.
 - **Fixed** by `OffSwitchGuard`: the guard now also runs whenever the owner has it on (default on),
-  with the escape modelled on the adult pack's cooling-off — a typed gate, then a 15-minute
-  clock-proof wait, then a 5-minute window. `strict ||` still comes first, so Strict cannot become
+  with the escape modelled on the adult pack's cooling-off — a typed gate, then a two-hour
+  clock-proof wait, then a 15-minute window. `strict ||` still comes first, so Strict cannot become
   weaker than it was.
 - **Second bug found while fixing it, never hit by anyone:** `GUARD_TEXT_MARKERS` was English-only
   and the fallback *fails silently* when it doesn't match — on a phone whose Settings are not in

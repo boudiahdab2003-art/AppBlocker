@@ -123,11 +123,23 @@ class OffSwitchGuardTest {
     }
 
     @Test
-    fun `the wait is the full delay and the window really is shorter`() {
-        // Guards the intent of the two constants rather than their exact values: the wait has to
-        // outlast an impulse, and the window has to be short enough that a forgotten unlock
-        // isn't an open door for the rest of the day.
-        assertTrue(delay >= 10 * 60_000L)
+    fun `the wait outlasts an impulse and the window is shorter but not a trap`() {
+        // The intent of the two constants rather than their exact values. The wait has to be long
+        // enough that the urge has passed by the time it is served; the window has to be shorter
+        // (a forgotten unlock must not be an open door all day) but not so short that missing it
+        // by being asleep or at work costs the whole wait again.
+        assertTrue(delay >= 60 * 60_000L)
         assertTrue(window < delay)
+        assertTrue(window >= 10 * 60_000L)
+    }
+
+    @Test
+    fun `the labels say the same thing as the constants`() {
+        // The block screen, the Profile row and the gate all print these words while the guard
+        // acts on the numbers. Changing one and not the other would leave the app confidently
+        // telling the owner a wait that isn't the one being enforced — and he'd only find out by
+        // sitting through it.
+        assertEquals("${delay / 60 / 60_000} hours", OffSwitchGuard.DELAY_LABEL)
+        assertEquals("${window / 60_000} minutes", OffSwitchGuard.WINDOW_LABEL)
     }
 }

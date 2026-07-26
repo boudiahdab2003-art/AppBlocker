@@ -259,7 +259,7 @@ fun ProfileScreen(
                             "${fmtCountdown(guardUntilExpiry)}."
                     else -> "On. The Accessibility page is blocked, so blocking can't be " +
                         "switched off on a whim. Turning this off takes " +
-                        "${OffSwitchGuard.UNLOCK_DELAY_MS / 60_000} minutes."
+                        "${OffSwitchGuard.DELAY_LABEL}."
                 },
                 badge = guardOn,
                 // Deliberately usable during Strict: the guard can only be turned *on* or have a
@@ -451,9 +451,9 @@ fun ProfileScreen(
             blurb = "This is the switch that stops you switching blocking off in a bad moment. " +
                 "To be sure it's really you and really deliberate, type the paragraph below — " +
                 "you can't paste it — and wait for the timer. Even then the guard stays on for " +
-                "another ${OffSwitchGuard.UNLOCK_DELAY_MS / 60_000} minutes; after that you " +
-                "have ${OffSwitchGuard.UNLOCK_WINDOW_MS / 60_000} minutes to turn it off.",
-            confirmLabel = "Start the ${OffSwitchGuard.UNLOCK_DELAY_MS / 60_000}-minute wait",
+                "another ${OffSwitchGuard.DELAY_LABEL}; after that you have " +
+                "${OffSwitchGuard.WINDOW_LABEL} to turn it off.",
+            confirmLabel = "Start the ${OffSwitchGuard.DELAY_LABEL} wait",
             dismissLabel = "Keep it on",
             onDismiss = { showGuardGate = false },
             onConfirm = {

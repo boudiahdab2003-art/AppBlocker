@@ -805,7 +805,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                 "You can't change this while Strict Mode is active."
             } else {
                 "Blocking guards this page. You can unlock it in AppBlocker — it takes " +
-                    "${OffSwitchGuard.UNLOCK_DELAY_MS / 60_000} minutes."
+                    "${OffSwitchGuard.DELAY_LABEL}."
             },
             packageName = null,
             counterKey = "strict_guard",

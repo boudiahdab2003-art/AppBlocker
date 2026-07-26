@@ -19,19 +19,33 @@ import android.content.Context
  * and the request lapses, gate and all. The same shape as the adult pack's cooling-off
  * ([SettingsStore.adultPackOffRequest]), and for the same reason: the urge that wants the toggle
  * now does not survive the wait, and a protection you can never escape is one you eventually
- * uninstall. The wait is minutes rather than the pack's 24 hours because this one has to be
- * usable in a real emergency — being locked out of Settings on a phone you need is a genuine
- * harm, not a hypothetical one.
+ * uninstall. The wait is hours rather than the pack's 24 because this one has to stay usable in a
+ * real emergency — being locked out of Settings on a phone you need is a genuine harm, not a
+ * hypothetical one.
  *
  * Deadlines come from [GuardedDeadline], so winding the device clock cannot shorten either
  * moment — the bypass that has now been found three times in this app.
  */
 object OffSwitchGuard {
 
-    /** The wait after passing the gate before the guard stands down, and how long it then stays
-     *  down. Deliberately short enough to be survivable and long enough to outlast an impulse. */
-    const val UNLOCK_DELAY_MS = 15 * 60_000L
-    const val UNLOCK_WINDOW_MS = 5 * 60_000L
+    /**
+     * The wait after passing the gate before the guard stands down, and how long it then stays
+     * down. Long enough to outlast an impulse, short enough to survive a real emergency.
+     *
+     * The window is *not* five minutes, which is what it would be if it had simply kept its
+     * proportion when the wait went from 15 minutes to two hours. After a two-hour wait a
+     * five-minute window is a trap: miss it because you were asleep, driving or at work and the
+     * price is the whole gate and another two hours. The wait is the friction; the window only
+     * has to be long enough to notice and act.
+     */
+    const val UNLOCK_DELAY_MS = 2 * 60 * 60_000L
+    const val UNLOCK_WINDOW_MS = 15 * 60_000L
+
+    /** Plain-language names for the two durations. The block screen, the Profile row and the gate
+     *  all read them from here rather than formatting the millis themselves, so the wording can't
+     *  drift apart — and "120 minutes" is not how anybody says two hours. */
+    const val DELAY_LABEL = "2 hours"
+    const val WINDOW_LABEL = "15 minutes"
 
     /** What the owner is currently looking at, and what the watcher acts on. */
     enum class Phase {
