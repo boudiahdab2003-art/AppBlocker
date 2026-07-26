@@ -264,7 +264,16 @@ fun ProfileScreen(
             ProfileRow(
                 icon = Icons.Filled.Shield,
                 title = "Prevent uninstall",
-                subtitle = "Device admin stops AppBlocker being uninstalled until you turn this off.",
+                // Says so out loud when it's off. The guard makes the *page* hard to reach, but
+                // the actual "you cannot uninstall this" comes from device admin — and the two
+                // being separate switches means the app can look protected while it isn't.
+                subtitle = if (adminOn) {
+                    "On. AppBlocker can't be uninstalled until you turn this off, and reaching " +
+                        "that switch goes through the guard."
+                } else {
+                    "OFF — AppBlocker can be uninstalled right now. Turn this on; the guard only " +
+                        "makes the page hard to reach, this is what actually stops removal."
+                },
                 badge = adminOn,
                 enabled = !locked,
                 // Same toggle as Setup & permissions: on -> system confirm screen, off -> remove.
