@@ -38,6 +38,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
@@ -199,6 +200,19 @@ private fun BlockScreen(
 
         // The hero quote.
         if (shows(BlockArrangement.Element.QUOTE)) {
+        // The chosen side, mirroring what BlockScreenRenderer does to the overlay: the quote
+        // spans the width so it takes a text alignment, the author line wraps its text so it
+        // takes a placement instead.
+        val quoteTextAlign = when (arrangement.quoteAlign) {
+            BlockArrangement.QuoteAlign.LEFT -> TextAlign.Start
+            BlockArrangement.QuoteAlign.CENTRE -> TextAlign.Center
+            BlockArrangement.QuoteAlign.RIGHT -> TextAlign.End
+        }
+        val authorAlign = when (arrangement.quoteAlign) {
+            BlockArrangement.QuoteAlign.LEFT -> Alignment.Start
+            BlockArrangement.QuoteAlign.CENTRE -> Alignment.CenterHorizontally
+            BlockArrangement.QuoteAlign.RIGHT -> Alignment.End
+        }
         Column(
             Modifier.fillMaxWidth().weight(1f),
             verticalArrangement = Arrangement.Center,
@@ -209,6 +223,8 @@ private fun BlockScreen(
                 lineHeight = (quoteSize * 1.18f).sp,
                 fontFamily = FontFamily.Serif,
                 color = primaryText,
+                textAlign = quoteTextAlign,
+                modifier = Modifier.fillMaxWidth(),
             )
             Text(
                 "— ${quote.author}".uppercase(),
@@ -220,7 +236,7 @@ private fun BlockScreen(
                         Brush.linearGradient(listOf(Color(theme.accent), Color(it)))
                     } ?: SolidColor(Color(theme.accent)),
                 ),
-                modifier = Modifier.padding(top = 18.dp),
+                modifier = Modifier.align(authorAlign).padding(top = 18.dp),
             )
         }
         } else {
