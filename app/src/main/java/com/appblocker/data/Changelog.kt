@@ -13,6 +13,12 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.105", "Jul 26, 2026", "Other accessibility apps are reachable again", listOf(
+        "You said you use other accessibility services and the guard was in the way. It was blocking the entire Accessibility section, not just AppBlocker's own entry — so every other service, TalkBack included, sat behind a two-hour wait. That's worse than inconvenient, so this is the fix.",
+        "The reason is worth knowing, because it's the third time I've got this guard's logic wrong in a different way. It asked \"does this page mention AppBlocker?\" — and Android's Accessibility list names *every* installed service, ours among them. So the list passed the same test our own page does. The signal wasn't weak; it was true of both pages by design.",
+        "It now asks \"does this page name AppBlocker and nobody else?\" The list names many services, our entry names one. So the list and other services' pages open normally, and tapping into AppBlocker's own entry still bounces.",
+        "The honest cost: if your phone ever shows an on/off switch directly in the list rather than making you tap in, the service could be switched off there without the guard appearing. Tapping into our entry is still guarded, which is the normal route. This is the narrower, more usable setting you've now asked for twice, and it is slightly weaker than blocking the whole section.",
+    )),
     VersionLog("1.104", "Jul 26, 2026", "Fixes the block screen flashing where it shouldn't", listOf(
         "You reported the block screen flashing in the wrong places. That was mine, from yesterday's 1.103 — and it was a mistake in the reasoning, not a typo.",
         "When you open a Settings page, the app checks whether it's AppBlocker's own page before covering it. I made that check answer \"treat it as ours\" whenever it couldn't read the screen, on the logic that a block you didn't need is annoying but obvious, while a block that fails to happen is invisible. That logic is sound in general — but it ignored *when* the check runs. It runs at the exact instant the page is opening, which is precisely when the screen usually can't be read yet. So \"couldn't read it\" wasn't a rare accident; it was the normal case, and any app's App info page could flash a cover depending on timing.",

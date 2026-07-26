@@ -100,6 +100,20 @@ class BlockerAccessibilityService : AccessibilityService() {
     @Volatile private var browserPackages: Set<String> = emptySet()
     // Home-screen (launcher) apps — never keyword-scanned, see findLauncherPackages(this).
     @Volatile private var launcherPackages: Set<String> = emptySet()
+
+    /**
+     * Labels of every installed accessibility service **except ours**, lowercased.
+     *
+     * This is what tells the Accessibility *list* apart from AppBlocker's own entry in it. Both
+     * pages name AppBlocker, so "does this page mention us" — the test used until now — matches
+     * both and bounced the whole section, locking the owner out of every other service he uses
+     * behind a two-hour wait. Only our own page names us and *nobody else*.
+     *
+     * Short labels are dropped: a generic two-word name appearing incidentally on our own page
+     * would read as "this is the list" and switch the guard off on the one page it exists to
+     * defend. Being wrong that way is far worse than failing to recognise the list.
+     */
+    @Volatile private var otherServiceLabels: Set<String> = emptySet()
     // Negative cache for isLauncherPkg, so its throttled re-detection only runs on new packages.
     @Volatile private var knownNonLauncherPkgs: Set<String> = emptySet()
     @Volatile private var lastLauncherRefreshAt = 0L
@@ -892,7 +906,13 @@ class BlockerAccessibilityService : AccessibilityService() {
     private fun aboutUs(): Boolean? {
         val text = guardScreenText()
         if (text.isBlank()) return null
-        return text.contains("appblocker")
+        if (!text.contains("appblocker")) return false
+        // Naming us is not enough: Android's Accessibility LIST names every installed service,
+        // ours among them, so "mentions appblocker" is true of both the list and our own entry —
+        // and bouncing the list locks the owner out of every other accessibility service he uses,
+        // behind a two-hour wait, TalkBack included. Only our own page names us and nobody else.
+        // Whole-word, so a service called "Files" can't match inside "Profiles".
+        return otherServiceLabels.none { WebContentFilter.containsWord(text, it) }
     }
 
     /** True if the current page is an off-switch danger page — us, next to an accessibility /
@@ -1007,6 +1027,11 @@ class BlockerAccessibilityService : AccessibilityService() {
             launcherPackages = it
             knownNonLauncherPkgs = emptySet() // a fresh answer retires every earlier guess
         }
+        // Same empty-answer rule as the two above, and it matters more here: an empty set makes
+        // aboutUs() unable to recognise the Accessibility list, which silently returns the guard
+        // to bouncing the whole section — the exact behaviour this set exists to end.
+        findOtherAccessibilityLabels(applicationContext, packageName)
+            .takeIf { it.isNotEmpty() }?.let { otherServiceLabels = it }
     }
 
     /** Launcher check that self-heals after a default-launcher change: the set is built at
