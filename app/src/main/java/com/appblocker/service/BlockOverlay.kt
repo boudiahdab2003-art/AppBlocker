@@ -22,6 +22,7 @@ import androidx.core.content.ContextCompat
 import com.appblocker.R
 import com.appblocker.data.AppIcons
 import com.appblocker.data.AttemptCounter
+import com.appblocker.data.BlockLayouts
 import com.appblocker.data.BlockThemes
 import com.appblocker.data.Quotes
 
@@ -51,6 +52,9 @@ internal class BlockOverlay(private val context: Context) {
     // cover is up. Volatile so those reads see the current value rather than a stale one.
     @Volatile private var view: View? = null
     private var preInflated: View? = null
+    /** Which layout `view`/`preInflated` was inflated from, so a layout picked in the meantime
+     *  isn't ignored in favour of the cached view. 0 = nothing held. */
+    private var heldLayoutRes = 0
 
     /** True while a cover is attached. */
     val isShowing: Boolean get() = view != null
@@ -92,6 +96,15 @@ internal class BlockOverlay(private val context: Context) {
     ): Boolean = try {
         this.counterKey = counterKey
         this.isAppBlock = isAppBlock
+        // The layout can be changed between blocks, and both `view` and `preInflated` outlive a
+        // single block — so a cached view built from the previous choice has to go, or the new
+        // one would not appear until the service restarted.
+        if (heldLayoutRes != BlockLayouts.current(context).layoutRes) {
+            view?.let { runCatching { windowManager.removeView(it) } }
+            view = null
+            preInflated = null
+            heldLayoutRes = 0
+        }
         val v = view ?: (preInflated ?: newView(onClose)).also {
             preInflated = null
             val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
@@ -113,20 +126,22 @@ internal class BlockOverlay(private val context: Context) {
         // blocks (and survives in preInflated), so a theme picked between two blocks would
         // otherwise not appear until the service restarted.
         val theme = applyTheme(v)
-        v.findViewById<TextView>(R.id.overlay_title).text = title
-        v.findViewById<TextView>(R.id.overlay_subtitle).text = message
+        // Every lookup below is null-safe: a layout that leaves the number or the quote out is a
+        // valid choice (see BlockLayouts), not a broken layout.
+        v.findViewById<TextView>(R.id.overlay_title)?.text = title
+        v.findViewById<TextView>(R.id.overlay_subtitle)?.text = message
         // Masthead: every dodged open counts as ~3 minutes of life back.
-        v.findViewById<TextView>(R.id.overlay_stat_number).text =
+        v.findViewById<TextView>(R.id.overlay_stat_number)?.text =
             (AttemptCounter.totalToday(context) * MINUTES_PER_DODGE).toString()
         // Fresh motivation every time a NEW block appears (the view is reused across blocks).
         val quoteView = v.findViewById<TextView>(R.id.overlay_quote)
-        if (freshBlock || quoteView.text.isNullOrBlank()) {
+        if (quoteView != null && (freshBlock || quoteView.text.isNullOrBlank())) {
             val quote = Quotes.random()
             quoteView.apply {
                 text = quote.text
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, Quotes.sizeSpFor(quote.text))
             }
-            v.findViewById<TextView>(R.id.overlay_quote_author).apply {
+            v.findViewById<TextView>(R.id.overlay_quote_author)?.apply {
                 text = "— ${quote.author}"
                 // Brand sweep across the author line, but only where the theme asks for one —
                 // on the gradient and light backdrops a second gradient fights the first.
@@ -142,8 +157,8 @@ internal class BlockOverlay(private val context: Context) {
         val iconView = v.findViewById<ImageView>(R.id.overlay_icon)
         // Our own mark must be the launcher icon the user actually picked (icon switcher),
         // not the hardcoded default that stops matching the moment they change it.
-        iconView.setImageResource(AppIcons.current(context).previewRes)
-        if (packageName != null) {
+        iconView?.setImageResource(AppIcons.current(context).previewRes)
+        if (iconView != null && packageName != null) {
             // The icon can need a PackageManager decode (cache miss) — keep it off the
             // first frame so the cover lands instantly; guard against a torn-down cover.
             handler.post {
@@ -182,19 +197,19 @@ internal class BlockOverlay(private val context: Context) {
     private fun applyTheme(v: View): BlockThemes.BlockTheme {
         val t = BlockThemes.current(context)
         v.setBackgroundResource(t.backgroundRes)
-        v.findViewById<TextView>(R.id.overlay_title).setTextColor(t.secondaryText)
-        v.findViewById<TextView>(R.id.overlay_stat_number).setTextColor(t.primaryText)
-        v.findViewById<TextView>(R.id.overlay_stat_label).setTextColor(t.accent)
-        v.findViewById<TextView>(R.id.overlay_quote).setTextColor(t.primaryText)
-        v.findViewById<TextView>(R.id.overlay_quote_author).setTextColor(t.accent)
-        v.findViewById<TextView>(R.id.overlay_subtitle).setTextColor(t.primaryText)
+        v.findViewById<TextView>(R.id.overlay_title)?.setTextColor(t.secondaryText)
+        v.findViewById<TextView>(R.id.overlay_stat_number)?.setTextColor(t.primaryText)
+        v.findViewById<TextView>(R.id.overlay_stat_label)?.setTextColor(t.accent)
+        v.findViewById<TextView>(R.id.overlay_quote)?.setTextColor(t.primaryText)
+        v.findViewById<TextView>(R.id.overlay_quote_author)?.setTextColor(t.accent)
+        v.findViewById<TextView>(R.id.overlay_subtitle)?.setTextColor(t.primaryText)
         // mutate() so tinting one theme's drawable can't bleed into the shared constant state
         // (Android caches drawables by resource id across every view that inflates them).
-        v.findViewById<View>(R.id.overlay_badge_bg).background =
+        v.findViewById<View>(R.id.overlay_badge_bg)?.background =
             ContextCompat.getDrawable(context, R.drawable.overlay_badge)?.mutate()?.apply {
                 setTint(t.badge)
             }
-        v.findViewById<Button>(R.id.overlay_close).apply {
+        v.findViewById<Button>(R.id.overlay_close)?.apply {
             setTextColor(t.buttonText)
             background = ContextCompat.getDrawable(context, R.drawable.overlay_btn)?.mutate()
                 ?.apply { if (!t.gradientButton) setTint(t.button) }
@@ -204,11 +219,12 @@ internal class BlockOverlay(private val context: Context) {
 
     /** Inflates the cover and wires its Close button (not yet attached). */
     private fun newView(onClose: () -> Unit): View =
-        LayoutInflater.from(context).inflate(R.layout.overlay_block, null).also {
-            it.findViewById<Button>(R.id.overlay_close).setOnClickListener { onClose() }
-            // Clip the footer icon to a circle — the icon-art PNGs are full-bleed squares,
+        LayoutInflater.from(context).inflate(BlockLayouts.current(context).layoutRes, null).also {
+            heldLayoutRes = BlockLayouts.current(context).layoutRes
+            it.findViewById<Button>(R.id.overlay_close)?.setOnClickListener { onClose() }
+            // Clip the app icon to a circle — the icon-art PNGs are full-bleed squares,
             // and this matches how the icon picker (and most launchers) present icons.
-            it.findViewById<ImageView>(R.id.overlay_icon).apply {
+            it.findViewById<ImageView>(R.id.overlay_icon)?.apply {
                 clipToOutline = true
                 outlineProvider = object : ViewOutlineProvider() {
                     override fun getOutline(view: View, outline: Outline) {

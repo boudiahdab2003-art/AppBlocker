@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- "Focus" block screen: the app you tried to open, large and centred, and nothing else.
+     No minutes counter and no quote — no score to admire and no reading material, just the
+     fact and the way out. Same view ids as overlay_block.xml so BlockOverlay fills any layout
+     the same way; the ids it omits are simply absent and looked up null-safely. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/overlay_bg"
+    android:clickable="true"
+    android:focusable="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:paddingHorizontal="32dp"
+        android:paddingTop="96dp"
+        android:paddingBottom="36dp">
+
+        <ImageView
+            android:id="@+id/overlay_icon"
+            android:layout_width="96dp"
+            android:layout_height="96dp"
+            android:contentDescription="@null" />
+
+        <TextView
+            android:id="@+id/overlay_subtitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="28dp"
+            android:gravity="center"
+            android:fontFamily="serif"
+            android:textColor="@color/block_text_primary"
+            android:textSize="32sp"
+            android:lineSpacingMultiplier="1.1" />
+
+        <TextView
+            android:id="@+id/overlay_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:textAllCaps="true"
+            android:letterSpacing="0.18"
+            android:fontFamily="sans-serif-black"
+            android:textColor="@color/block_text_secondary"
+            android:textSize="13sp" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <Button
+            android:id="@+id/overlay_close"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:background="@drawable/overlay_btn"
+            android:text="Got it"
+            android:textAllCaps="false"
+            android:textColor="@color/block_text_primary"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:stateListAnimator="@null" />
+    </LinearLayout>
+</FrameLayout>

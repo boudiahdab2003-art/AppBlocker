@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import com.appblocker.data.AppIcons
 import com.appblocker.data.AttemptCounter
+import com.appblocker.data.BlockLayouts
 import com.appblocker.data.BlockThemes
 import com.appblocker.data.Quote
 import com.appblocker.data.Quotes
@@ -132,6 +133,10 @@ private fun BlockScreen(
     // denied the overlay permission it is the ONLY block screen they ever see, so leaving it on
     // the default look would silently ignore their choice.
     val theme = BlockThemes.current(LocalContext.current)
+    // This screen can't inflate the XML layouts, so it approximates the chosen one by showing
+    // or hiding the same pieces. Not pixel-identical to the overlay, but it honours the choice
+    // rather than always showing everything.
+    val layout = BlockLayouts.current(LocalContext.current)
     val primaryText = Color(theme.primaryText)
     val quoteSize = Quotes.sizeSpFor(quote.text)
     Column(
@@ -166,7 +171,8 @@ private fun BlockScreen(
             )
         }
 
-        // Masthead: today's win, giant editorial serif.
+        // Masthead: today's win, giant editorial serif. Hidden by the layouts that drop it.
+        if (layout.showsNumber) {
         Text(
             reclaimedMinutes.toString(),
             fontSize = 120.sp,
@@ -182,6 +188,7 @@ private fun BlockScreen(
             letterSpacing = 2.2.sp,
             color = Color(theme.accent),
         )
+        }
 
         // The hero quote.
         Column(

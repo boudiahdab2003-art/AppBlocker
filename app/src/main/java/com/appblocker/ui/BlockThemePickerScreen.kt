@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.appblocker.data.BlockLayouts
 import com.appblocker.data.BlockThemes
 import com.appblocker.data.SettingsStore
 import com.appblocker.data.backdropSolid
@@ -43,26 +44,49 @@ import com.appblocker.ui.theme.AppGradients
 import com.appblocker.ui.theme.AppShapes
 
 /**
- * Profile ▸ Block screen: choose how the block screen looks. Same screen and same behaviour in
- * every option — only the colours change, so nothing here can affect blocking.
+ * Profile ▸ Block screen: choose what the block screen shows (the layout) and what colour it is.
+ * The two are independent, so any layout works in any colour.
+ *
+ * Behaviour is identical in every combination — "Got it" does exactly the same thing — so nothing
+ * chosen here can affect blocking.
  */
 @Composable
 fun BlockThemePickerScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     var selected by remember { mutableStateOf(BlockThemes.current(context).id) }
+    var layout by remember { mutableStateOf(BlockLayouts.current(context).id) }
+    val theme = BlockThemes.OPTIONS.firstOrNull { it.id == selected } ?: BlockThemes.OPTIONS.first()
 
     Column(Modifier.fillMaxSize().safeDrawingPadding()) {
         EditorTopBar(title = "Block screen", onBack = onBack)
         LazyColumn(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
             item {
                 Text(
-                    "Pick how the block screen looks. It shows the same things either way — " +
-                        "your minutes reclaimed, a quote and the app you tried to open.",
+                    "Two choices, and they combine freely — pick what's on the screen, then " +
+                        "what colour it is.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 16.dp),
                 )
             }
+
+            item { PickerSectionLabel("Layout") }
+            items(BlockLayouts.OPTIONS.size) { i ->
+                val option = BlockLayouts.OPTIONS[i]
+                LayoutRow(
+                    option = option,
+                    // Previews use the colour currently selected, so the two choices are seen
+                    // together rather than each in isolation.
+                    theme = theme,
+                    selected = option.id == layout,
+                    onClick = {
+                        SettingsStore.setBlockLayout(context, option.id)
+                        layout = option.id
+                    },
+                )
+            }
+
+            item { PickerSectionLabel("Colour") }
             items(BlockThemes.OPTIONS.size) { i ->
                 val option = BlockThemes.OPTIONS[i]
                 ThemeRow(
@@ -83,6 +107,115 @@ fun BlockThemePickerScreen(onBack: () -> Unit) {
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun PickerSectionLabel(text: String) {
+    Text(
+        text.uppercase(),
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 6.dp, bottom = 10.dp),
+    )
+}
+
+@Composable
+private fun LayoutRow(
+    option: BlockLayouts.BlockLayout,
+    theme: BlockThemes.BlockTheme,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().padding(bottom = 14.dp)
+            .clip(AppShapes.card)
+            .background(MaterialTheme.colorScheme.surface)
+            .border(
+                if (selected) 2.dp else 1.dp,
+                if (selected) AppGradients.accent
+                else SolidColor(MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
+                AppShapes.card,
+            )
+            .clickable(onClick = onClick)
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        LayoutPreview(option, theme)
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                option.label,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
+                color = if (selected) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                option.blurb,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+        if (selected) {
+            Spacer(Modifier.width(10.dp))
+            Box(
+                Modifier.size(24.dp).clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Filled.Check, contentDescription = null, tint = Color.White,
+                    modifier = Modifier.size(15.dp))
+            }
+        }
+    }
+}
+
+/** A miniature of each arrangement, in the currently chosen colour. Same reasoning as
+ *  [ThemePreview]: drawn from the real values, so it can't advertise a layout that isn't. */
+@Composable
+private fun LayoutPreview(option: BlockLayouts.BlockLayout, theme: BlockThemes.BlockTheme) {
+    val shape = RoundedCornerShape(10.dp)
+    val background = if (theme.id == "aurora") AppGradients.accent
+    else SolidColor(Color(theme.backdropSolid()))
+    Column(
+        Modifier.size(width = 54.dp, height = 78.dp).clip(shape)
+            .background(background)
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f), shape)
+            .padding(7.dp),
+        horizontalAlignment = if (option.appCentred) Alignment.CenterHorizontally
+        else Alignment.Start,
+    ) {
+        if (option.appCentred) {
+            // Focus: the app icon large and centred, a line of text, nothing else.
+            Spacer(Modifier.height(6.dp))
+            Box(Modifier.size(22.dp).clip(CircleShape).background(Color(theme.badge)))
+            Spacer(Modifier.height(6.dp))
+            Bar(width = 32.dp, height = 4.dp, color = Color(theme.primaryText))
+            Spacer(Modifier.height(3.dp))
+            Bar(width = 18.dp, height = 3.dp, color = Color(theme.secondaryText))
+        } else {
+            Bar(width = 20.dp, height = 3.dp, color = Color(theme.secondaryText))
+            if (option.showsNumber) {
+                Spacer(Modifier.height(if (option.showsQuote) 6.dp else 14.dp))
+                Bar(width = if (option.showsQuote) 26.dp else 34.dp,
+                    height = if (option.showsQuote) 13.dp else 18.dp,
+                    color = Color(theme.primaryText))
+                Spacer(Modifier.height(3.dp))
+                Bar(width = 15.dp, height = 3.dp, color = Color(theme.accent))
+            }
+            if (option.showsQuote) {
+                Spacer(Modifier.height(7.dp))
+                Bar(width = 40.dp, height = 3.dp,
+                    color = Color(theme.primaryText).copy(alpha = 0.8f))
+                Spacer(Modifier.height(2.dp))
+                Bar(width = 30.dp, height = 3.dp,
+                    color = Color(theme.primaryText).copy(alpha = 0.8f))
+            }
+        }
+        Spacer(Modifier.weight(1f))
+        Bar(width = 40.dp, height = 8.dp, color = Color(theme.button), radius = 4.dp)
     }
 }
 

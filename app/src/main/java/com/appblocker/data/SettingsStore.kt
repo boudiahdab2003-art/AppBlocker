@@ -99,6 +99,13 @@ object SettingsStore {
     fun setBlockTheme(context: Context, value: String) =
         prefs(context).edit().putString("block_theme", value).apply()
 
+    /** Which block-screen layout is active (Profile ▸ Block screen). Ids in [BlockLayouts]. */
+    fun blockLayout(context: Context): String =
+        prefs(context).getString("block_layout", "editorial") ?: "editorial"
+
+    fun setBlockLayout(context: Context, value: String) =
+        prefs(context).edit().putString("block_layout", value).apply()
+
     /** Whether the first-run setup screen has been shown once. */
     fun setupSeen(context: Context): Boolean =
         prefs(context).getBoolean("setup_seen", false)
