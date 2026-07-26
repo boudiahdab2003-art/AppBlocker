@@ -3,6 +3,15 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.107
+- Uninstalling is guarded again. You could just switch the protection off and uninstall the app — and that was my fault, from a few hours earlier.
+
+Fixing the accessibility-list problem in 1.106, I removed a check that reads the screen's text, because that check was what kept bouncing the list. What I missed is that the same check was the only thing catching the uninstall and device-admin screens on your phone. Xiaomi routes those through generic screens whose names match nothing, so with the text check gone, nothing was watching them.
+
+It's back, with its own separate word list — uninstall, force stop, deactivate, device admin — none of which can appear on the accessibility list. So the uninstall route is guarded again without re-breaking what 1.106 fixed.
+
+The Prevent uninstall row in Profile now says plainly when it's off: "AppBlocker can be uninstalled right now." Those are two separate protections — the guard makes the page hard to reach, device admin is what actually refuses the uninstall — and it was possible for the app to look locked down while that one was switched off. You want both on.
+
 ## v1.106
 - The accessibility list really does open now. Fourth attempt, and the first three were the same mistake in different clothes — sorry for the runaround.
 
