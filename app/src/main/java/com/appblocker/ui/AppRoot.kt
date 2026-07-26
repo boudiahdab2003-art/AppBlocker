@@ -70,6 +70,7 @@ private sealed interface Overlay {
     data object Instructions : Overlay
     data object DetoxGuide : Overlay
     data object Scenarios : Overlay
+    data object TwelveSteps : Overlay
     data object IconPicker : Overlay
     data object BlockThemePicker : Overlay
     data class NewSchedule(val type: ScheduleType) : Overlay
@@ -153,6 +154,8 @@ fun AppRoot(openPermissionsOnStart: Boolean = false) {
                 DopamineDetoxScreen(onBack = { overlay = null })
             is Overlay.Scenarios ->
                 ScenariosScreen(onBack = { overlay = null })
+            is Overlay.TwelveSteps ->
+                TwelveStepsScreen(onBack = { overlay = null })
             is Overlay.IconPicker ->
                 IconPickerScreen(onBack = { overlay = null })
             is Overlay.BlockThemePicker ->
@@ -184,6 +187,7 @@ fun AppRoot(openPermissionsOnStart: Boolean = false) {
                 onOpenInstructions = { overlay = Overlay.Instructions },
                 onOpenDetox = { overlay = Overlay.DetoxGuide },
                 onOpenScenarios = { overlay = Overlay.Scenarios },
+                onOpenSteps = { overlay = Overlay.TwelveSteps },
                 onOpenIconPicker = { overlay = Overlay.IconPicker },
                 onOpenBlockThemePicker = { overlay = Overlay.BlockThemePicker },
             )
@@ -252,6 +256,7 @@ private fun MainScaffold(
     onOpenInstructions: () -> Unit,
     onOpenDetox: () -> Unit,
     onOpenScenarios: () -> Unit,
+    onOpenSteps: () -> Unit,
     onOpenIconPicker: () -> Unit,
     onOpenBlockThemePicker: () -> Unit,
 ) {
@@ -321,6 +326,7 @@ private fun MainScaffold(
                     onOpenInstructions = onOpenInstructions,
                     onOpenDetox = onOpenDetox,
                     onOpenScenarios = onOpenScenarios,
+                    onOpenSteps = onOpenSteps,
                     onOpenIconPicker = onOpenIconPicker,
                     onOpenBlockThemePicker = onOpenBlockThemePicker,
                     updateVm = updateVm,

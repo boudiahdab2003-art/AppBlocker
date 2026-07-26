@@ -384,6 +384,14 @@ viable path — not a consolation prize.
 ## Where we are right now (update as we go)
 
 - **Status:** Detailed plan written and saved. No product work started yet.
+- **Third-party text — clear as of v1.105.** The Twelve Steps screen
+  (`ui/TwelveStepsScreen.kt`) contains **only original wording** plus attribution and a
+  link, so it carries no licence obligation into a Play release. This was deliberate:
+  the owner asked for SAA's official text verbatim, and SAA's site prohibits reproduction
+  without the written permission of ISO of SAA, Inc. (AA's original Twelve Steps are
+  likewise copyrighted by AA World Services, so they are not an alternative.) **If verbatim
+  text is ever added under permission, record that permission here before publishing** —
+  a store review is exactly where an unrecorded licence becomes a problem.
 - **Next step when the owner says "play version":** begin **Phase 1**
   (de-personalise + build the onboarding wizard) — it unlocks everything else and
   reveals whether other people want the app before we invest in payments and

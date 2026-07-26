@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Diversity3
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
@@ -99,6 +100,7 @@ fun ProfileScreen(
     onOpenInstructions: () -> Unit = {},
     onOpenDetox: () -> Unit = {},
     onOpenScenarios: () -> Unit = {},
+    onOpenSteps: () -> Unit = {},
     onOpenIconPicker: () -> Unit = {},
     onOpenBlockThemePicker: () -> Unit = {},
     updateVm: UpdateViewModel = viewModel(),
@@ -428,6 +430,15 @@ fun ProfileScreen(
                 chevron = true,
                 enabled = true,
                 onClick = onOpenScenarios,
+            )
+            Divider()
+            ProfileRow(
+                icon = Icons.Filled.Diversity3,
+                title = "The Twelve Steps",
+                subtitle = "The programme, in plain English — and where to find the real thing.",
+                chevron = true,
+                enabled = true,
+                onClick = onOpenSteps,
             )
             Divider()
             ProfileRow(
