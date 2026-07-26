@@ -144,14 +144,18 @@ fun BlockThemePickerScreen(strictActive: Boolean = false, onBack: () -> Unit) {
                 )
             }
             item { PickerSectionLabel("Pieces") }
-            items(arrangement.order.size) { i ->
-                val element = arrangement.order[i]
+            // Only the pieces this layout actually has. Listing all four everywhere meant Focus
+            // offered a "Quote" switch that did nothing, because that layout has no quote in it —
+            // a control that lies about what it does is worse than a missing one.
+            val piecesHere = arrangement.order.filter { it in BlockLayouts.byId(layout).elements }
+            items(piecesHere.size) { i ->
+                val element = piecesHere[i]
                 ElementRow(
                     element = element,
                     visible = arrangement.isVisible(element),
                     size = arrangement.sizeOf(element),
                     canMoveUp = i > 0,
-                    canMoveDown = i < arrangement.order.lastIndex,
+                    canMoveDown = i < piecesHere.lastIndex,
                     enabled = editable,
                     onToggle = {
                         arrangement = arrangement.copy(
@@ -160,9 +164,13 @@ fun BlockThemePickerScreen(strictActive: Boolean = false, onBack: () -> Unit) {
                         ).also { BlockArrangement.save(context, it) }
                     },
                     onMove = { delta ->
+                        // Indices here are into the FILTERED list, so translate through the full
+                        // order — otherwise moving a piece on a layout that hides one would
+                        // reorder the wrong element.
                         val list = arrangement.order.toMutableList()
-                        val to = i + delta
-                        list.add(to, list.removeAt(i))
+                        val from = list.indexOf(element)
+                        val to = list.indexOf(piecesHere[i + delta])
+                        list.add(to, list.removeAt(from))
                         arrangement = arrangement.copy(order = list)
                             .also { BlockArrangement.save(context, it) }
                     },
@@ -304,16 +312,18 @@ private fun LayoutPreview(option: BlockLayouts.BlockLayout, theme: BlockThemes.B
             Spacer(Modifier.height(3.dp))
             Bar(width = 18.dp, height = 3.dp, color = Color(theme.secondaryText))
         } else {
+            val hasNumber = BlockArrangement.Element.NUMBER in option.elements
+            val hasQuote = BlockArrangement.Element.QUOTE in option.elements
             Bar(width = 20.dp, height = 3.dp, color = Color(theme.secondaryText))
-            if (option.showsNumber) {
-                Spacer(Modifier.height(if (option.showsQuote) 6.dp else 14.dp))
-                Bar(width = if (option.showsQuote) 26.dp else 34.dp,
-                    height = if (option.showsQuote) 13.dp else 18.dp,
+            if (hasNumber) {
+                Spacer(Modifier.height(if (hasQuote) 6.dp else 14.dp))
+                Bar(width = if (hasQuote) 26.dp else 34.dp,
+                    height = if (hasQuote) 13.dp else 18.dp,
                     color = Color(theme.primaryText))
                 Spacer(Modifier.height(3.dp))
                 Bar(width = 15.dp, height = 3.dp, color = Color(theme.accent))
             }
-            if (option.showsQuote) {
+            if (hasQuote) {
                 Spacer(Modifier.height(7.dp))
                 Bar(width = 40.dp, height = 3.dp,
                     color = Color(theme.primaryText).copy(alpha = 0.8f))

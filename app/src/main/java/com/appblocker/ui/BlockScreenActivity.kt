@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import com.appblocker.data.AppIcons
 import com.appblocker.data.AttemptCounter
+import com.appblocker.data.BlockArrangement
 import com.appblocker.data.BlockLayouts
 import com.appblocker.data.BlockThemes
 import com.appblocker.data.Quote
@@ -137,6 +138,12 @@ private fun BlockScreen(
     // or hiding the same pieces. Not pixel-identical to the overlay, but it honours the choice
     // rather than always showing everything.
     val layout = BlockLayouts.current(LocalContext.current)
+    val arrangement = BlockArrangement.load(LocalContext.current)
+    // A piece shows here only if the chosen layout has it AND the owner hasn't switched it off.
+    // The visibility half was previously read from a per-layout boolean that only covered the
+    // number — the quote was shown even on layouts that don't have one, and nothing here knew
+    // about the Pieces switches at all.
+    fun shows(e: BlockArrangement.Element) = e in layout.elements && arrangement.isVisible(e)
     val primaryText = Color(theme.primaryText)
     val quoteSize = Quotes.sizeSpFor(quote.text)
     Column(
@@ -172,7 +179,7 @@ private fun BlockScreen(
         }
 
         // Masthead: today's win, giant editorial serif. Hidden by the layouts that drop it.
-        if (layout.showsNumber) {
+        if (shows(BlockArrangement.Element.NUMBER)) {
         Text(
             reclaimedMinutes.toString(),
             fontSize = 120.sp,
@@ -191,6 +198,7 @@ private fun BlockScreen(
         }
 
         // The hero quote.
+        if (shows(BlockArrangement.Element.QUOTE)) {
         Column(
             Modifier.fillMaxWidth().weight(1f),
             verticalArrangement = Arrangement.Center,
@@ -214,6 +222,10 @@ private fun BlockScreen(
                 ),
                 modifier = Modifier.padding(top = 18.dp),
             )
+        }
+        } else {
+            // Keep the flexible gap so the footer stays pinned to the bottom.
+            Spacer(Modifier.weight(1f))
         }
 
         // Context footer: small app icon + what's blocked + attempt counts.

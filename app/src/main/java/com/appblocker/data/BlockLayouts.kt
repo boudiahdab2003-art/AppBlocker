@@ -14,9 +14,10 @@ import com.appblocker.R
  * nothing where a layout leaves something out. Every lookup there is null-safe for that reason —
  * a layout omitting the quote is normal, not an error.
  *
- * [showsNumber] and [showsQuote] exist for the Compose fallback screen
- * ([com.appblocker.ui.BlockScreenActivity]), which cannot inflate these XML layouts and so
- * approximates them by hiding the same pieces.
+ * [elements] is what the layout's XML actually holds. The Compose fallback
+ * ([com.appblocker.ui.BlockScreenActivity]) cannot inflate these layouts, so it reads this to
+ * approximate them; the editor reads it to avoid offering a switch for a piece the current layout
+ * does not have.
  */
 object BlockLayouts {
 
@@ -25,8 +26,10 @@ object BlockLayouts {
         val label: String,
         val blurb: String,
         val layoutRes: Int,
-        val showsNumber: Boolean,
-        val showsQuote: Boolean,
+        /** The pieces this layout's XML actually contains. One declaration, used both to filter
+         *  the editor's Pieces list and by the Compose fallback — previously two booleans that
+         *  described the same thing and could disagree with the XML. */
+        val elements: Set<BlockArrangement.Element>,
         /** App icon large and centred near the top, rather than in a small row. */
         val appCentred: Boolean = false,
     )
@@ -37,16 +40,17 @@ object BlockLayouts {
             label = "Editorial",
             blurb = "Minutes reclaimed up top, the quote as the hero, the app in a footer.",
             layoutRes = R.layout.overlay_block,
-            showsNumber = true,
-            showsQuote = true,
+            elements = setOf(
+                BlockArrangement.Element.KICKER, BlockArrangement.Element.NUMBER,
+                BlockArrangement.Element.QUOTE, BlockArrangement.Element.APP,
+            ),
         ),
         BlockLayout(
             id = "focus",
             label = "Focus",
             blurb = "Just the app, large and centred. No number, no quote — nothing to linger on.",
             layoutRes = R.layout.overlay_block_focus,
-            showsNumber = false,
-            showsQuote = false,
+            elements = setOf(BlockArrangement.Element.KICKER, BlockArrangement.Element.APP),
             appCentred = true,
         ),
         BlockLayout(
@@ -54,20 +58,23 @@ object BlockLayouts {
             label = "Scoreboard",
             blurb = "Today's reclaimed minutes, huge and centred. No quote.",
             layoutRes = R.layout.overlay_block_scoreboard,
-            showsNumber = true,
-            showsQuote = false,
+            elements = setOf(
+                BlockArrangement.Element.KICKER, BlockArrangement.Element.NUMBER,
+                BlockArrangement.Element.APP,
+            ),
         ),
         BlockLayout(
             id = "quote",
             label = "Quote",
             blurb = "The line fills the screen; the app shrinks to a line at the top. No number.",
             layoutRes = R.layout.overlay_block_quote,
-            showsNumber = false,
-            showsQuote = true,
+            elements = setOf(BlockArrangement.Element.QUOTE, BlockArrangement.Element.APP),
         ),
     )
 
+    /** The layout with this id, falling back to the first if the id is unknown. */
+    fun byId(id: String?): BlockLayout = OPTIONS.firstOrNull { it.id == id } ?: OPTIONS.first()
+
     /** The chosen layout, falling back to the first if the stored id is unknown. */
-    fun current(context: Context): BlockLayout =
-        OPTIONS.firstOrNull { it.id == SettingsStore.blockLayout(context) } ?: OPTIONS.first()
+    fun current(context: Context): BlockLayout = byId(SettingsStore.blockLayout(context))
 }
