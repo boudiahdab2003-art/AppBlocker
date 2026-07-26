@@ -92,6 +92,13 @@ object SettingsStore {
     fun setAppIcon(context: Context, value: String) =
         prefs(context).edit().putString("app_icon", value).apply()
 
+    /** Which block-screen look is active (Profile ▸ Block screen). Ids in [BlockThemes]. */
+    fun blockTheme(context: Context): String =
+        prefs(context).getString("block_theme", "midnight") ?: "midnight"
+
+    fun setBlockTheme(context: Context, value: String) =
+        prefs(context).edit().putString("block_theme", value).apply()
+
     /** Whether the first-run setup screen has been shown once. */
     fun setupSeen(context: Context): Boolean =
         prefs(context).getBoolean("setup_seen", false)

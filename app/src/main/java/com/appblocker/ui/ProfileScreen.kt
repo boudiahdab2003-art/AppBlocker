@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.SelfImprovement
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
@@ -67,6 +68,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.appblocker.Dist
 import com.appblocker.data.AppIcons
 import com.appblocker.data.AttemptCounter
+import com.appblocker.data.BlockThemes
 import com.appblocker.data.PinStore
 import com.appblocker.data.ServiceHealth
 import com.appblocker.data.SettingsStore
@@ -86,6 +88,7 @@ fun ProfileScreen(
     onOpenDetox: () -> Unit = {},
     onOpenScenarios: () -> Unit = {},
     onOpenIconPicker: () -> Unit = {},
+    onOpenBlockThemePicker: () -> Unit = {},
     updateVm: UpdateViewModel = viewModel(),
     vm: HomeViewModel = viewModel(),
     scheduleVm: ScheduleViewModel = viewModel(),
@@ -108,6 +111,8 @@ fun ProfileScreen(
     var showRename by remember { mutableStateOf(false) }
     var showTheme by remember { mutableStateOf(false) }
     var currentIcon by remember { mutableStateOf(AppIcons.current(context)) }
+    // resumeTick so the row updates after returning from the picker.
+    val currentBlockTheme = remember(resumeTick) { BlockThemes.current(context) }
     val themeController = LocalThemeController.current
     val locked = strictActive
 
@@ -220,6 +225,15 @@ fun ProfileScreen(
                 chevron = true,
                 enabled = true, // cosmetic — allowed even during Strict
                 onClick = onOpenIconPicker,
+            )
+            Divider()
+            ProfileRow(
+                icon = Icons.Filled.Wallpaper,
+                title = "Block screen",
+                subtitle = "Current: ${currentBlockTheme.label}. Change how the block screen looks.",
+                chevron = true,
+                enabled = true, // cosmetic — allowed even during Strict, like the icon above
+                onClick = onOpenBlockThemePicker,
             )
         }
 

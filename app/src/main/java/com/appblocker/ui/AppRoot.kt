@@ -71,6 +71,7 @@ private sealed interface Overlay {
     data object DetoxGuide : Overlay
     data object Scenarios : Overlay
     data object IconPicker : Overlay
+    data object BlockThemePicker : Overlay
     data class NewSchedule(val type: ScheduleType) : Overlay
     data class EditSchedule(val schedule: Schedule) : Overlay
 }
@@ -150,6 +151,8 @@ fun AppRoot(openPermissionsOnStart: Boolean = false) {
                 ScenariosScreen(onBack = { overlay = null })
             is Overlay.IconPicker ->
                 IconPickerScreen(onBack = { overlay = null })
+            is Overlay.BlockThemePicker ->
+                BlockThemePickerScreen(onBack = { overlay = null })
             is Overlay.NewSchedule ->
                 ScheduleEditorScreen(
                     type = o.type, existing = null, strictActive = strictActive,
@@ -177,6 +180,7 @@ fun AppRoot(openPermissionsOnStart: Boolean = false) {
                 onOpenDetox = { overlay = Overlay.DetoxGuide },
                 onOpenScenarios = { overlay = Overlay.Scenarios },
                 onOpenIconPicker = { overlay = Overlay.IconPicker },
+                onOpenBlockThemePicker = { overlay = Overlay.BlockThemePicker },
             )
         }
     }
@@ -239,6 +243,7 @@ private fun MainScaffold(
     onOpenDetox: () -> Unit,
     onOpenScenarios: () -> Unit,
     onOpenIconPicker: () -> Unit,
+    onOpenBlockThemePicker: () -> Unit,
 ) {
     Scaffold(
         containerColor = Color.Transparent,
@@ -307,6 +312,7 @@ private fun MainScaffold(
                     onOpenDetox = onOpenDetox,
                     onOpenScenarios = onOpenScenarios,
                     onOpenIconPicker = onOpenIconPicker,
+                    onOpenBlockThemePicker = onOpenBlockThemePicker,
                     updateVm = updateVm,
                 )
             }
