@@ -3,6 +3,17 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.109
+- The guard stops blocking pages you actually need. It was blocking your battery settings — that page has an "Uninstall" button at the bottom, so it matched the words the guard watches for. Blocking it is self-defeating too, because this app tells you to set battery to "No restrictions" so blocking survives in the background.
+
+The real mistake was bigger than that one page. I'd been guarding the whole App info screen, which is the hub for battery, permissions, storage, notifications and uninstall. Guarding it to protect one button costs you everything else on it — which is why this kept coming back.
+
+The guard now covers exactly three screens, and they're the only three that actually end your protection: AppBlocker's own accessibility page, the "uninstall this app?" confirmation, and the screen for turning off device admin. Battery, permissions and app details are yours again.
+
+One thing given up on purpose: Force stop is no longer blocked. It shares the page with the battery settings, and force-stopping only pauses blocking until the service restarts by itself — whereas the settings beside it are ones the app asks you to change. Uninstalling is still guarded, at the confirmation where it actually happens.
+
+Strict Mode is unchanged and still blocks all of those pages.
+
 ## v1.108
 - You can turn on uninstall protection again. The guard was blocking Android's "Activate device admin app?" screen — the one you have to pass through to switch that protection ON — so it could never be enabled, while the app still reported itself as guarded. That's the worst kind of bug this app can have, and it was mine, from 1.107.
 
