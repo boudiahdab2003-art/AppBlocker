@@ -41,10 +41,21 @@ object BlockArrangement {
     /** Text size for one element, as a multiplier on whatever size its layout declares. Kept as
      *  a factor rather than an absolute size so each layout keeps its own proportions — "large"
      *  on Scoreboard's 150sp number and on Editorial's 120sp one should not become the same. */
+    /**
+     * Five steps rather than three. The original Smaller/Default/Larger only spanned 0.8–1.25,
+     * which on a layout as icon-heavy as Focus was barely a change at all — the owner reported
+     * the buttons as "not working properly and not enough", and half of that was simply range.
+     *
+     * The three original *names* are kept exactly (only their labels changed), because the stored
+     * arrangement is written by enum name: renaming SMALLER would silently reset a saved choice
+     * to Normal, which is the mistake this file's persistence comment already warns about.
+     */
     enum class Size(val label: String, val factor: Float) {
-        SMALLER("Smaller", 0.8f),
-        DEFAULT("Default", 1f),
-        LARGER("Larger", 1.25f),
+        TINY("Tiny", 0.55f),
+        SMALLER("Small", 0.8f),
+        DEFAULT("Normal", 1f),
+        LARGER("Large", 1.25f),
+        HUGE("Huge", 1.8f),
     }
 
     /**

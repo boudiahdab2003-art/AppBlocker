@@ -5,4 +5,9 @@
          reading the CURRENT size would compound on every block until the text filled the screen;
          every scale is computed from this base instead. -->
     <item name="base_text_size_sp" type="id" />
+
+    <!-- The same idea for an icon's declared width/height, as an int[2]. Focus's app piece is
+         mostly a 96dp ImageView, so scaling only its text made the Size buttons look broken
+         there: the label moved and the picture beside it did not. -->
+    <item name="base_icon_size_px" type="id" />
 </resources>
