@@ -13,7 +13,7 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
-    VersionLog("1.100", "Jul 25, 2026", "A much smarter coach, and clock changes can't weaken blocking", listOf(
+    VersionLog("1.100", "Jul 26, 2026", "A much smarter coach, and clock changes can't weaken blocking", listOf(
         "Your AI coach got a serious upgrade. It was quietly running on Google's *fast* model with its reasoning turned down to almost nothing — both chosen originally to keep replies snappy. It now uses the best model available and is allowed to think properly before answering. Replies take longer (often 10-30 seconds, with the typing dots showing the whole time), and they should be noticeably deeper — actually reasoning about your week rather than reacting to the last number it saw.",
         "It also writes like a person now. It used to be capped at 80 words and forced to format everything into headings and bullet points, which is why it could read like a form letter. Now it just talks, at whatever length the question deserves, and only makes a list when it's genuinely listing steps.",
         "It remembers better. It used to only see the last 16 messages of your conversation, which is why it sometimes seemed to forget what you'd just discussed — that's now 40, and it keeps far more of your chat history. It can also hold more of what it's learned about you personally.",
