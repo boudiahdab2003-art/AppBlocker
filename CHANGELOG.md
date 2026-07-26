@@ -3,6 +3,15 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.103
+- Bugs can now report themselves. The app already recorded every error it survived, but there was nowhere to send them — so the only way a problem reached me was you noticing and mentioning it. Errors and crashes now send themselves to a private tracker, and there's a Report a problem button in Profile for the ones you spot.
+
+Never sent: your blocked words, the sites you visit, the apps you block, your name, your location. Error messages are dropped entirely rather than cleaned up, because that's exactly where a blocked word would get quoted back.
+
+The Focus block screen can now show a quote — small and centred rather than the big hero line, since Focus has no room to spare. The quote's Side setting gained an Auto option, now the default, meaning "however this layout draws it".
+
+And the off-switch guard from 1.102 no longer overreaches: it was blocking every app's App info page and the whole Accessibility section, so force-stopping a frozen app cost the full wait. It now only guards AppBlocker's own pages. Strict Mode still guards all of them.
+
 ## v1.102
 - Blocking now guards its own off-switch. Before this, turning AppBlocker's accessibility service off in Settings took about five seconds and switched off every block in the app — apps, blocked words and websites all at once. Strict Mode guarded that page, but only while a session was running; the rest of the time nothing did. It is now covered whenever the guard is on, which it is by default.
 
