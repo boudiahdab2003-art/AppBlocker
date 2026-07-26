@@ -791,7 +791,9 @@ class BlockerAccessibilityService : AccessibilityService() {
         val danger = if (strict) {
             byClass || guardScreenIsDangerous()
         } else {
-            (byClass && aboutUs()) || guardScreenIsDangerous()
+            // `== true` on purpose: null means "couldn't read the screen", which must not bounce.
+            // See aboutUs() — answering true there made every app's App-info page flash a cover.
+            (byClass && aboutUs() == true) || guardScreenIsDangerous()
         }
         if (!danger) return false
 
@@ -865,20 +867,30 @@ class BlockerAccessibilityService : AccessibilityService() {
      * frozen app or clearing a cache cost the full unlock wait. Strict Mode does *not* use this —
      * there, the kind of page is enough.
      *
-     * **An unreadable screen answers `true`.** That is the whole design of this function. A blank
-     * read means "we could not tell", and the two ways to be wrong are not symmetrical: a wrong
-     * `true` bounces the owner off a page they could have used, which they notice and can wait
-     * out; a wrong `false` leaves the off-switch reachable, which is invisible and undoes every
-     * block in the app. Same reasoning as `isShortsOnScreen()` answering null rather than false
-     * when the tree can't be read (docs/BLOCKING_INVARIANTS.md, sweep 5).
+     * **An unreadable screen answers `null` — "can't tell" — and null must not bounce.**
+     *
+     * This started out answering `true` there, reasoning that a wrong bounce is visible and
+     * waitable while a wrong pass is invisible. That reasoning was wrong about *when* this runs.
+     * The call happens on the window-state event, which is the exact moment the window is being
+     * built and `rootInActiveWindow` is most often null or empty — so "unreadable" is not a rare
+     * failure here, it is the common case at that instant. Answering `true` meant opening *any*
+     * app's App-info page could raise a cover and bounce, intermittently, depending on a race.
+     * That is over-blocking, and it flashes.
+     *
+     * Nothing is lost by waiting: the page has only just opened, no toggle can have been reached
+     * yet, and Settings emits content events within milliseconds. The re-check on those events
+     * (see handleEvent) runs with a populated tree and catches a genuine off-switch page through
+     * the text path below. Null therefore changes nothing, exactly as `isShortsOnScreen()` does
+     * when it cannot read the tree (docs/BLOCKING_INVARIANTS.md, sweep 5) — the same primitive,
+     * and this is its third appearance.
      *
      * Known limit, deliberately accepted: in a long scrollable list Android only builds nodes for
      * rendered rows, so our row genuinely is not in the tree until it is scrolled into view. The
-     * content-event re-check (see handleEvent) is what catches it then, via the text path below.
+     * content-event re-check is what catches that too.
      */
-    private fun aboutUs(): Boolean {
+    private fun aboutUs(): Boolean? {
         val text = guardScreenText()
-        if (text.isBlank()) return true
+        if (text.isBlank()) return null
         return text.contains("appblocker")
     }
 

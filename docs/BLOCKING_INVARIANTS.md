@@ -540,8 +540,28 @@ written down in this file and read as a note rather than a bug** — sweep 5 abo
   - Worth naming as a shape: **widening a defence's trigger also widens its collateral**, and the
     collateral is the part you don't think to describe. When a Strict-only rule is promoted to
     always-on, re-ask what it forbids on an ordinary day, not what it protects on a bad one.
-  - `aboutUs()` **fails closed** (an unreadable screen answers "ours") for the invariant-6 reason:
-    a wrong yes is visible and waitable, a wrong no is invisible and total.
+  - `aboutUs()` originally **failed closed** (an unreadable screen answered "ours"), reasoning that
+    a wrong yes is visible and waitable while a wrong no is invisible and total. **That was wrong,
+    and the owner hit it the same day** — see below.
+
+### The fail-closed that pointed the wrong way (v1.104)
+
+Reported as "the block screen was flashing in wrong places". `aboutUs()` runs on the
+**window-state** event — the instant the window is being built, when `rootInActiveWindow` is most
+often null. "Unreadable" is therefore not a rare failure at that moment, it is the *common case*,
+so answering "ours" meant **any** app's App-info page could raise a cover and bounce, depending on
+a race. Intermittent over-blocking, which is what flashing is.
+
+The lesson is not "fail open instead". It is that **fail-closed reasoning has to name the moment
+the check runs.** "A wrong yes is cheap" was true in the abstract and false here, because the
+check fires precisely when the information is missing. Nothing was lost by waiting: the page had
+just opened, no toggle could have been reached, and the content-event re-check runs milliseconds
+later with a populated tree and catches a real off-switch page through the text path.
+
+`aboutUs()` now returns `Boolean?`, null changing nothing — the **third** appearance of that
+primitive after `isShortsOnScreen()` (sweep 5) and `protectionState`'s `usedMinutes` (sweep 2).
+Worth generalising: when a screen-reading check can't read, the answer is null, not a guess. Grep
+for `rootInActiveWindow` and ask of each caller what it does when the tree is empty.
   - **Two under-blocking risks this created, both still live and worth a future sweep.** Android
     only builds nodes for *rendered* rows, so our row is genuinely absent from a long scrollable
     list until scrolled to — caught, in theory, only by the content-event re-check falling through
