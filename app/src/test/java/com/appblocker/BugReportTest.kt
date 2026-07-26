@@ -218,3 +218,35 @@ class BlockLogTest {
         assertEquals(null, com.appblocker.data.BlockLog.decode("x|app|true|true|true", now = 1))
     }
 }
+
+/**
+ * The device-admin activation exemption.
+ *
+ * The guard blocked Android's "Activate device admin app?" screen — which says *device admin* and
+ * carries an *Uninstall app* button — so uninstall protection could never be switched ON while
+ * the app still reported itself as guarded. The window below is what lets that screen through.
+ */
+class AdminPromptTest {
+
+    @Test
+    fun `nothing is exempt before we ask`() {
+        com.appblocker.data.AdminPrompt.clear()
+        assertFalse(com.appblocker.data.AdminPrompt.recentlyRequested())
+    }
+
+    @Test
+    fun `clearing closes the window immediately`() {
+        // Called once the admin state actually changed, so the exemption can't outlive its screen.
+        com.appblocker.data.AdminPrompt.requested()
+        com.appblocker.data.AdminPrompt.clear()
+        assertFalse(com.appblocker.data.AdminPrompt.recentlyRequested())
+    }
+
+    @Test
+    fun `the window is long enough to read the screen and short enough not to be a door`() {
+        // It has a paragraph and three buttons, so seconds is too short; but it must not survive
+        // long enough to walk to the DEACTIVATION screen afterwards.
+        assertTrue(com.appblocker.data.AdminPrompt.WINDOW_MS >= 30_000L)
+        assertTrue(com.appblocker.data.AdminPrompt.WINDOW_MS <= 120_000L)
+    }
+}

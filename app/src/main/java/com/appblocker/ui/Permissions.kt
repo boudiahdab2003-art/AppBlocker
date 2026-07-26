@@ -29,6 +29,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.appblocker.Dist
 import com.appblocker.admin.AppBlockerAdminReceiver
+import com.appblocker.data.AdminPrompt
 import com.appblocker.service.AccessibilityUtil
 import com.appblocker.service.NotificationCountListener
 
@@ -203,7 +204,14 @@ fun toggleDeviceAdmin(ctx: Context) {
     val admin = AppBlockerAdminReceiver.componentName(ctx)
     if (dpm.isAdminActive(admin)) {
         dpm.removeActiveAdmin(admin) // turn protection off so the app can be uninstalled
+        AdminPrompt.clear()
     } else {
+        // Tell the guard we opened this, so it stands down while Android's activation screen is
+        // up. That screen says "device admin" and offers "Uninstall app", so it matches every
+        // removal marker the guard has — and blocking it means uninstall protection can never be
+        // switched ON. See AdminPrompt: knowing we opened it beats trying to read the wording,
+        // which differs by OEM and is translated.
+        AdminPrompt.requested()
         // NOTE: no FLAG_ACTIVITY_NEW_TASK — the system's ADD_DEVICE_ADMIN screen refuses to
         // start as a new task ("Cannot start ADD_DEVICE_ADMIN as a new task") and must run in
         // the caller's (Activity) task, which ctx is here.

@@ -13,6 +13,11 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.108", "Jul 27, 2026", "You can turn on uninstall protection again", listOf(
+        "The guard was blocking Android's \"Activate device admin app?\" screen — the one you have to pass through to switch uninstall protection ON. So the protection could never be enabled, while the app still told you it was guarded. That is the worst kind of bug this app can have, and it was mine.",
+        "It happened because that screen says \"device admin\" and has an \"Uninstall app\" button on it, so it matched every word the guard watches for. Reading the wording can't separate \"activate\" from \"deactivate\" reliably — one word literally contains the other, and it's translated on other phones.",
+        "So the app no longer tries to read it. When *you* tap Prevent uninstall, the app knows it just opened that screen and stands aside for a minute. Knowing we opened it beats guessing from the text, and it works in any language. The deactivation screen, which we never open, is still guarded.",
+    )),
     VersionLog("1.107", "Jul 26, 2026", "Uninstalling is guarded again", listOf(
         "You said you could just switch the protection off and uninstall the app. You could — and that was my fault, from a few hours earlier.",
         "Fixing the accessibility-list problem in 1.106, I removed a check that read the screen's text, because that check was what kept bouncing the list. What I missed is that the same check was the *only* thing catching the uninstall and device-admin screens on your phone. Xiaomi routes those through generic screens whose names match nothing, so with the text check gone, nothing was watching them.",
