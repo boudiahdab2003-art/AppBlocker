@@ -82,7 +82,7 @@ internal object BlockScreenRenderer {
             scaleText(child, arrangement.factorFor(element))
         }
 
-        val stack = present.first().second.parent as? LinearLayout ?: return
+        val stack = present.first().second.parent as? LinearLayout ?: return arrangement
         // Reorder in place. Each element is moved to sit at the index of the earliest slot any
         // element currently occupies, in turn — so the elements shuffle among the positions they
         // already hold and the layout's other children (spacers, the Got it button) never move.
