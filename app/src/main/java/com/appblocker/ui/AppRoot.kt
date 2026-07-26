@@ -152,7 +152,8 @@ fun AppRoot(openPermissionsOnStart: Boolean = false) {
             is Overlay.IconPicker ->
                 IconPickerScreen(onBack = { overlay = null })
             is Overlay.BlockThemePicker ->
-                BlockThemePickerScreen(onBack = { overlay = null })
+                BlockThemePickerScreen(
+                    strictActive = strictActive, onBack = { overlay = null })
             is Overlay.NewSchedule ->
                 ScheduleEditorScreen(
                     type = o.type, existing = null, strictActive = strictActive,

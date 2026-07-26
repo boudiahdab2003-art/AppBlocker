@@ -106,6 +106,16 @@ object SettingsStore {
     fun setBlockLayout(context: Context, value: String) =
         prefs(context).edit().putString("block_layout", value).apply()
 
+    /** The block screen's element order/visibility/alignment, encoded by [BlockArrangement].
+     *  Null = untouched, so each layout keeps its own arrangement. */
+    fun blockArrangement(context: Context): String? =
+        prefs(context).getString("block_arrangement", null)
+
+    fun setBlockArrangement(context: Context, value: String?) =
+        prefs(context).edit().apply {
+            if (value == null) remove("block_arrangement") else putString("block_arrangement", value)
+        }.apply()
+
     /** Whether the first-run setup screen has been shown once. */
     fun setupSeen(context: Context): Boolean =
         prefs(context).getBoolean("setup_seen", false)

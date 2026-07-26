@@ -13,6 +13,12 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.101", "Jul 26, 2026", "Arrange the block screen yourself", listOf(
+        "You can now show, hide and reorder the pieces of the block screen, not just pick between four fixed ones. Profile ▸ Block screen: switch off the minutes counter or the quote, move the app to the top, centre everything — whatever you want on it, in whatever order.",
+        "There is a live preview at the top, and it is the real block screen rather than a picture of one — the same code that draws it on your phone draws it there, scaled down. A preview that is a separate drawing of the same thing eventually stops matching, and a preview you cannot trust is worse than none.",
+        "The four looks from 1.100 are untouched. They are now starting points: pick the one closest to what you want, then adjust it. If you change your mind there is a reset that puts a layout back to how it was designed.",
+        "One deliberate restriction: you can no longer change the block screen while Strict Mode is running. Until now this was allowed because it was purely how things looked — but being able to hide the parts that make the screen persuasive, at the exact moment you are trying to get past it, is not cosmetic. It was never a way to unblock anything (the screen still covers the app whatever you hide), but softening it mid-session is not something a Strict session should permit.",
+    )),
     VersionLog("1.100", "Jul 26, 2026", "A much smarter coach, and clock changes can't weaken blocking", listOf(
         "Your AI coach got a serious upgrade. It was quietly running on Google's *fast* model with its reasoning turned down to almost nothing — both chosen originally to keep replies snappy. It now uses the best model available and is allowed to think properly before answering. Replies take longer (often 10-30 seconds, with the typing dots showing the whole time), and they should be noticeably deeper — actually reasoning about your week rather than reacting to the last number it saw.",
         "It also writes like a person now. It used to be capped at 80 words and forced to format everything into headings and bullet points, which is why it could read like a form letter. Now it just talks, at whatever length the question deserves, and only makes a list when it's genuinely listing steps.",

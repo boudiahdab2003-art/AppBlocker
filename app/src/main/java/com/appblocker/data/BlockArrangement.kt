@@ -1,0 +1,86 @@
+package com.appblocker.data
+
+import android.content.Context
+import com.appblocker.R
+
+/**
+ * Which pieces of the block screen appear, and in what order — layered *on top of* the chosen
+ * layout ([BlockLayouts]) rather than replacing it.
+ *
+ * The obvious design was to throw the four layouts away and compose the screen from scratch, so
+ * that position, size and spacing were all free. That was tried and rejected: the four differ in
+ * far more than arrangement (28dp vs 32dp padding, 72dp vs 96dp top inset, 36/40/48/96dp icons,
+ * 12/13/15sp kickers, and Focus renders the app name as 32sp centred serif where the others use
+ * 17sp sans). Reproducing all of that from a generic engine means a mass of conditional sizing,
+ * and the bar was that the four presets keep looking *exactly* as they shipped. So the layouts
+ * stay untouched and this only changes three things about them, none of which can affect styling:
+ *
+ *  - whether an element is shown,
+ *  - the order elements sit in,
+ *  - whether the stack is left-aligned or centred.
+ *
+ * Every layout tags its logical elements with the same container ids (`el_kicker`, `el_number`,
+ * `el_quote`, `el_app`), so one code path in [com.appblocker.service.BlockOverlay] applies this to
+ * any of them, and simply skips an element the layout doesn't have.
+ */
+object BlockArrangement {
+
+    /** A movable, hideable piece of the block screen. */
+    enum class Element(val id: Int, val label: String, val blurb: String) {
+        KICKER(R.id.el_kicker, "\"Blocked\" label", "The small caps line naming what happened."),
+        NUMBER(R.id.el_number, "Minutes reclaimed", "Today's running total, and its caption."),
+        QUOTE(R.id.el_quote, "Quote", "The motivational line and who said it."),
+        APP(R.id.el_app, "App", "The icon and name of what you tried to open."),
+    }
+
+    enum class Align { DEFAULT, LEFT, CENTRE }
+
+    /**
+     * [order] is top to bottom and may omit elements the current layout lacks — it is matched by
+     * id at apply time. [hidden] is stored rather than a "visible" flag per element so that a
+     * *new* element added in a future version defaults to shown rather than silently missing.
+     */
+    data class Arrangement(
+        val order: List<Element> = Element.entries.toList(),
+        val hidden: Set<Element> = emptySet(),
+        val align: Align = Align.DEFAULT,
+    ) {
+        fun isVisible(e: Element) = e !in hidden
+    }
+
+    /** The default: every element shown, in each layout's own order, alignment untouched. */
+    val DEFAULT = Arrangement()
+
+    // --- persistence: "order|hidden|align", ids by enum name so reordering the enum is safe ---
+
+    fun load(context: Context): Arrangement {
+        val raw = SettingsStore.blockArrangement(context) ?: return DEFAULT
+        return runCatching {
+            val (orderPart, hiddenPart, alignPart) = raw.split('|', limit = 3).let {
+                Triple(it[0], it.getOrElse(1) { "" }, it.getOrElse(2) { "" })
+            }
+            val parsed = orderPart.split(',').mapNotNull { name ->
+                Element.entries.firstOrNull { it.name == name }
+            }
+            // Any element missing from a stored order (an older version's string, or a new
+            // element added since) is appended rather than dropped — losing one silently would
+            // look like a bug in the block screen, not in the settings.
+            val order = parsed + Element.entries.filter { it !in parsed }
+            Arrangement(
+                order = order,
+                hidden = hiddenPart.split(',').mapNotNull { name ->
+                    Element.entries.firstOrNull { it.name == name }
+                }.toSet(),
+                align = Align.entries.firstOrNull { it.name == alignPart } ?: Align.DEFAULT,
+            )
+        }.getOrDefault(DEFAULT)
+    }
+
+    fun save(context: Context, a: Arrangement) = SettingsStore.setBlockArrangement(
+        context,
+        "${a.order.joinToString(",") { it.name }}|" +
+            "${a.hidden.joinToString(",") { it.name }}|${a.align.name}",
+    )
+
+    fun reset(context: Context) = SettingsStore.setBlockArrangement(context, null)
+}

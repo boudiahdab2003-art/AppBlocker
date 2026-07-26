@@ -18,6 +18,12 @@
         android:paddingTop="72dp"
         android:paddingBottom="36dp">
 
+        <LinearLayout
+            android:id="@+id/el_kicker"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
         <TextView
             android:id="@+id/overlay_title"
             android:layout_width="wrap_content"
@@ -28,10 +34,19 @@
             android:textColor="@color/block_text_secondary"
             android:textSize="13sp" />
 
+        </LinearLayout>
+
         <View
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1" />
+
+        <LinearLayout
+            android:id="@+id/el_number"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center_horizontal">
 
         <TextView
             android:id="@+id/overlay_stat_number"
@@ -55,12 +70,15 @@
             android:textColor="@color/block_accent"
             android:textSize="15sp" />
 
+        </LinearLayout>
+
         <View
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1" />
 
         <LinearLayout
+            android:id="@+id/el_app"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="horizontal"

@@ -18,7 +18,6 @@ import android.view.WindowManager
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.TextView
-import androidx.core.content.ContextCompat
 import com.appblocker.R
 import com.appblocker.data.AppIcons
 import com.appblocker.data.AttemptCounter
@@ -125,7 +124,8 @@ internal class BlockOverlay(private val context: Context) {
         // Re-applied on every show, not just on inflate: the view is cached and reused across
         // blocks (and survives in preInflated), so a theme picked between two blocks would
         // otherwise not appear until the service restarted.
-        val theme = applyTheme(v)
+        val theme = BlockScreenRenderer.applyTheme(context, v)
+        BlockScreenRenderer.applyArrangement(context, v)
         // Every lookup below is null-safe: a layout that leaves the number or the quote out is a
         // valid choice (see BlockLayouts), not a broken layout.
         v.findViewById<TextView>(R.id.overlay_title)?.text = title
@@ -183,38 +183,6 @@ internal class BlockOverlay(private val context: Context) {
         // isShowing beside it), so a value left over from the last app block made it a no-op
         // and could strand a "Locked during Strict Mode" cover.
         isAppBlock = false
-    }
-
-    /**
-     * Paints the chosen look (Profile ▸ Block screen) onto the single shared layout, and returns
-     * it so the caller can use its accent for the quote line.
-     *
-     * There is one `overlay_block.xml`, not one per theme, on purpose: four copies of the layout
-     * would be four things to keep in step every time the screen changes, which is the drift shape
-     * behind most of this app's past bugs. Only the backdrop is a per-theme drawable, because those
-     * differ in structure rather than just colour; the badge and button are tinted.
-     */
-    private fun applyTheme(v: View): BlockThemes.BlockTheme {
-        val t = BlockThemes.current(context)
-        v.setBackgroundResource(t.backgroundRes)
-        v.findViewById<TextView>(R.id.overlay_title)?.setTextColor(t.secondaryText)
-        v.findViewById<TextView>(R.id.overlay_stat_number)?.setTextColor(t.primaryText)
-        v.findViewById<TextView>(R.id.overlay_stat_label)?.setTextColor(t.accent)
-        v.findViewById<TextView>(R.id.overlay_quote)?.setTextColor(t.primaryText)
-        v.findViewById<TextView>(R.id.overlay_quote_author)?.setTextColor(t.accent)
-        v.findViewById<TextView>(R.id.overlay_subtitle)?.setTextColor(t.primaryText)
-        // mutate() so tinting one theme's drawable can't bleed into the shared constant state
-        // (Android caches drawables by resource id across every view that inflates them).
-        v.findViewById<View>(R.id.overlay_badge_bg)?.background =
-            ContextCompat.getDrawable(context, R.drawable.overlay_badge)?.mutate()?.apply {
-                setTint(t.badge)
-            }
-        v.findViewById<Button>(R.id.overlay_close)?.apply {
-            setTextColor(t.buttonText)
-            background = ContextCompat.getDrawable(context, R.drawable.overlay_btn)?.mutate()
-                ?.apply { if (!t.gradientButton) setTint(t.button) }
-        }
-        return t
     }
 
     /** Inflates the cover and wires its Close button (not yet attached). */

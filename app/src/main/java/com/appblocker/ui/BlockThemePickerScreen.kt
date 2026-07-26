@@ -1,10 +1,14 @@
 package com.appblocker.ui
 
+import android.view.LayoutInflater
+import android.widget.ImageView
+import android.widget.TextView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -20,11 +24,17 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -33,13 +43,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import com.appblocker.R
+import com.appblocker.data.AppIcons
+import com.appblocker.data.BlockArrangement
 import com.appblocker.data.BlockLayouts
 import com.appblocker.data.BlockThemes
 import com.appblocker.data.SettingsStore
 import com.appblocker.data.backdropSolid
+import com.appblocker.service.BlockScreenRenderer
 import com.appblocker.ui.theme.AppGradients
 import com.appblocker.ui.theme.AppShapes
 
@@ -51,10 +69,14 @@ import com.appblocker.ui.theme.AppShapes
  * chosen here can affect blocking.
  */
 @Composable
-fun BlockThemePickerScreen(onBack: () -> Unit) {
+fun BlockThemePickerScreen(strictActive: Boolean = false, onBack: () -> Unit) {
     val context = LocalContext.current
     var selected by remember { mutableStateOf(BlockThemes.current(context).id) }
     var layout by remember { mutableStateOf(BlockLayouts.current(context).id) }
+    var arrangement by remember { mutableStateOf(BlockArrangement.load(context)) }
+    // Locked during Strict: hiding the pieces that make the screen persuasive is no longer
+    // purely cosmetic, so it belongs with everything else Strict Mode freezes.
+    val editable = !strictActive
     val theme = BlockThemes.OPTIONS.firstOrNull { it.id == selected } ?: BlockThemes.OPTIONS.first()
 
     Column(Modifier.fillMaxSize().safeDrawingPadding()) {
@@ -62,11 +84,30 @@ fun BlockThemePickerScreen(onBack: () -> Unit) {
         LazyColumn(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
             item {
                 Text(
-                    "Two choices, and they combine freely — pick what's on the screen, then " +
-                        "what colour it is.",
+                    "Pick a starting point, choose a colour, then show, hide and reorder the " +
+                        "pieces. The preview is the real block screen, not a picture of one.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 16.dp),
+                    modifier = Modifier.padding(bottom = 14.dp),
+                )
+                if (!editable) {
+                    Box(
+                        Modifier.fillMaxWidth().padding(bottom = 14.dp).clip(AppShapes.medium)
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
+                            .padding(14.dp),
+                    ) {
+                        Text(
+                            "🔒 Strict Mode is on — the block screen is locked until it ends.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+                BlockScreenPreview(
+                    layoutId = layout,
+                    themeId = selected,
+                    arrangement = arrangement,
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 18.dp),
                 )
             }
 
@@ -79,6 +120,7 @@ fun BlockThemePickerScreen(onBack: () -> Unit) {
                     // together rather than each in isolation.
                     theme = theme,
                     selected = option.id == layout,
+                    enabled = editable,
                     onClick = {
                         SettingsStore.setBlockLayout(context, option.id)
                         layout = option.id
@@ -92,12 +134,69 @@ fun BlockThemePickerScreen(onBack: () -> Unit) {
                 ThemeRow(
                     option = option,
                     selected = option.id == selected,
+                    enabled = editable,
                     onClick = {
                         SettingsStore.setBlockTheme(context, option.id)
                         selected = option.id
                     },
                 )
             }
+            item { PickerSectionLabel("Pieces") }
+            items(arrangement.order.size) { i ->
+                val element = arrangement.order[i]
+                ElementRow(
+                    element = element,
+                    visible = arrangement.isVisible(element),
+                    canMoveUp = i > 0,
+                    canMoveDown = i < arrangement.order.lastIndex,
+                    enabled = editable,
+                    onToggle = {
+                        arrangement = arrangement.copy(
+                            hidden = if (arrangement.isVisible(element)) arrangement.hidden + element
+                            else arrangement.hidden - element,
+                        ).also { BlockArrangement.save(context, it) }
+                    },
+                    onMove = { delta ->
+                        val list = arrangement.order.toMutableList()
+                        val to = i + delta
+                        list.add(to, list.removeAt(i))
+                        arrangement = arrangement.copy(order = list)
+                            .also { BlockArrangement.save(context, it) }
+                    },
+                )
+            }
+
+            item { PickerSectionLabel("Alignment") }
+            item {
+                Row(Modifier.fillMaxWidth().padding(bottom = 14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    BlockArrangement.Align.entries.forEach { a ->
+                        AlignChip(
+                            label = when (a) {
+                                BlockArrangement.Align.DEFAULT -> "As designed"
+                                BlockArrangement.Align.LEFT -> "Left"
+                                BlockArrangement.Align.CENTRE -> "Centred"
+                            },
+                            selected = arrangement.align == a,
+                            enabled = editable,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            arrangement = arrangement.copy(align = a)
+                                .also { BlockArrangement.save(context, it) }
+                        }
+                    }
+                }
+                if (arrangement != BlockArrangement.DEFAULT) {
+                    TextButton(
+                        onClick = {
+                            BlockArrangement.reset(context)
+                            arrangement = BlockArrangement.DEFAULT
+                        },
+                        enabled = editable,
+                    ) { Text("Reset the pieces to this layout's own arrangement") }
+                }
+            }
+
             item {
                 Text(
                     "The next block screen you see will use it.",
@@ -125,6 +224,7 @@ private fun LayoutRow(
     option: BlockLayouts.BlockLayout,
     theme: BlockThemes.BlockTheme,
     selected: Boolean,
+    enabled: Boolean,
     onClick: () -> Unit,
 ) {
     Row(
@@ -137,7 +237,7 @@ private fun LayoutRow(
                 else SolidColor(MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
                 AppShapes.card,
             )
-            .clickable(onClick = onClick)
+            .clickable(enabled = enabled, onClick = onClick)
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -223,6 +323,7 @@ private fun LayoutPreview(option: BlockLayouts.BlockLayout, theme: BlockThemes.B
 private fun ThemeRow(
     option: BlockThemes.BlockTheme,
     selected: Boolean,
+    enabled: Boolean,
     onClick: () -> Unit,
 ) {
     Row(
@@ -235,7 +336,7 @@ private fun ThemeRow(
                 else SolidColor(MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
                 AppShapes.card,
             )
-            .clickable(onClick = onClick)
+            .clickable(enabled = enabled, onClick = onClick)
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -314,4 +415,146 @@ private fun ThemePreview(option: BlockThemes.BlockTheme) {
 private fun Bar(width: androidx.compose.ui.unit.Dp, height: androidx.compose.ui.unit.Dp,
                 color: Color, radius: androidx.compose.ui.unit.Dp = 2.dp) {
     Box(Modifier.width(width).height(height).clip(RoundedCornerShape(radius)).background(color))
+}
+
+
+@Composable
+private fun ElementRow(
+    element: BlockArrangement.Element,
+    visible: Boolean,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+    enabled: Boolean,
+    onToggle: () -> Unit,
+    onMove: (Int) -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().padding(bottom = 10.dp)
+            .clip(AppShapes.card)
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), AppShapes.card)
+            .padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                element.label,
+                style = MaterialTheme.typography.titleSmall,
+                color = if (visible) MaterialTheme.colorScheme.onSurface
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                element.blurb,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        // Up/down rather than drag: reliable, reachable, and far less code than a drag
+        // implementation that has to behave inside a LazyColumn.
+        IconButton(onClick = { onMove(-1) }, enabled = enabled && canMoveUp) {
+            Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Move up")
+        }
+        IconButton(onClick = { onMove(1) }, enabled = enabled && canMoveDown) {
+            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Move down")
+        }
+        Switch(checked = visible, onCheckedChange = { onToggle() }, enabled = enabled)
+    }
+}
+
+@Composable
+private fun AlignChip(
+    label: String,
+    selected: Boolean,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier
+            .clip(AppShapes.small)
+            .background(
+                if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+                else MaterialTheme.colorScheme.surface,
+            )
+            .border(
+                if (selected) 2.dp else 1.dp,
+                if (selected) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f),
+                AppShapes.small,
+            )
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(vertical = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = if (selected) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
+ * The block screen itself, inflated and rendered by the very code the service uses
+ * ([BlockScreenRenderer]), then scaled down to fit.
+ *
+ * Deliberately not a Compose mock-up of the block screen. A mock-up would be a second description
+ * of the same design and would drift from the real one — which is the failure mode behind most of
+ * this app's bugs, and would be especially cruel in a *preview*, whose entire job is to be
+ * trustworthy. What is on screen here is the real layout with the real colours and the real
+ * arrangement; only the text is stand-in.
+ */
+@Composable
+private fun BlockScreenPreview(
+    layoutId: String,
+    themeId: String,
+    arrangement: BlockArrangement.Arrangement,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val cfg = LocalConfiguration.current
+    val screenW = cfg.screenWidthDp.dp
+    val screenH = cfg.screenHeightDp.dp
+    val layoutRes = (BlockLayouts.OPTIONS.firstOrNull { it.id == layoutId }
+        ?: BlockLayouts.OPTIONS.first()).layoutRes
+
+    BoxWithConstraints(modifier) {
+        val scale = maxWidth / screenW
+        Box(
+            Modifier.fillMaxWidth().height(screenH * scale)
+                .clip(AppShapes.medium)
+                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f), AppShapes.medium),
+        ) {
+            // key(): AndroidView's factory does not re-run on its own, so switching layout has to
+            // recreate the view rather than try to re-render a different layout's widgets.
+            key(layoutRes) {
+                AndroidView(
+                    factory = { ctx -> LayoutInflater.from(ctx).inflate(layoutRes, null) },
+                    update = { v ->
+                        // themeId/arrangement are read so this re-runs when either changes; the
+                        // renderer itself reads the saved values, which the picker writes on tap.
+                        @Suppress("UNUSED_EXPRESSION") themeId
+                        @Suppress("UNUSED_EXPRESSION") arrangement
+                        BlockScreenRenderer.applyTheme(context, v)
+                        BlockScreenRenderer.applyArrangement(context, v)
+                        v.findViewById<TextView>(R.id.overlay_title)?.text = "Blocked"
+                        v.findViewById<TextView>(R.id.overlay_subtitle)?.text =
+                            "Instagram is blocked"
+                        v.findViewById<TextView>(R.id.overlay_stat_number)?.text = "36"
+                        v.findViewById<TextView>(R.id.overlay_quote)?.text =
+                            "You have power over your mind — not outside events."
+                        v.findViewById<TextView>(R.id.overlay_quote_author)?.text =
+                            "— Marcus Aurelius"
+                        v.findViewById<ImageView>(R.id.overlay_icon)
+                            ?.setImageResource(AppIcons.current(context).previewRes)
+                    },
+                    modifier = Modifier.size(screenW, screenH).graphicsLayer {
+                        scaleX = scale; scaleY = scale
+                        transformOrigin = TransformOrigin(0f, 0f)
+                    },
+                )
+            }
+        }
+    }
 }
