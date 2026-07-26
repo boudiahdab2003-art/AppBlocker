@@ -23,14 +23,22 @@ object UpdatePause {
         if (current < 0L) return
         val last = SettingsStore.lastSeenVersionCode(context)
         if (last != current) {
-            SettingsStore.setLastSeenVersionCode(context, current)
             if (last != -1L) {
                 SettingsStore.setUpdatePaused(context, true)
                 // Durable intent to end any running Strict session, set BEFORE attempting:
                 // prefs writes survive a broadcast receiver's process teardown, the DB
                 // coroutine below may not.
                 SettingsStore.setStrictClearPending(context, true)
+                // A version change means the downloaded APK has served its purpose. It is tens of
+                // megabytes and was previously kept until the next update overwrote it.
+                Updater.discardDownload(context)
             }
+            // Recorded LAST, deliberately. Recording it first meant that a process killed between
+            // the two writes — a real risk here, since this also runs from a broadcast receiver —
+            // left the version already updated and the pause never armed, with no second chance:
+            // the next start sees last == current and concludes nothing changed. Writing it last
+            // makes the whole thing re-runnable, and re-running it is harmless.
+            SettingsStore.setLastSeenVersionCode(context, current)
         }
         // Runs on EVERY call (app open, service reconnect, install broadcast) — a clear
         // whose process died mid-write is retried until it actually lands. The flag is

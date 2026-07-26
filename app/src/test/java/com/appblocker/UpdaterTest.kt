@@ -22,4 +22,26 @@ class UpdaterTest {
     @Test fun ninetyNineIsNotNewerThanHundred() = assertFalse(Updater.isNewer("1.99", "1.100"))
     @Test fun hundredIsNotNewerThanItself() = assertFalse(Updater.isNewer("1.100", "1.100"))
     @Test fun hundredAndOneIsNewerThanHundred() = assertTrue(Updater.isNewer("1.101", "1.100"))
+
+    // "The download finished" is not "the download is an app". The download path used to check
+    // only the byte count, and only when the server declared one — so a captive-portal login page
+    // (a complete, correctly-sized 200 response) went straight to the installer.
+    private fun bytes(vararg v: Int) = ByteArray(v.size) { v[it].toByte() }
+
+    @Test fun zipHeaderIsAnApk() =
+        assertTrue(Updater.looksLikeApk(bytes(0x50, 0x4B, 0x03, 0x04, 0x14, 0x00)))
+
+    @Test fun htmlIsNotAnApk() =
+        assertFalse(Updater.looksLikeApk("<!DOCTYPE html>".toByteArray()))
+
+    /** An empty response body is the shape a dropped connection leaves behind. */
+    @Test fun emptyIsNotAnApk() = assertFalse(Updater.looksLikeApk(ByteArray(0)))
+
+    /** Truncated at the first three bytes: the prefix matches, the file still isn't one. */
+    @Test fun truncatedHeaderIsNotAnApk() =
+        assertFalse(Updater.looksLikeApk(bytes(0x50, 0x4B, 0x03)))
+
+    /** A plain ZIP that isn't the local-file-header variant — right first two bytes, wrong rest. */
+    @Test fun wrongZipRecordIsNotAnApk() =
+        assertFalse(Updater.looksLikeApk(bytes(0x50, 0x4B, 0x05, 0x06)))
 }

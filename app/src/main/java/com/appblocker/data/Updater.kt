@@ -3,9 +3,11 @@ package com.appblocker.data
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
@@ -71,6 +73,31 @@ object Updater {
         }.getOrDefault("0.0")
     }
 
+    /**
+     * The four bytes every ZIP archive — and therefore every APK — starts with.
+     *
+     * Checked because "the download finished" and "the download is an app" are not the same
+     * thing. A captive-portal Wi-Fi login page, or any proxy that answers 200 with its own HTML,
+     * produces a complete, correctly-sized body that is not an APK; without this the installer
+     * is handed that HTML and reports a parse error the user cannot interpret.
+     */
+    internal fun looksLikeApk(head: ByteArray): Boolean =
+        head.size >= 4 && head[0] == 'P'.code.toByte() && head[1] == 'K'.code.toByte() &&
+            head[2] == 3.toByte() && head[3] == 4.toByte()
+
+    private fun looksLikeApk(file: File): Boolean = runCatching {
+        file.inputStream().use { stream ->
+            val buf = ByteArray(4)
+            var filled = 0
+            while (filled < 4) {
+                val n = stream.read(buf, filled, 4 - filled)
+                if (n <= 0) break
+                filled += n
+            }
+            if (filled < 4) ByteArray(0) else buf
+        }
+    }.map(::looksLikeApk).getOrDefault(false)
+
     /** Downloads the APK to external files dir, reporting 0..100 progress. Returns the file. */
     suspend fun download(context: Context, url: String, onProgress: (Int) -> Unit): File =
         withContext(Dispatchers.IO) {
@@ -85,13 +112,24 @@ object Updater {
                     instanceFollowRedirects = true
                 }
                 conn.connect()
-                val total = conn.contentLength.toLong()
+                // Not every failure arrives as an exception: a proxy or captive portal can answer
+                // 200-with-HTML, and some error responses carry a readable body rather than
+                // throwing on getInputStream(). Insist on a plain OK before believing the bytes.
+                if (conn.responseCode != HttpURLConnection.HTTP_OK) {
+                    error("server answered ${conn.responseCode}")
+                }
+                // contentLengthLong, not contentLength: the Int version overflows past 2GB and is
+                // deprecated. -1 (no Content-Length) is normal for a chunked response.
+                val total = conn.contentLengthLong
                 var done = 0L
                 conn.inputStream.use { input ->
                     dest.outputStream().use { output ->
                         val buf = ByteArray(64 * 1024)
                         var read: Int
                         while (input.read(buf).also { read = it } != -1) {
+                            // Cancelling the download has to interrupt the copy, or "Cancel"
+                            // would tear the dialog down while the transfer ran on regardless.
+                            ensureActive()
                             output.write(buf, 0, read)
                             done += read
                             if (total > 0) onProgress(((done * 100) / total).toInt())
@@ -100,6 +138,10 @@ object Updater {
                 }
                 // A truncated download would install as a corrupt APK — fail instead.
                 if (total > 0 && done < total) error("incomplete download ($done/$total bytes)")
+                // The length check above is skipped entirely when the server sends no length, so
+                // this is the only integrity check that always runs. Cheap, and it catches both
+                // the wrong-content case and a download truncated at the very first buffer.
+                if (!looksLikeApk(dest)) error("downloaded file is not an app")
                 onProgress(100)
                 dest
             } catch (e: Exception) {
@@ -108,16 +150,29 @@ object Updater {
             }
         }
 
-    /** True once the user has allowed this app to install packages. */
-    fun canInstall(context: Context): Boolean = context.packageManager.canRequestPackageInstalls()
+    /**
+     * True once the user has allowed this app to install packages.
+     *
+     * `canRequestPackageInstalls` is API 26; minSdk is 24. Calling it on 24/25 is a crash, not a
+     * false — and on those versions the permission is a single global "unknown sources" setting
+     * with no per-app screen to send anyone to, so the honest answer there is "nothing to ask for".
+     */
+    fun canInstall(context: Context): Boolean =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+            context.packageManager.canRequestPackageInstalls()
+        else true
 
-    /** Opens the system "allow install unknown apps" screen for this app. */
-    fun requestInstallPermission(context: Context) {
+    /**
+     * Opens the system "allow install unknown apps" screen for this app. Returns false if the
+     * phone has no such screen — some OEM builds don't — so the caller can say so instead of
+     * crashing on an unhandled intent.
+     */
+    fun requestInstallPermission(context: Context): Boolean = runCatching {
         context.startActivity(
             Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}"))
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         )
-    }
+    }.isSuccess
 
     /** Launches the system installer for the downloaded APK. */
     fun install(context: Context, file: File) {
@@ -128,5 +183,13 @@ object Updater {
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
             }
         )
+    }
+
+    /** Deletes a downloaded APK that is no longer needed. Both possible locations, because which
+     *  one [download] used depends on whether external storage was mounted at the time. */
+    fun discardDownload(context: Context) {
+        listOfNotNull(context.getExternalFilesDir(null), context.filesDir).forEach { dir ->
+            runCatching { File(dir, "update.apk").delete() }
+        }
     }
 }
