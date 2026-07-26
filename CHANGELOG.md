@@ -3,6 +3,15 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.102
+- Blocking now guards its own off-switch. Before this, turning AppBlocker's accessibility service off in Settings took about five seconds and switched off every block in the app — apps, blocked words and websites all at once. Strict Mode guarded that page, but only while a session was running; the rest of the time nothing did. It is now covered whenever the guard is on, which it is by default.
+
+You can still turn it off, but not quickly: Profile ▸ Guard the off-switch, type the paragraph, wait 2 hours with the guard still standing, then you have 15 minutes to do it. Cancel any time. Turning it back on is instant. Changing the phone's clock doesn't shorten the wait.
+
+Also fixed: the backup detection for those Settings pages only ever worked in English, so on an Arabic phone it silently did nothing. It now understands Arabic too.
+
+And the block screen quote can sit on the left, in the centre or on the right — Profile ▸ Block screen ▸ Pieces ▸ Quote.
+
 ## v1.101
 - You can now arrange the block screen yourself. Show, hide, resize and reorder its pieces — the minutes counter, the quote, the "Blocked" label, the app — on top of the four looks from 1.100, with a live preview that is the real block screen rather than a picture of one. The four looks are untouched; they are starting points now. Editing is locked while Strict Mode is running.
 
