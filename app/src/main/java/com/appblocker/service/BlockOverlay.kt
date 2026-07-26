@@ -21,6 +21,7 @@ import android.widget.TextView
 import com.appblocker.R
 import com.appblocker.data.AppIcons
 import com.appblocker.data.AttemptCounter
+import com.appblocker.data.BlockArrangement
 import com.appblocker.data.BlockLayouts
 import com.appblocker.data.BlockThemes
 import com.appblocker.data.Quotes
@@ -125,7 +126,7 @@ internal class BlockOverlay(private val context: Context) {
         // blocks (and survives in preInflated), so a theme picked between two blocks would
         // otherwise not appear until the service restarted.
         val theme = BlockScreenRenderer.applyTheme(context, v)
-        BlockScreenRenderer.applyArrangement(context, v)
+        val arrangement = BlockScreenRenderer.applyArrangement(context, v)
         // Every lookup below is null-safe: a layout that leaves the number or the quote out is a
         // valid choice (see BlockLayouts), not a broken layout.
         v.findViewById<TextView>(R.id.overlay_title)?.text = title
@@ -139,7 +140,14 @@ internal class BlockOverlay(private val context: Context) {
             val quote = Quotes.random()
             quoteView.apply {
                 text = quote.text
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, Quotes.sizeSpFor(quote.text))
+                // The quote's own size scales with its length; the owner's Smaller/Larger
+                // choice multiplies that rather than replacing it, so a long quote still
+                // shrinks to stay readable at whichever size was picked.
+                setTextSize(
+                    TypedValue.COMPLEX_UNIT_SP,
+                    Quotes.sizeSpFor(quote.text) *
+                        arrangement.factorFor(BlockArrangement.Element.QUOTE),
+                )
             }
             v.findViewById<TextView>(R.id.overlay_quote_author)?.apply {
                 text = "— ${quote.author}"

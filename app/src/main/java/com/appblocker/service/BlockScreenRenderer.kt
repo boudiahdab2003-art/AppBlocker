@@ -2,7 +2,9 @@ package com.appblocker.service
 
 import android.content.Context
 import android.view.Gravity
+import android.util.TypedValue
 import android.view.View
+import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -66,17 +68,18 @@ internal object BlockScreenRenderer {
      * margin. The four layouts are hand-tuned and must keep looking exactly as they shipped; this
      * rearranges them, it does not restyle them.
      */
-    fun applyArrangement(context: Context, v: View) {
+    fun applyArrangement(context: Context, v: View): BlockArrangement.Arrangement {
         val arrangement = BlockArrangement.load(context)
         // The elements this layout actually has, in the owner's order. A layout without a quote
         // simply contributes nothing here.
         val present = arrangement.order.mapNotNull { element ->
             v.findViewById<View>(element.id)?.let { element to it }
         }
-        if (present.isEmpty()) return
+        if (present.isEmpty()) return arrangement
 
         present.forEach { (element, child) ->
             child.visibility = if (arrangement.isVisible(element)) View.VISIBLE else View.GONE
+            scaleText(child, arrangement.factorFor(element))
         }
 
         val stack = present.first().second.parent as? LinearLayout ?: return
@@ -97,6 +100,32 @@ internal object BlockScreenRenderer {
             BlockArrangement.Align.CENTRE -> stack.gravity = Gravity.CENTER_HORIZONTAL
             // Untouched: keep whatever the layout itself declares.
             BlockArrangement.Align.DEFAULT -> Unit
+        }
+        return arrangement
+    }
+
+    /**
+     * Scales every text inside [root] to [factor] of the size its layout declared.
+     *
+     * The base size is captured on the first pass and reused forever after, because the cover's
+     * view is **reused across blocks**: scaling by reading the current size would multiply again
+     * on every single block until the text filled the screen. Always base × factor, never
+     * current × factor.
+     *
+     * The quote itself is skipped — its size already belongs to the quote-length logic in
+     * [BlockOverlay] (a short line goes huge, a long one stays readable), so the factor is applied
+     * there instead. Scaling it here as well would apply the factor twice.
+     */
+    private fun scaleText(root: View, factor: Float) {
+        when (root) {
+            is TextView -> {
+                if (root.id == R.id.overlay_quote) return
+                val density = root.resources.displayMetrics.scaledDensity
+                val base = root.getTag(R.id.base_text_size_sp) as? Float
+                    ?: (root.textSize / density).also { root.setTag(R.id.base_text_size_sp, it) }
+                root.setTextSize(TypedValue.COMPLEX_UNIT_SP, base * factor)
+            }
+            is ViewGroup -> for (i in 0 until root.childCount) scaleText(root.getChildAt(i), factor)
         }
     }
 

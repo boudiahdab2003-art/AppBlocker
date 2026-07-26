@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Tag key on a block-screen TextView holding the text size its layout declared, captured
+         the first time it is scaled. The cover's view is reused across blocks, so scaling by
+         reading the CURRENT size would compound on every block until the text filled the screen;
+         every scale is computed from this base instead. -->
+    <item name="base_text_size_sp" type="id" />
+</resources>

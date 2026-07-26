@@ -1,5 +1,6 @@
 package com.appblocker.ui
 
+import android.util.TypedValue
 import android.view.LayoutInflater
 import android.widget.ImageView
 import android.widget.TextView
@@ -55,6 +56,7 @@ import com.appblocker.data.AppIcons
 import com.appblocker.data.BlockArrangement
 import com.appblocker.data.BlockLayouts
 import com.appblocker.data.BlockThemes
+import com.appblocker.data.Quotes
 import com.appblocker.data.SettingsStore
 import com.appblocker.data.backdropSolid
 import com.appblocker.service.BlockScreenRenderer
@@ -147,6 +149,7 @@ fun BlockThemePickerScreen(strictActive: Boolean = false, onBack: () -> Unit) {
                 ElementRow(
                     element = element,
                     visible = arrangement.isVisible(element),
+                    size = arrangement.sizeOf(element),
                     canMoveUp = i > 0,
                     canMoveDown = i < arrangement.order.lastIndex,
                     enabled = editable,
@@ -162,6 +165,11 @@ fun BlockThemePickerScreen(strictActive: Boolean = false, onBack: () -> Unit) {
                         list.add(to, list.removeAt(i))
                         arrangement = arrangement.copy(order = list)
                             .also { BlockArrangement.save(context, it) }
+                    },
+                    onSize = { newSize ->
+                        arrangement = arrangement.copy(
+                            sizes = arrangement.sizes + (element to newSize),
+                        ).also { BlockArrangement.save(context, it) }
                     },
                 )
             }
@@ -422,17 +430,22 @@ private fun Bar(width: androidx.compose.ui.unit.Dp, height: androidx.compose.ui.
 private fun ElementRow(
     element: BlockArrangement.Element,
     visible: Boolean,
+    size: BlockArrangement.Size,
     canMoveUp: Boolean,
     canMoveDown: Boolean,
     enabled: Boolean,
     onToggle: () -> Unit,
     onMove: (Int) -> Unit,
+    onSize: (BlockArrangement.Size) -> Unit,
 ) {
+  Column(
+      Modifier.fillMaxWidth().padding(bottom = 10.dp)
+          .clip(AppShapes.card)
+          .background(MaterialTheme.colorScheme.surface)
+          .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), AppShapes.card),
+  ) {
     Row(
         Modifier.fillMaxWidth().padding(bottom = 10.dp)
-            .clip(AppShapes.card)
-            .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), AppShapes.card)
             .padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -459,6 +472,23 @@ private fun ElementRow(
         }
         Switch(checked = visible, onCheckedChange = { onToggle() }, enabled = enabled)
     }
+    // Size only matters for a piece that is actually on screen.
+    if (visible) {
+        Row(
+            Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, bottom = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            BlockArrangement.Size.entries.forEach { option ->
+                AlignChip(
+                    label = option.label,
+                    selected = size == option,
+                    enabled = enabled,
+                    modifier = Modifier.weight(1f),
+                ) { onSize(option) }
+            }
+        }
+    }
+  }
 }
 
 @Composable
@@ -537,13 +567,21 @@ private fun BlockScreenPreview(
                         @Suppress("UNUSED_EXPRESSION") themeId
                         @Suppress("UNUSED_EXPRESSION") arrangement
                         BlockScreenRenderer.applyTheme(context, v)
-                        BlockScreenRenderer.applyArrangement(context, v)
+                        val a = BlockScreenRenderer.applyArrangement(context, v)
                         v.findViewById<TextView>(R.id.overlay_title)?.text = "Blocked"
                         v.findViewById<TextView>(R.id.overlay_subtitle)?.text =
                             "Instagram is blocked"
                         v.findViewById<TextView>(R.id.overlay_stat_number)?.text = "36"
-                        v.findViewById<TextView>(R.id.overlay_quote)?.text =
-                            "You have power over your mind — not outside events."
+                        v.findViewById<TextView>(R.id.overlay_quote)?.apply {
+                            text = "You have power over your mind — not outside events."
+                            // Mirrors BlockOverlay: the quote's length-based size, times the
+                            // owner's choice. Doing it here too is what keeps the preview honest.
+                            setTextSize(
+                                TypedValue.COMPLEX_UNIT_SP,
+                                Quotes.sizeSpFor(text.toString()) *
+                                    a.factorFor(BlockArrangement.Element.QUOTE),
+                            )
+                        }
                         v.findViewById<TextView>(R.id.overlay_quote_author)?.text =
                             "— Marcus Aurelius"
                         v.findViewById<ImageView>(R.id.overlay_icon)

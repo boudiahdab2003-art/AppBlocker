@@ -13,11 +13,13 @@ import com.appblocker.R
  * 12/13/15sp kickers, and Focus renders the app name as 32sp centred serif where the others use
  * 17sp sans). Reproducing all of that from a generic engine means a mass of conditional sizing,
  * and the bar was that the four presets keep looking *exactly* as they shipped. So the layouts
- * stay untouched and this only changes three things about them, none of which can affect styling:
+ * stay untouched and this only changes four things about them:
  *
  *  - whether an element is shown,
  *  - the order elements sit in,
- *  - whether the stack is left-aligned or centred.
+ *  - whether the stack is left-aligned or centred,
+ *  - each element's text size, as a *multiplier* on what its layout declares — so a layout keeps
+ *    its own proportions and "Larger" means larger relative to that design, not one fixed size.
  *
  * Every layout tags its logical elements with the same container ids (`el_kicker`, `el_number`,
  * `el_quote`, `el_app`), so one code path in [com.appblocker.service.BlockOverlay] applies this to
@@ -35,6 +37,15 @@ object BlockArrangement {
 
     enum class Align { DEFAULT, LEFT, CENTRE }
 
+    /** Text size for one element, as a multiplier on whatever size its layout declares. Kept as
+     *  a factor rather than an absolute size so each layout keeps its own proportions — "large"
+     *  on Scoreboard's 150sp number and on Editorial's 120sp one should not become the same. */
+    enum class Size(val label: String, val factor: Float) {
+        SMALLER("Smaller", 0.8f),
+        DEFAULT("Default", 1f),
+        LARGER("Larger", 1.25f),
+    }
+
     /**
      * [order] is top to bottom and may omit elements the current layout lacks — it is matched by
      * id at apply time. [hidden] is stored rather than a "visible" flag per element so that a
@@ -44,21 +55,28 @@ object BlockArrangement {
         val order: List<Element> = Element.entries.toList(),
         val hidden: Set<Element> = emptySet(),
         val align: Align = Align.DEFAULT,
+        val sizes: Map<Element, Size> = emptyMap(),
     ) {
         fun isVisible(e: Element) = e !in hidden
+        fun sizeOf(e: Element) = sizes[e] ?: Size.DEFAULT
+        fun factorFor(e: Element) = sizeOf(e).factor
     }
 
     /** The default: every element shown, in each layout's own order, alignment untouched. */
     val DEFAULT = Arrangement()
 
-    // --- persistence: "order|hidden|align", ids by enum name so reordering the enum is safe ---
+    // --- persistence: "order|hidden|align|sizes", names not ordinals so reordering an enum in a
+    // later version can't silently reinterpret someone's saved arrangement ---
 
     fun load(context: Context): Arrangement {
         val raw = SettingsStore.blockArrangement(context) ?: return DEFAULT
         return runCatching {
-            val (orderPart, hiddenPart, alignPart) = raw.split('|', limit = 3).let {
-                Triple(it[0], it.getOrElse(1) { "" }, it.getOrElse(2) { "" })
-            }
+            val parts = raw.split('|')
+            val orderPart = parts.getOrElse(0) { "" }
+            val hiddenPart = parts.getOrElse(1) { "" }
+            val alignPart = parts.getOrElse(2) { "" }
+            // Absent in strings written before sizes existed — getOrElse, not [3].
+            val sizePart = parts.getOrElse(3) { "" }
             val parsed = orderPart.split(',').mapNotNull { name ->
                 Element.entries.firstOrNull { it.name == name }
             }
@@ -72,6 +90,14 @@ object BlockArrangement {
                     Element.entries.firstOrNull { it.name == name }
                 }.toSet(),
                 align = Align.entries.firstOrNull { it.name == alignPart } ?: Align.DEFAULT,
+                sizes = sizePart.split(',').mapNotNull { pair ->
+                    val (e, sz) = pair.split(':').let {
+                        it.getOrNull(0) to it.getOrNull(1)
+                    }
+                    val element = Element.entries.firstOrNull { it.name == e } ?: return@mapNotNull null
+                    val size = Size.entries.firstOrNull { it.name == sz } ?: return@mapNotNull null
+                    element to size
+                }.toMap(),
             )
         }.getOrDefault(DEFAULT)
     }
@@ -79,7 +105,8 @@ object BlockArrangement {
     fun save(context: Context, a: Arrangement) = SettingsStore.setBlockArrangement(
         context,
         "${a.order.joinToString(",") { it.name }}|" +
-            "${a.hidden.joinToString(",") { it.name }}|${a.align.name}",
+            "${a.hidden.joinToString(",") { it.name }}|${a.align.name}|" +
+            a.sizes.entries.joinToString(",") { (e, s) -> "${e.name}:${s.name}" },
     )
 
     fun reset(context: Context) = SettingsStore.setBlockArrangement(context, null)
