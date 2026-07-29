@@ -726,6 +726,35 @@ own blocked words, and had that line been missing, opening it would have blocked
 own list — a tidy explanation for "flashing inside the app itself" that turns out **not** to be the
 cause. Ruled out, so nobody re-derives it.
 
+### Swept in the sixteenth "bug hunt" (29 Jul 2026) — the PIN, boot recovery
+
+**The PIN was asked once per task and never again.** `LockGate` held `unlocked` in a
+`rememberSaveable`, which survives backgrounding *and* process-death restore — so on a phone where
+AppBlocker sits in recents, the lock opened once and stayed open for days. Its own description says
+"lock your settings so blocks can't be removed on a whim", and the whim arrives hours later, by
+which point the gate was already open. Now re-locks after `PinStore.RELOCK_AFTER_MS` away.
+
+The interesting part is the tension, which is why the rule is a tested function rather than a
+constant: **this app sends the user out to system screens constantly** — accessibility, device
+admin, battery, app-info — and re-locking on every return would make setup miserable and teach him
+to switch the PIN off. Two minutes covers a trip to Settings; it does not cover picking the phone
+up again in the evening. `ON_START`, not `ON_RESUME`, so a permission dialog over the app doesn't
+count as leaving. A negative elapsed (restore across a reboot, monotonic clock restarted) re-locks:
+asking for a PIN that wasn't needed costs seconds, skipping one that was costs what it protects.
+
+Swept and found sound: `BootReceiver` handles BOOT_COMPLETED and MY_PACKAGE_REPLACED and re-arms
+both the watchdog schedule and an immediate check; `ProtectionScheduler.ensureScheduled` is called
+from `MainActivity.onCreate` as well as boot, so the periodic check is re-armed on every app open
+and `KEEP` leaves a running cycle alone.
+
+Not fixed, deliberately, and worth a decision rather than a patch: **the Quick Settings tile is a
+PIN-free, guard-free pause.** `QuickBlockTileService.onClick` flips `quickBlockPaused` in one tap
+from the shade, refusing only during a Strict session — no PIN (it never opens the app), no
+off-switch guard, no wait. Functionally it is the same door as the relapse that started this whole
+line of work, and cheaper: one tap instead of a walk through Settings. It only matters if the tile
+has actually been added to the shade, which is a manual step, so the owner was asked before
+anything is changed — the fix is either to gate it or to drop the tile, and that is his call.
+
 ### Swept in the fifteenth "bug hunt" (29 Jul 2026) — schedules, and new-app auto-blocking
 
 Both areas were on the "never swept" list; the owner picked them. Four findings, and the two that
