@@ -82,5 +82,56 @@ object TypedChallenge {
     fun isPaste(oldText: String, newText: String): Boolean =
         newText.length - oldText.length > MAX_INSERT
 
+    /**
+     * How far into the paragraph the typing has got, and whether it has already gone wrong.
+     *
+     * @param correct words typed correctly from the start — also the index of the word being
+     *   typed now, which is what the screen highlights.
+     * @param wrong the text has diverged, so no amount of further typing can match. The word at
+     *   [correct] is the one that broke it.
+     */
+    data class Progress(val correct: Int, val wrong: Boolean)
+
+    /**
+     * Where the typist is. Drives the display only — [matches] remains the sole authority on
+     * whether the gate opens, so a bug in here can make the screen unhelpful but cannot unlock
+     * anything.
+     *
+     * **Why the screen needs this at all.** Forty words with nothing but a pass/fail at the end
+     * means a wrong letter in word three is invisible until the clock runs out and the whole
+     * attempt is thrown away. That does not read as strictness, it reads as the app cheating —
+     * the same reason the gate latches [matches] the instant it is met rather than at the moment
+     * the button is pressed. Knowing where you are does not shrink the work: it is still forty
+     * words, still against the same clock.
+     *
+     * A word counts as finished when it is typed in full, or when a space has been typed after it.
+     * Until then a partial word is judged as a *prefix* — "wheelbar" on the way to "wheelbarrow"
+     * is not an error, "wheelbap" is, and saying so immediately is the entire point.
+     */
+    fun progress(phrase: String, input: String): Progress {
+        val expected = phrase.split(WHITESPACE).filter { it.isNotEmpty() }
+        val typed = input.trim().split(WHITESPACE).filter { it.isNotEmpty() }
+        if (typed.isEmpty()) return Progress(0, false)
+        // A trailing space is the typist saying "that word is done" — without it, a short word is
+        // still on its way to a longer one and must not be called an error yet.
+        val committed = input.isNotEmpty() && input.last().isWhitespace()
+        var correct = 0
+        typed.forEachIndexed { i, word ->
+            // Typed past the end: there is nothing left for this word to be.
+            if (i >= expected.size) return Progress(correct, true)
+            val want = expected[i]
+            when {
+                // Equal counts however it was left. Without this the fortieth word would sit at
+                // 39/40 while `matches` already said yes, and the two would contradict each other
+                // on the one screen showing both.
+                word.equals(want, ignoreCase = true) -> correct++
+                i == typed.lastIndex && !committed && want.startsWith(word, ignoreCase = true) ->
+                    return Progress(correct, false) // still being typed
+                else -> return Progress(correct, true)
+            }
+        }
+        return Progress(correct, false)
+    }
+
     private val WHITESPACE = Regex("\\s+")
 }

@@ -75,6 +75,79 @@ class TypedChallengeTest {
         assertEquals(emptyList<String>(), words.filterNot { it in TypedChallenge.CHALLENGE_WORDS })
     }
 
+    // --- where the typist is, which is what the screen draws ---
+
+    @Test
+    fun `a half-typed word has not been typed yet`() {
+        // "wheelbar" on the way to "wheelbarrow" is neither finished nor wrong. Calling it either
+        // would be a lie the screen then shows: a counter that jumps a word early, or a red
+        // warning on a word being typed correctly.
+        val p = TypedChallenge.progress("wheelbarrow watermelon", "wheelbar")
+        assertEquals(0, p.correct)
+        assertFalse(p.wrong)
+    }
+
+    @Test
+    fun `a word counts once it is complete, with or without the space after it`() {
+        assertEquals(1, TypedChallenge.progress("wheelbarrow watermelon", "wheelbarrow").correct)
+        assertEquals(1, TypedChallenge.progress("wheelbarrow watermelon", "wheelbarrow ").correct)
+        assertEquals(2, TypedChallenge.progress("wheelbarrow watermelon", "wheelbarrow watermelon").correct)
+    }
+
+    @Test
+    fun `a wrong letter is wrong immediately, and names the right word`() {
+        // The point of the whole thing: a typo in word two must not stay invisible until the
+        // clock runs out and the attempt is gone.
+        val p = TypedChallenge.progress("wheelbarrow watermelon", "wheelbarrow watet")
+        assertTrue(p.wrong)
+        assertEquals(1, p.correct) // so the screen highlights word 2, the one that broke
+    }
+
+    @Test
+    fun `a finished word that is merely a prefix is wrong`() {
+        // The space is the typist saying "done". Before it, "water" is on its way to
+        // "watermelon"; after it, it is simply the wrong word.
+        assertFalse(TypedChallenge.progress("watermelon riverbank", "water").wrong)
+        assertTrue(TypedChallenge.progress("watermelon riverbank", "water ").wrong)
+    }
+
+    @Test
+    fun `capitals and stray spaces are forgiven here too`() {
+        // Same forgiveness as `matches`, or the counter would disagree with the button on the one
+        // screen showing both.
+        val p = TypedChallenge.progress("candlestick riverbank", "  Candlestick   riverbank")
+        assertEquals(2, p.correct)
+        assertFalse(p.wrong)
+    }
+
+    @Test
+    fun `typing past the end is wrong`() {
+        val p = TypedChallenge.progress("candlestick riverbank", "candlestick riverbank umbrella")
+        assertTrue(p.wrong)
+        assertEquals(2, p.correct)
+    }
+
+    @Test
+    fun `typing the paragraph out letter by letter is never wrong, and ends complete`() {
+        // The load-bearing one. A correct transcription must not flash an error at any point on
+        // the way — a red word that appears and vanishes while you are typing correctly is worse
+        // than no marker at all — and at the last letter this must agree with `matches`, which is
+        // what actually opens the gate.
+        val phrase = TypedChallenge.newPhrase()
+        for (i in 1..phrase.length) {
+            val typed = phrase.substring(0, i)
+            assertFalse("wrong after typing \"$typed\"", TypedChallenge.progress(phrase, typed).wrong)
+        }
+        assertEquals(TypedChallenge.WORDS, TypedChallenge.progress(phrase, phrase).correct)
+        assertTrue(TypedChallenge.matches(phrase, phrase))
+    }
+
+    @Test
+    fun `nothing typed is no progress and no error`() {
+        assertEquals(TypedChallenge.Progress(0, false), TypedChallenge.progress("candlestick", ""))
+        assertEquals(TypedChallenge.Progress(0, false), TypedChallenge.progress("candlestick", "   "))
+    }
+
     // --- the calibration, which is a pair of numbers that only mean anything together ---
 
     @Test

@@ -534,9 +534,9 @@ fun ProfileScreen(
         FrictionGate(
             title = "Turn off the guard",
             blurb = "This is the switch that stops you switching blocking off in a bad moment. " +
-                "To be sure it's really you and really deliberate, type the paragraph below — " +
-                "you can't paste it — before the clock runs out. Miss it and you get a fresh " +
-                "paragraph and a fresh clock. Even then the guard stays on for another " +
+                "Type the paragraph below — you can't paste it — before the clock runs out.",
+            detail = "Miss the clock and you get a fresh paragraph and a fresh clock, as many " +
+                "times as it takes. Even once you've typed it, the guard stays on for another " +
                 "${OffSwitchGuard.DELAY_LABEL}; after that you have " +
                 "${OffSwitchGuard.WINDOW_LABEL} to turn it off.",
             confirmLabel = "Start the ${OffSwitchGuard.DELAY_LABEL} wait",

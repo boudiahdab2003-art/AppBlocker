@@ -230,12 +230,12 @@ fun rememberGatedFix(perm: Perm): () -> Unit {
 fun PreventUninstallGate(onDismiss: () -> Unit, onConfirm: () -> Unit) {
     FrictionGate(
         title = "Allow uninstalling",
-        blurb = "This is the switch that actually refuses an uninstall — the guard only makes the " +
-            "Settings page hard to reach. With it off, AppBlocker can be removed in a few taps, " +
-            "and every block goes with it.\n\nSo, to be sure it's really you and really " +
-            "deliberate: type the paragraph below — you can't paste it — before the clock runs " +
-            "out. Miss it and you get a fresh paragraph and a fresh clock. Turning it back on is " +
-            "always one tap.",
+        blurb = "This is the switch that actually refuses an uninstall. Type the paragraph " +
+            "below — you can't paste it — before the clock runs out.",
+        detail = "The guard only makes the Settings page hard to reach; this is the switch that " +
+            "refuses the uninstall itself. With it off, AppBlocker can be removed in a few taps, " +
+            "and every block goes with it. Miss the clock and you get a fresh paragraph and a " +
+            "fresh clock. Turning it back on is always one tap.",
         confirmLabel = "Turn protection off",
         dismissLabel = "Keep it on",
         onDismiss = onDismiss,

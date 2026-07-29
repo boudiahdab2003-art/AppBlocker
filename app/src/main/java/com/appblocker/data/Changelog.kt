@@ -13,6 +13,15 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.113", "Jul 29, 2026", "The typing screen now lets you actually type", listOf(
+        "**You sent two screenshots of the paragraph screen and said the design was very bad.** Looking at them, it was worse than that — the screen wasn't letting you do the thing it was asking for.",
+        "The explanation at the top filled the entire display, so the paragraph you were supposed to copy wasn't even on screen. Scroll down and it was there, but sliced through mid-word by the box below it. Words you can't see are words you can't type.",
+        "So the screen has been rebuilt around the typing. The clock is now a bar under the title that visibly drains, with the time on the left and how many of the forty words you've done on the right. The explanation is one line, with the rest behind a small **What happens next?** you can open — and it steps out of the way entirely once you start typing, which gives the paragraph most of the screen.",
+        "The paragraph itself now scrolls inside its own box, so it always ends in a proper edge instead of a cut-off word, and it follows you: words you've typed fade out, the word you're on is highlighted, and the box scrolls itself to keep it in view.",
+        "**And it tells you the moment you go wrong.** Before, one mistyped letter in word three stayed invisible until the clock ran out and the whole attempt was thrown away. Now that word turns red straight away and the message names it — Word 12 doesn't match — so you fix one letter instead of hunting through forty words or starting over.",
+        "The typing box is three lines tall instead of one, so you can see what you've written.",
+        "None of this makes the gate easier. It's still forty words, still hand-typed, still no pasting, still the same three-minute clock, and running out still means a brand new paragraph. What changed is that the difficulty is now the typing, rather than the screen."
+    )),
     VersionLog("1.112", "Jul 29, 2026", "Updating the app is not an escape attempt", listOf(
         "**The guard was blocking your own updates.** You reported it, and you were right: the app downloads the update, hands it to Android's installer, and the guard threw you straight back to the home screen.",
         "The reason is the same trap as the device-admin screen in 1.107. The guard watches Android's installer for the \"do you want to uninstall AppBlocker?\" screen — and the screen for *installing an update* is the same installer showing the same app name. Reading the words can't separate them: they're translated, and in English \"uninstall\" literally contains \"install\".",
