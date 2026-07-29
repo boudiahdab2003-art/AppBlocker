@@ -727,6 +727,41 @@ own blocked words, and had that line been missing, opening it would have blocked
 own list — a tidy explanation for "flashing inside the app itself" that turns out **not** to be the
 cause. Ruled out, so nobody re-derives it.
 
+### A layout rule, learnt three times in one day (v1.113–v1.115)
+
+Not a sweep — three separate reports about one screen, `ui/FrictionGate.kt`, each the same defect
+wearing a different disguise. Recorded here because the rule generalises and the cost of relearning
+it was three releases.
+
+**The element a screen exists for must never be the flexible one.**
+
+The gate laid itself out as a `Column` where every child had a fixed height except the paragraph
+card, which carried `Modifier.weight(1f)`. A weight is not a size, it is *whatever is left over* —
+so every pressure on that screen was paid for by the one thing the screen is about:
+
+1. **v1.113**: five lines of explanation at the owner's system font scale left nothing over. The
+   paragraph rendered as a single clipped line.
+2. **v1.114**: fixed by *removing content* — explanation into a dialog, input from three lines to
+   one. That bought room with the keyboard closed and none with it open.
+3. **v1.115**: with the keyboard up, `safeDrawingPadding()` correctly shrinks the Column and the
+   weight child went to **zero**; the fixed children then overflowed and the last button was sliced
+   in half.
+
+Rounds 1 and 2 treated the symptom. The defect was the contract: **a weighted child is a promise
+the layout is allowed to break, and it breaks silently — at exactly the font scale and keyboard
+state the developer did not test.** Both of the states that broke it are ones a cloud session
+cannot see.
+
+The fix is structural, and came from an app the owner pointed at: nothing on its confirmation
+dialog has a flexible height, so there is nothing for the keyboard to squeeze. The gate now pins
+the title and the countdown, puts everything else in **one scroll container**, and gives the
+paragraph a **stated height**. A weight on a *scroll container* is safe in the way it is not on
+content — squeezing it scrolls rather than starving what is inside.
+
+Generalises beyond Compose: whenever a layout has one flexible element and many rigid ones, the
+flexible one absorbs every future addition. Ask which element the screen exists for, and make sure
+it is not that one.
+
 ### Swept in the eighteenth "bug hunt" (29 Jul 2026) — the auto-updater, hours old
 
 Method: sweep 10's — **audit the day's own changes** — pointed at the silent self-updater, written

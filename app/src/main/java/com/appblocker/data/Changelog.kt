@@ -13,6 +13,13 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.115", "Jul 29, 2026", "The paragraph stays put when the keyboard opens", listOf(
+        "**You opened the keyboard and the paragraph vanished completely** — and \"Keep it on\" was cut in half at the bottom. Third time this screen has broken on me, and this time the actual cause is fixed rather than worked around.",
+        "The paragraph was the only thing on that screen without a size of its own — it was told to take whatever space was left over. So every time something else needed room, it came out of the paragraph. Yesterday it was the explanation; today it was the keyboard taking half the screen. Twice I made other things smaller, which helped until the next thing came along.",
+        "You pointed at another blocker app and you were right about what it does well: nothing on that dialog has a flexible size, so there's nothing for the keyboard to squash. It's one page you scroll.",
+        "So that's what this screen is now. The title and the countdown stay pinned at the top where you can always see them, and everything below scrolls. The paragraph has a fixed panel of its own — it can't shrink, can't vanish, and stays the same size whether the keyboard is up or down. It still scrolls inside itself and still follows the word you're on.",
+        "The typing box says \"Type the paragraph above\" now, so it's clear where to look."
+    )),
     VersionLog("1.114", "Jul 29, 2026", "The paragraph gets the screen this time", listOf(
         "**Yesterday's rebuild of the typing screen made the one thing worse that mattered most** — you sent a screenshot showing the paragraph squeezed down to a single half-cut line, with no way to read what you were meant to type. Sorry. That was my mistake and it's worth saying exactly what it was.",
         "Everything on that screen had a fixed size — the explanation, the typing box, the buttons — and the paragraph was the only part told to \"take whatever's left over\". At your font size there was nothing left over, so the one element the whole screen exists for was the one that got squeezed to nothing.",
