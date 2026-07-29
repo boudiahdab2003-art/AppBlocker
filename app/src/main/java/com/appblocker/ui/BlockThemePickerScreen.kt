@@ -523,16 +523,81 @@ private fun ElementRow(
         }
     }
     // Reorder last, and quiet: it moves the piece up or down the block screen, which matters far
-    // less often than the switch above. Full-width text buttons rather than two bare chevrons
-    // floating in the middle of the header, where they were easy to hit by accident and gave no
-    // clue what they moved.
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        MoveButton("Move up", Icons.Filled.KeyboardArrowUp, enabled && canMoveUp,
-            Modifier.weight(1f)) { onMove(-1) }
-        MoveButton("Move down", Icons.Filled.KeyboardArrowDown, enabled && canMoveDown,
-            Modifier.weight(1f)) { onMove(1) }
-    }
+    // less often than the switch above.
+    MoveControl(
+        canMoveUp = enabled && canMoveUp,
+        canMoveDown = enabled && canMoveDown,
+        onMove = onMove,
+    )
   }
+}
+
+/**
+ * "Move up | Move down" as one track of two halves.
+ *
+ * Three versions of this control now. It began as two bare chevrons floating between the
+ * description and the switch — small, unlabelled, easy to hit by accident, and silent about what
+ * they moved. Then two separate outlined buttons, which said what they did but read as two
+ * unrelated things in a card that already had a switch and a stepper in it.
+ *
+ * This is the same **track with cells** shape as [SegmentedRow] above it, so the card speaks one
+ * visual language instead of three: a filled surface, one divider down the middle, one hairline
+ * around the outside. A disabled half — the top piece cannot move up — fades rather than
+ * disappearing, so the control keeps its shape and the row below doesn't jump as pieces reorder.
+ */
+@Composable
+private fun MoveControl(canMoveUp: Boolean, canMoveDown: Boolean, onMove: (Int) -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(AppShapes.small)
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), AppShapes.small),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        MoveHalf("Move up", Icons.Filled.KeyboardArrowUp, canMoveUp, Modifier.weight(1f)) {
+            onMove(-1)
+        }
+        // A hairline rather than a gap: a gap between two filled halves reads as two buttons that
+        // happen to be adjacent, which is what this is trying to stop looking like.
+        Box(
+            Modifier
+                .width(1.dp)
+                .height(22.dp)
+                .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
+        )
+        MoveHalf("Move down", Icons.Filled.KeyboardArrowDown, canMoveDown, Modifier.weight(1f)) {
+            onMove(1)
+        }
+    }
+}
+
+@Composable
+private fun MoveHalf(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val tint =
+        if (enabled) MaterialTheme.colorScheme.onSurface
+        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+    Row(
+        modifier.clickable(enabled = enabled, onClick = onClick).padding(vertical = 10.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = tint,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
 }
 
 /**
@@ -575,6 +640,14 @@ private fun StepperRow(
     }
 }
 
+/**
+ * A round − / + for the stepper.
+ *
+ * Solid accent fill when it can act, and a flat outline when it cannot. The earlier version was a
+ * faint tint behind a hairline in both states, which meant "you have reached Huge" looked almost
+ * exactly like "press me" — the one thing a stepper button has to communicate. 40dp is the
+ * comfortable-tap floor, and the icon stays 20dp so the disc reads as a button rather than a chip.
+ */
 @Composable
 private fun StepperButton(
     description: String,
@@ -582,26 +655,24 @@ private fun StepperButton(
     enabled: Boolean,
     onClick: () -> Unit,
 ) {
-    val tint =
-        if (enabled) MaterialTheme.colorScheme.primary
-        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
     Box(
         Modifier
             .size(40.dp)
             .clip(CircleShape)
             .background(
-                if (enabled) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
-                else Color.Transparent,
-            )
-            .border(
-                1.dp,
-                MaterialTheme.colorScheme.outline.copy(alpha = if (enabled) 0.35f else 0.15f),
-                CircleShape,
+                if (enabled) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
             )
             .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = description, tint = tint, modifier = Modifier.size(20.dp))
+        Icon(
+            icon,
+            contentDescription = description,
+            tint = if (enabled) MaterialTheme.colorScheme.onPrimary
+            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
 
@@ -657,45 +728,6 @@ private fun SegmentedRow(
             }
         }
     }
-}
-
-/** A reorder button that says what it does. */
-@Composable
-private fun MoveButton(
-    label: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    enabled: Boolean,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-) {
-    val tint =
-        if (enabled) MaterialTheme.colorScheme.onSurfaceVariant
-        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-    Row(
-        modifier
-            .clip(AppShapes.small)
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = if (enabled) 0.3f else 0.12f),
-                AppShapes.small)
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
-        Spacer(Modifier.width(4.dp))
-        Text(label, style = MaterialTheme.typography.labelMedium, color = tint, maxLines = 1)
-    }
-}
-
-@Composable
-private fun ChipRowLabel(text: String) {
-    Text(
-        text,
-        // Matches the "Size" label in StepperRow — the two sit one above the other inside the
-        // same card, and they were different sizes with different indents.
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
 }
 
 /**
