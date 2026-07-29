@@ -13,6 +13,12 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.112", "Jul 29, 2026", "Updating the app is not an escape attempt", listOf(
+        "**The guard was blocking your own updates.** You reported it, and you were right: the app downloads the update, hands it to Android's installer, and the guard threw you straight back to the home screen.",
+        "The reason is the same trap as the device-admin screen in 1.107. The guard watches Android's installer for the "do you want to uninstall AppBlocker?" screen — and the screen for *installing an update* is the same installer showing the same app name. Reading the words can't separate them: they're translated, and in English "uninstall" literally contains "install".",
+        "So the app no longer tries to read it. When the updater opens the installer, it knows it opened it and stands aside for a few minutes — the same trick that fixed the device-admin screen, and it works in any language. There's a second safety net too: Android's internal screen names aren't translated, so an install screen is recognised as an install even when you side-load the file yourself.",
+        "This one was worse than an inconvenience: a guard that blocks its own updates blocks the update that fixes it. If you're stuck on an older version, see the note below on getting past it once.",
+    )),
     VersionLog("1.111", "Jul 29, 2026", "Your screen time was wrong, and the coach now says what went wrong", listOf(
         "**Your screen time was counting time that wasn't today.** You saw 5 hours on a day you hadn't been awake 5 hours, and you were right to doubt it.",
         "The reason: the hour-by-hour chart and the big number above it were worked out in two completely different ways. The chart reads Android's raw record of what you opened and when — accurate, and only for today. The total asked Android for its own pre-summarised daily figures, and those come back as whole blocks that can start *before* midnight. So yesterday evening's phone use was landing in today's total.",

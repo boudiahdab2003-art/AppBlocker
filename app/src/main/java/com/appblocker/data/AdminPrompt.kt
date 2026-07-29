@@ -52,6 +52,49 @@ object AdminPrompt {
 }
 
 /**
+ * "We just asked Android to install our own update."
+ *
+ * The same problem as [AdminPrompt], found the same way — by the owner hitting it. The guard
+ * bounces the system installer when the screen names AppBlocker, because that is how it catches
+ * "do you want to uninstall this app?". But **installing an update uses the same installer and
+ * names the same app**, so the update confirmation was bounced too: the in-app updater downloaded
+ * a new version, opened the installer, and the guard threw the owner back to the home screen.
+ *
+ * That is worse than the device-admin case it rhymes with. A guard that blocks its own updates
+ * blocks the update that would fix it — including this one, which is why the release notes have to
+ * tell him how to get past it once by hand.
+ *
+ * Reading the screen cannot separate install from uninstall: both say the app's name, both are
+ * translated, and "install" is a substring of "uninstall" in English and unrelated in Arabic. But
+ * we know what the screen text cannot say — **we opened it** — and the updater is the only thing
+ * in this app that ever launches an install.
+ *
+ * Longer window than the admin prompt: this screen is followed by a real installation, which on a
+ * slow phone takes a while, and the "app installed / open" screen that follows is the same
+ * activity. Still bounded, so it cannot become a standing exemption.
+ */
+object InstallPrompt {
+
+    const val WINDOW_MS = 5 * 60_000L
+
+    @Volatile private var requestedAtRt: Long = 0L
+
+    /** Called immediately before launching the package-installer intent. */
+    fun requested() {
+        requestedAtRt = SystemClock.elapsedRealtime()
+    }
+
+    /** True while the installer we asked for may still be in front. */
+    fun recentlyRequested(): Boolean {
+        val at = requestedAtRt
+        if (at == 0L) return false
+        val elapsed = SystemClock.elapsedRealtime() - at
+        // Negative means the monotonic clock restarted (a reboot): treat as expired, never open.
+        return elapsed in 0..WINDOW_MS
+    }
+}
+
+/**
  * Recognising the device-admin screen by its wording, for the builds where its *name* says nothing.
  *
  * The watcher's fast path is the activity's class name (`deviceadmin`), which works on AOSP. On

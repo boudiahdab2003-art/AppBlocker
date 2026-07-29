@@ -220,6 +220,51 @@ class BlockLogTest {
 }
 
 /**
+ * The install-vs-uninstall exemption.
+ *
+ * The guard bounces the system installer when the screen names AppBlocker, which is how it catches
+ * "do you want to uninstall this app?". Installing an **update** uses the same installer and shows
+ * the same app name — so the owner's updates were bounced, and a guard that blocks its own updates
+ * blocks the fix for itself. He reported it as "the update is being blocked".
+ *
+ * Two independent ways out, both locale-proof, because the screen's own words are not: "install"
+ * is a substring of "uninstall" in English and an unrelated word in Arabic.
+ */
+class InstallPromptTest {
+
+    @Test
+    fun `nothing is exempt before we ask`() {
+        // The window only opens because the updater opened the installer. A removal the owner
+        // started himself must never fall inside it.
+        assertFalse(com.appblocker.data.InstallPrompt.recentlyRequested())
+    }
+
+    @Test
+    fun `the window outlasts a slow installation but is still bounded`() {
+        // Longer than the admin prompt's: this screen is followed by a real install, and on a slow
+        // phone the "app installed" screen that follows is the same activity. Bounded, so it can
+        // never become a standing exemption.
+        assertTrue(com.appblocker.data.InstallPrompt.WINDOW_MS >= 2 * 60_000L)
+        assertTrue(com.appblocker.data.InstallPrompt.WINDOW_MS <= 10 * 60_000L)
+    }
+
+    @Test
+    fun `an install class name is told apart from an uninstall one`() {
+        // The rule the watcher applies to activity class names, which are never translated. The
+        // trap is that "uninstall" contains "install" — the same shape as "deactivate" containing
+        // "activate", which is what broke uninstall protection in v1.107.
+        fun looksLikeInstall(cn: String) =
+            cn.contains("install") && !cn.contains("uninstall") && !cn.contains("delete")
+
+        assertTrue(looksLikeInstall("com.android.packageinstaller.packageinstalleractivity"))
+        assertTrue(looksLikeInstall("com.miui.packageinstaller.installstart"))
+        assertFalse(looksLikeInstall("com.android.packageinstaller.uninstalleractivity"))
+        assertFalse(looksLikeInstall("com.miui.packageinstaller.uninstallerativity"))
+        assertFalse(looksLikeInstall("com.android.packageinstaller.deleteactivity"))
+    }
+}
+
+/**
  * The device-admin activation exemption.
  *
  * The guard blocked Android's "Activate device admin app?" screen — which says *device admin* and
