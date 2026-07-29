@@ -595,8 +595,10 @@ Two things worth carrying forward:
 
 ### Not yet swept
 
-- `UsageTracker` beyond `addInterval`: the caching layers (`usedTodayCache`, the per-day
-  memoisation) and `sessionStatsToday`'s interval merging. **Best remaining candidate.**
+- `UsageTracker`'s Insights-side reads: `sessionStatsToday`'s interval merging, `hourlyMinutesToday`
+  and the `pastDaysCache` / `lastWeekCache` prefs memoisation. Sweep thirteen took `usedMinutesToday`
+  (the one on the blocking path) and left these, since a wrong number there is visible on a chart
+  rather than invisible in a block that never happened. **Best remaining candidate.**
 - The rest of the UI's live state. Sweep thirteen took the `remember`-blocks pass and found the
   one that mattered (`KeywordsScreen`'s phase), but only audited the blocks that gate a
   *protection*. `BlockEditorScreen` and `BlockingScreen` cache a dozen settings each and were read
@@ -658,6 +660,33 @@ notification, the keyboard) is a readable window that says nothing about what is
    state machine, complete and unit-tested (`a lapsed window is not an open door`), and the screen
    now calls it. Two copies of one state machine, one of them incomplete — bug shape #1, in a
    protection whose whole design is that it is expensive to switch off.
+
+**Second pass, same day — the readings the app treats as facts about itself.** Two more, from
+`grep -n "getOrDefault(\|?: 0\|?: emptyList()"` across `service/` (invariant 10: an empty or failed
+answer is not data):
+
+4. **`usedMinutesToday` answered 0 for "couldn't read it".** That number is what a daily limit is
+   compared against, so an empty `queryUsageStats` — access revoked mid-day, the stats database
+   rotating around midnight, an OEM throttling the call — read as "you have used nothing today"
+   and the limit silently stopped existing, cached for 15 seconds at a time. Fixed by leaning on a
+   property of the quantity: **minutes used today only ever go up**, so a lower reading is a failed
+   read wearing a number and the previous figure stands. Day-stamped, because without that
+   yesterday's total would stick and block the app all day — the opposite mistake, and a worse one.
+
+5. **`AccessibilityUtil.isEnabled` compared spellings, not identities.** Android's enabled-services
+   setting holds either `pkg/pkg.Class` or `pkg/.Class` depending on what wrote it; the check
+   string-matched `flattenToString()`, which is always the long form. On a build that stored the
+   short one, a perfectly healthy watcher reads as **off**: the checklist keeps asking for a
+   permission already granted, the watchdog keeps announcing that blocking has stopped, and every
+   bug report carries `serviceOn=false` about a service that is demonstrably running. No evidence
+   this is happening on the owner's phone — it is fixed because it is the first fact I would reason
+   from in a report, and a lying diagnostic is the theme this release already had to fix twice.
+
+**A known limit, deliberately not fixed:** daily limits and daily open counts are *calendar-day*
+facts (`todayStamp()`, `startOfToday()`), so winding the device clock back a day resets both. Every
+*duration* in the app is clock-proofed through `GuardedDeadline`/`SessionClock`, but "today" cannot
+be — a monotonic notion of a day would punish someone whose clock was genuinely wrong and then
+corrected. Worth knowing it is a hole; not worth the cure.
 
 Not a finding, but worth writing down: `shouldScanPkg` starts `if (pkg == packageName) return false`,
 so the keyword scanner can never read our own screens. The Blocked-words screen lists the owner's
