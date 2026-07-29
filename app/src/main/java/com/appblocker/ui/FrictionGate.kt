@@ -1,9 +1,7 @@
 package com.appblocker.ui
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,15 +13,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -38,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.onSizeChanged
@@ -112,7 +111,7 @@ fun FrictionGate(
     // Keyed to the attempt like everything else: a warning left over from the last paragraph,
     // sitting under an empty field, reads as a bug in the new one.
     var blockedPaste by remember(attempt) { mutableStateOf(false) }
-    var showDetail by remember { mutableStateOf(false) }
+    var showHelp by remember { mutableStateOf(false) }
     val matched = TypedChallenge.matches(phrase, input)
     val progress = TypedChallenge.progress(phrase, input)
     // Latches on the first match and stops the clock. Without it, finishing at 0:01 and reaching
@@ -134,7 +133,21 @@ fun FrictionGate(
         Modifier.fillMaxSize().background(com.appblocker.ui.theme.appBackground())
             .safeDrawingPadding(),
     ) {
-        EditorTopBar(title, onBack = onDismiss)
+        // The explanation lives behind this button and nowhere else. On screen it cost five lines
+        // at the owner's font size, and since the paragraph card was the only flexible element,
+        // those five lines came *out of the paragraph* — which is how a screen whose entire job is
+        // "read this and type it" ended up showing one clipped line of it. A corner button costs
+        // nothing, and the screen explains itself: a countdown, a word count, and a box saying
+        // where to type.
+        EditorTopBar(title, onBack = onDismiss) {
+            IconButton(onClick = { showHelp = true }) {
+                Icon(
+                    Icons.Filled.Info,
+                    contentDescription = "How this works",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
 
         ClockStrip(
             remaining = remaining,
@@ -143,54 +156,16 @@ fun FrictionGate(
             modifier = Modifier.padding(horizontal = 16.dp),
         )
 
-        // Read before starting, in the way of everything afterwards. Once the first character is
-        // typed the instructions have done their job and the room goes to the paragraph — which at
-        // a large font size is the difference between seeing three lines of it and seeing ten.
-        AnimatedVisibility(visible = input.isEmpty()) {
-            Column(Modifier.padding(horizontal = 16.dp)) {
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    blurb,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
-                        .clickable { showDetail = !showDetail }
-                        .padding(vertical = 8.dp),
-                ) {
-                    Text(
-                        "What happens next?",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Icon(
-                        if (showDetail) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                        contentDescription = if (showDetail) "Hide" else "Show",
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                }
-                if (showDetail) {
-                    Text(
-                        detail,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                // Says what just happened, rather than leaving a silently different paragraph and
-                // a cleared field to be worked out. Counted, so a run of near-misses is visible.
-                if (attempt > 0 && !solved) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "⏱ Time ran out. Here's a new paragraph — the clock starts again. " +
-                            "(Attempt ${attempt + 1})",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-            }
+        // Says what just happened, rather than leaving a silently different paragraph and a
+        // cleared field to be worked out. Counted, so a run of near-misses is visible — and kept
+        // to one line, because this is the screen where a stray line costs the paragraph.
+        if (attempt > 0 && !solved && input.isEmpty()) {
+            Text(
+                "Time ran out — attempt ${attempt + 1}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
         }
 
         PhraseCard(
@@ -212,11 +187,14 @@ fun FrictionGate(
                         else { input = new; blockedPaste = false }
                     },
                     placeholder = { Text("Type it here") },
-                    singleLine = false,
-                    // Three lines, not one: at the owner's font size a 56dp field showed about six
-                    // words of the forty he had just typed, so there was no way to check his own
-                    // work without scrolling a text field.
-                    minLines = 3,
+                    // `singleLine`, not `minLines = 1` — and the difference is the whole bug.
+                    // A minLines field *starts* at one line and grows as it fills, so by the
+                    // fortieth word it would be ten lines tall and the paragraph would be back
+                    // to a sliver. singleLine pins the height and scrolls sideways instead.
+                    // Nothing is lost: newlines were never needed (matches() collapses
+                    // whitespace), and the paragraph above is where progress is read now, so the
+                    // field no longer has to be where he checks his own work.
+                    singleLine = true,
                     keyboardOptions = KeyboardOptions(
                         autoCorrect = false,
                         capitalization = KeyboardCapitalization.None,
@@ -256,7 +234,11 @@ fun FrictionGate(
             text = confirmLabel,
             enabled = solved,
             onClick = onConfirm,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp),
+            // Faded until it works. Disabled, the shared button is a solid grey pill that looks
+            // exactly like a live one — so the screen offered a button that did nothing when
+            // pressed, which reads as broken rather than as locked.
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp)
+                .alpha(if (solved) 1f else 0.45f),
         )
         TextButton(
             onClick = onDismiss,
@@ -264,6 +246,23 @@ fun FrictionGate(
                 .align(Alignment.CenterHorizontally)
                 .padding(top = 4.dp, bottom = 12.dp),
         ) { Text(dismissLabel) }
+    }
+
+    if (showHelp) {
+        AlertDialog(
+            onDismissRequest = { showHelp = false },
+            title = { Text("How this works") },
+            text = {
+                // Scrollable, because Material3's alert text is not — and this is the screen
+                // whose one bug was text outgrowing the space it was given.
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    Text(blurb, style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(12.dp))
+                    Text(detail, style = MaterialTheme.typography.bodyMedium)
+                }
+            },
+            confirmButton = { TextButton(onClick = { showHelp = false }) { Text("Got it") } },
+        )
     }
 }
 
@@ -385,7 +384,14 @@ private fun PhraseCard(
         Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(14.dp)) {
             Text(
                 text,
-                style = MaterialTheme.typography.bodyLarge,
+                // Looser than the theme's body spacing (1.6 against its 1.44), because this is the
+                // one block of text in the app nobody *reads* — it is scanned, word by word, for
+                // the one that is highlighted. Air between the lines is what makes that findable.
+                // Derived from the font size rather than a fixed sp value, so it still holds at
+                // the owner's larger system font.
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    lineHeight = MaterialTheme.typography.bodyLarge.fontSize * 1.6f,
+                ),
                 onTextLayout = { layout = it },
             )
         }

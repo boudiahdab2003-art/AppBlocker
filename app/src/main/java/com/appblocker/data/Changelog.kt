@@ -13,6 +13,13 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.114", "Jul 29, 2026", "The paragraph gets the screen this time", listOf(
+        "**Yesterday's rebuild of the typing screen made the one thing worse that mattered most** — you sent a screenshot showing the paragraph squeezed down to a single half-cut line, with no way to read what you were meant to type. Sorry. That was my mistake and it's worth saying exactly what it was.",
+        "Everything on that screen had a fixed size — the explanation, the typing box, the buttons — and the paragraph was the only part told to \"take whatever's left over\". At your font size there was nothing left over, so the one element the whole screen exists for was the one that got squeezed to nothing.",
+        "Fixed by giving the paragraph the room instead of the leftovers. The explanation has moved off the screen entirely — there's now a small ⓘ button next to the back arrow that opens it when you want it. The typing box is one line instead of three, and it stays one line however much you type. Between them that's about a third of the screen handed back to the paragraph.",
+        "The paragraph also gets more space between its lines now, which makes the highlighted word easier to spot, and the button at the bottom is faded until you've actually typed it — it used to look like an ordinary button that simply didn't work when pressed.",
+        "\"Time ran out\" is now a single short line under the clock instead of a paragraph of its own."
+    )),
     VersionLog("1.113", "Jul 29, 2026", "The typing screen now lets you actually type", listOf(
         "**You sent two screenshots of the paragraph screen and said the design was very bad.** Looking at them, it was worse than that — the screen wasn't letting you do the thing it was asking for.",
         "The explanation at the top filled the entire display, so the paragraph you were supposed to copy wasn't even on screen. Scroll down and it was there, but sliced through mid-word by the box below it. Words you can't see are words you can't type.",
