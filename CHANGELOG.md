@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.114
+- Fixes the typing screen from 1.113, where the paragraph was squeezed down to a single half-cut line. The explanation has moved behind a small info button next to the back arrow, and the typing box is one line instead of three — between them that's about a third of the screen handed back to the paragraph. The paragraph also has more space between its lines so the highlighted word is easier to spot, and the button at the bottom is faded until you've actually typed it.
+
 ## v1.113
 - The screen where you type the paragraph has been rebuilt so you can actually type on it: a clock bar you can read at a glance, one line of explanation instead of six, and the paragraph now follows you word by word and turns red the moment you mistype. Schedules can be switched on and off from their own page, and you delete one by swiping it left. The adult filter no longer blocks the general words for porn, which is why you were getting stopped on YouTube and in other blocker apps. Plus four fixes in the new auto-update code, found by auditing it.
 
