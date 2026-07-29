@@ -175,9 +175,9 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
         // Labels/icons come from the launch-warmed installed-apps cache — decoding ~20 icon
         // bitmaps per refresh via PackageManager was most of the remaining build time.
         val installed = installedByPackage(ctx)
-        // One system query for everything derived from "today's stats" (total, top apps,
-        // categories) instead of three identical ones.
-        val snapshot = UsageTracker.todaySnapshot(ctx)
+        // Everything derived from "today" — the total, the app rows, the category slices —
+        // now comes from UsageTracker's one event-based, TTL-cached per-app map, so they agree
+        // with each other by construction rather than by three callers being careful.
         val attemptSummary = AttemptCounter.summary(ctx)
         val attemptRows = attemptSummary.take(6)
         val maxAttempts = attemptRows.maxOfOrNull { it.total } ?: 0
@@ -192,7 +192,7 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         val opensByApp = LaunchCounter.opensTodayByApp(ctx)
-        val topUsage = UsageTracker.topAppsToday(snapshot, 6)
+        val topUsage = UsageTracker.topAppsToday(ctx, 6)
         val maxUsage = topUsage.maxOfOrNull { it.minutes } ?: 0
         val topApps = topUsage.map { u ->
             val opens = opensByApp[u.packageName] ?: 0
@@ -209,7 +209,7 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
         }
         // parse() maps legacy slice names (VIDEO/CHAT/PRODUCTIVE) onto the new categories;
         // group in case a legacy and a new name land on the same category.
-        val categories = UsageTracker.categoryMinutesToday(snapshot)
+        val categories = UsageTracker.categoryMinutesToday(ctx)
             .entries.groupBy { AppCategories.parse(it.key) }
             .map { (cat, slices) -> CatSlice(cat.label, Color(cat.color), slices.sumOf { it.value }) }
         // 30-day history powers the Trend tab, week-vs-week and weekday/weekend patterns.
@@ -270,7 +270,7 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
         return InsightsState(
             loaded = true,
             usageAccess = hasUsageAccess(ctx),
-            screenMinutes = UsageTracker.totalMinutesToday(snapshot),
+            screenMinutes = UsageTracker.screenMinutesToday(ctx),
             weekMinutes = weekly.sum(),
             strictMinutes = StatsStore.strictMinutesToday(ctx),
             hourly = UsageTracker.hourlyMinutesToday(ctx),

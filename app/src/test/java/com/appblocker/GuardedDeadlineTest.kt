@@ -131,17 +131,27 @@ class GuardedDeadlineTest {
     // --- the stored format ---
 
     @Test
-    fun `encode and decode round-trip, minus the word`() {
+    fun `encode and decode round-trip, including the word`() {
+        // The word used to be dropped here, deliberately: "a user keyword can contain anything,
+        // including this format's separator", and a note in the middle of a pipe-delimited record
+        // would corrupt every field after it. That reason was real, and it is now answered rather
+        // than ignored — the note goes LAST and decode rejoins everything past the sixth field, so
+        // a separator inside it lands harmlessly in the note's own text.
         val original = lockout()
         val (decodedPkg, decoded) = GuardedDeadline.decode(original.encode(pkg))!!
         assertEquals(pkg, decodedPkg)
-        assertEquals(original.copy(note = null), decoded)
+        assertEquals(original, decoded)
     }
 
     @Test
-    fun `the word is deliberately not persisted`() {
-        // A user keyword can contain anything, including this format's separator.
-        assertNull(GuardedDeadline.decode(lockout(note = "a|b").encode(pkg))!!.second.note)
+    fun `a word containing the separator no longer corrupts the record`() {
+        // The case that forced the omission. Every numeric field must survive it, or the lockout
+        // itself — not just its label — would be read wrong.
+        val (decodedPkg, decoded) = GuardedDeadline.decode(lockout(note = "a|b").encode(pkg))!!
+        assertEquals(pkg, decodedPkg)
+        assertEquals("a|b", decoded.note)
+        assertEquals(boot, decoded.bootCount)
+        assertEquals(halfHour, decoded.remainingAt(boot, nowRt = 1_000L, nowWall = 1L))
     }
 
     @Test
@@ -179,5 +189,31 @@ class GuardedDeadlineTest {
     fun `a package name survives decoding intact`() {
         assertEquals(pkg, GuardedDeadline.decode(lockout().encode(pkg))!!.first)
         assertNotNull(GuardedDeadline.decode(lockout().encode("a.b.c.d_e")))
+    }
+
+    // --- the note, which is the word that caused the lockout ---
+
+    @Test
+    fun `the word survives being written to disk`() {
+        // It did not. `encode` listed five numbers and stopped, so the word lived only in memory:
+        // every restore — every reboot, every app update, every OEM kill-and-revive — turned
+        // "“casino” was found here" into the generic "A blocked word was found here". The map
+        // holding these says the word and its deadline "can't drift"; the encoder made them.
+        val withNote = lockout().copy(note = "casino")
+        assertEquals("casino", GuardedDeadline.decode(withNote.encode(pkg))!!.second.note)
+    }
+
+    @Test
+    fun `records written before the note existed still read`() {
+        // Six fields, no note: the form every lockout on the owner's phone is stored in today.
+        val old = "$pkg|1000|2000|3000|4000|$boot"
+        val back = GuardedDeadline.decode(old)!!.second
+        assertNull(back.note)
+        assertEquals(boot, back.bootCount)
+    }
+
+    @Test
+    fun `an empty note reads as no note`() {
+        assertNull(GuardedDeadline.decode("$pkg|1000|2000|3000|4000|$boot|")!!.second.note)
     }
 }

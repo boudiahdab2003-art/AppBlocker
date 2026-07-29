@@ -79,7 +79,9 @@ object Goals {
 
     /** Today's live value against the goal's target. */
     fun usedToday(ctx: Context, goal: Goal): Int = when (goal.kind) {
-        GoalKind.SCREEN_TIME -> UsageTracker.totalMinutesToday(UsageTracker.todaySnapshot(ctx))
+        // The event-based figure, not the bucket one: a goal judged against a total that can
+        // include yesterday is a goal the user fails without having done anything.
+        GoalKind.SCREEN_TIME -> UsageTracker.screenMinutesToday(ctx)
         GoalKind.APP_LIMIT -> goal.pkg?.let { UsageTracker.usedMinutesToday(ctx, it) } ?: 0
         GoalKind.UNLOCKS -> UnlockCounter.unlocksToday(ctx)
     }

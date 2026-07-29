@@ -26,6 +26,19 @@ object SettingsStore {
     fun setAddNewApps(context: Context, value: Boolean) =
         prefs(context).edit().putBoolean(KEY_ADD_NEW_APPS, value).apply()
 
+    private const val KEY_KNOWN_PACKAGES = "known_launchable_packages"
+
+    /** Launchable packages [NewAppWatcher] has already seen, or **null** when it has never
+     *  looked. Null is load-bearing: it means "no baseline", which must never be read as
+     *  "every app is new". */
+    fun knownPackages(context: Context): Set<String>? =
+        prefs(context).getStringSet(KEY_KNOWN_PACKAGES, null)
+
+    fun setKnownPackages(context: Context, value: Set<String>) =
+        // A defensive copy: SharedPreferences must not be handed a set the caller still mutates,
+        // and the stored instance must not be handed back out either (documented Android trap).
+        prefs(context).edit().putStringSet(KEY_KNOWN_PACKAGES, HashSet(value)).apply()
+
     fun blockPurchases(context: Context): Boolean =
         prefs(context).getBoolean(KEY_BLOCK_PURCHASES, false)
 

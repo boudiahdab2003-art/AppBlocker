@@ -601,10 +601,11 @@ Two things worth carrying forward:
   reads `isAppBlock` without `isShowing` is the guard's safety net, and the guard's own `show()`
   resets the flag on the way in), so it was left alone rather than churned before a release. It is
   still two sources of truth with a window between them. **Best remaining candidate.**
-- The Insights-side of `UsageTracker`'s bucket queries. `queryUsageStats(INTERVAL_DAILY, …)` returns
-  whole daily buckets that merely *overlap* the range rather than clipping to it, so every
-  range-based figure can be off by part of a day at the edges. `totalMinutesInRange` already says so
-  in its KDoc; the charts do not. Cosmetic, and it needs a device to judge.
+- ~~The Insights-side of `UsageTracker`'s bucket queries.~~ **Not cosmetic — the owner hit it the
+  same day it was written down here.** See the sweep-fourteen entry below: dismissing it as "off by
+  part of a day at the edges" understated it, because for *today* the edge is the whole of
+  yesterday. The lesson is about the note, not the code: an imprecision worth writing down is worth
+  bounding, and "cosmetic" was a guess about size that nobody had measured.
 - The rest of the UI's live state. Sweep thirteen took the `remember`-blocks pass and found the
   one that mattered (`KeywordsScreen`'s phase), but only audited the blocks that gate a
   *protection*. `BlockEditorScreen` and `BlockingScreen` cache a dozen settings each and were read
@@ -724,6 +725,160 @@ so the keyword scanner can never read our own screens. The Blocked-words screen 
 own blocked words, and had that line been missing, opening it would have blocked the app with its
 own list — a tidy explanation for "flashing inside the app itself" that turns out **not** to be the
 cause. Ruled out, so nobody re-derives it.
+
+### Swept in the seventeenth "bug hunt" (29 Jul 2026) — every hand-written serializer
+
+Prompted by the bug found the same day in `BugReportQueue`, whose encoder listed eight fields
+while the report had ten, so `context` and `recentBlocks` were dropped on the way to disk and
+**every report ever sent arrived without them**. That suggested a kind to enumerate:
+
+```
+grep -rln "fun encode|private fun decode|joinToString(\"|\")|split('|')" data/
+```
+
+Four serializers, checked field-by-field against their data classes. One more miss:
+
+- **`GuardedDeadline` has six fields and `encode` wrote five** — `note` (the *word that caused a
+  keyword lockout*) was dropped, so it survived only in memory and every restore — every reboot,
+  app update and OEM kill-and-revive — turned "“casino” was found here" into the generic "A blocked
+  word was found here".
+
+  **This one was deliberate, and the tests said so.** `the word is deliberately not persisted`
+  asserted the omission, with the reason: a user keyword can contain the format's `'|'` separator,
+  and a note in the middle of a pipe-delimited record corrupts every field after it — including the
+  numbers the lockout itself is read from. I changed it before reading them, and the build caught
+  me. The change stands because the *reason* is now answered rather than ignored: the note goes
+  **last** and decode rejoins everything past the sixth field, so a separator inside it lands
+  harmlessly in the note's own text. The two tests were rewritten to assert that, rather than
+  deleted.
+
+  **Lesson, and it is the second time today**: a test that asserts an absence is documenting a
+  decision. Read the tests for the thing you are about to "fix" — earlier the same day I claimed a
+  second door to the uninstall switch existed without reading the `if` around it. Both were
+  assertions about the codebase made without checking, and both cost a round trip.
+- `BlockArrangement` (5 fields), `Goals` (6), `BlockLog` — all complete, and `BlockArrangement`
+  notably handles fields added later with `getOrElse` rather than positional indexing.
+
+**The shape to remember: a field added to a data class and not to its serializer.** It cannot be
+seen in memory — the object is complete right up until it is stored — and it produces a silent
+partial loss rather than a crash. Both instances found today were fields added *after* the
+serializer was written, by someone (me) who did not think of it as a schema. Every one of these
+pairs now has a round-trip test, which is the only thing that catches it.
+
+### Swept in the sixteenth "bug hunt" (29 Jul 2026) — the PIN, boot recovery
+
+**The PIN was asked once per task and never again.** `LockGate` held `unlocked` in a
+`rememberSaveable`, which survives backgrounding *and* process-death restore — so on a phone where
+AppBlocker sits in recents, the lock opened once and stayed open for days. Its own description says
+"lock your settings so blocks can't be removed on a whim", and the whim arrives hours later, by
+which point the gate was already open. Now re-locks after `PinStore.RELOCK_AFTER_MS` away.
+
+The interesting part is the tension, which is why the rule is a tested function rather than a
+constant: **this app sends the user out to system screens constantly** — accessibility, device
+admin, battery, app-info — and re-locking on every return would make setup miserable and teach him
+to switch the PIN off. Two minutes covers a trip to Settings; it does not cover picking the phone
+up again in the evening. `ON_START`, not `ON_RESUME`, so a permission dialog over the app doesn't
+count as leaving. A negative elapsed (restore across a reboot, monotonic clock restarted) re-locks:
+asking for a PIN that wasn't needed costs seconds, skipping one that was costs what it protects.
+
+Swept and found sound: `BootReceiver` handles BOOT_COMPLETED and MY_PACKAGE_REPLACED and re-arms
+both the watchdog schedule and an immediate check; `ProtectionScheduler.ensureScheduled` is called
+from `MainActivity.onCreate` as well as boot, so the periodic check is re-armed on every app open
+and `KEEP` leaves a running cycle alone.
+
+Not fixed, deliberately, and worth a decision rather than a patch: **the Quick Settings tile is a
+PIN-free, guard-free pause.** `QuickBlockTileService.onClick` flips `quickBlockPaused` in one tap
+from the shade, refusing only during a Strict session — no PIN (it never opens the app), no
+off-switch guard, no wait. Functionally it is the same door as the relapse that started this whole
+line of work, and cheaper: one tap instead of a walk through Settings. It only matters if the tile
+has actually been added to the shade, which is a manual step, so the owner was asked before
+anything is changed — the fix is either to gate it or to drop the tile, and that is his call.
+
+### Swept in the fifteenth "bug hunt" (29 Jul 2026) — schedules, and new-app auto-blocking
+
+Both areas were on the "never swept" list; the owner picked them. Four findings, and the two that
+matter are the same shape: **a protection that reports itself as on while doing nothing.**
+
+1. **A TIME schedule can be saved in a state where it can never fire.** The day chips are free
+   toggles, so `daysMask` reaches 0; and the window is half-open, so `start == end` contains no
+   minute. Either one saves without complaint and sits in the list looking enabled. Save now
+   refuses both, and the editor says which. `timeScheduleCanFire` is pure and tested. Deliberately
+   does *not* reinterpret `09:00–09:00` as "all day" — guessing intent is a different way to be
+   wrong, and the editor suggests `00:00–23:59` instead.
+
+2. **New-app auto-blocking rides on one broadcast with no retry.** `PACKAGE_ADDED` is not
+   delivered to an app in the **stopped** state — what a force stop produces, and v1.109
+   deliberately stopped guarding Force stop. Also lost if the DB write fails or the process can't
+   start. `NewAppWatcher.catchUp` reconciles installed apps against a stored baseline on every
+   service start; the receiver stays the fast path.
+
+   **The interesting part is the failure direction.** A wrong baseline blocks every app on the
+   phone at once — far worse than the hole. So `newlyInstalled(baseline, current)` returns nothing
+   when the baseline is **null** (never looked): first run teaches, second enforces. And the
+   baseline is refreshed even while the setting is OFF, or switching it on after a year would treat
+   a year of installs as new. Both properties have tests, and the null case is the first one.
+
+3. An exception in the receiver's coroutine had no handler above it — a bare `CoroutineScope`, so
+   a database hiccup crashed the process in the background, minutes after an install, with nothing
+   connecting the two. Every other background path in this app is wrapped; this one was missed.
+
+4. The receiver upserted a **fresh** `AppRule`, so reinstalling an app silently reset the mode and
+   daily limit the owner had chosen. `AppRuleDao` gains a single-row `get` so both paths keep an
+   existing rule.
+
+Worth noting for the next sweep: findings 1 and 2 were both reachable from the *editor and the
+manifest*, not from the watcher — the file that has absorbed almost every sweep so far. The
+watcher is well-trodden ground now; the untested edges are increasingly elsewhere.
+
+### Swept in the fourteenth "bug hunt" (29 Jul 2026) — two sources for one number
+
+Reported, not audited: **five hours of screen time on a day he had not been awake five hours**,
+while the hour-by-hour chart beside it looked right. That pairing is the whole diagnosis, and it is
+the recurring shape in a new place — **two sources of truth for one quantity**:
+
+| Figure | Built from |
+|---|---|
+| Day chart (correct) | `queryEvents(dayStart, now)` — the event stream, scoped to today |
+| Headline total (inflated) | `queryUsageStats(INTERVAL_DAILY, …)` — Android's pre-aggregated buckets |
+
+`queryUsageStats` returns whole buckets that merely **overlap** the requested range, each carrying
+its full period's total, so "midnight → now" can include time from before midnight. It cannot
+express a partial day. This file's own `totalMinutesInRange` KDoc already said as much — written
+for the coach's yesterday comparison, while the headline number stayed on buckets.
+
+The reach is the part worth remembering: the same figure decided whether a **screen-time goal** was
+blown, was the "screen time so far today" line the **coach** reasoned from, and — through the range
+variant — fed `ProtectionWatchdog`'s STALLED threshold, where inflation raises a false "blocking has
+stopped" alert. A wrong number on a stats screen is cosmetic; the same number wired into four
+decisions is not.
+
+Second defect found alongside: three separate copies of the same event walk had drifted — two
+summed overlapping app intervals while `sessionStatsToday` merged them. So an hour of the chart
+could hold more than sixty minutes. There is now one walk (`walkForeground`) and one merge
+(`mergeIntervals`, lifted out of the copy that was right), and the merge is unit-tested — the first
+test coverage this file has had beyond `addInterval`.
+
+**The follow-on sweep, which is the part worth copying.** Having moved the *headline* onto events,
+the first question asked was "what else reads the broken source?" — and the answer was every
+per-app figure on the same screen, including `usedMinutesToday`, **which is what a daily limit is
+compared against**. On buckets, yesterday's time could sit in today's per-app figure, so an app
+could be blocked in the morning against a limit the owner had not spent. Over-blocking, on the
+blocking path, reached by fixing something else. (And the monotonic guard added earlier that day —
+"a lower reading is a failed read" — would then have pinned the inflated figure for the rest of the
+day: a safeguard is only as good as the number it protects.)
+
+Generalises to: **fixing one consumer of a bad source is half a fix.** The half-done state is worse
+than the original, because the corrected number and the uncorrected one sit next to each other and
+neither is obviously the liar. Finish by grepping the source, not the symptom.
+
+Recorded so nobody "fixes" it: per-app minutes can now sum to MORE than screen time. Two apps
+overlapping for a minute is one minute of phone use and a minute for each app — different
+questions. There is a test saying so.
+
+Left alone deliberately: the 30-day history and week-over-week trends still come from bucket
+queries. Events do not reach back that far, and a bucket covering a *whole* day is roughly what the
+bucket holds anyway — the error is in partial days, which means today, and today now comes from
+events even inside that chart.
 
 ### Strict Mode's broad rule is gone, and a fix that reached one call site (v1.110)
 

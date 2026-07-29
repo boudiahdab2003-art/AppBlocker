@@ -6,6 +6,7 @@ import android.content.Intent
 import com.appblocker.data.AppRule
 import com.appblocker.data.BlockerDatabase
 import com.appblocker.data.InstalledAppsRepository
+import com.appblocker.data.NewAppWatcher
 import com.appblocker.data.SettingsStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -48,8 +49,23 @@ class PackageInstallReceiver : BroadcastReceiver() {
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                BlockerDatabase.get(context).appRuleDao()
-                    .upsert(AppRule(packageName = pkg, appLabel = label, isBlocked = true))
+                // Wrapped, like every other background path in this app: an exception in a
+                // coroutine launched from a bare scope has no handler above it, so a database
+                // hiccup here would crash the process — in the background, minutes after the
+                // owner installed something, with no way to connect the two. NewAppWatcher.catchUp
+                // adds the app on the next service start, so a failure here is recoverable.
+                runCatching {
+                    val dao = BlockerDatabase.get(context).appRuleDao()
+                    // Don't flatten an existing rule: a reinstalled app keeps the mode and daily
+                    // limit the owner set for it.
+                    if (dao.get(pkg) == null) {
+                        dao.upsert(AppRule(packageName = pkg, appLabel = label, isBlocked = true))
+                    }
+                    // Keep the baseline in step so the backstop doesn't re-consider this app.
+                    SettingsStore.setKnownPackages(
+                        context, NewAppWatcher.launchablePackages(context),
+                    )
+                }
             } finally {
                 pending.finish()
             }

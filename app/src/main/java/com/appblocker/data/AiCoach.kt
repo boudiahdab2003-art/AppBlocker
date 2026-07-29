@@ -26,6 +26,52 @@ data class ChatMsg(val role: String, val text: String)
 data class CoachReply(val reply: String, val suggestions: List<String>)
 
 /**
+ * Why the coach couldn't answer — the *category*, never the error itself.
+ *
+ * **Why a category and not the message.** Every failure used to end as `null`, which the chat
+ * screen rendered as one grey line: "Couldn't reach Gemini — check your connection and try again."
+ * No internet, an exhausted quota, a dead VM, a rejected key and a reply the app couldn't parse
+ * all looked identical, so the only thing the owner could report was "it's not working" — and on
+ * the day this was written that cost a full round of investigation against a server that turned
+ * out to be perfectly healthy, to discover he simply hadn't installed the update. A diagnostic
+ * that cannot distinguish "your phone is offline" from "Google says we're out of quota" is not a
+ * diagnostic.
+ *
+ * **And why not just show the error text**, which is the obvious next change someone will want to
+ * make: Gemini's error bodies quote the request back, and this app's requests carry the owner's
+ * usage figures, his goals and the coach conversation. The same rule as [BugReport] applies —
+ * a named category may leave this file, a message may not.
+ */
+enum class CoachError {
+    /** No proxy configured and no key entered — the coach can't run at all on this build. */
+    NO_KEY,
+
+    /** The phone has no working internet connection. */
+    OFFLINE,
+
+    /** We reached the network but not the coach's server (down, refused, timed out). */
+    SERVER_DOWN,
+
+    /** Google says the daily free allowance is used up, on every model we know. */
+    QUOTA,
+
+    /** The server turned us away — the key or the shared secret is wrong. */
+    REJECTED,
+
+    /** A 200 that the app couldn't make sense of. */
+    BAD_REPLY,
+
+    /** Anything unrecognised. Present so a new failure mode is visibly *new* rather than silent. */
+    UNKNOWN,
+}
+
+/** What [AiCoach.chat] gives back: an answer, or a nameable reason there isn't one. */
+sealed interface CoachOutcome {
+    data class Ok(val reply: CoachReply) : CoachOutcome
+    data class Failed(val error: CoachError) : CoachOutcome
+}
+
+/**
  * The AI Coach: Gemini-powered daily tips AND a two-way chat, both grounded in the user's real
  * usage data, their current AppBlocker setup, and their long-term goals. The user's API key
  * lives ONLY in this device's SharedPreferences (pasted once in the app) — it is never baked
@@ -36,6 +82,12 @@ object AiCoach {
     private const val TAG = "AiCoach"
     private const val PREFS = "ai_coach"
     private const val MODEL_REPROBE_MS = 7L * 24 * 60 * 60 * 1000
+
+    /** How long a *fallback* winner is trusted before the preferred model is tried again. Six
+     *  hours, because the usual reason for falling back is quota and quota resets daily — see
+     *  [attemptWithModelFallback]. One 404 every six hours is a cheap price for not spending a
+     *  week on the second-best model after one exhausted afternoon. */
+    private const val FALLBACK_REPROBE_MS = 6L * 60 * 60 * 1000
     // Sent per request. The coach model has a large context window and the system prompt carries
     // the durable context, but continuity is most of what makes the coach feel like it knows the
     // user — a 16-turn window was the main reason it seemed to forget mid-conversation.
@@ -67,6 +119,52 @@ object AiCoach {
      */
     private fun retryWorthwhile(t: Throwable?): Boolean =
         t !is java.io.InterruptedIOException // SocketTimeoutException extends this; null => true
+
+    /**
+     * Sorts a failure into one of the [CoachError] categories.
+     *
+     * Pure, and that is the point: the call it describes needs a network and a live Gemini key, so
+     * it cannot be tested here — this can, and it is the part that decides what the owner is told.
+     *
+     * Reads the exception's message only to *match* it (the codes this file itself formats into
+     * `"HTTP $code: …"`), and never returns any of it. See [CoachError] for why that line matters.
+     */
+    internal fun classify(t: Throwable?): CoachError {
+        val msg = t?.message.orEmpty()
+        return when {
+            // Types first: they are unambiguous, where a message is whatever the far end wrote.
+            t is java.net.UnknownHostException -> CoachError.OFFLINE
+            t is java.net.ConnectException -> CoachError.SERVER_DOWN
+            t is java.io.InterruptedIOException -> CoachError.SERVER_DOWN // incl. socket timeouts
+            t is org.json.JSONException -> CoachError.BAD_REPLY
+            msg.contains("HTTP 429") || msg.contains("RESOURCE_EXHAUSTED") -> CoachError.QUOTA
+            msg.contains("HTTP 401") || msg.contains("HTTP 403") -> CoachError.REJECTED
+            msg.contains("HTTP 5") -> CoachError.SERVER_DOWN
+            else -> CoachError.UNKNOWN
+        }
+    }
+
+    private const val KEY_LAST_ERROR = "coach_last_error"
+    private const val KEY_LAST_ERROR_AT = "coach_last_error_at"
+
+    /** The last failure and when it happened, for the coach's own info dialog and for bug
+     *  reports — so "it's not working" arrives with the reason already attached. */
+    fun lastError(ctx: Context): Pair<CoachError, Long>? {
+        val name = p(ctx).getString(KEY_LAST_ERROR, null) ?: return null
+        val at = p(ctx).getLong(KEY_LAST_ERROR_AT, 0L)
+        return runCatching { CoachError.valueOf(name) to at }.getOrNull()
+    }
+
+    private fun recordError(ctx: Context, e: CoachError) {
+        p(ctx).edit()
+            .putString(KEY_LAST_ERROR, e.name)
+            .putLong(KEY_LAST_ERROR_AT, System.currentTimeMillis())
+            .apply()
+    }
+
+    private fun clearError(ctx: Context) {
+        p(ctx).edit().remove(KEY_LAST_ERROR).remove(KEY_LAST_ERROR_AT).apply()
+    }
 
     /** How hard the model should think before answering. The coach wants depth over speed; bulk
      *  jobs like app categorisation want neither. Mapped per model generation in [postWithThinking]
@@ -286,14 +384,20 @@ object AiCoach {
         }
 
     /**
-     * One chat turn: sends the conversation + fresh usage/setup/goal context, returns the
-     * coach's reply (or null on failure). If Gemini includes an updated goal list, it is
-     * saved here so both chat and daily tips see it.
+     * One chat turn: sends the conversation + fresh usage/setup/goal context, and returns either
+     * the coach's reply or a **named** reason there isn't one ([CoachError]). If Gemini includes
+     * an updated goal list, it is saved here so both chat and daily tips see it.
+     *
+     * This used to return `CoachReply?`, and the null threw the cause away — see [CoachError] for
+     * what that cost. Only the chat path reports its reason: the daily tips fail invisibly by
+     * design (they serve the cached list), so there is nothing there for a user to act on.
      */
-    suspend fun chat(ctx: Context, history: List<ChatMsg>, userMsg: String): CoachReply? =
+    suspend fun chat(ctx: Context, history: List<ChatMsg>, userMsg: String): CoachOutcome =
         withContext(Dispatchers.IO) {
             val key = apiKey(ctx)
-            if (key.isBlank() && !proxyOn()) return@withContext null
+            if (key.isBlank() && !proxyOn()) {
+                return@withContext CoachOutcome.Failed(CoachError.NO_KEY)
+            }
             val today = SimpleDateFormat("EEEE, MMM d, yyyy", Locale.US).format(Date())
             val nowTime = SimpleDateFormat("H:mm", Locale.US).format(Date())
             val first = SettingsStore.userName(ctx).substringBefore(' ')
@@ -357,12 +461,30 @@ object AiCoach {
                 .put("system_instruction", JSONObject()
                     .put("parts", JSONArray().put(JSONObject().put("text", system))))
                 .put("contents", contents)
-                .put("generationConfig", JSONObject().put("responseMimeType", "application/json"))
+                .put(
+                    "generationConfig",
+                    JSONObject()
+                        .put("responseMimeType", "application/json")
+                        // The reply must be ONE valid JSON object, so hitting the output ceiling
+                        // does not truncate an answer — it destroys it: the object never closes,
+                        // the parse throws, and the whole reply is lost. The requests most likely
+                        // to hit a ceiling are exactly the ones worth having (a weekly report, a
+                        // plan), so the ceiling is set high enough that a long answer plus its
+                        // goals, suggestions and profile fields fit inside it.
+                        .put("maxOutputTokens", 4096),
+                )
 
             var triesLeft = 2
+            var lastFailure: Throwable? = null
+            var salvaged: String? = null
             while (triesLeft-- > 0) {
                 val attempt = runCatching {
-                    val obj = JSONObject(callGemini(ctx, key, body, COACH_CHAIN))
+                    val raw = callGemini(ctx, key, body, COACH_CHAIN)
+                    // Keep what he can still be shown if the strict parse below fails. A reply cut
+                    // off by the output ceiling leaves an object that never closes, and throwing
+                    // it away costs him the whole answer over a missing brace.
+                    salvaged = salvageReply(raw)
+                    val obj = JSONObject(raw)
                     val reply = obj.getString("reply").trim()
                     obj.optJSONArray("goals")?.let { g -> applyGoalUpdate(ctx, g) }
                     obj.optJSONObject("profile")?.let { pr ->
@@ -377,11 +499,74 @@ object AiCoach {
                     } ?: emptyList()
                     if (reply.isBlank()) null else CoachReply(reply, suggestions)
                 }
-                attempt.getOrNull()?.let { return@withContext it }
-                if (!retryWorthwhile(attempt.exceptionOrNull())) break
+                attempt.getOrNull()?.let {
+                    clearError(ctx)
+                    return@withContext CoachOutcome.Ok(it)
+                }
+                lastFailure = attempt.exceptionOrNull()
+                if (!retryWorthwhile(lastFailure)) break
             }
-            null
+            // Both tries failed to parse, but the model did answer and the answer is readable:
+            // show it rather than "the coach replied in a form the app couldn't read". Only the
+            // words are salvaged — goals, profile updates and advice all need a well-formed
+            // object, and half-applying a goal update from a truncated one is exactly the kind of
+            // silent wrong state this app cannot afford.
+            salvaged?.takeIf { it.isNotBlank() }?.let {
+                clearError(ctx)
+                return@withContext CoachOutcome.Ok(CoachReply(it, emptyList()))
+            }
+            // A success with nothing usable in it (a blank reply, an unparsable object) leaves
+            // lastFailure null — that is BAD_REPLY, not UNKNOWN: the call worked and the content
+            // was the problem.
+            val error =
+                if (lastFailure == null) CoachError.BAD_REPLY else classify(lastFailure)
+            recordError(ctx, error)
+            CoachOutcome.Failed(error)
         }
+
+    /**
+     * Pulls the `reply` text out of an answer that is *nearly* JSON.
+     *
+     * The coach is asked for one JSON object, so an answer cut off by the output ceiling — which
+     * happens on exactly the requests worth having, a weekly report or a plan — leaves an object
+     * that never closes. `JSONObject` throws, and the whole answer is lost over a missing brace.
+     *
+     * Deliberately dumb: find `"reply"`, take the string that follows, unescape it. It does not
+     * try to repair the object, because anything cleverer would eventually "repair" a goals array
+     * into something the owner never agreed to. Words only; see the caller.
+     */
+    internal fun salvageReply(raw: String): String? {
+        val key = raw.indexOf("\"reply\"")
+        if (key < 0) return null
+        val open = raw.indexOf('"', raw.indexOf(':', key) + 1)
+        if (open < 0) return null
+        val sb = StringBuilder()
+        var i = open + 1
+        while (i < raw.length) {
+            when (val c = raw[i]) {
+                '\\' -> {
+                    if (i + 1 >= raw.length) break
+                    when (val esc = raw[i + 1]) {
+                        'n' -> sb.append('\n')
+                        't' -> sb.append('\t')
+                        'r' -> Unit
+                        'u' -> {
+                            val hex = raw.substring(i + 2, minOf(i + 6, raw.length))
+                            hex.toIntOrNull(16)?.let { sb.append(it.toChar()) }
+                            i += 4
+                        }
+                        else -> sb.append(esc) // \" and \\ land here, as themselves
+                    }
+                    i += 2
+                }
+                // The closing quote of the reply — anything after it is structure we don't need.
+                '"' -> return sb.toString().trim().ifBlank { null }
+                else -> { sb.append(c); i++ }
+            }
+        }
+        // Ran off the end: the string itself was truncated mid-sentence. Still his answer.
+        return sb.toString().trim().ifBlank { null }
+    }
 
     /** Turns the coach's goal objects into real [Goals], keeping the id (and so the whole
      *  hit history) of any goal that survives the update unchanged. */
@@ -418,7 +603,6 @@ object AiCoach {
     /** Compact plain-text usage summary — aggregate numbers and app names only, nothing
      *  sensitive. Shared by daily tips and chat; everything reads from day-cached sources. */
     suspend fun usageSummary(ctx: Context): String {
-        val snapshot = UsageTracker.todaySnapshot(ctx)
         val monthly = UsageTracker.dailyMinutes(ctx, 30)
         val weekly = monthly.copyOfRange(23, 30)
         InstalledAppsRepository.ensureLoaded(ctx)
@@ -464,7 +648,7 @@ object AiCoach {
         val minuteOfDay = nowCal.get(Calendar.HOUR_OF_DAY) * 60 + nowCal.get(Calendar.MINUTE)
         return buildString {
             appendLine("Time right now: ${hm(minuteOfDay)} — the day is ${minuteOfDay * 100 / 1440}% over. Every \"today\" number below is a running count for this UNFINISHED day, not a final daily total.")
-            appendLine("Screen time so far today: ${fmt(UsageTracker.totalMinutesToday(snapshot))}")
+            appendLine("Screen time so far today: ${fmt(UsageTracker.screenMinutesToday(ctx))}")
             runCatching {
                 val yStart = UsageTracker.startOfDayAgo(1)
                 val byNow = UsageTracker.totalMinutesInRange(ctx, yStart, yStart + minuteOfDay * 60_000L)
@@ -475,7 +659,7 @@ object AiCoach {
             appendLine("Yesterday: ${fmt(weekly.getOrElse(5) { 0 })}")
             appendLine("Last 7 days (oldest first, ending today): $last7")
             appendLine("Weekday average: ${fmt(avg(weekdayVals))}, weekend average: ${fmt(avg(weekendVals))}")
-            val top = UsageTracker.topAppsToday(snapshot, 3)
+            val top = UsageTracker.topAppsToday(ctx, 3)
             if (top.isNotEmpty()) {
                 appendLine("Top apps today: " +
                     top.joinToString { "${label(it.packageName)} (${fmt(it.minutes)})" })
@@ -492,7 +676,7 @@ object AiCoach {
                 }
             }
             runCatching {
-                val cats = UsageTracker.categoryMinutesToday(snapshot)
+                val cats = UsageTracker.categoryMinutesToday(ctx)
                     .entries.sortedByDescending { it.value }.take(4)
                 if (cats.isNotEmpty()) {
                     appendLine("Time by category today: " +
@@ -671,8 +855,22 @@ object AiCoach {
         val okKey = "model_ok_${chain.name}"
         val okAtKey = "model_ok_at_${chain.name}"
         val remembered = prefs.getString(okKey, null)
-            ?.takeIf { System.currentTimeMillis() - prefs.getLong(okAtKey, 0) < MODEL_REPROBE_MS }
             ?.takeIf { it in chain.models } // a chain edit retires the old winner
+            ?.takeIf {
+                val age = System.currentTimeMillis() - prefs.getLong(okAtKey, 0)
+                // A fallback is remembered for hours; the first choice for a week.
+                //
+                // The chain is a PREFERENCE order — the model at the top is the one whose answers
+                // are worth having. Quota is what usually knocks it out, and quota resets daily,
+                // so remembering "flash answered" for a full week means one exhausted afternoon
+                // costs seven days of second-best coaching, silently. Nobody would notice: the
+                // coach still replies, just less well.
+                //
+                // The long memory exists for a different case — an id this key does not serve at
+                // all, which costs a 404 every time it is tried. That only applies to the model
+                // we actually settled on being the best available, so it keeps the long window.
+                age < if (it == chain.models.first()) MODEL_REPROBE_MS else FALLBACK_REPROBE_MS
+            }
         val order =
             if (remembered == null) chain.models
             else listOf(remembered) + chain.models.filter { it != remembered }

@@ -16,7 +16,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import android.os.SystemClock
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -25,6 +27,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -34,11 +39,36 @@ import androidx.compose.ui.unit.sp
 import com.appblocker.data.PinStore
 import com.appblocker.ui.theme.AppBlockerTheme
 
-/** Wraps the app: if a PIN is set, the user must enter it before getting in. */
+/**
+ * Wraps the app: if a PIN is set, the user must enter it before getting in — and again after the
+ * app has been away for a while. See [PinStore.shouldRelock] for why "again" is the point.
+ */
 @Composable
 fun LockGate(content: @Composable () -> Unit) {
     val context = LocalContext.current
     var unlocked by rememberSaveable { mutableStateOf(!PinStore.isSet(context)) }
+    // Monotonic, per the rule this project has had to relearn three times: a wall-clock stamp
+    // would let a clock change either strand the lock open or spring it shut.
+    var leftAt by rememberSaveable { mutableStateOf(0L) }
+    val owner = LocalLifecycleOwner.current
+    DisposableEffect(owner) {
+        val obs = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_STOP -> leftAt = SystemClock.elapsedRealtime()
+                // ON_START, not ON_RESUME: a system dialog over the app pauses without stopping
+                // it, and being asked for the PIN because a permission prompt appeared would be
+                // absurd. Stopping means the app genuinely left the screen.
+                Lifecycle.Event.ON_START ->
+                    if (leftAt > 0L && PinStore.shouldRelock(
+                            PinStore.isSet(context), SystemClock.elapsedRealtime() - leftAt,
+                        )
+                    ) unlocked = false
+                else -> Unit
+            }
+        }
+        owner.lifecycle.addObserver(obs)
+        onDispose { owner.lifecycle.removeObserver(obs) }
+    }
 
     if (unlocked) {
         content()

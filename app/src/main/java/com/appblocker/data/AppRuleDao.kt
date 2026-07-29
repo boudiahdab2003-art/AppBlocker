@@ -12,6 +12,12 @@ interface AppRuleDao {
     @Query("SELECT * FROM app_rules")
     fun getAll(): Flow<List<AppRule>>
 
+    /** One rule, or null if the app has never been configured. Used before auto-adding a newly
+     *  installed app, so a reinstall keeps the mode and limit the owner chose rather than being
+     *  reset to a plain block. */
+    @Query("SELECT * FROM app_rules WHERE packageName = :packageName LIMIT 1")
+    suspend fun get(packageName: String): AppRule?
+
     @Upsert
     suspend fun upsert(rule: AppRule)
 

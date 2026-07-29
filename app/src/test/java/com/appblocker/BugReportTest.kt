@@ -252,6 +252,83 @@ class AdminPromptTest {
 }
 
 /**
+ * A report has to survive being written to disk.
+ *
+ * **This is where the evidence was actually going.** Reports are queued to prefs first and sent
+ * from what is read back — trouble correlates with a phone that is offline or being killed, so
+ * sending straight from the error path would drop exactly the reports that matter. But the encoder
+ * listed eight fields and the report had ten: `context` (the settings table) and `recentBlocks`
+ * (the log of what the watcher covered) were added to [BugReport] and never added to the queue. So
+ * every report ever sent arrived without the two sections built specifically to diagnose the
+ * flashing — and the hardening added to `appContext` the same day would not have changed one line
+ * of it, because the map was assembled correctly and then dropped on the way to storage.
+ *
+ * Nothing in memory could reveal this: a report is complete right up until it is stored.
+ */
+class ReportRoundTripTest {
+
+    private fun store(r: BugReport) = com.appblocker.data.BugReportQueue.decode(
+        com.appblocker.data.BugReportQueue.encode(listOf(r)),
+    ).single()
+
+    @Test
+    fun `the settings table survives the queue`() {
+        val r = BugReport.fromNote(
+            "the block screen flashed again", "1.111", "github", 36, "Xiaomi 25080RABDG",
+            context = mapOf("serviceOn" to "true", "lastEventMin" to "240"),
+            recentBlocks = emptyList(),
+        )
+        assertEquals(r.context, store(r).context)
+        assertTrue(store(r).body().contains("lastEventMin"))
+    }
+
+    @Test
+    fun `the block log survives the queue`() {
+        val blocks = listOf(
+            "3s ago  app  ownUi=true  rootOk=false  counted=true",
+            "12s ago  guard  ownUi=false  rootOk=true  counted=false",
+        )
+        val r = BugReport.fromNote("flashing", "1.111", "github", 36, "d", recentBlocks = blocks)
+        assertEquals(blocks, store(r).recentBlocks)
+        assertTrue(store(r).body().contains("ownUi=true"))
+    }
+
+    @Test
+    fun `everything else survives too`() {
+        val r = BugReport.fromThrowable(
+            where = "webScan",
+            t = IllegalStateException("boom").apply {
+                stackTrace = arrayOf(StackTraceElement("com.appblocker.A", "b", "A.kt", 3))
+            },
+            appVersion = "1.111", flavor = "github", androidSdk = 36, device = "d",
+        )
+        val back = store(r)
+        assertEquals(r.where, back.where)
+        assertEquals(r.errorClass, back.errorClass)
+        assertEquals(r.frames, back.frames)
+        assertEquals(r.appVersion, back.appVersion)
+        assertEquals(r.dedupeKey(), back.dedupeKey())
+    }
+
+    @Test
+    fun `a stored report is re-sanitised on the way back out`() {
+        // A report can sit on disk across an app update. If a future version ever widened the
+        // allow-list and this one narrowed it again, the file must not be a way past the narrower
+        // rule — so the sending version's list is the one that applies, not the writing version's.
+        val forged = """[{"where":"owner","errorClass":null,"frames":[],"note":"x",
+            "appVersion":"1","flavor":"github","androidSdk":36,"device":"d",
+            "context":{"layout":"focus","keyword":"$secretWord"},"recentBlocks":[]}]"""
+        val back = com.appblocker.data.BugReportQueue.decode(forged).single()
+        assertEquals(mapOf("layout" to "focus"), back.context)
+        assertFalse(back.body().contains(secretWord))
+    }
+
+    private companion object {
+        const val secretWord = "someveryprivateblockedword"
+    }
+}
+
+/**
  * Which wording may make the guard bounce a page.
  *
  * This list replaces a much longer one that also held `accessibilit`, `uninstall` and

@@ -20,15 +20,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -49,6 +51,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.appblocker.R
@@ -189,24 +193,23 @@ fun BlockThemePickerScreen(strictActive: Boolean = false, onBack: () -> Unit) {
 
             item { PickerSectionLabel("Alignment") }
             item {
-                Row(Modifier.fillMaxWidth().padding(bottom = 14.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    BlockArrangement.Align.entries.forEach { a ->
-                        AlignChip(
-                            label = when (a) {
-                                BlockArrangement.Align.DEFAULT -> "As designed"
-                                BlockArrangement.Align.LEFT -> "Left"
-                                BlockArrangement.Align.CENTRE -> "Centred"
-                            },
-                            selected = arrangement.align == a,
-                            enabled = editable,
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            arrangement = arrangement.copy(align = a)
-                                .also { BlockArrangement.save(context, it) }
-                        }
-                    }
+                // "As designed" was too long for a third of the width and broke across two lines,
+                // making its cell taller than the other two. The word moves to the caption below,
+                // where there is room to say what it actually means.
+                SegmentedRow(
+                    labels = listOf("Default", "Left", "Centred"),
+                    selectedIndex = arrangement.align.ordinal,
+                    enabled = editable,
+                ) {
+                    arrangement = arrangement.copy(align = BlockArrangement.Align.entries[it])
+                        .also { a -> BlockArrangement.save(context, a) }
                 }
+                Text(
+                    "Default keeps each layout's own alignment.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp, bottom = 14.dp),
+                )
                 if (arrangement != BlockArrangement.DEFAULT) {
                     TextButton(
                         onClick = {
@@ -470,122 +473,272 @@ private fun ElementRow(
       Modifier.fillMaxWidth().padding(bottom = 10.dp)
           .clip(AppShapes.card)
           .background(MaterialTheme.colorScheme.surface)
-          .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), AppShapes.card),
+          .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), AppShapes.card)
+          .padding(horizontal = 14.dp, vertical = 12.dp),
+      verticalArrangement = Arrangement.spacedBy(10.dp),
   ) {
-    Row(
-        Modifier.fillMaxWidth().padding(bottom = 10.dp)
-            .padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                element.label,
-                style = MaterialTheme.typography.titleSmall,
-                color = if (visible) MaterialTheme.colorScheme.onSurface
-                else MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                element.blurb,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        // Up/down rather than drag: reliable, reachable, and far less code than a drag
-        // implementation that has to behave inside a LazyColumn.
-        IconButton(onClick = { onMove(-1) }, enabled = enabled && canMoveUp) {
-            Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Move up")
-        }
-        IconButton(onClick = { onMove(1) }, enabled = enabled && canMoveDown) {
-            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Move down")
-        }
+    // Title and switch share a line; the description gets the full width underneath. It used to
+    // sit in a narrow middle column between the reorder arrows and the switch, which squeezed
+    // "The small caps line naming what happened." into three ragged lines.
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            element.label,
+            style = MaterialTheme.typography.titleSmall,
+            color = if (visible) MaterialTheme.colorScheme.onSurface
+            else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
         Switch(checked = visible, onCheckedChange = { onToggle() }, enabled = enabled)
     }
+    Text(
+        element.blurb,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
     // Size only matters for a piece that is actually on screen.
     if (visible) {
-        // The quote has two chip rows, so both are named. Two unlabelled rows of three chips
-        // give no clue which one does what.
-        val quote = element == BlockArrangement.Element.QUOTE
-        if (quote) ChipRowLabel("Size")
-        // Five chips rather than three, so tighter spacing — the labels are short (Tiny…Huge)
-        // and this keeps them on one row on a phone.
-        Row(
-            Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, bottom = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(5.dp),
-        ) {
-            BlockArrangement.Size.entries.forEach { option ->
-                AlignChip(
-                    label = option.label,
-                    selected = size == option,
-                    enabled = enabled,
-                    modifier = Modifier.weight(1f),
-                ) { onSize(option) }
-            }
-        }
+        // A stepper, not five chips in a row. Five equal-width cells cannot hold "Normal" on a
+        // phone at a large system font size — it broke to "Norm / al" mid-word and left the
+        // selected cell taller than its neighbours. A stepper is one line at any font scale, and
+        // it names the current size instead of making you work it out from which box is outlined.
+        StepperRow(
+            label = "Size",
+            value = size.label,
+            canDecrease = size.ordinal > 0,
+            canIncrease = size.ordinal < BlockArrangement.Size.entries.lastIndex,
+            enabled = enabled,
+            onDecrease = { onSize(BlockArrangement.Size.entries[size.ordinal - 1]) },
+            onIncrease = { onSize(BlockArrangement.Size.entries[size.ordinal + 1]) },
+        )
         // Only the quote gets a side of its own. The screen-wide Alignment below moves the stack,
         // which the full-width quote never visibly follows — so this is the only control that
         // actually shifts it.
-        if (quote) {
+        if (element == BlockArrangement.Element.QUOTE) {
             ChipRowLabel("Side")
-            Row(
-                Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, bottom = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                BlockArrangement.QuoteAlign.entries.forEach { option ->
-                    AlignChip(
-                        label = option.label,
-                        selected = quoteAlign == option,
-                        enabled = enabled,
-                        modifier = Modifier.weight(1f),
-                    ) { onQuoteAlign(option) }
-                }
-            }
+            SegmentedRow(
+                labels = BlockArrangement.QuoteAlign.entries.map { it.label },
+                selectedIndex = quoteAlign.ordinal,
+                enabled = enabled,
+            ) { onQuoteAlign(BlockArrangement.QuoteAlign.entries[it]) }
         }
     }
+    // Reorder last, and quiet: it moves the piece up or down the block screen, which matters far
+    // less often than the switch above.
+    MoveControl(
+        canMoveUp = enabled && canMoveUp,
+        canMoveDown = enabled && canMoveDown,
+        onMove = onMove,
+    )
   }
 }
 
+/**
+ * "Move up | Move down" as one track of two halves.
+ *
+ * Three versions of this control now. It began as two bare chevrons floating between the
+ * description and the switch — small, unlabelled, easy to hit by accident, and silent about what
+ * they moved. Then two separate outlined buttons, which said what they did but read as two
+ * unrelated things in a card that already had a switch and a stepper in it.
+ *
+ * This is the same **track with cells** shape as [SegmentedRow] above it, so the card speaks one
+ * visual language instead of three: a filled surface, one divider down the middle, one hairline
+ * around the outside. A disabled half — the top piece cannot move up — fades rather than
+ * disappearing, so the control keeps its shape and the row below doesn't jump as pieces reorder.
+ */
 @Composable
-private fun ChipRowLabel(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(start = 14.dp, bottom = 6.dp),
-    )
+private fun MoveControl(canMoveUp: Boolean, canMoveDown: Boolean, onMove: (Int) -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(AppShapes.small)
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), AppShapes.small),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        MoveHalf("Move up", Icons.Filled.KeyboardArrowUp, canMoveUp, Modifier.weight(1f)) {
+            onMove(-1)
+        }
+        // A hairline rather than a gap: a gap between two filled halves reads as two buttons that
+        // happen to be adjacent, which is what this is trying to stop looking like.
+        Box(
+            Modifier
+                .width(1.dp)
+                .height(22.dp)
+                .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
+        )
+        MoveHalf("Move down", Icons.Filled.KeyboardArrowDown, canMoveDown, Modifier.weight(1f)) {
+            onMove(1)
+        }
+    }
 }
 
 @Composable
-private fun AlignChip(
+private fun MoveHalf(
     label: String,
-    selected: Boolean,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
     enabled: Boolean,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
-    Box(
-        modifier
-            .clip(AppShapes.small)
-            .background(
-                if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
-                else MaterialTheme.colorScheme.surface,
-            )
-            .border(
-                if (selected) 2.dp else 1.dp,
-                if (selected) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f),
-                AppShapes.small,
-            )
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(vertical = 10.dp),
-        contentAlignment = Alignment.Center,
+    val tint =
+        if (enabled) MaterialTheme.colorScheme.onSurface
+        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+    Row(
+        modifier.clickable(enabled = enabled, onClick = onClick).padding(vertical = 10.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(6.dp))
         Text(
             label,
             style = MaterialTheme.typography.labelMedium,
-            color = if (selected) MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.onSurfaceVariant,
+            color = tint,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
+}
+
+/**
+ * `label   [−]  value  [+]` on one line.
+ *
+ * Built for the phone this app actually runs on: a large system font size, where five labelled
+ * cells in a row cannot fit "Normal" and break it mid-word. A stepper holds one line at any scale
+ * because only one value is ever on screen — and it says the value in words, which the row of
+ * outlined boxes never did.
+ */
+@Composable
+private fun StepperRow(
+    label: String,
+    value: String,
+    canDecrease: Boolean,
+    canIncrease: Boolean,
+    enabled: Boolean,
+    onDecrease: () -> Unit,
+    onIncrease: () -> Unit,
+) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        StepperButton("Smaller", Icons.Filled.Remove, enabled && canDecrease, onDecrease)
+        Text(
+            value,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            // Wide enough for the longest label so the +/- buttons don't jump as the value
+            // changes — a control that moves under your thumb is a control you mis-tap.
+            modifier = Modifier.widthIn(min = 84.dp).padding(horizontal = 4.dp),
+        )
+        StepperButton("Larger", Icons.Filled.Add, enabled && canIncrease, onIncrease)
+    }
+}
+
+/**
+ * A round − / + for the stepper.
+ *
+ * Solid accent fill when it can act, and a flat outline when it cannot. The earlier version was a
+ * faint tint behind a hairline in both states, which meant "you have reached Huge" looked almost
+ * exactly like "press me" — the one thing a stepper button has to communicate. 40dp is the
+ * comfortable-tap floor, and the icon stays 20dp so the disc reads as a button rather than a chip.
+ */
+@Composable
+private fun StepperButton(
+    description: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    Box(
+        Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .background(
+                if (enabled) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+            )
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            icon,
+            contentDescription = description,
+            tint = if (enabled) MaterialTheme.colorScheme.onPrimary
+            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
+            modifier = Modifier.size(20.dp),
+        )
+    }
+}
+
+/**
+ * One rounded track with the options inside it, rather than a row of separate outlined boxes.
+ *
+ * The old chips each carried their own border, so a row of them read as four unrelated buttons and
+ * the selected one grew a second, thicker outline that made it taller than its neighbours. Here the
+ * container owns the border and the selection is a filled pill inside it — one control, with one
+ * part of it lit.
+ */
+@Composable
+private fun SegmentedRow(
+    labels: List<String>,
+    selectedIndex: Int,
+    enabled: Boolean,
+    onSelect: (Int) -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(AppShapes.small)
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), AppShapes.small)
+            .padding(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        labels.forEachIndexed { i, label ->
+            val selected = i == selectedIndex
+            Box(
+                Modifier
+                    .weight(1f)
+                    .clip(AppShapes.small)
+                    .background(
+                        if (selected) MaterialTheme.colorScheme.primary
+                        else Color.Transparent,
+                    )
+                    .clickable(enabled = enabled, onClick = { onSelect(i) })
+                    .padding(vertical = 9.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelMedium,
+                    // One line, always. These labels are short by design; if a translation or a
+                    // font scale ever makes one too long, an ellipsis is honest and a word broken
+                    // in half is not.
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                    color = if (selected) MaterialTheme.colorScheme.onPrimary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+/** Names a control inside a piece card. Matches the "Size" label in [StepperRow] — the two sit
+ *  one above the other in the same card, and were different sizes with different indents. */
+@Composable
+private fun ChipRowLabel(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 /**

@@ -99,7 +99,22 @@ object BugReportQueue {
     // --- storage: a JSON array, since a report has free text in it and the app's usual
     // pipe-delimited format would be broken by the first note containing a '|'. ---
 
-    private fun encode(reports: List<BugReport>): String {
+    /**
+     * **Every field a report carries has to be written here.** This is not a summary of a report,
+     * it is the report: `enqueue` writes to disk and `flush` sends what it reads back, so anything
+     * missing from this pair is missing from the issue — silently, and only on a real phone, since
+     * a report built in memory looks perfectly complete right up until it is stored.
+     *
+     * That is exactly what happened. `context` (the settings table) and `recentBlocks` (the log of
+     * what the watcher covered) were added to [BugReport] and never added here, so every report
+     * ever sent arrived without the two sections built specifically to diagnose the flashing. The
+     * owner's first real report looked bare, and the per-field hardening added to
+     * `BugReportSender.appContext` on the same day would not have changed it by one line: the map
+     * was assembled correctly and then dropped on the way to disk.
+     *
+     * [ReportRoundTripTest] is the test that would have caught it, and now does.
+     */
+    internal fun encode(reports: List<BugReport>): String {
         val arr = JSONArray()
         reports.forEach { r ->
             arr.put(
@@ -111,18 +126,22 @@ object BugReportQueue {
                     .put("appVersion", r.appVersion)
                     .put("flavor", r.flavor)
                     .put("androidSdk", r.androidSdk)
-                    .put("device", r.device),
+                    .put("device", r.device)
+                    .put("context", org.json.JSONObject(r.context.toMap()))
+                    .put("recentBlocks", JSONArray(r.recentBlocks)),
             )
         }
         return arr.toString()
     }
 
-    private fun decode(raw: String): List<BugReport> {
+    internal fun decode(raw: String): List<BugReport> {
         val arr = JSONArray(raw)
         return (0 until arr.length()).mapNotNull { i ->
             runCatching {
                 val o = arr.getJSONObject(i)
                 val frames = o.optJSONArray("frames")
+                val blocks = o.optJSONArray("recentBlocks")
+                val ctx = o.optJSONObject("context")
                 BugReport(
                     where = o.getString("where"),
                     errorClass = if (o.isNull("errorClass")) null else o.getString("errorClass"),
@@ -132,6 +151,18 @@ object BugReportQueue {
                     flavor = o.getString("flavor"),
                     androidSdk = o.getInt("androidSdk"),
                     device = o.getString("device"),
+                    // Re-sanitised on the way back in, not trusted. The stored file is ours, but a
+                    // report that sat on disk across an app update could have been written by a
+                    // version whose allow-list was wider than this one's — and the allow-list has
+                    // to be the *sending* version's, or an old file becomes a way past it.
+                    context = BugReport.sanitizeContext(
+                        (0 until (ctx?.length() ?: 0)).let {
+                            ctx?.keys()?.asSequence()?.associateWith { k -> ctx.optString(k) }
+                                ?: emptyMap()
+                        },
+                    ),
+                    recentBlocks = (0 until (blocks?.length() ?: 0))
+                        .map { blocks!!.getString(it) },
                 )
             }.getOrNull()
         }
