@@ -26,6 +26,7 @@ import androidx.core.graphics.drawable.toBitmap
 import com.appblocker.R
 import com.appblocker.data.AppRule
 import com.appblocker.data.AdminPrompt
+import com.appblocker.data.AdminScreens
 import com.appblocker.data.AttemptCounter
 import com.appblocker.data.BlockMode
 import com.appblocker.data.BlockLog
@@ -773,12 +774,19 @@ class BlockerAccessibilityService : AccessibilityService() {
      * (`docs/BLOCKING_INVARIANTS.md`: "Nothing else defends that toggle") until the owner walked
      * through it on a bad day. It now also runs whenever [OffSwitchGuard] is armed.
      *
-     * Strict is still checked **first and unconditionally**: a Strict session must never become
-     * weaker than it was, whatever the new setting says or whichever unlock window is open.
+     * Strict is still checked **first**, and still bounces regardless of whether the always-on
+     * guard is switched on or standing in an open unlock window — that is what keeps a Strict
+     * session stronger than the everyday guard. What it no longer does is bounce a *wider set of
+     * pages*: see below.
      *
-     * Detection is deliberately broad (like the purchase/Shorts matchers) because OEMs — Xiaomi
-     * especially — name these activities unpredictably: a className fast-path for AOSP's aliased
-     * activities, plus an on-screen-text fallback for MIUI's generic SubSettings/app-info screens.
+     * **Both modes now guard exactly the same three screens.** Strict used to take the broad rule
+     * — the *kind* of page was enough, whoever it was about — on the reasoning that a Strict
+     * session is opt-in and ends by itself, so over-blocking was affordable there. It isn't: that
+     * rule bounced the whole Accessibility section (every other service with it) and *every* app's
+     * App-info page, and Strict is the mode the owner runs when he most needs the phone to keep
+     * working. He asked for it narrowed, and this is the same target v1.109 settled on for the
+     * everyday guard: the screens that actually END protection, and nothing that merely sits near
+     * them.
      */
     private fun handleSettingsGuard(pkg: String, className: String?): Boolean {
         val strict = strictRemaining() > 0L
@@ -788,26 +796,23 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (!strict && !OffSwitchGuard.armed(applicationContext)) return false
 
         val cn = className?.lowercase().orEmpty()
-        val byClass = STRICT_GUARD_HINTS.any { cn.contains(it) }
-        val danger = if (strict) {
-            // Strict keeps the broad rule: the *kind* of page is enough, whoever it is about.
-            // A Strict session is opt-in and ends by itself, so over-blocking is affordable there.
-            byClass || guardScreenIsDangerous()
-        } else {
-            // The always-on guard covers exactly three screens: the ones that actually END
-            // protection. Everything else it used to cover was collateral.
-            //
-            // The lesson of six attempts is that the App-info page is the wrong target. It is a
-            // HUB — battery, permissions, storage, notifications and uninstall on one page — so
-            // guarding it to protect one button costs the owner all the rest. Worse, it is
-            // self-defeating: this app *asks* him to set battery to "no restrictions" so blocking
-            // survives, and then blocked the page where that is done. Force-stop is given up with
-            // it, which is an accepted trade — the service restarts by itself, whereas battery
-            // and permission settings are ones the owner is told to change.
-            ourOwnServicePage() ||                 // our accessibility page: the real off-switch
-                uninstallConfirmation(pkg) ||      // the "uninstall this app?" dialog
-                deviceAdminRemoval(cn)             // deactivating device admin
-        }
+        // Read the window ONCE and pass it down. Each of the three checks below used to walk the
+        // node tree for itself, so a single decision could walk it three times — on a screen the
+        // budget deliberately lets run to 800 nodes, on every foreground change inside Settings.
+        val text = guardScreenText()
+        // Exactly three screens, in both modes: the ones that actually END protection. Everything
+        // else the old broad rule covered was collateral.
+        //
+        // The lesson of six attempts is that the App-info page is the wrong target. It is a HUB —
+        // battery, permissions, storage, notifications and uninstall on one page — so guarding it
+        // to protect one button costs the owner all the rest. Worse, it is self-defeating: this
+        // app *asks* him to set battery to "no restrictions" so blocking survives, and then
+        // blocked the page where that is done. Force-stop is given up with it, which is an
+        // accepted trade — the service restarts by itself, whereas battery and permission settings
+        // are ones the owner is told to change.
+        val danger = ourOwnServicePage(text) ||      // our accessibility page: the real off-switch
+            uninstallConfirmation(pkg, text) ||     // the "uninstall this app?" dialog
+            deviceAdminRemoval(cn, text)            // deactivating device admin
         if (!danger) return false
 
         // Monotonic, not the wall clock: this throttle claims "already bouncing" WITHOUT
@@ -816,7 +821,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         val now = stopwatchNow()
         if (now - lastGuardBounceAt < 1500) return true // already bouncing this page
         lastGuardBounceAt = now
-        if (DEBUG) Log.d(TAG, "settings guard bounce: pkg=$pkg class=$className byClass=$byClass")
+        if (DEBUG) Log.d(TAG, "settings guard bounce: pkg=$pkg class=$className strict=$strict")
 
         // Name the actual reason. A cover saying "Strict Mode" on a day with no session running
         // reads as a bug, and sends the owner looking for a session to end that doesn't exist.
@@ -872,36 +877,6 @@ class BlockerAccessibilityService : AccessibilityService() {
     }
 
     /**
-     * Whether the dangerous page in front of us is about **AppBlocker**, rather than some other
-     * app or service that merely lives on the same kind of screen.
-     *
-     * This is what lets the always-on guard leave the rest of the phone alone: without it, every
-     * app's App-info page and the whole Accessibility section were bounced, so force-stopping a
-     * frozen app or clearing a cache cost the full unlock wait. Strict Mode does *not* use this —
-     * there, the kind of page is enough.
-     *
-     * **An unreadable screen answers `null` — "can't tell" — and null must not bounce.**
-     *
-     * This started out answering `true` there, reasoning that a wrong bounce is visible and
-     * waitable while a wrong pass is invisible. That reasoning was wrong about *when* this runs.
-     * The call happens on the window-state event, which is the exact moment the window is being
-     * built and `rootInActiveWindow` is most often null or empty — so "unreadable" is not a rare
-     * failure here, it is the common case at that instant. Answering `true` meant opening *any*
-     * app's App-info page could raise a cover and bounce, intermittently, depending on a race.
-     * That is over-blocking, and it flashes.
-     *
-     * Nothing is lost by waiting: the page has only just opened, no toggle can have been reached
-     * yet, and Settings emits content events within milliseconds. The re-check on those events
-     * (see handleEvent) runs with a populated tree and catches a genuine off-switch page through
-     * the text path below. Null therefore changes nothing, exactly as `isShortsOnScreen()` does
-     * when it cannot read the tree (docs/BLOCKING_INVARIANTS.md, sweep 5) — the same primitive,
-     * and this is its third appearance.
-     *
-     * Known limit, deliberately accepted: in a long scrollable list Android only builds nodes for
-     * rendered rows, so our row genuinely is not in the tree until it is scrolled into view. The
-     * content-event re-check is what catches that too.
-     */
-    /**
      * Whether the screen is **AppBlocker's own accessibility page**, decided by our own text.
      *
      * Android renders a service's `android:description` on that service's detail page. Ours is
@@ -920,11 +895,39 @@ class BlockerAccessibilityService : AccessibilityService() {
      * opened, nothing can have been tapped yet, and the content-event re-check follows in
      * milliseconds with a populated tree (see the v1.104 note in aboutUs).
      */
-    private fun ourOwnServicePage(): Boolean =
-        guardScreenText().contains(OUR_SERVICE_DESCRIPTION_FRAGMENT)
+    private fun ourOwnServicePage(text: String): Boolean =
+        text.contains(OUR_SERVICE_DESCRIPTION_FRAGMENT)
 
-    private fun aboutUs(): Boolean? {
-        val text = guardScreenText()
+    /**
+     * Whether the dangerous page in front of us is about **AppBlocker**, rather than some other
+     * app or service that merely lives on the same kind of screen.
+     *
+     * This is what lets the guard leave the rest of the phone alone: without it, every app's
+     * App-info page and the whole Accessibility section get bounced, so force-stopping a frozen
+     * app or clearing a cache costs the full unlock wait. That is what Strict Mode used to do to
+     * the owner, and why both modes now go through here.
+     *
+     * **An unreadable screen answers `null` — "can't tell" — and null must not bounce.**
+     *
+     * This started out answering `true` there, reasoning that a wrong bounce is visible and
+     * waitable while a wrong pass is invisible. That reasoning was wrong about *when* this runs.
+     * The call happens on the window-state event, which is the exact moment the window is being
+     * built and `rootInActiveWindow` is most often null or empty — so "unreadable" is not a rare
+     * failure here, it is the common case at that instant. Answering `true` meant opening *any*
+     * app's App-info page could raise a cover and bounce, intermittently, depending on a race.
+     * That is over-blocking, and it flashes.
+     *
+     * Nothing is lost by waiting: the page has only just opened, no toggle can have been reached
+     * yet, and Settings emits content events within milliseconds. The re-check on those events
+     * (see handleEvent) runs with a populated tree and catches a genuine off-switch page. Null
+     * therefore changes nothing, exactly as `isShortsOnScreen()` does when it cannot read the tree
+     * (docs/BLOCKING_INVARIANTS.md, sweep 5) — the same primitive, and this is its third appearance.
+     *
+     * Known limit, deliberately accepted: in a long scrollable list Android only builds nodes for
+     * rendered rows, so our row genuinely is not in the tree until it is scrolled into view. The
+     * content-event re-check is what catches that too.
+     */
+    private fun aboutUs(text: String): Boolean? {
         if (text.isBlank()) return null
         return text.contains("appblocker")
     }
@@ -936,8 +939,8 @@ class BlockerAccessibilityService : AccessibilityService() {
      * so being in one of them and naming us is enough, and nothing here depends on a string that
      * an OEM translates or rephrases.
      */
-    private fun uninstallConfirmation(pkg: String): Boolean =
-        pkg in INSTALLER_PACKAGES && aboutUs() == true
+    private fun uninstallConfirmation(pkg: String, text: String): Boolean =
+        pkg in INSTALLER_PACKAGES && aboutUs(text) == true
 
     /**
      * The device-admin screen, when it is about *removing* our admin rather than adding it.
@@ -946,24 +949,22 @@ class BlockerAccessibilityService : AccessibilityService() {
      * activation prompt is one WE opened, moments earlier. Reading the screen cannot do this —
      * "deactivate" contains "activate", and both are translated. Guarding the activation prompt
      * meant uninstall protection could never be switched on at all (v1.107).
-     */
-    private fun deviceAdminRemoval(cn: String): Boolean {
-        if (!cn.contains("deviceadmin") && !cn.contains("device_admin")) return false
-        if (AdminPrompt.recentlyRequested()) return false
-        return aboutUs() == true
-    }
-
-    /** True if the current page is an off-switch danger page — us, next to an accessibility /
-     *  device-admin / uninstall / force-stop control.
      *
-     *  Identity is matched on the package name as well as the label: the label is what a
-     *  translated Settings app may render differently (and what the icon-switcher aliases can
-     *  change), while "com.appblocker" is the same string in every locale and appears on the
-     *  app-info and accessibility detail pages. */
-    private fun guardScreenIsDangerous(): Boolean {
-        val text = guardScreenText()
-        if (!text.contains("appblocker")) return false
-        return GUARD_TEXT_MARKERS.any { text.contains(it) }
+     * The class name is a fast path, not the whole test. On MIUI this screen is routinely a
+     * generic `SubSettings` whose name says nothing, and the only thing catching it there was the
+     * broad Strict rule that this version deletes — so removing that rule without widening this
+     * one would have handed back the v1.107 hole. [ADMIN_TEXT_MARKERS] is the fallback, and it is
+     * deliberately far narrower than the list it replaces: device-admin wording only, so it cannot
+     * match the Accessibility list or an App-info page the way `uninstall` and `accessibilit` did.
+     */
+    private fun deviceAdminRemoval(cn: String, text: String): Boolean {
+        if (AdminPrompt.recentlyRequested()) return false
+        // Unreadable screen answers no, exactly as aboutUs() does: the page has only just opened,
+        // no toggle can have been reached yet, and the content-event re-check follows with a
+        // populated tree (v1.104 — answering "yes" here is what made covers flash).
+        if (aboutUs(text) != true) return false
+        return cn.contains("deviceadmin") || cn.contains("device_admin") ||
+            AdminScreens.looksLikeAdminScreen(text)
     }
 
     /**
@@ -1865,28 +1866,13 @@ class BlockerAccessibilityService : AccessibilityService() {
          *  guardScreenText(). If that string is ever reworded, reword this with it. */
         private const val OUR_SERVICE_DESCRIPTION_FRAGMENT = "appblocker uses this to detect"
 
-
-        private val STRICT_GUARD_HINTS = listOf(
-            "accessibilit", "deviceadmin", "device_admin",
-            "installedappdetails", "appinfodashboard",
-        )
-
-        // On-screen-text markers (paired with our app name) for MIUI's generic SubSettings /
-        // app-info screens where the className alone doesn't identify the page.
-        //
-        // Arabic sits alongside English because this fallback fails SILENTLY when it doesn't
-        // match: nothing errors, the page simply isn't recognised and the guard doesn't bounce.
-        // On a phone whose Settings are not in English the whole fallback was dead, leaving the
-        // className fast-path alone to defend the toggle — on HyperOS, the very build whose class
-        // names the comment above calls unpredictable. Under-blocking is invisible (see
-        // docs/BLOCKING_INVARIANTS.md), so this could not have been noticed by using the app.
-        private val GUARD_TEXT_MARKERS = listOf(
-            "accessibilit", "device admin", "deactivate", "uninstall", "force stop", "force-stop",
-            // Arabic: إمكانية الوصول (accessibility), إلغاء التثبيت (uninstall),
-            // إيقاف/فرض الإيقاف (stop / force stop), مسؤول الجهاز (device admin), تعطيل (disable).
-            "امكانيه الوصول", "الغاء التثبيت", "فرض الايقاف", "ايقاف اجباري",
-            "مسئول الجهاز", "مسءول الجهاز", "تعطيل",
-        )
+        // STRICT_GUARD_HINTS and GUARD_TEXT_MARKERS used to live here, and Strict Mode bounced any
+        // page they matched. Between them that was the entire Accessibility section and every
+        // app's App-info page, which is why the owner reported Strict "blocking the whole
+        // Settings". Both are deleted rather than left beside the narrow rule — the v1.106 lesson:
+        // a superseded matcher sitting next to its replacement is how the same over-block gets
+        // rebuilt later. The one case they genuinely covered on MIUI (a device-admin screen with a
+        // generic class name) is now AdminScreens.MARKERS, which is testable and much narrower.
 
         private const val YOUTUBE_PKG = "com.google.android.youtube"
 

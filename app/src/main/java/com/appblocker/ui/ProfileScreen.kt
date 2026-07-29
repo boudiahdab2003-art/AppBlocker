@@ -141,6 +141,7 @@ fun ProfileScreen(
         mutableStateOf(SettingsStore.guardUnlockRequest(context))
     }
     var showGuardGate by remember { mutableStateOf(false) }
+    var showAdminGate by remember { mutableStateOf(false) }
     var showReport by remember { mutableStateOf(false) }
     // `tick` only drives redraws of the countdown; the deadline itself is what decides.
     var guardTick by remember { mutableStateOf(0) }
@@ -268,21 +269,24 @@ fun ProfileScreen(
                 // the actual "you cannot uninstall this" comes from device admin — and the two
                 // being separate switches means the app can look protected while it isn't.
                 subtitle = if (adminOn) {
-                    "On. AppBlocker can't be uninstalled until you turn this off, and reaching " +
-                        "that switch goes through the guard."
+                    "On. AppBlocker can't be uninstalled until you turn this off — and turning it " +
+                        "off means typing a paragraph first."
                 } else {
                     "OFF — AppBlocker can be uninstalled right now. Turn this on; the guard only " +
                         "makes the page hard to reach, this is what actually stops removal."
                 },
                 badge = adminOn,
                 enabled = !locked,
-                // Same toggle as Setup & permissions: on -> system confirm screen, off -> remove.
-                // removeActiveAdmin completes async, so flip the badge optimistically when
-                // turning off; turning on is corrected on resume from the system screen.
+                // On is one tap. Off goes through the typed gate below — this switch is the only
+                // thing that actually refuses an uninstall, so it was the cheapest way out of
+                // every protection in the app.
                 onClick = {
-                    val wasOn = isDeviceAdminActive(context)
-                    toggleDeviceAdmin(context)
-                    adminOn = if (wasOn) false else isDeviceAdminActive(context)
+                    if (isDeviceAdminActive(context)) {
+                        showAdminGate = true
+                    } else {
+                        enableDeviceAdmin(context)
+                        adminOn = isDeviceAdminActive(context) // corrected on resume anyway
+                    }
                 },
             )
             Divider()
@@ -522,6 +526,18 @@ fun ProfileScreen(
                 )
                 guardRequest = SettingsStore.guardUnlockRequest(context)
                 showGuardGate = false
+            },
+        )
+    }
+    if (showAdminGate) {
+        PreventUninstallGate(
+            onDismiss = { showAdminGate = false },
+            onConfirm = {
+                // removeActiveAdmin completes asynchronously, so flip the badge ourselves rather
+                // than re-reading a state that hasn't changed yet.
+                disableDeviceAdmin(context)
+                adminOn = false
+                showAdminGate = false
             },
         )
     }

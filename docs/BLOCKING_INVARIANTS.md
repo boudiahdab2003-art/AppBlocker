@@ -619,6 +619,42 @@ Three things a future sweep should check rather than assume:
 - **Dedup keys off a stack frame**, so a bug reporting from a *changing* line would slip past it.
   The per-day cap is the backstop; it has no test because the queue needs a `Context`.
 
+### Strict Mode's broad rule is gone, and a fix that reached one call site (v1.110)
+
+**The broad rule.** `handleSettingsGuard` ran two rules: the narrow three-screen one v1.109
+settled on, and — during Strict — `byClass || guardScreenIsDangerous()`, where the *kind* of page
+was enough. Between `STRICT_GUARD_HINTS` (`accessibilit`, `installedappdetails`,
+`appinfodashboard`) and `GUARD_TEXT_MARKERS` (which held `accessibilit`, `uninstall`, `force stop`
+alongside the device-admin words), that bounced the entire Accessibility section and every app's
+App-info page. The owner reported it as "Strict blocks the whole Settings".
+
+The comment defending it said over-blocking is affordable in Strict because a session is opt-in and
+ends by itself. That is wrong in the way this file keeps finding: **Strict is the mode he runs when
+he most needs the phone to still work**, so it is the worst place to be careless, not the safest.
+Both modes now run the same three-screen rule. What Strict keeps is *unconditionality* — it bounces
+regardless of `OffSwitchGuard.armed`, so neither the guard switch being off nor an open unlock
+window stands it down — not a wider net.
+
+Both constants are **deleted**, per the v1.106 lesson. The one case they genuinely covered that the
+narrow rule did not is a device-admin screen with a generic MIUI class name; that is now
+`AdminScreens.MARKERS` — device-admin wording only, out in `data/` where it can be tested, and its
+test asserts what it must **not** match (the accessibility list, an App-info page), because that is
+the property that was lost rather than the one that was missing.
+
+`guardScreenText()` is now read once per decision and threaded through the three checks, which used
+to walk the node tree up to three times for one event, at a budget of 800 nodes.
+
+**The fix that reached one call site.** `StrictModeScreen.ensureDeviceAdmin` was its own copy of the
+ADD_DEVICE_ADMIN launch and never learnt what `toggleDeviceAdmin` learnt in v1.108: to stamp
+`AdminPrompt.requested()`. So starting a Strict session could not switch uninstall protection on —
+the v1.107 bug, alive on a second path for two releases, invisible because the first path worked.
+It now delegates, and `toggleDeviceAdmin` is split into `enableDeviceAdmin` / `disableDeviceAdmin`
+so no caller can reach the dangerous direction by passing a state it didn't check.
+
+Worth generalising: **a duplicated call site is a place a fix does not reach.** When a bug is fixed
+by teaching one function something, grep for other launchers of the same intent/screen before
+closing it — the copy will not fail loudly, it will just still be broken.
+
 ### The reporter answered the standing question with "no" (v1.110)
 
 The first real bug report the owner sent arrived carrying version, SDK and device — and **nothing

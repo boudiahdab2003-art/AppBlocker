@@ -252,6 +252,51 @@ class AdminPromptTest {
 }
 
 /**
+ * Which wording may make the guard bounce a page.
+ *
+ * This list replaces a much longer one that also held `accessibilit`, `uninstall` and
+ * `force stop` — and those three are why Strict Mode bounced the entire Accessibility section and
+ * every app's App-info page. The owner reported it as "Strict blocks the whole Settings", twice.
+ *
+ * So the test is not "does it match device-admin screens" (easy, and it would still pass if
+ * someone re-added the greedy words). It is **what it must NOT match**, which is the property that
+ * was lost.
+ */
+class AdminScreensTest {
+
+    private fun matches(text: String) =
+        com.appblocker.data.AdminScreens.looksLikeAdminScreen(text)
+
+    @Test
+    fun `the device-admin removal screen is recognised`() {
+        assertTrue(matches("deactivate device admin app appblocker"))
+        assertTrue(matches("device administrator settings"))
+    }
+
+    @Test
+    fun `it is recognised in arabic too`() {
+        // The match fails silently when it misses — nothing errors, the page simply isn't
+        // recognised — so a phone in Arabic would have no fallback at all without these.
+        assertTrue(matches("مسئول الجهاز appblocker"))
+        assertTrue(matches("تعطيل"))
+    }
+
+    @Test
+    fun `the accessibility list is not an admin screen`() {
+        // It names every installed service, ours among them, so "mentions AppBlocker" is true of
+        // it by design. Only the wording can tell it apart — and this list must not claim it.
+        assertFalse(matches("accessibility downloaded apps talkback appblocker select to speak"))
+    }
+
+    @Test
+    fun `an app info page is not an admin screen`() {
+        // The page with battery, permissions, storage AND uninstall on it. Guarding this to
+        // protect one button is what cost the owner his battery settings in v1.108.
+        assertFalse(matches("appblocker app info uninstall force stop battery permissions storage"))
+    }
+}
+
+/**
  * The diagnostic must not fail silently — the failure that made the owner's first real report
  * useless, in the very tool built to stop failures being invisible.
  */
