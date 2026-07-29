@@ -26,6 +26,52 @@ data class ChatMsg(val role: String, val text: String)
 data class CoachReply(val reply: String, val suggestions: List<String>)
 
 /**
+ * Why the coach couldn't answer — the *category*, never the error itself.
+ *
+ * **Why a category and not the message.** Every failure used to end as `null`, which the chat
+ * screen rendered as one grey line: "Couldn't reach Gemini — check your connection and try again."
+ * No internet, an exhausted quota, a dead VM, a rejected key and a reply the app couldn't parse
+ * all looked identical, so the only thing the owner could report was "it's not working" — and on
+ * the day this was written that cost a full round of investigation against a server that turned
+ * out to be perfectly healthy, to discover he simply hadn't installed the update. A diagnostic
+ * that cannot distinguish "your phone is offline" from "Google says we're out of quota" is not a
+ * diagnostic.
+ *
+ * **And why not just show the error text**, which is the obvious next change someone will want to
+ * make: Gemini's error bodies quote the request back, and this app's requests carry the owner's
+ * usage figures, his goals and the coach conversation. The same rule as [BugReport] applies —
+ * a named category may leave this file, a message may not.
+ */
+enum class CoachError {
+    /** No proxy configured and no key entered — the coach can't run at all on this build. */
+    NO_KEY,
+
+    /** The phone has no working internet connection. */
+    OFFLINE,
+
+    /** We reached the network but not the coach's server (down, refused, timed out). */
+    SERVER_DOWN,
+
+    /** Google says the daily free allowance is used up, on every model we know. */
+    QUOTA,
+
+    /** The server turned us away — the key or the shared secret is wrong. */
+    REJECTED,
+
+    /** A 200 that the app couldn't make sense of. */
+    BAD_REPLY,
+
+    /** Anything unrecognised. Present so a new failure mode is visibly *new* rather than silent. */
+    UNKNOWN,
+}
+
+/** What [AiCoach.chat] gives back: an answer, or a nameable reason there isn't one. */
+sealed interface CoachOutcome {
+    data class Ok(val reply: CoachReply) : CoachOutcome
+    data class Failed(val error: CoachError) : CoachOutcome
+}
+
+/**
  * The AI Coach: Gemini-powered daily tips AND a two-way chat, both grounded in the user's real
  * usage data, their current AppBlocker setup, and their long-term goals. The user's API key
  * lives ONLY in this device's SharedPreferences (pasted once in the app) — it is never baked
@@ -67,6 +113,52 @@ object AiCoach {
      */
     private fun retryWorthwhile(t: Throwable?): Boolean =
         t !is java.io.InterruptedIOException // SocketTimeoutException extends this; null => true
+
+    /**
+     * Sorts a failure into one of the [CoachError] categories.
+     *
+     * Pure, and that is the point: the call it describes needs a network and a live Gemini key, so
+     * it cannot be tested here — this can, and it is the part that decides what the owner is told.
+     *
+     * Reads the exception's message only to *match* it (the codes this file itself formats into
+     * `"HTTP $code: …"`), and never returns any of it. See [CoachError] for why that line matters.
+     */
+    internal fun classify(t: Throwable?): CoachError {
+        val msg = t?.message.orEmpty()
+        return when {
+            // Types first: they are unambiguous, where a message is whatever the far end wrote.
+            t is java.net.UnknownHostException -> CoachError.OFFLINE
+            t is java.net.ConnectException -> CoachError.SERVER_DOWN
+            t is java.io.InterruptedIOException -> CoachError.SERVER_DOWN // incl. socket timeouts
+            t is org.json.JSONException -> CoachError.BAD_REPLY
+            msg.contains("HTTP 429") || msg.contains("RESOURCE_EXHAUSTED") -> CoachError.QUOTA
+            msg.contains("HTTP 401") || msg.contains("HTTP 403") -> CoachError.REJECTED
+            msg.contains("HTTP 5") -> CoachError.SERVER_DOWN
+            else -> CoachError.UNKNOWN
+        }
+    }
+
+    private const val KEY_LAST_ERROR = "coach_last_error"
+    private const val KEY_LAST_ERROR_AT = "coach_last_error_at"
+
+    /** The last failure and when it happened, for the coach's own info dialog and for bug
+     *  reports — so "it's not working" arrives with the reason already attached. */
+    fun lastError(ctx: Context): Pair<CoachError, Long>? {
+        val name = p(ctx).getString(KEY_LAST_ERROR, null) ?: return null
+        val at = p(ctx).getLong(KEY_LAST_ERROR_AT, 0L)
+        return runCatching { CoachError.valueOf(name) to at }.getOrNull()
+    }
+
+    private fun recordError(ctx: Context, e: CoachError) {
+        p(ctx).edit()
+            .putString(KEY_LAST_ERROR, e.name)
+            .putLong(KEY_LAST_ERROR_AT, System.currentTimeMillis())
+            .apply()
+    }
+
+    private fun clearError(ctx: Context) {
+        p(ctx).edit().remove(KEY_LAST_ERROR).remove(KEY_LAST_ERROR_AT).apply()
+    }
 
     /** How hard the model should think before answering. The coach wants depth over speed; bulk
      *  jobs like app categorisation want neither. Mapped per model generation in [postWithThinking]
@@ -286,14 +378,20 @@ object AiCoach {
         }
 
     /**
-     * One chat turn: sends the conversation + fresh usage/setup/goal context, returns the
-     * coach's reply (or null on failure). If Gemini includes an updated goal list, it is
-     * saved here so both chat and daily tips see it.
+     * One chat turn: sends the conversation + fresh usage/setup/goal context, and returns either
+     * the coach's reply or a **named** reason there isn't one ([CoachError]). If Gemini includes
+     * an updated goal list, it is saved here so both chat and daily tips see it.
+     *
+     * This used to return `CoachReply?`, and the null threw the cause away — see [CoachError] for
+     * what that cost. Only the chat path reports its reason: the daily tips fail invisibly by
+     * design (they serve the cached list), so there is nothing there for a user to act on.
      */
-    suspend fun chat(ctx: Context, history: List<ChatMsg>, userMsg: String): CoachReply? =
+    suspend fun chat(ctx: Context, history: List<ChatMsg>, userMsg: String): CoachOutcome =
         withContext(Dispatchers.IO) {
             val key = apiKey(ctx)
-            if (key.isBlank() && !proxyOn()) return@withContext null
+            if (key.isBlank() && !proxyOn()) {
+                return@withContext CoachOutcome.Failed(CoachError.NO_KEY)
+            }
             val today = SimpleDateFormat("EEEE, MMM d, yyyy", Locale.US).format(Date())
             val nowTime = SimpleDateFormat("H:mm", Locale.US).format(Date())
             val first = SettingsStore.userName(ctx).substringBefore(' ')
@@ -360,6 +458,7 @@ object AiCoach {
                 .put("generationConfig", JSONObject().put("responseMimeType", "application/json"))
 
             var triesLeft = 2
+            var lastFailure: Throwable? = null
             while (triesLeft-- > 0) {
                 val attempt = runCatching {
                     val obj = JSONObject(callGemini(ctx, key, body, COACH_CHAIN))
@@ -377,10 +476,20 @@ object AiCoach {
                     } ?: emptyList()
                     if (reply.isBlank()) null else CoachReply(reply, suggestions)
                 }
-                attempt.getOrNull()?.let { return@withContext it }
-                if (!retryWorthwhile(attempt.exceptionOrNull())) break
+                attempt.getOrNull()?.let {
+                    clearError(ctx)
+                    return@withContext CoachOutcome.Ok(it)
+                }
+                lastFailure = attempt.exceptionOrNull()
+                if (!retryWorthwhile(lastFailure)) break
             }
-            null
+            // A success with nothing usable in it (a blank reply, an unparsable object) leaves
+            // lastFailure null — that is BAD_REPLY, not UNKNOWN: the call worked and the content
+            // was the problem.
+            val error =
+                if (lastFailure == null) CoachError.BAD_REPLY else classify(lastFailure)
+            recordError(ctx, error)
+            CoachOutcome.Failed(error)
         }
 
     /** Turns the coach's goal objects into real [Goals], keeping the id (and so the whole

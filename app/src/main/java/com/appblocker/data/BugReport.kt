@@ -168,6 +168,10 @@ data class BugReport(
             // How many of the fields above failed to read. Present only when non-zero, so a
             // half-empty report announces itself instead of looking like a healthy quiet one.
             "fieldErrors",
+            // Why the coach last failed, as a [CoachError] name — QUOTA, OFFLINE, BAD_REPLY.
+            // A category, like `protection`, never a message: Gemini's error bodies quote the
+            // request back, and this app's requests carry usage figures and the conversation.
+            "coachError",
         )
 
         /** Values are short by nature (an id, a boolean, a count); anything long is a sign

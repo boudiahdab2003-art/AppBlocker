@@ -5,6 +5,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.appblocker.data.AiCoach
 import com.appblocker.data.ChatMsg
+import com.appblocker.data.CoachError
+import com.appblocker.data.CoachOutcome
 import com.appblocker.data.CoachProfile
 import com.appblocker.data.Goal
 import com.appblocker.data.Goals
@@ -64,16 +66,20 @@ class CoachChatViewModel(app: Application) : AndroidViewModel(app) {
             val history = _messages.value
                 .filter { it.role == "user" || it.role == "model" }
                 .dropLast(1) // chat() re-appends the new message itself
-            val reply = AiCoach.chat(ctx, history, msg)
-            if (reply != null) {
-                _messages.value = _messages.value + ChatMsg("model", reply.reply)
-                AiCoach.saveChat(ctx, _messages.value)
-                _goals.value = Goals.all(ctx)
-                _profile.value = CoachProfile.all(ctx)
-                _suggestions.value = reply.suggestions
-            } else {
-                _messages.value = _messages.value +
-                    ChatMsg("local", "Couldn't reach Gemini — check your connection and try again.")
+            when (val outcome = AiCoach.chat(ctx, history, msg)) {
+                is CoachOutcome.Ok -> {
+                    _messages.value = _messages.value + ChatMsg("model", outcome.reply.reply)
+                    AiCoach.saveChat(ctx, _messages.value)
+                    _goals.value = Goals.all(ctx)
+                    _profile.value = CoachProfile.all(ctx)
+                    _suggestions.value = outcome.reply.suggestions
+                }
+                // Named, not the old one-size-fits-all "Couldn't reach Gemini". Five different
+                // problems used to read identically here, so the only report possible was "the
+                // coach isn't working" — and the answer that day was "you haven't installed the
+                // update", which this bubble would have said in one line.
+                is CoachOutcome.Failed ->
+                    _messages.value = _messages.value + ChatMsg("local", explain(outcome.error))
             }
             _sending.value = false
         }
@@ -94,6 +100,10 @@ class CoachChatViewModel(app: Application) : AndroidViewModel(app) {
     /** The Gemini model that last answered, for the "what your coach knows" dialog. */
     fun coachModel(): String? = AiCoach.lastModelUsed(getApplication())
 
+    /** The last failure and when, for the same dialog — the line to read back when the coach
+     *  stops answering, so the reason arrives with the report instead of after it. */
+    fun coachFailure(): Pair<CoachError, Long>? = AiCoach.lastError(getApplication())
+
     fun clearProfile() {
         CoachProfile.clear(getApplication())
         // "Forget what you know about me" has to include what the coach ADVISED, or it would keep
@@ -104,6 +114,34 @@ class CoachChatViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private companion object {
+        /**
+         * One sentence per cause, written for a non-technical reader: what happened, and whether
+         * it is his to fix. No codes, no "Gemini" — the point is that he can act on it or tell me
+         * which one it was without knowing anything about the inside of the app.
+         */
+        fun explain(e: CoachError): String = when (e) {
+            CoachError.OFFLINE ->
+                "Your phone isn't online right now — the coach needs a connection. " +
+                    "Try again once you're back on Wi-Fi or data."
+            CoachError.SERVER_DOWN ->
+                "Couldn't reach the coach's server. It may be down or just slow — " +
+                    "try again in a minute."
+            CoachError.QUOTA ->
+                "The coach has used up today's free allowance from Google. It comes back " +
+                    "tomorrow — everything else in the app is unaffected."
+            CoachError.REJECTED ->
+                "The server turned us away. That's a key or password problem on my side, " +
+                    "not yours — send a report and I'll fix it."
+            CoachError.BAD_REPLY ->
+                "The coach answered in a form the app couldn't read. Try asking again; " +
+                    "if it keeps happening, send a report."
+            CoachError.NO_KEY ->
+                "The coach isn't set up in this build — there's no key for it to use."
+            CoachError.UNKNOWN ->
+                "Something went wrong that I haven't seen before. Please send a report — " +
+                    "it'll carry the details."
+        }
+
         val DEFAULT_SUGGESTIONS = listOf(
             "Give me my weekly report",
             "Set a goal for this week with a plan",

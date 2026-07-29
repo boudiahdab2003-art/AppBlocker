@@ -59,6 +59,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.appblocker.data.ChatMsg
+import com.appblocker.data.CoachError
 import com.appblocker.data.Goal
 import com.appblocker.ui.theme.AppGradients
 import com.appblocker.ui.theme.softGlow
@@ -151,6 +152,7 @@ fun CoachChatScreen(onBack: () -> Unit, vm: CoachChatViewModel = viewModel()) {
         ProfileDialog(
             profile = profile,
             model = vm.coachModel(),
+            failure = vm.coachFailure(),
             onForget = { vm.clearProfile(); showProfile = false },
             onClose = { showProfile = false },
         )
@@ -165,6 +167,10 @@ private fun ProfileDialog(
      *  the model chain degrades silently by design (see AiCoach.ModelChain) — without this there
      *  is no way to tell a working upgrade from a quiet fall-back to the fast model. */
     model: String?,
+    /** The last failure and when it happened, or null if the coach has never failed. Shown for
+     *  the same reason as [model]: when the coach stops answering, this is the one line that says
+     *  *why*, and it can be read back in a sentence instead of described. */
+    failure: Pair<CoachError, Long>?,
     onForget: () -> Unit,
     onClose: () -> Unit,
 ) {
@@ -193,6 +199,15 @@ private fun ProfileDialog(
                 model?.let {
                     Text("Brain: $it", style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                failure?.let { (error, at) ->
+                    Text(
+                        "Last problem: ${error.name.lowercase().replace('_', ' ')} " +
+                            "(${java.text.SimpleDateFormat("d MMM, HH:mm", java.util.Locale.US)
+                                .format(java.util.Date(at))})",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
                 }
             }
         },

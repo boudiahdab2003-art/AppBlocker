@@ -13,6 +13,13 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.111", "Jul 29, 2026", "The coach tells you what went wrong", listOf(
+        "You told me the coach wasn't working. It was — the fix just wasn't on your phone yet; you were still on 1.109. But you had no way of knowing that, and neither did I, because the app says the same thing no matter what goes wrong.",
+        "**Every coach failure looked identical.** No internet, Google's daily allowance used up, the server down, a wrong password on my side, an answer the app couldn't read — all five produced one grey line: \"Couldn't reach Gemini — check your connection and try again.\" So the only thing you could tell me was \"it's not working\", and I spent an hour testing a server that was perfectly healthy.",
+        "Now it says which one it is, in a sentence: your phone is offline; the coach's server can't be reached; today's free allowance is used up and comes back tomorrow; the key needs attention on my side. You can act on the ones that are yours and ignore the ones that are mine.",
+        "**\"What your coach knows\" now shows the last problem and when it happened**, under the brain it's using. That's the line to read back to me — or just send a report, because reports now carry it automatically.",
+        "One deliberate limit: the app shows you the *kind* of problem, never the raw error text. Those messages quote your request back, and your requests carry your usage figures and your conversation with the coach. Same rule the reports follow.",
+    )),
     VersionLog("1.110", "Jul 29, 2026", "Strict Mode stops blocking all of Settings, and uninstalling gets harder", listOf(
         "**Strict Mode was blocking the whole Settings app, and it doesn't need to.** It ran a much broader rule than the everyday guard: any Accessibility page (so the whole section, every other service you use), and *every* app's App info page — battery, permissions, storage, notifications. That was left broad on the reasoning that Strict is short and opt-in so over-blocking is affordable. It isn't: Strict is exactly when you need the phone to still work.",
         "Both modes now guard the same three screens — the ones that actually end protection: **AppBlocker's own accessibility page**, the **\"uninstall this app?\" confirmation**, and the screen for **turning off device admin**. Everything else in Settings opens normally during a Strict session.",

@@ -5,6 +5,7 @@ import android.os.Build
 import android.provider.Settings
 import android.util.Log
 import com.appblocker.BuildConfig
+import com.appblocker.data.AiCoach
 import com.appblocker.data.BugReport
 import com.appblocker.data.AttemptCounter
 import com.appblocker.data.BlockLayouts
@@ -90,6 +91,9 @@ object BugReportSender {
         field("scanEverywhere") { SettingsStore.keywordsEverywhere(ctx).toString() }
         field("overlayPermission") { Settings.canDrawOverlays(ctx).toString() }
         field("usageAccess") { hasUsageAccess(ctx).toString() }
+        // Only when the coach has actually failed — absent means it has never failed on this
+        // install, which is different from "we didn't look".
+        AiCoach.lastError(ctx)?.let { (error, _) -> field("coachError") { error.name } }
         // Reported rather than hidden: a bare report and a healthy one must never look alike.
         if (failed > 0) out["fieldErrors"] = failed.toString()
         return out
