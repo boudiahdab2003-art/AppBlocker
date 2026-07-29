@@ -156,25 +156,47 @@ fun FrictionGate(
             modifier = Modifier.padding(horizontal = 16.dp),
         )
 
-        // Says what just happened, rather than leaving a silently different paragraph and a
-        // cleared field to be worked out. Counted, so a run of near-misses is visible — and kept
-        // to one line, because this is the screen where a stray line costs the paragraph.
-        if (attempt > 0 && !solved && input.isEmpty()) {
-            Text(
-                "Time ran out — attempt ${attempt + 1}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        // **Everything below the clock scrolls, and only this scroller flexes.**
+        //
+        // The screen used to be one Column where every child had a fixed height except the
+        // paragraph card, which had `weight(1f)` — "take whatever is left over". Open the
+        // keyboard and there was nothing left over, so the paragraph went to zero and the last
+        // button was sliced in half. Removing content bought room with the keyboard down and
+        // none with it up; the defect was the layout contract, not the amount of content.
+        //
+        // A weight on a *scroll container* is safe in the way it is not on content: squeezing it
+        // scrolls instead of starving what is inside. Every child below keeps its own height
+        // whatever the keyboard does, and the text field brings itself into view on focus.
+        // (The top bar and the clock stay pinned above — a countdown you have to scroll to find
+        // is not a countdown.)
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            // Says what just happened, rather than leaving a silently different paragraph and a
+            // cleared field to be worked out. Counted, so a run of near-misses is visible.
+            if (attempt > 0 && !solved && input.isEmpty()) {
+                Text(
+                    "Time ran out — attempt ${attempt + 1}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+            }
+
+            PhraseCard(
+                phrase = phrase,
+                progress = progress,
+                // A stated height, not leftovers — the whole point of this rewrite. Inside a
+                // scroll container it is a guarantee rather than a risk, because anything that
+                // doesn't fit scrolls instead of being taken out of here. 240dp is chosen so
+                // that the panel *and* the typing box both fit above the keyboard on the owner's
+                // phone: roughly seven lines at his font scale, five at a much larger one.
+                //
+                // The cost is some empty space below the buttons when the keyboard is closed.
+                // That is the deal — the alternative is a height that depends on what is left
+                // over, which is exactly what made the paragraph disappear three times.
+                modifier = Modifier.height(240.dp)
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
             )
-        }
 
-        PhraseCard(
-            phrase = phrase,
-            progress = progress,
-            modifier = Modifier.weight(1f).padding(horizontal = 16.dp, vertical = 12.dp),
-        )
-
-        Column(Modifier.padding(horizontal = 16.dp)) {
             // A no-op text toolbar removes the cut/copy/paste popup entirely, so the paragraph
             // must be hand-typed. That alone is not enough: a keyboard's own clipboard (Gboard's
             // clipboard chip) commits text through the IME without ever opening that popup, so
@@ -186,7 +208,7 @@ fun FrictionGate(
                         if (TypedChallenge.isPaste(input, new)) blockedPaste = true
                         else { input = new; blockedPaste = false }
                     },
-                    placeholder = { Text("Type it here") },
+                    placeholder = { Text("Type the paragraph above") },
                     // `singleLine`, not `minLines = 1` — and the difference is the whole bug.
                     // A minLines field *starts* at one line and grows as it fills, so by the
                     // fortieth word it would be ten lines tall and the paragraph would be back
@@ -200,12 +222,15 @@ fun FrictionGate(
                         capitalization = KeyboardCapitalization.None,
                     ),
                     shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                 )
             }
             // Reserved height, so a line appearing and disappearing doesn't shove the buttons
             // under the typist's thumb mid-word.
-            Box(Modifier.fillMaxWidth().heightIn(min = 28.dp).padding(top = 6.dp)) {
+            Box(
+                Modifier.fillMaxWidth().heightIn(min = 28.dp)
+                    .padding(start = 16.dp, end = 16.dp, top = 6.dp),
+            ) {
                 when {
                     blockedPaste -> Text(
                         "Pasting is off — this one has to be typed.",
@@ -229,23 +254,23 @@ fun FrictionGate(
                     )
                 }
             }
+            GradientButton(
+                text = confirmLabel,
+                enabled = solved,
+                onClick = onConfirm,
+                // Faded until it works. Disabled, the shared button is a solid grey pill that
+                // looks exactly like a live one — so the screen offered a button that did nothing
+                // when pressed, which reads as broken rather than as locked.
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp)
+                    .alpha(if (solved) 1f else 0.45f),
+            )
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .padding(top = 4.dp, bottom = 16.dp),
+            ) { Text(dismissLabel) }
         }
-        GradientButton(
-            text = confirmLabel,
-            enabled = solved,
-            onClick = onConfirm,
-            // Faded until it works. Disabled, the shared button is a solid grey pill that looks
-            // exactly like a live one — so the screen offered a button that did nothing when
-            // pressed, which reads as broken rather than as locked.
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp)
-                .alpha(if (solved) 1f else 0.45f),
-        )
-        TextButton(
-            onClick = onDismiss,
-            modifier = Modifier
-                .align(Alignment.CenterHorizontally)
-                .padding(top = 4.dp, bottom = 12.dp),
-        ) { Text(dismissLabel) }
     }
 
     if (showHelp) {
