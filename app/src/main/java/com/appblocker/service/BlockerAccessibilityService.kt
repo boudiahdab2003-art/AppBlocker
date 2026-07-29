@@ -393,7 +393,18 @@ class BlockerAccessibilityService : AccessibilityService() {
                 // UI). With an unreadable root the cache may be stale (missed gesture-nav
                 // Home event), and blocking blind used to flash the cover over the home
                 // screen — wait for a tick that can actually see what's on screen.
-                if (actual != null && actual != packageName) handleAppBlock(pkg)
+                //
+                // A transient surface is not that evidence either, and this is where it leaked
+                // back in: the reconcile above deliberately refuses to adopt the shade, the
+                // volume dialog or the keyboard, because they sit OVER whatever is open and say
+                // nothing about it. This test then read the very same window as proof that the
+                // cached app was still in front. After a missed Home event that is exactly
+                // wrong — pull down the shade on the home screen, or open a keyboard in another
+                // app, and the stale package got covered for as long as it took the next event
+                // to tear it down. Milliseconds, over apps that are not blocked.
+                if (actual != null && actual != packageName && !isTransientSurface(actual)) {
+                    handleAppBlock(pkg)
+                }
             } else if (overlay.isAppBlock && !shouldBlock(pkg)) {
                 // The condition ended while the cover was up → release without an app switch.
                 // (Acting only on this transition also avoids re-recording an "attempt" every
@@ -1483,8 +1494,15 @@ class BlockerAccessibilityService : AccessibilityService() {
      */
     private fun exitView(target: String): ExitView {
         val active = rootInActiveWindow?.packageName?.toString()
-        // A readable window that isn't ours settles it either way.
-        if (active != null && active != packageName) {
+        // A readable window that isn't ours settles it either way — unless it is a surface merely
+        // drawn on top. The shade, the volume dialog, a heads-up notification and the keyboard all
+        // genuinely become the active window while the user has not gone anywhere, and any of them
+        // can land in the ~2.5s after "Got it" (a notification arriving is not a rare event). Read
+        // as "positively somewhere else", that ends the exit watch and takes the cover down while
+        // the blocked app is still right there behind the shade. "Can't tell" is the honest answer,
+        // and ExitView.BLIND exists for it — the third invariant in docs/BLOCKING_INVARIANTS.md,
+        // and this was the last place in the file still treating a transient surface as evidence.
+        if (active != null && active != packageName && !isTransientSurface(active)) {
             return if (active == target) ExitView.STILL_THERE else ExitView.LEFT
         }
         // Our own UI is in front (not merely our cover): they are out of the app. See OwnUi.

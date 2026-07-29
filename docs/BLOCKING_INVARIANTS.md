@@ -595,12 +595,16 @@ Two things worth carrying forward:
 
 ### Not yet swept
 
-- the UI's own live state: `resumeTick` re-reads, and the several screens that cache
-  service/prefs state in `remember` blocks. Sweeps four and five touched only the adult-pack gate;
-  the pattern (a `remember` holding a decision that time or the service can invalidate) is
-  everywhere and is worth a sweep of its own. **Best remaining candidate.**
 - `UsageTracker` beyond `addInterval`: the caching layers (`usedTodayCache`, the per-day
-  memoisation) and `sessionStatsToday`'s interval merging.
+  memoisation) and `sessionStatsToday`'s interval merging. **Best remaining candidate.**
+- The rest of the UI's live state. Sweep thirteen took the `remember`-blocks pass and found the
+  one that mattered (`KeywordsScreen`'s phase), but only audited the blocks that gate a
+  *protection*. `BlockEditorScreen` and `BlockingScreen` cache a dozen settings each and were read
+  quickly rather than reasoned through; both refresh on `LaunchedEffect(perms)`, which is a
+  resume-tick in disguise, so they looked sound.
+- Every `remember` that survives backgrounding. Finding 3 turned on recomposition *stopping* while
+  the app is in the background, which makes a `LaunchedEffect` ticker an unreliable cleaner. Any
+  other place that leans on a ticker to correct stale state has the same hole.
 
 ### Swallowed errors now leave the device (v1.103)
 
@@ -618,6 +622,48 @@ Three things a future sweep should check rather than assume:
   message, it's usually fine" is the whole risk, on an app whose keyword list is adult words.
 - **Dedup keys off a stack frame**, so a bug reporting from a *changing* line would slip past it.
   The per-day cap is the backstop; it has no test because the queue needs a `Context`.
+
+### Swept in the thirteenth "bug hunt" (29 Jul 2026) — transient surfaces, and one stale phase
+
+Two greps, three findings, all of one shape: **something that is on screen being read as evidence
+about something else.**
+
+`grep -n "rootInActiveWindow"` — eleven reads in the watcher. Nine were already guarded. Two were
+not, and both had the same hole: a *transient surface* (the shade, the volume dialog, a heads-up
+notification, the keyboard) is a readable window that says nothing about what is underneath it.
+
+1. **The re-check tick raised covers on the strength of a transient window.** `recheckRunnable`
+   refuses to *reconcile* the cache to a transient surface — correct, and commented as such — and
+   then two lines later used `actual != null && actual != packageName` as proof that the cached app
+   was still in front. After a missed gesture-nav Home event (the documented HyperOS quirk that
+   most of the original nine trace back to), pulling down the shade on the home screen, or opening
+   a keyboard in another app, covered the **stale** package until the next event tore it down.
+   Milliseconds, over an app that is not blocked. This is a strong candidate for the second cause
+   of the flashing the owner has reported twice and that no amount of reading had explained.
+
+2. **The exit watcher read one as "they left".** `exitView` returned `LEFT` for any readable
+   non-ours window, so a notification arriving in the ~2.5 s after "Got it" ended the watch and
+   dropped the cover while the blocked app sat behind the shade. Now falls through to `BLIND`,
+   which is the answer that case has always deserved. Self-healing either way (the app's next
+   window-state event re-blocks), which is exactly why it was invisible.
+
+`grep -n "remember {"` across `ui/` — the "not yet swept" candidate this file has been pointing at.
+
+3. **`KeywordsScreen` re-derived the unlock phase and got it wrong.** `offReady` was
+   `offRequest != null && untilUnlock <= 0L` — it never asked whether the window had since
+   **closed**, so a request whose 24 hours were served days ago still read as "you may switch the
+   adult pack off now". A 30-second ticker cleared lapsed requests, which mostly hid it; but
+   recomposition stops while the app is backgrounded, so coming back to that screen after a missed
+   window handed back a live switch for up to 30 seconds more. `OffSwitchGuard.phase` is the same
+   state machine, complete and unit-tested (`a lapsed window is not an open door`), and the screen
+   now calls it. Two copies of one state machine, one of them incomplete — bug shape #1, in a
+   protection whose whole design is that it is expensive to switch off.
+
+Not a finding, but worth writing down: `shouldScanPkg` starts `if (pkg == packageName) return false`,
+so the keyword scanner can never read our own screens. The Blocked-words screen lists the owner's
+own blocked words, and had that line been missing, opening it would have blocked the app with its
+own list — a tidy explanation for "flashing inside the app itself" that turns out **not** to be the
+cause. Ruled out, so nobody re-derives it.
 
 ### Strict Mode's broad rule is gone, and a fix that reached one call site (v1.110)
 
