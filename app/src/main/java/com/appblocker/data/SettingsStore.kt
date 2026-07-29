@@ -46,8 +46,26 @@ object SettingsStore {
     fun autoInstalled(context: Context): Boolean =
         prefs(context).getBoolean(KEY_AUTO_INSTALLED, false)
 
-    fun setAutoInstalled(context: Context, value: Boolean) =
-        prefs(context).edit().putBoolean(KEY_AUTO_INSTALLED, value).apply()
+    /**
+     * **`commit()`, not `apply()` — and that is the whole point of this flag.**
+     *
+     * `apply()` writes to memory now and to disk on a background thread. Every other setting in
+     * this file can afford that. Setting this one to **true** cannot: it happens in the breath
+     * before [SilentInstaller] hands the install to the system, and what happens next is that this
+     * process is *killed* so its replacement can take its place. A kill is not an orderly exit, so
+     * the queued disk write is simply lost — and a lost flag means the new version reads "nobody
+     * marked this as automatic", arms the after-update pause, and switches **all blocking off**
+     * silently, on a phone whose owner never asked for an update and has no idea one arrived.
+     *
+     * Clearing it does not have that problem (a flag that survives too long only means the *next*
+     * update skips a pause, which leaves blocking on), but both directions commit anyway rather
+     * than making durability depend on the value — this runs once per install, so the blocking
+     * write costs nothing worth reasoning about, and a conditional rule would be one more thing
+     * for the next reader to get wrong.
+     */
+    fun setAutoInstalled(context: Context, value: Boolean) {
+        prefs(context).edit().putBoolean(KEY_AUTO_INSTALLED, value).commit()
+    }
 
     private const val KEY_AUTO_UPDATE_ATTEMPT = "auto_update_attempt"
 
@@ -63,8 +81,12 @@ object SettingsStore {
     fun autoUpdateAttempt(context: Context): String? =
         prefs(context).getString(KEY_AUTO_UPDATE_ATTEMPT, null)
 
-    fun setAutoUpdateAttempt(context: Context, value: String?) =
-        prefs(context).edit().putString(KEY_AUTO_UPDATE_ATTEMPT, value).apply()
+    /** `commit()` for the same reason as [setAutoInstalled] — it is written just before an
+     *  install that kills this process. Losing it only costs one repeated download rather than a
+     *  phone that has stopped blocking, but the write is on the same doomed path. */
+    fun setAutoUpdateAttempt(context: Context, value: String?) {
+        prefs(context).edit().putString(KEY_AUTO_UPDATE_ATTEMPT, value).commit()
+    }
 
     private const val KEY_KNOWN_PACKAGES = "known_launchable_packages"
 
