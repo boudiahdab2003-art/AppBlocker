@@ -37,14 +37,28 @@ object UpdatePause {
         if (current < 0L) return
         val last = SettingsStore.lastSeenVersionCode(context)
         if (last != current) {
-            if (last != -1L) {
+            // An update the owner did not ask for must not switch his blocking off and then wait
+            // for a tap he has no reason to know is needed. The pause exists so that a person who
+            // just installed something confirms it still works; nobody is standing there after a
+            // silent auto-install, so blocking would simply be off — silently, for however long
+            // until he next opened the app. If the update really did break the watcher,
+            // ProtectionWatchdog notices and says so, which is the mechanism built for exactly
+            // that. See SilentInstaller.
+            val automatic = SettingsStore.autoInstalled(context)
+            SettingsStore.setAutoInstalled(context, false)
+            // A version change is the only proof an install actually landed, so this is where the
+            // "already tried this one" note is torn up — whoever installed it. Leaving it would
+            // make the next release look like the one that was already declined.
+            SettingsStore.setAutoUpdateAttempt(context, null)
+            if (last != -1L && !automatic) {
                 // Durable intent, written BEFORE anything is attempted: prefs writes survive a
                 // broadcast receiver's process teardown, the coroutine below may not.
                 SettingsStore.setUpdatePausePending(context, true)
-                // A version change means the downloaded APK has served its purpose. It is tens of
-                // megabytes and was previously kept until the next update overwrote it.
-                Updater.discardDownload(context)
             }
+            // Outside the branch above, and outside the `last != -1L` check with it: a version
+            // change means the downloaded APK has served its purpose whoever installed it. It is
+            // tens of megabytes, and an auto-install leaves one behind on every single release.
+            if (last != -1L) Updater.discardDownload(context)
             // Recorded LAST, deliberately. Recording it first meant that a process killed between
             // the two writes — a real risk here, since this also runs from a broadcast receiver —
             // left the version already updated and the pause never armed, with no second chance:

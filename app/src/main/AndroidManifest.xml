@@ -40,6 +40,10 @@
     <!-- Lets us alert the user if the blocking service gets silently disabled. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Lets the app replace ITSELF with a newer version without the installer screen (API 31+).
+         Only ever granted for a self-update by the app that installed the previous version, and
+         only with a matching signature — see SilentInstaller. -->
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
 
     <application
         android:allowBackup="false"
@@ -171,6 +175,12 @@
                 <data android:scheme="package" />
             </intent-filter>
         </receiver>
+
+        <!-- Hears the outcome of a silent self-update. Not exported: the only sender is the
+             system, answering a PendingIntent we handed it ourselves. -->
+        <receiver
+            android:name=".service.InstallResultReceiver"
+            android:exported="false" />
 
         <!-- Re-arms the protection watchdog after a reboot, and arms the after-update
              blocking pause the moment the app is updated. -->
