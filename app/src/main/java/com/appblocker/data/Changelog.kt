@@ -15,7 +15,7 @@ data class VersionLog(
 val changelog: List<VersionLog> = listOf(
     VersionLog("1.112", "Jul 29, 2026", "Updating the app is not an escape attempt", listOf(
         "**The guard was blocking your own updates.** You reported it, and you were right: the app downloads the update, hands it to Android's installer, and the guard threw you straight back to the home screen.",
-        "The reason is the same trap as the device-admin screen in 1.107. The guard watches Android's installer for the \"do you want to uninstall AppBlocker?\" screen — and the screen for *installing an update* is the same installer showing the same app name. Reading the words can't separate them: they're translated, and in English "uninstall" literally contains "install".",
+        "The reason is the same trap as the device-admin screen in 1.107. The guard watches Android's installer for the \"do you want to uninstall AppBlocker?\" screen — and the screen for *installing an update* is the same installer showing the same app name. Reading the words can't separate them: they're translated, and in English \"uninstall\" literally contains \"install\".",
         "So the app no longer tries to read it. When the updater opens the installer, it knows it opened it and stands aside for a few minutes — the same trick that fixed the device-admin screen, and it works in any language. There's a second safety net too: Android's internal screen names aren't translated, so an install screen is recognised as an install even when you side-load the file yourself.",
         "This one was worse than an inconvenience: a guard that blocks its own updates blocks the update that fixes it. If you're stuck on an older version, see the note below on getting past it once.",
     )),
