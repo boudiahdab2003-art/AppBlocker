@@ -152,34 +152,35 @@ fun rememberPermissions(): List<Perm> {
                 "deviceadmin", "Prevent uninstall (Device admin)",
                 "Stops AppBlocker being uninstalled until you turn this off — extra friction against bypassing your blocks.",
                 isDeviceAdminActive(ctx), essential = false,
-                // On only. Turning it OFF from this row goes through the same typed gate as
-                // Profile's — see rememberGatedFix, which is what every checklist tap passes
-                // through. A second, cheaper door here would make the gate on the first one
-                // decorative.
+                // On only, and that is all this screen can do: the Grant button is drawn under
+                // `if (!perm.granted)`. It used to call a toggle, which would have turned the
+                // protection OFF with one tap had the button ever been shown while it was on.
+                // Naming the direction removes that entirely. Turning it off lives in Profile,
+                // behind the typed gate.
             ) { enableDeviceAdmin(ctx) },
         ).filter { Dist.LOCATION_SCHEDULES || it.key != "location" }
     }
 }
 
 /**
- * Everything that has to stand between a checklist tap and the thing it does.
+ * Google Play's AccessibilityService policy requires a prominent disclosure and explicit consent
+ * BEFORE sending the user to accessibility settings. Returns a click handler that shows the
+ * consent dialog first for the (ungranted) accessibility perm and passes straight through for
+ * everything else — so every Grant call site gets the gate by using this.
  *
- * Two cases, both of which must not be bypassable by tapping the row somewhere else:
- *  - **Accessibility, not yet granted** — Google Play's AccessibilityService policy requires a
- *    prominent disclosure and explicit consent BEFORE sending the user to accessibility settings.
- *  - **Prevent uninstall, currently on** — turning it off removes the only protection that
- *    actually refuses an uninstall, so it costs a typed paragraph. Same gate as Profile's row;
- *    this row was the second door to the same switch.
- *
- * Everything else passes straight through, so every Grant call site gets both gates by using this.
+ * **It deliberately does not gate "Prevent uninstall".** It looked like a second door to that
+ * switch and briefly grew a copy of the gate for it; both call sites
+ * ([PermissionsScreen]'s `PermCard`, [OnboardingScreen]'s `EssentialStep`) render the Grant button
+ * only under `if (!perm.granted)`, so this screen can turn device admin **on** and has no way to
+ * turn it off. The copy was unreachable, and a full-screen [FrictionGate] emitted from inside a
+ * card in a scrolling column would not have drawn correctly if it ever had been. Profile's row is
+ * the one door, and it is gated there.
  */
 @Composable
 fun rememberGatedFix(perm: Perm): () -> Unit {
-    val ctx = LocalContext.current
-    // Both states are declared unconditionally: a `return` before a `remember` would change the
-    // number of slots in the composition when `granted` flips, which is exactly what these rows do.
+    // Declared unconditionally: a `return` before a `remember` would change the number of slots in
+    // the composition when `granted` flips, which is exactly what these rows do.
     var showConsent by remember { mutableStateOf(false) }
-    var showAdminGate by remember { mutableStateOf(false) }
     if (showConsent) {
         AlertDialog(
             onDismissRequest = { showConsent = false },
@@ -204,25 +205,21 @@ fun rememberGatedFix(perm: Perm): () -> Unit {
             dismissButton = { TextButton(onClick = { showConsent = false }) { Text("Cancel") } },
         )
     }
-    if (showAdminGate) {
-        PreventUninstallGate(
-            onDismiss = { showAdminGate = false },
-            onConfirm = { showAdminGate = false; disableDeviceAdmin(ctx) },
-        )
-    }
-    return when {
-        perm.key == "accessibility" && !perm.granted -> ({ showConsent = true })
-        perm.key == "deviceadmin" && perm.granted -> ({ showAdminGate = true })
-        else -> perm.onFix
+    return if (perm.key == "accessibility" && !perm.granted) {
+        { showConsent = true }
+    } else {
+        perm.onFix
     }
 }
 
 /**
  * The typed-paragraph gate in front of turning **Prevent uninstall** off.
  *
- * One composable rather than one per screen, for the reason [FrictionGate] itself gives: the
- * friction *is* the feature, and a second copy is a second thing to keep honest. Both doors to
- * this switch — Profile and the Setup checklist — render this.
+ * Lives here, next to the device-admin calls it guards, rather than in the one screen that shows
+ * it — so if a second way to switch this off is ever added, the gate is already written and there
+ * is no excuse for a cheaper copy. That is also why [disableDeviceAdmin] is named rather than
+ * being one half of a toggle: the dangerous direction should be greppable, and today it has
+ * exactly one caller.
  *
  * Unlike the off-switch guard's gate, confirming here acts immediately rather than starting an
  * hours-long wait. Deliberate: device admin has no emergency escape of its own, and "you cannot

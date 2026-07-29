@@ -78,7 +78,9 @@ fun FrictionGate(
     val phrase = remember(attempt) { TypedChallenge.newPhrase() }
     var input by remember(attempt) { mutableStateOf("") }
     var remaining by remember(attempt) { mutableStateOf(TypedChallenge.ATTEMPT_SECONDS) }
-    var blockedPaste by remember { mutableStateOf(false) }
+    // Keyed to the attempt like everything else: a warning left over from the last paragraph,
+    // sitting under an empty field, reads as a bug in the new one.
+    var blockedPaste by remember(attempt) { mutableStateOf(false) }
     val matched = TypedChallenge.matches(phrase, input)
     // Latches on the first match and stops the clock. Without it, finishing at 0:01 and reaching
     // for the button would lose the attempt — which does not read as strictness, it reads as the

@@ -682,6 +682,22 @@ answer is not data):
    this is happening on the owner's phone — it is fixed because it is the first fact I would reason
    from in a report, and a lying diagnostic is the theme this release already had to fix twice.
 
+**Third pass — auditing the same day's own changes**, which is where the sixth finding was:
+
+6. **A gate written for a door that does not exist.** Adding the typed gate to Prevent uninstall, I
+   gated the Setup-checklist row too, on the reasoning that it was "a second, free door". It is
+   not: both call sites (`PermissionsScreen.PermCard`, `OnboardingScreen.EssentialStep`) draw the
+   Grant button under `if (!perm.granted)`, so that screen can only switch device admin **on**. The
+   branch was unreachable — and had it ever been reached, a full-screen `FrictionGate` emitted from
+   inside a card in a scrolling column would not have drawn as a screen at all. Removed, with the
+   reason written where the next person will look. The real improvement from that change survives:
+   `toggleDeviceAdmin` is split into `enableDeviceAdmin`/`disableDeviceAdmin`, so the checklist can
+   no longer turn the protection **off** by passing a state it never checked.
+
+   The lesson is about the audit, not the feature: *a claim about a second call site is a claim to
+   verify, not to assume from a grep hit.* The grep found `toggleDeviceAdmin` in two files; only
+   reading the surrounding `if` showed what the second one could actually do.
+
 **A known limit, deliberately not fixed:** daily limits and daily open counts are *calendar-day*
 facts (`todayStamp()`, `startOfToday()`), so winding the device clock back a day resets both. Every
 *duration* in the app is clock-proofed through `GuardedDeadline`/`SessionClock`, but "today" cannot
