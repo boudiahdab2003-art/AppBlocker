@@ -13,6 +13,11 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.116", "Jul 29, 2026", "No more empty half-screen on the typing page", listOf(
+        "**\"Keep it on\" is gone.** It was a third way of doing what the back arrow at the top and your phone's back gesture already do, and it sat right in the middle of the empty space you pointed at.",
+        "**And the paragraph now grows into that space instead of leaving it blank.** Yesterday it had one fixed size, which was safe but meant the page just ended early with a third of the screen doing nothing. It now works out how much room there actually is and takes it — bigger with the keyboard down, smaller with it up, and never below a floor it can't go under whatever your font size is.",
+        "That floor is the important part, and it's the difference from the version that kept breaking. Before, the paragraph was told to take \"whatever's left over\", which can be nothing. Now it's measured from the space that actually exists, and a bad guess costs you a bit of scrolling instead of the paragraph."
+    )),
     VersionLog("1.115", "Jul 29, 2026", "The paragraph stays put when the keyboard opens", listOf(
         "**You opened the keyboard and the paragraph vanished completely** — and \"Keep it on\" was cut in half at the bottom. Third time this screen has broken on me, and this time the actual cause is fixed rather than worked around.",
         "The paragraph was the only thing on that screen without a size of its own — it was told to take whatever space was left over. So every time something else needed room, it came out of the paragraph. Yesterday it was the explanation; today it was the keyboard taking half the screen. Twice I made other things smaller, which helped until the next thing came along.",

@@ -540,7 +540,6 @@ fun ProfileScreen(
                 "${OffSwitchGuard.DELAY_LABEL}; after that you have " +
                 "${OffSwitchGuard.WINDOW_LABEL} to turn it off.",
             confirmLabel = "Start the ${OffSwitchGuard.DELAY_LABEL} wait",
-            dismissLabel = "Keep it on",
             onDismiss = { showGuardGate = false },
             onConfirm = {
                 // Passing the gate does NOT lower the guard — it starts the wait. The guard keeps

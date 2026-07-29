@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -63,14 +64,15 @@ import kotlinx.coroutines.delay
  * copied out at leisure. Now it is a deadline. The rules themselves live in
  * [com.appblocker.data.TypedChallenge], where they can be tested; this file is the screen.
  *
- * **The screen is laid out around the typing, because the first version was not.** It led with six
- * sentences of explanation, which at a large system font filled the display entirely — the
- * paragraph to be transcribed was not on screen at all, and the card holding it was sliced through
- * mid-word by the controls pinned below. So: the clock is a draining bar under the title, the
- * explanation is one line with the consequences behind a tap, and the paragraph gets the room left
- * over and scrolls *inside its own card* so its bottom edge is always a rounded edge rather than a
- * cut. Everything that decides whether the gate opens is untouched; this is a redraw, not a
- * loosening.
+ * **The screen is laid out around the typing, because three earlier versions were not.** Each led
+ * with content that had a fixed height while the paragraph — the one thing the screen exists for —
+ * had `weight(1f)`, which is not a size but *whatever is left over*. So the explanation ate it, and
+ * then the keyboard ate what was left, and the paragraph rendered as one clipped line and then as
+ * nothing at all. The rule the file now follows, and the reason for every layout choice in it:
+ * **the element a screen exists for must never be the flexible one.** The clock and title are
+ * pinned, everything else scrolls, and the paragraph's height is computed from the measured
+ * viewport with a floor it can never go below. Everything that decides whether the gate opens is
+ * untouched by all of this; it has only ever been a redraw, never a loosening.
  *
  * Shared rather than copied. Three protections now stand behind this gate — the adult word pack
  * ([KeywordsScreen]), the off-switch guard ([ProfileScreen]) and the uninstall block
@@ -98,7 +100,6 @@ fun FrictionGate(
     /** Label for the confirm button once the paragraph is typed — name the *wait* that follows
      *  where there is one, not the switch, because confirming only starts that wait. */
     confirmLabel: String,
-    dismissLabel: String,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
 ) {
@@ -169,107 +170,127 @@ fun FrictionGate(
         // whatever the keyboard does, and the text field brings itself into view on focus.
         // (The top bar and the clock stay pinned above — a countdown you have to scroll to find
         // is not a countdown.)
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-            // Says what just happened, rather than leaving a silently different paragraph and a
-            // cleared field to be worked out. Counted, so a run of near-misses is visible.
-            if (attempt > 0 && !solved && input.isEmpty()) {
-                Text(
-                    "Time ran out — attempt ${attempt + 1}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                )
-            }
-
-            PhraseCard(
-                phrase = phrase,
-                progress = progress,
-                // A stated height, not leftovers — the whole point of this rewrite. Inside a
-                // scroll container it is a guarantee rather than a risk, because anything that
-                // doesn't fit scrolls instead of being taken out of here. 240dp is chosen so
-                // that the panel *and* the typing box both fit above the keyboard on the owner's
-                // phone: roughly seven lines at his font scale, five at a much larger one.
-                //
-                // The cost is some empty space below the buttons when the keyboard is closed.
-                // That is the deal — the alternative is a height that depends on what is left
-                // over, which is exactly what made the paragraph disappear three times.
-                modifier = Modifier.height(240.dp)
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-            )
-
-            // A no-op text toolbar removes the cut/copy/paste popup entirely, so the paragraph
-            // must be hand-typed. That alone is not enough: a keyboard's own clipboard (Gboard's
-            // clipboard chip) commits text through the IME without ever opening that popup, so
-            // the size of each edit is checked as well — see TypedChallenge.isPaste.
-            CompositionLocalProvider(LocalTextToolbar provides NoPasteToolbar) {
-                OutlinedTextField(
-                    value = input,
-                    onValueChange = { new ->
-                        if (TypedChallenge.isPaste(input, new)) blockedPaste = true
-                        else { input = new; blockedPaste = false }
-                    },
-                    placeholder = { Text("Type the paragraph above") },
-                    // `singleLine`, not `minLines = 1` — and the difference is the whole bug.
-                    // A minLines field *starts* at one line and grows as it fills, so by the
-                    // fortieth word it would be ten lines tall and the paragraph would be back
-                    // to a sliver. singleLine pins the height and scrolls sideways instead.
-                    // Nothing is lost: newlines were never needed (matches() collapses
-                    // whitespace), and the paragraph above is where progress is read now, so the
-                    // field no longer has to be where he checks his own work.
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(
-                        autoCorrect = false,
-                        capitalization = KeyboardCapitalization.None,
-                    ),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                )
-            }
-            // Reserved height, so a line appearing and disappearing doesn't shove the buttons
-            // under the typist's thumb mid-word.
-            Box(
-                Modifier.fillMaxWidth().heightIn(min = 28.dp)
-                    .padding(start = 16.dp, end = 16.dp, top = 6.dp),
+        //
+        // `heightIn(min = maxHeight)` + centre arrangement is what stops the page ending in a
+        // void: the content is at least as tall as the viewport, so a short page sits centred
+        // instead of clinging to the top with a third of the screen empty beneath it, and a tall
+        // one (keyboard up) simply grows past it and scrolls as before. One expression covering
+        // both states, rather than a height guessed for one of them.
+        BoxWithConstraints(Modifier.weight(1f)) {
+            // Captured, not read where it is used: Compose's layout scopes carry a @DslMarker, so
+            // `maxHeight` cannot be reached by implicit receiver from inside the Column's content
+            // lambda below. A local is clearer than an explicit qualifier anyway — it names the
+            // thing every height on this screen is derived from.
+            val viewport = maxHeight
+            Column(
+                Modifier.verticalScroll(rememberScrollState())
+                    .heightIn(min = viewport)
+                    .fillMaxWidth(),
+                verticalArrangement = Arrangement.Center,
             ) {
-                when {
-                    blockedPaste -> Text(
-                        "Pasting is off — this one has to be typed.",
+                // Says what just happened, rather than leaving a silently different paragraph and a
+                // cleared field to be worked out. Counted, so a run of near-misses is visible.
+                if (attempt > 0 && !solved && input.isEmpty()) {
+                    Text(
+                        "Time ran out — attempt ${attempt + 1}",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.error,
-                    )
-                    solved -> Text(
-                        "Typed ✓ — the clock has stopped.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    // Naming the word is the whole gain: "doesn't match yet" left him hunting
-                    // through forty words for one letter. Past the end there is no word to name,
-                    // so say what is actually true instead of pointing at word 41.
-                    progress.wrong -> Text(
-                        if (progress.correct >= TypedChallenge.WORDS)
-                            "That's more than the paragraph — delete the extra words."
-                        else "Word ${progress.correct + 1} doesn't match — fix it to carry on.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                     )
                 }
+
+                PhraseCard(
+                    phrase = phrase,
+                    progress = progress,
+                    // **A stated height, computed from the space that exists — never leftovers.**
+                    //
+                    // The difference from `weight(1f)`, which broke this screen three times, is
+                    // the clamp. A weight is whatever remains after everything else has taken its
+                    // share, so it can reach zero; this starts from the *measured* viewport
+                    // (BoxWithConstraints, not a guess) and can never leave less than 200dp
+                    // however wrong the 220dp allowance for the box and button turns out to be at
+                    // some font scale. A bad estimate costs a little scrolling; it cannot cost
+                    // the paragraph.
+                    //
+                    // Growing into the space is also what removes the dead area under the button
+                    // when the keyboard is down: the paragraph uses the room rather than the page
+                    // ending early. The ceiling stops it swallowing a tall screen whole.
+                    modifier = Modifier.height((viewport - 220.dp).coerceIn(200.dp, 420.dp))
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                )
+
+                // A no-op text toolbar removes the cut/copy/paste popup entirely, so the paragraph
+                // must be hand-typed. That alone is not enough: a keyboard's own clipboard (Gboard's
+                // clipboard chip) commits text through the IME without ever opening that popup, so
+                // the size of each edit is checked as well — see TypedChallenge.isPaste.
+                CompositionLocalProvider(LocalTextToolbar provides NoPasteToolbar) {
+                    OutlinedTextField(
+                        value = input,
+                        onValueChange = { new ->
+                            if (TypedChallenge.isPaste(input, new)) blockedPaste = true
+                            else { input = new; blockedPaste = false }
+                        },
+                        placeholder = { Text("Type the paragraph above") },
+                        // `singleLine`, not `minLines = 1` — and the difference is the whole bug.
+                        // A minLines field *starts* at one line and grows as it fills, so by the
+                        // fortieth word it would be ten lines tall and the paragraph would be back
+                        // to a sliver. singleLine pins the height and scrolls sideways instead.
+                        // Nothing is lost: newlines were never needed (matches() collapses
+                        // whitespace), and the paragraph above is where progress is read now, so the
+                        // field no longer has to be where he checks his own work.
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            autoCorrect = false,
+                            capitalization = KeyboardCapitalization.None,
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    )
+                }
+                // Reserved height, so a line appearing and disappearing doesn't shove the buttons
+                // under the typist's thumb mid-word.
+                Box(
+                    Modifier.fillMaxWidth().heightIn(min = 28.dp)
+                        .padding(start = 16.dp, end = 16.dp, top = 6.dp),
+                ) {
+                    when {
+                        blockedPaste -> Text(
+                            "Pasting is off — this one has to be typed.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        solved -> Text(
+                            "Typed ✓ — the clock has stopped.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        // Naming the word is the whole gain: "doesn't match yet" left him hunting
+                        // through forty words for one letter. Past the end there is no word to name,
+                        // so say what is actually true instead of pointing at word 41.
+                        progress.wrong -> Text(
+                            if (progress.correct >= TypedChallenge.WORDS)
+                                "That's more than the paragraph — delete the extra words."
+                            else "Word ${progress.correct + 1} doesn't match — fix it to carry on.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+                GradientButton(
+                    text = confirmLabel,
+                    enabled = solved,
+                    onClick = onConfirm,
+                    // Faded until it works. Disabled, the shared button is a solid grey pill that
+                    // looks exactly like a live one — so the screen offered a button that did nothing
+                    // when pressed, which reads as broken rather than as locked.
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                        .padding(top = 4.dp, bottom = 16.dp)
+                        .alpha(if (solved) 1f else 0.45f),
+                )
+                // No "keep it on" button. It was a third way to do what the back arrow and the system
+                // back gesture already do, and it sat in the middle of the empty space it helped
+                // create. Leaving is not the thing this screen needs to make deliberate.
             }
-            GradientButton(
-                text = confirmLabel,
-                enabled = solved,
-                onClick = onConfirm,
-                // Faded until it works. Disabled, the shared button is a solid grey pill that
-                // looks exactly like a live one — so the screen offered a button that did nothing
-                // when pressed, which reads as broken rather than as locked.
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp)
-                    .alpha(if (solved) 1f else 0.45f),
-            )
-            TextButton(
-                onClick = onDismiss,
-                modifier = Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .padding(top = 4.dp, bottom = 16.dp),
-            ) { Text(dismissLabel) }
         }
     }
 

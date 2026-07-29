@@ -257,7 +257,6 @@ fun KeywordsScreen(
                     "many times as it takes. Even once you've typed it, the pack stays on for " +
                     "another 24 hours; only after that can you flip the switch off.",
                 confirmLabel = "Start the 24-hour wait",
-                dismissLabel = "Keep it on",
                 onDismiss = { showDisableGate = false },
                 onConfirm = {
                     // Passing the gate does NOT turn the pack off — it starts the 24-hour
