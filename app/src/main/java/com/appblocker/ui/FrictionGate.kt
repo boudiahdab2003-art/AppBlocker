@@ -177,9 +177,14 @@ fun FrictionGate(
         // one (keyboard up) simply grows past it and scrolls as before. One expression covering
         // both states, rather than a height guessed for one of them.
         BoxWithConstraints(Modifier.weight(1f)) {
+            // Captured, not read where it is used: Compose's layout scopes carry a @DslMarker, so
+            // `maxHeight` cannot be reached by implicit receiver from inside the Column's content
+            // lambda below. A local is clearer than an explicit qualifier anyway — it names the
+            // thing every height on this screen is derived from.
+            val viewport = maxHeight
             Column(
                 Modifier.verticalScroll(rememberScrollState())
-                    .heightIn(min = maxHeight)
+                    .heightIn(min = viewport)
                     .fillMaxWidth(),
                 verticalArrangement = Arrangement.Center,
             ) {
@@ -210,7 +215,7 @@ fun FrictionGate(
                     // Growing into the space is also what removes the dead area under the button
                     // when the keyboard is down: the paragraph uses the room rather than the page
                     // ending early. The ceiling stops it swallowing a tall screen whole.
-                    modifier = Modifier.height((maxHeight - 220.dp).coerceIn(200.dp, 420.dp))
+                    modifier = Modifier.height((viewport - 220.dp).coerceIn(200.dp, 420.dp))
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                 )
 
