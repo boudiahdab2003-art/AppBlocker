@@ -17,6 +17,7 @@ object ServiceHealth {
     private const val KEY_LAST_EVENT = "health_last_event_at"
     private const val KEY_LAST_ERROR_AT = "health_last_error_at"
     private const val KEY_LAST_ERROR = "health_last_error"
+    private const val KEY_LAST_ERROR_WHERE = "health_last_error_where"
     private const val KEY_ERROR_COUNT = "health_error_count"
 
     /** Don't touch disk on every accessibility event — one write a minute is plenty. */
@@ -56,9 +57,18 @@ object ServiceHealth {
         p.edit()
             .putLong(KEY_LAST_ERROR_AT, System.currentTimeMillis())
             .putString(KEY_LAST_ERROR, "$where: ${t.javaClass.simpleName}: ${t.message}")
+            // The tag on its own, so a bug report can say *where* the last error was without the
+            // string above it. That one includes `t.message`, which is where a failing value gets
+            // quoted back — and in this app that value is a blocked word. The full line is for the
+            // Profile screen, on the device; only this half may ever leave it. See BugReport.
+            .putString(KEY_LAST_ERROR_WHERE, where)
             .putInt(KEY_ERROR_COUNT, p.getInt(KEY_ERROR_COUNT, 0) + 1)
             .apply()
     }
+
+    /** The `where` tag of the most recent swallowed error — a literal from our own code. */
+    fun lastErrorWhere(context: Context): String? =
+        prefs(context).getString(KEY_LAST_ERROR_WHERE, null)
 
     fun errorCount(context: Context): Int = prefs(context).getInt(KEY_ERROR_COUNT, 0)
 

@@ -2,6 +2,7 @@ package com.appblocker.service
 
 import android.content.Context
 import android.os.Build
+import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
 import com.appblocker.BuildConfig
@@ -12,8 +13,10 @@ import com.appblocker.data.BlockLayouts
 import com.appblocker.data.BlockLog
 import com.appblocker.data.BlockThemes
 import com.appblocker.data.BugReportQueue
+import com.appblocker.data.ServiceHealth
 import com.appblocker.data.SettingsStore
 import com.appblocker.ui.hasUsageAccess
+import com.appblocker.ui.isIgnoringBattery
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -91,6 +94,28 @@ object BugReportSender {
         field("scanEverywhere") { SettingsStore.keywordsEverywhere(ctx).toString() }
         field("overlayPermission") { Settings.canDrawOverlays(ctx).toString() }
         field("usageAccess") { hasUsageAccess(ctx).toString() }
+        field("batteryFree") { isIgnoringBattery(ctx).toString() }
+        field("quickPaused") { SettingsStore.quickBlockPaused(ctx).toString() }
+        field("allowlist") { SettingsStore.quickBlockAllowlist(ctx).toString() }
+        // "Switched on" and "still working" are different facts, and this is the number that
+        // separates them: how long since the watcher last saw ANY event. A report saying blocking
+        // didn't happen, next to "lastEventMin 240", answers itself.
+        field("lastEventMin") {
+            val at = ServiceHealth.lastEventAt(ctx)
+            if (at <= 0L) "never" else ((System.currentTimeMillis() - at) / 60_000L).toString()
+        }
+        field("healthErrors") { ServiceHealth.errorCount(ctx).toString() }
+        // The tag only. ServiceHealth's full line contains the exception message, which is where
+        // a blocked word gets quoted back — see BugReport's contract.
+        ServiceHealth.lastErrorWhere(ctx)?.let { w -> field("lastErrorWhere") { w } }
+        // Separates "the service never came back after a reboot" from "it died an hour ago",
+        // which look identical in every other field.
+        field("uptimeMin") { (SystemClock.elapsedRealtime() / 60_000L).toString() }
+        // The phone's own clock. Half of any schedule question is "what time was it there?", and
+        // the issue's timestamp is when the report was SENT — hours later, for a queued one.
+        field("localTime") {
+            java.text.SimpleDateFormat("HH:mm", java.util.Locale.US).format(java.util.Date())
+        }
         // Only when the coach has actually failed — absent means it has never failed on this
         // install, which is different from "we didn't look".
         AiCoach.lastError(ctx)?.let { (error, _) -> field("coachError") { error.name } }

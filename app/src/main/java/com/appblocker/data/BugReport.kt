@@ -79,20 +79,31 @@ data class BugReport(
         else -> "$where|$errorClass|${frames.firstOrNull().orEmpty()}"
     }
 
-    /** The issue title. Short, and safe by construction — no field here can hold user text. */
+    /**
+     * The issue title, carrying the version — the first question about any report is "which build
+     * is this?", and an issue list where every row starts "Report:" is a list you have to open
+     * one by one to read.
+     */
     fun title(): String = when {
-        note != null -> "Report: " + note.lineSequence().first().take(60).trim()
-        else -> "$errorClass in $where"
+        note != null -> "[$appVersion] " + note.lineSequence().first().take(60).trim()
+        else -> "[$appVersion] $errorClass in $where"
     }
 
-    /** The issue body, in GitHub markdown. */
+    /**
+     * The issue body, in GitHub markdown.
+     *
+     * Written to be read top-down and answer the obvious follow-ups without a reply: what he said,
+     * what state the app was in, what it covered recently, and where in the code it happened. The
+     * sections are always present — an absent section and an empty one look identical in an issue
+     * and mean opposite things, which has already cost one round trip.
+     */
     fun body(): String = buildString {
         if (note != null) {
-            appendLine("**What happened, in the owner's words:**")
-            appendLine()
-            appendLine(note)
+            appendLine("> $note".replace("\n", "\n> "))
             appendLine()
         }
+        appendLine("### State")
+        appendLine()
         appendLine("| | |")
         appendLine("|---|---|")
         appendLine("| Where | `$where` |")
@@ -100,13 +111,14 @@ data class BugReport(
         appendLine("| Version | $appVersion ($flavor) |")
         appendLine("| Android | SDK $androidSdk |")
         appendLine("| Device | $device |")
+        // Sorted, so the same fact is always on the same line across two reports and they can be
+        // read side by side.
         context.toSortedMap().forEach { (k, v) -> appendLine("| $k | $v |") }
-        // Always printed, even when empty. A missing section and an empty one look identical in
-        // a GitHub issue and mean opposite things — "nothing happened" versus "the log is
-        // broken" — and the first real report arrived bare, which cost a round trip to work out.
         appendLine()
-        appendLine("**Recent blocks** (newest first — `ownUi=true` or `rootOk=false` means a")
-        appendLine("cover landed somewhere it should not have):")
+        appendLine("### Recent blocks")
+        appendLine()
+        appendLine("Newest first. `ownUi=true` or `rootOk=false` means a cover landed somewhere it")
+        appendLine("should not have — that pair is what identifies the flashing.")
         appendLine()
         appendLine("```")
         if (recentBlocks.isEmpty()) {
@@ -116,12 +128,19 @@ data class BugReport(
             recentBlocks.forEach { appendLine(it) }
         }
         appendLine("```")
-        if (frames.isNotEmpty()) {
-            appendLine()
-            appendLine("```")
+        appendLine()
+        appendLine("### Where in the code")
+        appendLine()
+        appendLine("```")
+        if (frames.isEmpty()) {
+            appendLine(
+                if (errorClass == null) "(nothing — the owner sent this himself, it isn't a crash)"
+                else "(no frames from our own package — the throw came from framework code)",
+            )
+        } else {
             frames.forEach { appendLine(it) }
-            appendLine("```")
         }
+        appendLine("```")
     }
 
     /** The GitHub "create an issue" payload. */
@@ -172,6 +191,30 @@ data class BugReport(
             // A category, like `protection`, never a message: Gemini's error bodies quote the
             // request back, and this app's requests carry usage figures and the conversation.
             "coachError",
+            // --- Is the watcher alive, and what has it been through? ---
+            // Minutes since the watcher last saw ANY accessibility event. The single most telling
+            // number in a report about blocking not happening: "switched on" and "still working"
+            // are different facts, and this is the one that separates them.
+            "lastEventMin",
+            // How many errors the watcher swallowed and kept going, and the `where` tag of the
+            // most recent — a literal chosen by our own code ("webScan", "watchdog"), never text
+            // from the failure itself. ServiceHealth's stored string includes the exception's
+            // message and must NEVER be reported; only the tag travels.
+            "healthErrors",
+            "lastErrorWhere",
+            // Minutes since the phone booted. Separates "the service never started after a
+            // reboot" from "it died an hour ago", which look identical in every other field.
+            "uptimeMin",
+            // The phone's own clock, HH:mm. Half the schedule questions are really "what time was
+            // it there?", and the issue's own timestamp is when the report was SENT — which for a
+            // queued report can be hours later.
+            "localTime",
+            // Whether the phone is exempt from battery optimisation. The app asks for this
+            // explicitly because OEM battery managers are the usual cause of a dead watcher.
+            "batteryFree",
+            // Enforcement state at the moment of the report.
+            "quickPaused",
+            "allowlist",
         )
 
         /** Values are short by nature (an id, a boolean, a count); anything long is a sign
