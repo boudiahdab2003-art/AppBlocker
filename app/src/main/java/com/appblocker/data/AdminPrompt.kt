@@ -13,7 +13,7 @@ import android.os.SystemClock
  *
  * Word-matching cannot fix this reliably: "deactivate" contains "activate", the wording differs by
  * OEM, and it is translated. But we know something the screen text cannot tell us — **we opened
- * it**. [toggleDeviceAdmin] stamps this immediately before starting the intent, so the guard can
+ * it**. `enableDeviceAdmin` stamps this immediately before starting the intent, so the guard can
  * stand down for the moment that follows, in any language, on any build.
  *
  * Monotonic, per the rule this app has had to relearn three times (see `stopwatchNow` and
@@ -49,4 +49,44 @@ object AdminPrompt {
     fun clear() {
         requestedAtRt = 0L
     }
+}
+
+/**
+ * Recognising the device-admin screen by its wording, for the builds where its *name* says nothing.
+ *
+ * The watcher's fast path is the activity's class name (`deviceadmin`), which works on AOSP. On
+ * MIUI the same screen arrives as a generic `SubSettings`, and until now the only thing catching
+ * it there was Strict Mode's broad rule — "any Settings page that mentions us next to a marker
+ * word". That rule bounced the whole Accessibility section and every app's App-info page as
+ * collateral, so it has been deleted; this is what replaces it for the one screen that needed it.
+ *
+ * **The list is deliberately short.** Its predecessor also held `accessibilit`, `uninstall` and
+ * `force stop` — and those are exactly the words that made it over-block: the Accessibility list
+ * names every service (so it mentions us) *and* says "accessibility"; an App-info page says
+ * "uninstall" and "force stop" about whichever app you opened. Device-admin wording appears on the
+ * device-admin screens and essentially nowhere else in Settings, which is why it can be trusted
+ * where the others could not. Anything added here must clear that same bar.
+ *
+ * Lives outside the watcher so it can be tested: the watcher has no test coverage and cannot have
+ * any as written, and this list is precisely the kind of thing that silently stops matching.
+ */
+object AdminScreens {
+
+    /**
+     * Lowercased, and Arabic already folded the way `WebContentFilter.normalizeArabic` folds it —
+     * the caller passes text through that first, so alef/hamza spellings and diacritics match.
+     *
+     * Arabic sits alongside English because this match fails **silently**: nothing errors, the page
+     * simply isn't recognised and the guard doesn't bounce. On a phone whose Settings are not in
+     * English the whole fallback would be dead, and under-blocking is invisible to the owner (see
+     * docs/BLOCKING_INVARIANTS.md).
+     */
+    val MARKERS = listOf(
+        "device admin", "device administrator", "deactivate",
+        // مسؤول الجهاز (device admin) — two spellings of the hamza — and تعطيل (deactivate).
+        "مسئول الجهاز", "مسءول الجهاز", "تعطيل",
+    )
+
+    /** Whether [text] (already lowercased and Arabic-folded) reads like a device-admin screen. */
+    fun looksLikeAdminScreen(text: String): Boolean = MARKERS.any { text.contains(it) }
 }

@@ -595,12 +595,24 @@ Two things worth carrying forward:
 
 ### Not yet swept
 
-- the UI's own live state: `resumeTick` re-reads, and the several screens that cache
-  service/prefs state in `remember` blocks. Sweeps four and five touched only the adult-pack gate;
-  the pattern (a `remember` holding a decision that time or the service can invalidate) is
-  everywhere and is worth a sweep of its own. **Best remaining candidate.**
-- `UsageTracker` beyond `addInterval`: the caching layers (`usedTodayCache`, the per-day
-  memoisation) and `sessionStatsToday`'s interval merging.
+- The rest of `BlockOverlay`. Sweep thirteen checked that `remove()` clears `counterKey` and
+  `isAppBlock`, and noted that `show()` sets both *before* the `addView` that can throw — so a
+  failed show leaves them set with nothing on screen. No reader is harmed today (the one place that
+  reads `isAppBlock` without `isShowing` is the guard's safety net, and the guard's own `show()`
+  resets the flag on the way in), so it was left alone rather than churned before a release. It is
+  still two sources of truth with a window between them. **Best remaining candidate.**
+- The Insights-side of `UsageTracker`'s bucket queries. `queryUsageStats(INTERVAL_DAILY, …)` returns
+  whole daily buckets that merely *overlap* the range rather than clipping to it, so every
+  range-based figure can be off by part of a day at the edges. `totalMinutesInRange` already says so
+  in its KDoc; the charts do not. Cosmetic, and it needs a device to judge.
+- The rest of the UI's live state. Sweep thirteen took the `remember`-blocks pass and found the
+  one that mattered (`KeywordsScreen`'s phase), but only audited the blocks that gate a
+  *protection*. `BlockEditorScreen` and `BlockingScreen` cache a dozen settings each and were read
+  quickly rather than reasoned through; both refresh on `LaunchedEffect(perms)`, which is a
+  resume-tick in disguise, so they looked sound.
+- Every `remember` that survives backgrounding. Finding 3 turned on recomposition *stopping* while
+  the app is in the background, which makes a `LaunchedEffect` ticker an unreliable cleaner. Any
+  other place that leans on a ticker to correct stale state has the same hole.
 
 ### Swallowed errors now leave the device (v1.103)
 
@@ -618,6 +630,163 @@ Three things a future sweep should check rather than assume:
   message, it's usually fine" is the whole risk, on an app whose keyword list is adult words.
 - **Dedup keys off a stack frame**, so a bug reporting from a *changing* line would slip past it.
   The per-day cap is the backstop; it has no test because the queue needs a `Context`.
+
+### Swept in the thirteenth "bug hunt" (29 Jul 2026) — transient surfaces, and one stale phase
+
+Two greps, three findings, all of one shape: **something that is on screen being read as evidence
+about something else.**
+
+`grep -n "rootInActiveWindow"` — eleven reads in the watcher. Nine were already guarded. Two were
+not, and both had the same hole: a *transient surface* (the shade, the volume dialog, a heads-up
+notification, the keyboard) is a readable window that says nothing about what is underneath it.
+
+1. **The re-check tick raised covers on the strength of a transient window.** `recheckRunnable`
+   refuses to *reconcile* the cache to a transient surface — correct, and commented as such — and
+   then two lines later used `actual != null && actual != packageName` as proof that the cached app
+   was still in front. After a missed gesture-nav Home event (the documented HyperOS quirk that
+   most of the original nine trace back to), pulling down the shade on the home screen, or opening
+   a keyboard in another app, covered the **stale** package until the next event tore it down.
+   Milliseconds, over an app that is not blocked. This is a strong candidate for the second cause
+   of the flashing the owner has reported twice and that no amount of reading had explained.
+
+2. **The exit watcher read one as "they left".** `exitView` returned `LEFT` for any readable
+   non-ours window, so a notification arriving in the ~2.5 s after "Got it" ended the watch and
+   dropped the cover while the blocked app sat behind the shade. Now falls through to `BLIND`,
+   which is the answer that case has always deserved. Self-healing either way (the app's next
+   window-state event re-blocks), which is exactly why it was invisible.
+
+`grep -n "remember {"` across `ui/` — the "not yet swept" candidate this file has been pointing at.
+
+3. **`KeywordsScreen` re-derived the unlock phase and got it wrong.** `offReady` was
+   `offRequest != null && untilUnlock <= 0L` — it never asked whether the window had since
+   **closed**, so a request whose 24 hours were served days ago still read as "you may switch the
+   adult pack off now". A 30-second ticker cleared lapsed requests, which mostly hid it; but
+   recomposition stops while the app is backgrounded, so coming back to that screen after a missed
+   window handed back a live switch for up to 30 seconds more. `OffSwitchGuard.phase` is the same
+   state machine, complete and unit-tested (`a lapsed window is not an open door`), and the screen
+   now calls it. Two copies of one state machine, one of them incomplete — bug shape #1, in a
+   protection whose whole design is that it is expensive to switch off.
+
+**Second pass, same day — the readings the app treats as facts about itself.** Two more, from
+`grep -n "getOrDefault(\|?: 0\|?: emptyList()"` across `service/` (invariant 10: an empty or failed
+answer is not data):
+
+4. **`usedMinutesToday` answered 0 for "couldn't read it".** That number is what a daily limit is
+   compared against, so an empty `queryUsageStats` — access revoked mid-day, the stats database
+   rotating around midnight, an OEM throttling the call — read as "you have used nothing today"
+   and the limit silently stopped existing, cached for 15 seconds at a time. Fixed by leaning on a
+   property of the quantity: **minutes used today only ever go up**, so a lower reading is a failed
+   read wearing a number and the previous figure stands. Day-stamped, because without that
+   yesterday's total would stick and block the app all day — the opposite mistake, and a worse one.
+
+5. **`AccessibilityUtil.isEnabled` compared spellings, not identities.** Android's enabled-services
+   setting holds either `pkg/pkg.Class` or `pkg/.Class` depending on what wrote it; the check
+   string-matched `flattenToString()`, which is always the long form. On a build that stored the
+   short one, a perfectly healthy watcher reads as **off**: the checklist keeps asking for a
+   permission already granted, the watchdog keeps announcing that blocking has stopped, and every
+   bug report carries `serviceOn=false` about a service that is demonstrably running. No evidence
+   this is happening on the owner's phone — it is fixed because it is the first fact I would reason
+   from in a report, and a lying diagnostic is the theme this release already had to fix twice.
+
+**Third pass — auditing the same day's own changes**, which is where the sixth finding was:
+
+6. **A gate written for a door that does not exist.** Adding the typed gate to Prevent uninstall, I
+   gated the Setup-checklist row too, on the reasoning that it was "a second, free door". It is
+   not: both call sites (`PermissionsScreen.PermCard`, `OnboardingScreen.EssentialStep`) draw the
+   Grant button under `if (!perm.granted)`, so that screen can only switch device admin **on**. The
+   branch was unreachable — and had it ever been reached, a full-screen `FrictionGate` emitted from
+   inside a card in a scrolling column would not have drawn as a screen at all. Removed, with the
+   reason written where the next person will look. The real improvement from that change survives:
+   `toggleDeviceAdmin` is split into `enableDeviceAdmin`/`disableDeviceAdmin`, so the checklist can
+   no longer turn the protection **off** by passing a state it never checked.
+
+   The lesson is about the audit, not the feature: *a claim about a second call site is a claim to
+   verify, not to assume from a grep hit.* The grep found `toggleDeviceAdmin` in two files; only
+   reading the surrounding `if` showed what the second one could actually do.
+
+**Fourth pass — swept and clean, recorded so they are not re-derived:** `UsageTracker`'s history
+caches (`cachedPastDays`, `lastWeekAppMinutes`) already refuse to memoise an all-zero or empty
+result, which is invariant 10 applied by someone who had learnt it; `dailyMinutes`' only callers
+pass a literal 30, so its `days - 1` arithmetic has no reachable edge; `CoverGate`'s suppression and
+counting rules, `OwnUi`'s activity lifecycle, `AttemptCounter`/`LaunchCounter`'s day rollovers, and
+every remaining day-stamp arithmetic site (all going through `dayGap`, itself a past bug) held up.
+The rule flow's `retryWhen` and the per-entry `mapNotNull` in `SettingsStore.keywordLockouts` are
+both the "one bad row must not lose the rest" shape, already correct.
+
+**A known limit, deliberately not fixed:** daily limits and daily open counts are *calendar-day*
+facts (`todayStamp()`, `startOfToday()`), so winding the device clock back a day resets both. Every
+*duration* in the app is clock-proofed through `GuardedDeadline`/`SessionClock`, but "today" cannot
+be — a monotonic notion of a day would punish someone whose clock was genuinely wrong and then
+corrected. Worth knowing it is a hole; not worth the cure.
+
+Not a finding, but worth writing down: `shouldScanPkg` starts `if (pkg == packageName) return false`,
+so the keyword scanner can never read our own screens. The Blocked-words screen lists the owner's
+own blocked words, and had that line been missing, opening it would have blocked the app with its
+own list — a tidy explanation for "flashing inside the app itself" that turns out **not** to be the
+cause. Ruled out, so nobody re-derives it.
+
+### Strict Mode's broad rule is gone, and a fix that reached one call site (v1.110)
+
+**The broad rule.** `handleSettingsGuard` ran two rules: the narrow three-screen one v1.109
+settled on, and — during Strict — `byClass || guardScreenIsDangerous()`, where the *kind* of page
+was enough. Between `STRICT_GUARD_HINTS` (`accessibilit`, `installedappdetails`,
+`appinfodashboard`) and `GUARD_TEXT_MARKERS` (which held `accessibilit`, `uninstall`, `force stop`
+alongside the device-admin words), that bounced the entire Accessibility section and every app's
+App-info page. The owner reported it as "Strict blocks the whole Settings".
+
+The comment defending it said over-blocking is affordable in Strict because a session is opt-in and
+ends by itself. That is wrong in the way this file keeps finding: **Strict is the mode he runs when
+he most needs the phone to still work**, so it is the worst place to be careless, not the safest.
+Both modes now run the same three-screen rule. What Strict keeps is *unconditionality* — it bounces
+regardless of `OffSwitchGuard.armed`, so neither the guard switch being off nor an open unlock
+window stands it down — not a wider net.
+
+Both constants are **deleted**, per the v1.106 lesson. The one case they genuinely covered that the
+narrow rule did not is a device-admin screen with a generic MIUI class name; that is now
+`AdminScreens.MARKERS` — device-admin wording only, out in `data/` where it can be tested, and its
+test asserts what it must **not** match (the accessibility list, an App-info page), because that is
+the property that was lost rather than the one that was missing.
+
+`guardScreenText()` is now read once per decision and threaded through the three checks, which used
+to walk the node tree up to three times for one event, at a budget of 800 nodes.
+
+**The fix that reached one call site.** `StrictModeScreen.ensureDeviceAdmin` was its own copy of the
+ADD_DEVICE_ADMIN launch and never learnt what `toggleDeviceAdmin` learnt in v1.108: to stamp
+`AdminPrompt.requested()`. So starting a Strict session could not switch uninstall protection on —
+the v1.107 bug, alive on a second path for two releases, invisible because the first path worked.
+It now delegates, and `toggleDeviceAdmin` is split into `enableDeviceAdmin` / `disableDeviceAdmin`
+so no caller can reach the dangerous direction by passing a state it didn't check.
+
+Worth generalising: **a duplicated call site is a place a fix does not reach.** When a bug is fixed
+by teaching one function something, grep for other launchers of the same intent/screen before
+closing it — the copy will not fail loudly, it will just still be broken.
+
+### The reporter answered the standing question with "no" (v1.110)
+
+The first real bug report the owner sent arrived carrying version, SDK and device — and **nothing
+else**. No settings context, no block log. The two things built specifically to diagnose the
+flashing were both absent, and the report looked exactly like a healthy quiet one.
+
+`BugReportSender.appContext` was a single `runCatching` around a ten-call `mapOf(...)`, defaulting
+to `emptyMap()`. **One throw among ten reads emptied all ten, silently.** That is the pattern
+three sections down — *"if this itself broke, would anyone ever know?"* — reproduced inside the
+tool built to answer it, which is the funniest and worst possible place for it.
+
+Fixed by reading each field under its own `runCatching` and emitting `fieldErrors=n` when any
+failed, and by making `BugReport.body()` always print the Recent-blocks section with an explicit
+`(none recorded …)` marker. **A missing section and an empty section render identically in a
+GitHub issue and mean opposite things** — "no cover appeared" versus "the log is broken" — and
+that ambiguity cost a whole round trip while the flashing went undiagnosed.
+
+Generalises to: *any* aggregate built from N independent reads on an error path should degrade to
+N−1 fields, never to zero, and should say how many it lost. And a diagnostic that can render
+"nothing" must distinguish the two nothings.
+
+Still open after this: **the flashing itself.** Six guesses at the guard each broke something the
+owner needed; no seventh guess is in v1.110 on purpose. The block log is the instrument, and this
+release is what makes it arrive. Note the owner changed phones — Xiaomi 25080RABDG on **SDK 36**,
+where the earlier reports were 2312DRA50G on SDK 35 — so a new OEM build is itself a live
+candidate and the log lines should be read against that.
 
 ### A pattern worth generalising from the second sweep
 

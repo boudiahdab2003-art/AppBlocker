@@ -250,3 +250,114 @@ class AdminPromptTest {
         assertTrue(com.appblocker.data.AdminPrompt.WINDOW_MS <= 120_000L)
     }
 }
+
+/**
+ * Which wording may make the guard bounce a page.
+ *
+ * This list replaces a much longer one that also held `accessibilit`, `uninstall` and
+ * `force stop` — and those three are why Strict Mode bounced the entire Accessibility section and
+ * every app's App-info page. The owner reported it as "Strict blocks the whole Settings", twice.
+ *
+ * So the test is not "does it match device-admin screens" (easy, and it would still pass if
+ * someone re-added the greedy words). It is **what it must NOT match**, which is the property that
+ * was lost.
+ */
+class AdminScreensTest {
+
+    private fun matches(text: String) =
+        com.appblocker.data.AdminScreens.looksLikeAdminScreen(text)
+
+    @Test
+    fun `the device-admin removal screen is recognised`() {
+        assertTrue(matches("deactivate device admin app appblocker"))
+        assertTrue(matches("device administrator settings"))
+    }
+
+    @Test
+    fun `it is recognised in arabic too`() {
+        // The match fails silently when it misses — nothing errors, the page simply isn't
+        // recognised — so a phone in Arabic would have no fallback at all without these.
+        assertTrue(matches("مسئول الجهاز appblocker"))
+        assertTrue(matches("تعطيل"))
+    }
+
+    @Test
+    fun `the accessibility list is not an admin screen`() {
+        // It names every installed service, ours among them, so "mentions AppBlocker" is true of
+        // it by design. Only the wording can tell it apart — and this list must not claim it.
+        assertFalse(matches("accessibility downloaded apps talkback appblocker select to speak"))
+    }
+
+    @Test
+    fun `an app info page is not an admin screen`() {
+        // The page with battery, permissions, storage AND uninstall on it. Guarding this to
+        // protect one button is what cost the owner his battery settings in v1.108.
+        assertFalse(matches("appblocker app info uninstall force stop battery permissions storage"))
+    }
+}
+
+/**
+ * The diagnostic must not fail silently — the failure that made the owner's first real report
+ * useless, in the very tool built to stop failures being invisible.
+ */
+class ReportDiagnosticsTest {
+
+    private fun r(context: Map<String, String> = emptyMap(), blocks: List<String> = emptyList()) =
+        BugReport.fromNote("something", "1.110", "github", 36, "d", context, blocks)
+
+    @Test
+    fun `an empty block log says so instead of saying nothing`() {
+        // A missing section and an empty one look identical in a GitHub issue and mean opposite
+        // things: "no block screen appeared" versus "the log is broken".
+        val body = r().body()
+        assertTrue(body.contains("Recent blocks"))
+        assertTrue(body.contains("none recorded"))
+    }
+
+    @Test
+    fun `recorded blocks are printed instead of the marker`() {
+        val body = r(blocks = listOf("3s ago  app  ownUi=true  rootOk=false  counted=true")).body()
+        assertTrue(body.contains("ownUi=true"))
+        assertFalse(body.contains("none recorded"))
+    }
+
+    @Test
+    fun `a failed-field count is allowed through and shown`() {
+        // So a half-empty report announces itself rather than looking like a healthy quiet one.
+        val body = r(context = mapOf("layout" to "focus", "fieldErrors" to "3")).body()
+        assertTrue(body.contains("fieldErrors"))
+        assertTrue(body.contains("focus"))
+    }
+}
+
+/**
+ * Which failures are worth trying another Gemini model for.
+ *
+ * The coach died because quota was not on this list: the owner's gemini-2.5-pro was exhausted
+ * (429) while the two flash models one line below answered normally, and the walk rethrew instead
+ * of falling through. Quota and capacity are metered PER MODEL, which is what separates them from
+ * auth and malformed-body errors.
+ */
+class ModelFallbackTest {
+
+    private fun walks(msg: String) =
+        com.appblocker.data.AiCoach.tryNextModel(java.io.IOException(msg))
+
+    @Test
+    fun `quota and capacity walk to the next model`() {
+        assertTrue(walks("HTTP 429 quota"))
+        assertTrue(walks("RESOURCE_EXHAUSTED"))
+        assertTrue(walks("HTTP 503 overloaded"))
+    }
+
+    @Test
+    fun `a missing model still walks`() {
+        assertTrue(walks("HTTP 404 not found"))
+    }
+
+    @Test
+    fun `auth and bad requests do not walk, because every model would fail the same way`() {
+        assertFalse(walks("HTTP 401 unauthorized"))
+        assertFalse(walks("HTTP 400 invalid argument"))
+    }
+}

@@ -40,6 +40,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.appblocker.data.DeviceBoot
+import com.appblocker.data.OffSwitchGuard
 import com.appblocker.data.SettingsStore
 import kotlinx.coroutines.delay
 
@@ -73,7 +74,22 @@ fun KeywordsScreen(
     var tick by remember { mutableStateOf(0) }
     val untilUnlock = offRequest?.remaining(boot) ?: 0L
     val untilExpiry = offRequest?.remaining(boot, extraMs = OFF_WINDOW_MS) ?: 0L
-    val offReady = offRequest != null && untilUnlock <= 0L
+    // The SAME phase machine the off-switch guard uses — deliberately called rather than
+    // re-derived here, even though the name says "guard". This screen used to decide with
+    // `untilUnlock <= 0L` alone, which never asked whether the window had since **closed**: a
+    // request whose 24 hours were served days ago still read as "you may switch it off now". The
+    // 30-second ticker below cleared lapsed requests, so the hole was usually short — but
+    // recomposition stops while the app is in the background, so returning to this screen after
+    // a missed window handed back an open switch for up to another 30 seconds.
+    //
+    // Two copies of one state machine, one of them incomplete, is the first bug shape in
+    // docs/BLOCKING_INVARIANTS.md. `OffSwitchGuard.phase` is unit-tested, including the
+    // lapsed-window case this screen got wrong; there is now one implementation.
+    val offReady = OffSwitchGuard.phase(
+        hasRequest = offRequest != null,
+        untilUnlock = untilUnlock,
+        untilExpiry = untilExpiry,
+    ) == OffSwitchGuard.Phase.OPEN
     LaunchedEffect(offRequest, tick) {
         if (offRequest == null) return@LaunchedEffect
         if (untilExpiry <= 0L) {
@@ -236,9 +252,10 @@ fun KeywordsScreen(
             FrictionGate(
                 title = "Turn off adult protection",
                 blurb = "This lowers your guard. To be sure it's really you and really " +
-                    "deliberate, type the paragraph below — you can't paste it — and wait for " +
-                    "the timer. Even then the pack stays on for another 24 hours; only after " +
-                    "that can you flip the switch off.",
+                    "deliberate, type the paragraph below — you can't paste it — before the " +
+                    "clock runs out. Miss it and you get a fresh paragraph and a fresh clock. " +
+                    "Even then the pack stays on for another 24 hours; only after that can you " +
+                    "flip the switch off.",
                 confirmLabel = "Start the 24-hour wait",
                 dismissLabel = "Keep it on",
                 onDismiss = { showDisableGate = false },

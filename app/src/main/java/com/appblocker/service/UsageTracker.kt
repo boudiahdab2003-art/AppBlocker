@@ -32,9 +32,14 @@ object UsageTracker {
     /** A package's foreground time today, in minutes. */
     data class AppUsage(val packageName: String, val minutes: Int)
 
-    // usedMinutesToday cache: pkg -> (elapsedRealtime of the query, minutes). The blocking
-    // check runs on the main thread per app switch; a 15s TTL turns that into a map read.
-    private val usedTodayCache = ConcurrentHashMap<String, Pair<Long, Int>>()
+    /** One package's last known foreground minutes: which day it is for, when it was read
+     *  (monotonic), and the figure itself. */
+    private data class UsedToday(val dayStamp: Int, val atRt: Long, val minutes: Int)
+
+    // usedMinutesToday cache. The blocking check runs on the main thread per app switch; a 15s
+    // TTL turns that into a map read. The day stamp is what lets a stale figure be *kept* rather
+    // than trusted forever — see usedMinutesToday.
+    private val usedTodayCache = ConcurrentHashMap<String, UsedToday>()
 
     // Past days' totals can't change during the day — memoized per day-stamp, both in memory
     // and in SharedPreferences so a fresh app launch later the same day skips the slow queries.
@@ -69,22 +74,43 @@ object UsageTracker {
 
     // ---- Today, per app ----
 
-    /** [packageName]'s foreground minutes today. Cached ~15s: this sits on the blocking
-     *  hot path (every app switch, main thread), so at the exact minute a limit is crossed
-     *  the block may fire up to 15s late — imperceptible for a minutes-based daily limit. */
+    /**
+     * [packageName]'s foreground minutes today. Cached ~15s: this sits on the blocking hot path
+     * (every app switch, main thread), so at the exact minute a limit is crossed the block may
+     * fire up to 15s late — imperceptible for a minutes-based daily limit.
+     *
+     * **A failed or empty read is not "zero minutes."** This is the number a daily limit is
+     * compared against, so answering 0 means "carry on, you've used nothing today" — the limit
+     * silently stops existing, and under-blocking is invisible to the owner
+     * (docs/BLOCKING_INVARIANTS.md, invariant 10). `queryUsageStats` can come back empty for
+     * reasons that have nothing to do with the truth: access revoked mid-day, the stats database
+     * rotating around midnight, an OEM throttling the query. The old code took whatever came back
+     * and cached it for 15 seconds.
+     *
+     * The fix leans on a fact about the quantity itself: **time used today only ever goes up**,
+     * until the day ends. So a fresh reading is adopted only if it is at least the last one for
+     * the same day; anything lower is a failed read wearing a number, and the previous figure
+     * stands. The day stamp is what stops that becoming its own bug — without it, yesterday's
+     * total would stick forever and block the app all day, which is the opposite mistake.
+     */
     fun usedMinutesToday(context: Context, packageName: String): Int {
         val now = SystemClock.elapsedRealtime()
-        usedTodayCache[packageName]?.let { (at, minutes) ->
-            if (now - at < USED_TODAY_TTL_MS) return minutes
-        }
-        // No usage access -> 0, deliberately uncached so a grant takes effect immediately.
-        val stats = todaySnapshot(context) ?: return 0
+        val today = todayStamp()
+        val known = usedTodayCache[packageName]?.takeIf { it.dayStamp == today }
+        if (known != null && now - known.atRt < USED_TODAY_TTL_MS) return known.minutes
+        // Null means no usage access at all: keep whatever today's best figure was (nothing, for
+        // a phone that never had access) and don't cache, so a grant takes effect immediately.
+        val stats = todaySnapshot(context) ?: return known?.minutes ?: 0
         val totalMs = stats.filter { it.packageName == packageName }
             .sumOf { it.totalTimeInForeground }
-        val minutes = (totalMs / 60_000L).toInt()
-        usedTodayCache[packageName] = now to minutes
+        val minutes = mergeUsedToday(known?.minutes, (totalMs / 60_000L).toInt())
+        usedTodayCache[packageName] = UsedToday(today, now, minutes)
         return minutes
     }
+
+    /** Today's minutes never go down. Split out so the rule has a test — the read around it
+     *  needs a live system service and cannot have one. */
+    internal fun mergeUsedToday(previous: Int?, fresh: Int): Int = max(previous ?: 0, fresh)
 
     /** Minutes used per package today, summed across entries, biggest first. */
     fun topAppsToday(context: Context, limit: Int = 5): List<AppUsage> =

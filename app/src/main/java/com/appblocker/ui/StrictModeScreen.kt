@@ -1,8 +1,6 @@
 package com.appblocker.ui
 
-import android.app.admin.DevicePolicyManager
 import android.content.Context
-import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -50,7 +48,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.appblocker.admin.AppBlockerAdminReceiver
 import com.appblocker.data.SettingsStore
 import com.appblocker.ui.theme.AppGradients
 import java.text.SimpleDateFormat
@@ -287,19 +284,18 @@ private fun durationLabel(minutes: Int): String = when {
     else -> "${minutes}m"
 }
 
-private fun ensureDeviceAdmin(context: Context) {
-    val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-    val admin = AppBlockerAdminReceiver.componentName(context)
-    if (dpm.isAdminActive(admin)) return
-    // No FLAG_ACTIVITY_NEW_TASK — the system's ADD_DEVICE_ADMIN screen self-closes ("Cannot
-    // start ADD_DEVICE_ADMIN as a new task") and must run in the caller's (Activity) task.
-    context.startActivity(
-        Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
-            putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, admin)
-            putExtra(
-                DevicePolicyManager.EXTRA_ADD_EXPLANATION,
-                "Strict Mode needs this so AppBlocker can't be uninstalled until the timer ends."
-            )
-        }
-    )
-}
+/**
+ * Delegates rather than building the intent itself — which is the whole fix here.
+ *
+ * This function used to be its own copy of the ADD_DEVICE_ADMIN launch, and the copy never learnt
+ * what [enableDeviceAdmin] learnt in v1.108: to tell [com.appblocker.data.AdminPrompt] that *we*
+ * opened the activation screen. Without that stamp the guard reads a device-admin screen it can't
+ * account for and bounces it, so starting a Strict session could not switch uninstall protection
+ * on — the exact v1.107 bug, still alive on this path because the fix was applied to one call site
+ * and not the other.
+ */
+private fun ensureDeviceAdmin(context: Context) = enableDeviceAdmin(
+    context,
+    explanation =
+        "Strict Mode needs this so AppBlocker can't be uninstalled until the timer ends.",
+)

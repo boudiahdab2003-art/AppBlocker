@@ -152,24 +152,38 @@ fun rememberPermissions(): List<Perm> {
                 "deviceadmin", "Prevent uninstall (Device admin)",
                 "Stops AppBlocker being uninstalled until you turn this off — extra friction against bypassing your blocks.",
                 isDeviceAdminActive(ctx), essential = false,
-            ) { toggleDeviceAdmin(ctx) },
+                // On only, and that is all this screen can do: the Grant button is drawn under
+                // `if (!perm.granted)`. It used to call a toggle, which would have turned the
+                // protection OFF with one tap had the button ever been shown while it was on.
+                // Naming the direction removes that entirely. Turning it off lives in Profile,
+                // behind the typed gate.
+            ) { enableDeviceAdmin(ctx) },
         ).filter { Dist.LOCATION_SCHEDULES || it.key != "location" }
     }
 }
 
 /**
- * Google Play's AccessibilityService policy requires a prominent disclosure and explicit
- * consent BEFORE sending the user to accessibility settings. Returns a click handler that
- * shows the consent dialog first for the (ungranted) accessibility perm and passes straight
- * through for everything else — so every Grant call site gets the gate by using this.
+ * Google Play's AccessibilityService policy requires a prominent disclosure and explicit consent
+ * BEFORE sending the user to accessibility settings. Returns a click handler that shows the
+ * consent dialog first for the (ungranted) accessibility perm and passes straight through for
+ * everything else — so every Grant call site gets the gate by using this.
+ *
+ * **It deliberately does not gate "Prevent uninstall".** It looked like a second door to that
+ * switch and briefly grew a copy of the gate for it; both call sites
+ * ([PermissionsScreen]'s `PermCard`, [OnboardingScreen]'s `EssentialStep`) render the Grant button
+ * only under `if (!perm.granted)`, so this screen can turn device admin **on** and has no way to
+ * turn it off. The copy was unreachable, and a full-screen [FrictionGate] emitted from inside a
+ * card in a scrolling column would not have drawn correctly if it ever had been. Profile's row is
+ * the one door, and it is gated there.
  */
 @Composable
 fun rememberGatedFix(perm: Perm): () -> Unit {
-    if (perm.key != "accessibility" || perm.granted) return perm.onFix
-    var show by remember { mutableStateOf(false) }
-    if (show) {
+    // Declared unconditionally: a `return` before a `remember` would change the number of slots in
+    // the composition when `granted` flips, which is exactly what these rows do.
+    var showConsent by remember { mutableStateOf(false) }
+    if (showConsent) {
         AlertDialog(
-            onDismissRequest = { show = false },
+            onDismissRequest = { showConsent = false },
             title = { Text("How blocking works") },
             text = {
                 Text(
@@ -184,12 +198,49 @@ fun rememberGatedFix(perm: Perm): () -> Unit {
                 )
             },
             confirmButton = {
-                TextButton(onClick = { show = false; perm.onFix() }) { Text("Agree & continue") }
+                TextButton(onClick = { showConsent = false; perm.onFix() }) {
+                    Text("Agree & continue")
+                }
             },
-            dismissButton = { TextButton(onClick = { show = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { showConsent = false }) { Text("Cancel") } },
         )
     }
-    return { show = true }
+    return if (perm.key == "accessibility" && !perm.granted) {
+        { showConsent = true }
+    } else {
+        perm.onFix
+    }
+}
+
+/**
+ * The typed-paragraph gate in front of turning **Prevent uninstall** off.
+ *
+ * Lives here, next to the device-admin calls it guards, rather than in the one screen that shows
+ * it — so if a second way to switch this off is ever added, the gate is already written and there
+ * is no excuse for a cheaper copy. That is also why [disableDeviceAdmin] is named rather than
+ * being one half of a toggle: the dangerous direction should be greppable, and today it has
+ * exactly one caller.
+ *
+ * Unlike the off-switch guard's gate, confirming here acts immediately rather than starting an
+ * hours-long wait. Deliberate: device admin has no emergency escape of its own, and "you cannot
+ * uninstall this app or hand this phone over for two hours" is a real harm rather than a
+ * hypothetical one. The paragraph is what stops a bad moment; the wait would only punish a good one.
+ */
+@Composable
+fun PreventUninstallGate(onDismiss: () -> Unit, onConfirm: () -> Unit) {
+    FrictionGate(
+        title = "Allow uninstalling",
+        blurb = "This is the switch that actually refuses an uninstall — the guard only makes the " +
+            "Settings page hard to reach. With it off, AppBlocker can be removed in a few taps, " +
+            "and every block goes with it.\n\nSo, to be sure it's really you and really " +
+            "deliberate: type the paragraph below — you can't paste it — before the clock runs " +
+            "out. Miss it and you get a fresh paragraph and a fresh clock. Turning it back on is " +
+            "always one tap.",
+        confirmLabel = "Turn protection off",
+        dismissLabel = "Keep it on",
+        onDismiss = onDismiss,
+        onConfirm = onConfirm,
+    )
 }
 
 /** Whether AppBlocker is currently an active device admin (so it can't be uninstalled). */
@@ -198,35 +249,59 @@ fun isDeviceAdminActive(ctx: Context): Boolean {
     return dpm.isAdminActive(AppBlockerAdminReceiver.componentName(ctx))
 }
 
-/** Turns device admin on (system confirm screen) or off (removes it, allowing uninstall). */
-fun toggleDeviceAdmin(ctx: Context) {
+/**
+ * Opens Android's "Activate device admin app?" screen. Does nothing if it is already on.
+ *
+ * **There is deliberately no `toggleDeviceAdmin`.** This used to be one function that flipped
+ * whichever way the current state pointed, which meant the *off* direction — the one that hands
+ * back the ability to uninstall AppBlocker, and the only protection that actually refuses one —
+ * was reachable from any caller that only meant "let the owner set this up". Two separate names
+ * make every call site say which direction it wants, and make the dangerous direction greppable.
+ * Everything that turns it off must go through [FrictionGate] first; see ProfileScreen.
+ *
+ * @param explanation shown by the system on its own screen, so it can name the reason we asked.
+ */
+fun enableDeviceAdmin(
+    ctx: Context,
+    explanation: String = "Lets AppBlocker resist being uninstalled until you turn this off.",
+) {
     val dpm = ctx.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
     val admin = AppBlockerAdminReceiver.componentName(ctx)
-    if (dpm.isAdminActive(admin)) {
-        dpm.removeActiveAdmin(admin) // turn protection off so the app can be uninstalled
-        AdminPrompt.clear()
-    } else {
-        // Tell the guard we opened this, so it stands down while Android's activation screen is
-        // up. That screen says "device admin" and offers "Uninstall app", so it matches every
-        // removal marker the guard has — and blocking it means uninstall protection can never be
-        // switched ON. See AdminPrompt: knowing we opened it beats trying to read the wording,
-        // which differs by OEM and is translated.
-        AdminPrompt.requested()
-        // NOTE: no FLAG_ACTIVITY_NEW_TASK — the system's ADD_DEVICE_ADMIN screen refuses to
-        // start as a new task ("Cannot start ADD_DEVICE_ADMIN as a new task") and must run in
-        // the caller's (Activity) task, which ctx is here.
-        runCatching {
-            ctx.startActivity(
-                Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
-                    putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, admin)
-                    putExtra(
-                        DevicePolicyManager.EXTRA_ADD_EXPLANATION,
-                        "Lets AppBlocker resist being uninstalled until you turn this off.",
-                    )
-                }
-            )
-        }
+    if (dpm.isAdminActive(admin)) return
+    // Tell the guard we opened this, so it stands down while Android's activation screen is up.
+    // That screen says "device admin" and offers "Uninstall app", so it matches every removal
+    // marker the guard has — and blocking it means uninstall protection can never be switched ON.
+    // See AdminPrompt: knowing we opened it beats trying to read the wording, which differs by
+    // OEM and is translated. Every path that opens this screen must stamp it; StrictModeScreen
+    // had its own copy of the intent and did not, so starting a Strict session could not switch
+    // uninstall protection on at all — which is why the intent lives in one place now.
+    AdminPrompt.requested()
+    // NOTE: no FLAG_ACTIVITY_NEW_TASK — the system's ADD_DEVICE_ADMIN screen refuses to
+    // start as a new task ("Cannot start ADD_DEVICE_ADMIN as a new task") and must run in
+    // the caller's (Activity) task, which ctx is here.
+    runCatching {
+        ctx.startActivity(
+            Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
+                putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, admin)
+                putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, explanation)
+            }
+        )
     }
+}
+
+/**
+ * Removes device admin, so AppBlocker can be uninstalled again.
+ *
+ * **Never call this straight from a tap.** It is the end of the chain the whole off-switch guard
+ * exists to defend: the guard only makes the Settings page hard to reach, whereas this is what
+ * actually refuses the uninstall. Both call sites put [FrictionGate] in front of it.
+ */
+fun disableDeviceAdmin(ctx: Context) {
+    val dpm = ctx.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+    dpm.removeActiveAdmin(AppBlockerAdminReceiver.componentName(ctx))
+    // The exemption is for a screen we opened; the state has just changed, so close it now rather
+    // than leaving a minute of standing-down behind us.
+    AdminPrompt.clear()
 }
 
 fun hasLocation(ctx: Context): Boolean =
