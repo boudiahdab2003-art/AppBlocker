@@ -13,6 +13,15 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.110", "Jul 29, 2026", "The coach answers again, and reports stop arriving empty", listOf(
+        "**The coach was dead, and the reason was quota.** The app tries several Google models in order and moves on to the next one only when a model doesn't exist. Your first-choice model does exist — it had simply run out of free quota for the day, which comes back as a different kind of error, so the app treated it as a real failure and stopped. Two models further down the list were answering normally the whole time.",
+        "Running out of quota is counted *per model*, so trying the next one is exactly the right move — that's now what happens, for \"out of quota\" and \"server busy\" alike. Wrong-password or bad-request errors still stop immediately, because every model would fail those the same way.",
+        "Two model names that no longer exist have been dropped from the list, so the app doesn't waste a round trip discovering that each time you ask a question.",
+        "**Your bug report arrived almost empty, and that was a bug in the reporting.** It carried the version and your phone model and nothing else — no settings, no record of the recent block screens. Those two things are the whole reason the report button exists.",
+        "The cause: the app gathered ten pieces of information in one go, and if any single one of them failed, all ten were thrown away silently. So one small failure produced a report that looked like a healthy quiet one.",
+        "Each piece is now collected separately — nine survive if the tenth fails — and if anything did fail, the report says how many. The recent-blocks section is now always printed too: if there's nothing in it, it says so out loud, because \"no blocks happened\" and \"the log is broken\" used to look identical on my side.",
+        "**About the flashing:** no fix for it in this version, on purpose. I've guessed at this guard six times and each guess broke something else you needed. The report is the instrument that would tell me the actual cause, and it was the thing that was broken. So next time it flashes, tap Report a problem — that report should finally carry the evidence, and then it gets fixed once instead of six times.",
+    )),
     VersionLog("1.109", "Jul 27, 2026", "The guard stops blocking pages you actually need", listOf(
         "It was blocking your battery settings. That page has an \"Uninstall\" button at the bottom, so it matched the words the guard watches for — and blocking it is self-defeating, because this app *tells you* to set battery to \"No restrictions\" so blocking survives in the background.",
         "The real mistake was bigger than that one page. I'd been guarding the whole **App info** screen, which is the hub for battery, permissions, storage, notifications *and* uninstall. Guarding it to protect one button costs you everything else on it.",

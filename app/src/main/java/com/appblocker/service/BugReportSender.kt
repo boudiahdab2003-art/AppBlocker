@@ -68,20 +68,32 @@ object BugReportSender {
      * worse. That is why there is no "how many rules" or "is Strict running" — both live in Room.
      * Everything below is SharedPreferences or a system flag.
      */
-    fun appContext(ctx: Context): Map<String, String> = runCatching {
-        mapOf(
-            "layout" to BlockLayouts.current(ctx).id,
-            "theme" to BlockThemes.current(ctx).id,
-            "serviceOn" to AccessibilityUtil.isEnabled(ctx).toString(),
-            "protection" to ProtectionWatchdog.state(ctx).name,
-            "guard" to SettingsStore.guardOffSwitch(ctx).toString(),
-            "blocksToday" to AttemptCounter.summary(ctx).sumOf { it.today }.toString(),
-            "adultPack" to SettingsStore.adultWordsPack(ctx).toString(),
-            "scanEverywhere" to SettingsStore.keywordsEverywhere(ctx).toString(),
-            "overlayPermission" to Settings.canDrawOverlays(ctx).toString(),
-            "usageAccess" to hasUsageAccess(ctx).toString(),
-        )
-    }.getOrDefault(emptyMap())
+    fun appContext(ctx: Context): Map<String, String> {
+        val out = mutableMapOf<String, String>()
+        var failed = 0
+        // Each field is read on its own. This used to be one runCatching around the whole map,
+        // which meant ONE throw among ten calls produced an empty map with nothing to say why —
+        // and that is exactly what happened: the owner's first real report arrived carrying only
+        // version, SDK and device, so the flashing it was meant to diagnose stayed invisible.
+        // A diagnostic that fails silently is the bug it exists to catch (BLOCKING_INVARIANTS:
+        // "if this itself broke, would anyone ever know?").
+        fun field(key: String, read: () -> String) {
+            runCatching { out[key] = read() }.onFailure { failed++ }
+        }
+        field("layout") { BlockLayouts.current(ctx).id }
+        field("theme") { BlockThemes.current(ctx).id }
+        field("serviceOn") { AccessibilityUtil.isEnabled(ctx).toString() }
+        field("protection") { ProtectionWatchdog.state(ctx).name }
+        field("guard") { SettingsStore.guardOffSwitch(ctx).toString() }
+        field("blocksToday") { AttemptCounter.summary(ctx).sumOf { it.today }.toString() }
+        field("adultPack") { SettingsStore.adultWordsPack(ctx).toString() }
+        field("scanEverywhere") { SettingsStore.keywordsEverywhere(ctx).toString() }
+        field("overlayPermission") { Settings.canDrawOverlays(ctx).toString() }
+        field("usageAccess") { hasUsageAccess(ctx).toString() }
+        // Reported rather than hidden: a bare report and a healthy one must never look alike.
+        if (failed > 0) out["fieldErrors"] = failed.toString()
+        return out
+    }
 
     /** Records an error for later sending. Safe to call from anywhere, including the watcher. */
     fun report(context: Context, where: String, t: Throwable) {

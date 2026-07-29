@@ -250,3 +250,69 @@ class AdminPromptTest {
         assertTrue(com.appblocker.data.AdminPrompt.WINDOW_MS <= 120_000L)
     }
 }
+
+/**
+ * The diagnostic must not fail silently — the failure that made the owner's first real report
+ * useless, in the very tool built to stop failures being invisible.
+ */
+class ReportDiagnosticsTest {
+
+    private fun r(context: Map<String, String> = emptyMap(), blocks: List<String> = emptyList()) =
+        BugReport.fromNote("something", "1.110", "github", 36, "d", context, blocks)
+
+    @Test
+    fun `an empty block log says so instead of saying nothing`() {
+        // A missing section and an empty one look identical in a GitHub issue and mean opposite
+        // things: "no block screen appeared" versus "the log is broken".
+        val body = r().body()
+        assertTrue(body.contains("Recent blocks"))
+        assertTrue(body.contains("none recorded"))
+    }
+
+    @Test
+    fun `recorded blocks are printed instead of the marker`() {
+        val body = r(blocks = listOf("3s ago  app  ownUi=true  rootOk=false  counted=true")).body()
+        assertTrue(body.contains("ownUi=true"))
+        assertFalse(body.contains("none recorded"))
+    }
+
+    @Test
+    fun `a failed-field count is allowed through and shown`() {
+        // So a half-empty report announces itself rather than looking like a healthy quiet one.
+        val body = r(context = mapOf("layout" to "focus", "fieldErrors" to "3")).body()
+        assertTrue(body.contains("fieldErrors"))
+        assertTrue(body.contains("focus"))
+    }
+}
+
+/**
+ * Which failures are worth trying another Gemini model for.
+ *
+ * The coach died because quota was not on this list: the owner's gemini-2.5-pro was exhausted
+ * (429) while the two flash models one line below answered normally, and the walk rethrew instead
+ * of falling through. Quota and capacity are metered PER MODEL, which is what separates them from
+ * auth and malformed-body errors.
+ */
+class ModelFallbackTest {
+
+    private fun walks(msg: String) =
+        com.appblocker.data.AiCoach.tryNextModel(java.io.IOException(msg))
+
+    @Test
+    fun `quota and capacity walk to the next model`() {
+        assertTrue(walks("HTTP 429 quota"))
+        assertTrue(walks("RESOURCE_EXHAUSTED"))
+        assertTrue(walks("HTTP 503 overloaded"))
+    }
+
+    @Test
+    fun `a missing model still walks`() {
+        assertTrue(walks("HTTP 404 not found"))
+    }
+
+    @Test
+    fun `auth and bad requests do not walk, because every model would fail the same way`() {
+        assertFalse(walks("HTTP 401 unauthorized"))
+        assertFalse(walks("HTTP 400 invalid argument"))
+    }
+}

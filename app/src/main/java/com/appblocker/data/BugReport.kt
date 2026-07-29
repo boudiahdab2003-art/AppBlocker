@@ -101,15 +101,21 @@ data class BugReport(
         appendLine("| Android | SDK $androidSdk |")
         appendLine("| Device | $device |")
         context.toSortedMap().forEach { (k, v) -> appendLine("| $k | $v |") }
-        if (recentBlocks.isNotEmpty()) {
-            appendLine()
-            appendLine("**Recent blocks** (newest first — `ownUi=true` or `rootOk=false` means a")
-            appendLine("cover landed somewhere it should not have):")
-            appendLine()
-            appendLine("```")
+        // Always printed, even when empty. A missing section and an empty one look identical in
+        // a GitHub issue and mean opposite things — "nothing happened" versus "the log is
+        // broken" — and the first real report arrived bare, which cost a round trip to work out.
+        appendLine()
+        appendLine("**Recent blocks** (newest first — `ownUi=true` or `rootOk=false` means a")
+        appendLine("cover landed somewhere it should not have):")
+        appendLine()
+        appendLine("```")
+        if (recentBlocks.isEmpty()) {
+            appendLine("(none recorded — either no block screen has appeared since install,")
+            appendLine(" or the block log itself is not working)")
+        } else {
             recentBlocks.forEach { appendLine(it) }
-            appendLine("```")
         }
+        appendLine("```")
         if (frames.isNotEmpty()) {
             appendLine()
             appendLine("```")
@@ -159,6 +165,9 @@ data class BugReport(
             "scanEverywhere",
             "overlayPermission",
             "usageAccess",
+            // How many of the fields above failed to read. Present only when non-zero, so a
+            // half-empty report announces itself instead of looking like a healthy quiet one.
+            "fieldErrors",
         )
 
         /** Values are short by nature (an id, a boolean, a count); anything long is a sign

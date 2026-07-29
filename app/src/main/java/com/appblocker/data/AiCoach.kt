@@ -97,8 +97,9 @@ object AiCoach {
     internal val COACH_CHAIN = ModelChain(
         name = "coach",
         models = listOf(
-            "gemini-3.5-pro",
-            "gemini-3-pro",
+            // Verified against the owner's key (Jul 2026): the 3.x "pro" ids 404, so they cost a
+            // probe and buy nothing. 2.5-pro stays first as the preference — when its quota
+            // refills the coach uses it again, and 429 now falls through to flash meanwhile.
             "gemini-2.5-pro",
             "gemini-3.5-flash",
             "gemini-2.5-flash",
@@ -658,9 +659,10 @@ object AiCoach {
      *
      * The winner is remembered per chain for [MODEL_REPROBE_MS] and tried first next time, so the
      * cost of listing an id that this key doesn't serve is one 404 a week — not one per request.
-     * Only a *model-unavailable* error walks the chain: anything else (auth, quota, a bad request,
-     * the proxy being down) is the caller's problem and is rethrown immediately, because retrying
-     * it on four more models would just multiply the same failure.
+     * Only a *this model might not be the problem* error walks the chain — see [tryNextModel].
+     * Auth, a malformed body and the proxy being down are rethrown at once, because they would
+     * fail identically on every model. Quota is NOT in that group: it is metered per model, which
+     * is exactly why the walk helps.
      */
     private fun attemptWithModelFallback(
         ctx: Context, key: String, body: JSONObject, viaProxy: Boolean, chain: ModelChain,
@@ -687,16 +689,33 @@ object AiCoach {
                 return out
             } catch (e: Exception) {
                 last = e
-                if (!modelUnavailable(e)) throw e
+                if (!tryNextModel(e)) throw e
                 if (BuildConfig.DEBUG) Log.d(TAG, "${chain.name}: $model unavailable, trying next")
             }
         }
         throw last ?: java.io.IOException("no models configured for ${chain.name}")
     }
 
-    /** "This key/endpoint doesn't serve that model" — the only error worth trying another one for. */
-    private fun modelUnavailable(e: Exception): Boolean = (e.message ?: "").let {
-        it.contains("HTTP 404") || it.contains("NOT_FOUND") || it.contains("not found")
+    /**
+     * "Another model in the chain might succeed where this one didn't" — the only errors worth
+     * walking for.
+     *
+     * **404** is the original case: this key doesn't serve that id.
+     *
+     * **429 and 503 are here because Gemini's quota and capacity are PER MODEL.** That is what
+     * makes them different from auth or a malformed body, which would fail identically on every
+     * model and are still rethrown at once. Leaving 429 out killed the coach outright: the owner's
+     * `gemini-2.5-pro` quota was exhausted while `gemini-3.5-flash` and `gemini-2.5-flash` — the
+     * next two entries — answered normally. The walk died one line above two working models, and
+     * the coach reported itself unavailable.
+     *
+     * If every model really is exhausted the loop still ends by rethrowing the last exception, so
+     * a global quota problem surfaces instead of being swallowed.
+     */
+    internal fun tryNextModel(e: Exception): Boolean = (e.message ?: "").let {
+        it.contains("HTTP 404") || it.contains("NOT_FOUND") || it.contains("not found") ||
+            it.contains("HTTP 429") || it.contains("RESOURCE_EXHAUSTED") ||
+            it.contains("HTTP 503") || it.contains("UNAVAILABLE")
     }
 
     /** Adds the thinking config for [thinking], mapped per model generation: 2.x takes a numeric

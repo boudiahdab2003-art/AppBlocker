@@ -619,6 +619,33 @@ Three things a future sweep should check rather than assume:
 - **Dedup keys off a stack frame**, so a bug reporting from a *changing* line would slip past it.
   The per-day cap is the backstop; it has no test because the queue needs a `Context`.
 
+### The reporter answered the standing question with "no" (v1.110)
+
+The first real bug report the owner sent arrived carrying version, SDK and device — and **nothing
+else**. No settings context, no block log. The two things built specifically to diagnose the
+flashing were both absent, and the report looked exactly like a healthy quiet one.
+
+`BugReportSender.appContext` was a single `runCatching` around a ten-call `mapOf(...)`, defaulting
+to `emptyMap()`. **One throw among ten reads emptied all ten, silently.** That is the pattern
+three sections down — *"if this itself broke, would anyone ever know?"* — reproduced inside the
+tool built to answer it, which is the funniest and worst possible place for it.
+
+Fixed by reading each field under its own `runCatching` and emitting `fieldErrors=n` when any
+failed, and by making `BugReport.body()` always print the Recent-blocks section with an explicit
+`(none recorded …)` marker. **A missing section and an empty section render identically in a
+GitHub issue and mean opposite things** — "no cover appeared" versus "the log is broken" — and
+that ambiguity cost a whole round trip while the flashing went undiagnosed.
+
+Generalises to: *any* aggregate built from N independent reads on an error path should degrade to
+N−1 fields, never to zero, and should say how many it lost. And a diagnostic that can render
+"nothing" must distinguish the two nothings.
+
+Still open after this: **the flashing itself.** Six guesses at the guard each broke something the
+owner needed; no seventh guess is in v1.110 on purpose. The block log is the instrument, and this
+release is what makes it arrive. Note the owner changed phones — Xiaomi 25080RABDG on **SDK 36**,
+where the earlier reports were 2312DRA50G on SDK 35 — so a new OEM build is itself a live
+candidate and the log lines should be read against that.
+
 ### A pattern worth generalising from the second sweep
 
 Both watchdog bugs were the same shape: **a safety mechanism that can fail silently, or take down
