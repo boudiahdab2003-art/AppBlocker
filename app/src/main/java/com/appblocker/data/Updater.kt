@@ -176,13 +176,30 @@ object Updater {
 
     /** Launches the system installer for the downloaded APK. */
     fun install(context: Context, file: File) {
+        // Tell the off-switch guard we opened this. The installer screen for an UPDATE looks
+        // exactly like the one for an UNINSTALL — same package, same app name on it — so the
+        // guard bounced our own updates, which meant the guard blocked the update that would fix
+        // the guard. See InstallPrompt; the same trick as the device-admin prompt, and for the
+        // same reason: reading the screen cannot tell install from uninstall in any language.
+        InstallPrompt.requested()
+        context.startActivity(installIntent(context, file))
+    }
+
+    /**
+     * The installer intent on its own, without opening it.
+     *
+     * Split out for the auto-updater: when a silent install can't start, the owner is offered the
+     * ordinary installer in a notification instead, and a notification cannot call
+     * [InstallPrompt.requested] at the moment it is *posted* — the guard's window would be long
+     * expired by the time anyone tapped. The tap goes through
+     * [com.appblocker.service.InstallResultReceiver] so that call happens then, not now.
+     */
+    fun installIntent(context: Context, file: File): Intent {
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-        context.startActivity(
-            Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, "application/vnd.android.package-archive")
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-        )
+        return Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "application/vnd.android.package-archive")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
     }
 
     /** Deletes a downloaded APK that is no longer needed. Both possible locations, because which

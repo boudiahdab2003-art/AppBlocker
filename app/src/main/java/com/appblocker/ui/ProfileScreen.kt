@@ -45,6 +45,7 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.SelfImprovement
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material.icons.filled.Warning
@@ -140,6 +141,7 @@ fun ProfileScreen(
     var guardRequest by remember(resumeTick) {
         mutableStateOf(SettingsStore.guardUnlockRequest(context))
     }
+    var autoUpdate by remember(resumeTick) { mutableStateOf(SettingsStore.autoUpdate(context)) }
     var showGuardGate by remember { mutableStateOf(false) }
     var showAdminGate by remember { mutableStateOf(false) }
     var showReport by remember { mutableStateOf(false) }
@@ -462,6 +464,27 @@ fun ProfileScreen(
                 enabled = true,
                 onClick = onOpenChangelog,
             )
+            if (Dist.SELF_UPDATE) {
+                Divider()
+                ProfileRow(
+                    icon = Icons.Filled.SystemUpdate,
+                    title = "Update automatically",
+                    subtitle = if (autoUpdate) {
+                        "On. New versions install by themselves, on Wi-Fi, without asking. " +
+                            "Blocking keeps running throughout."
+                    } else {
+                        "Off. You'll be told when an update is ready and install it yourself."
+                    },
+                    badge = autoUpdate,
+                    // Not locked during Strict: this only decides how a NEW version arrives, and
+                    // every version enforces Strict identically. Locking it would be theatre.
+                    enabled = true,
+                    onClick = {
+                        autoUpdate = !autoUpdate
+                        SettingsStore.setAutoUpdate(context, autoUpdate)
+                    },
+                )
+            }
             Divider()
             ProfileRow(
                 icon = Icons.Filled.Share,

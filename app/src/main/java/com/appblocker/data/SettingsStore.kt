@@ -26,6 +26,46 @@ object SettingsStore {
     fun setAddNewApps(context: Context, value: Boolean) =
         prefs(context).edit().putBoolean(KEY_ADD_NEW_APPS, value).apply()
 
+    private const val KEY_AUTO_UPDATE = "auto_update"
+    private const val KEY_AUTO_INSTALLED = "auto_installed"
+
+    /**
+     * Whether the app updates itself with no tap. **Default on**: what has actually cost the owner
+     * is updates NOT arriving — a guard that blocked its own update screen, and fixes sitting
+     * unread on his phone for hours — not updates arriving unannounced.
+     */
+    fun autoUpdate(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_AUTO_UPDATE, true)
+
+    fun setAutoUpdate(context: Context, value: Boolean) =
+        prefs(context).edit().putBoolean(KEY_AUTO_UPDATE, value).apply()
+
+    /** Set by [SilentInstaller] immediately before it commits, and read once by [UpdatePause]:
+     *  an update the owner did not ask for must not switch his blocking off and wait for a tap
+     *  he has no reason to know is needed. */
+    fun autoInstalled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_AUTO_INSTALLED, false)
+
+    fun setAutoInstalled(context: Context, value: Boolean) =
+        prefs(context).edit().putBoolean(KEY_AUTO_INSTALLED, value).apply()
+
+    private const val KEY_AUTO_UPDATE_ATTEMPT = "auto_update_attempt"
+
+    /**
+     * The release version whose silent install was already handed to the system, or null.
+     *
+     * The six-hourly check downloads the whole APK before it can install anything, so without this
+     * a version the system declined to install silently would be downloaded again every six hours,
+     * for as long as it stayed the latest release. One attempt per release; a notification is what
+     * carries it from there, and [UpdatePause] clears this the moment a version change proves an
+     * install actually landed.
+     */
+    fun autoUpdateAttempt(context: Context): String? =
+        prefs(context).getString(KEY_AUTO_UPDATE_ATTEMPT, null)
+
+    fun setAutoUpdateAttempt(context: Context, value: String?) =
+        prefs(context).edit().putString(KEY_AUTO_UPDATE_ATTEMPT, value).apply()
+
     private const val KEY_KNOWN_PACKAGES = "known_launchable_packages"
 
     /** Launchable packages [NewAppWatcher] has already seen, or **null** when it has never

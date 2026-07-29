@@ -27,6 +27,7 @@ import com.appblocker.R
 import com.appblocker.data.AppRule
 import com.appblocker.data.AdminPrompt
 import com.appblocker.data.AdminScreens
+import com.appblocker.data.InstallPrompt
 import com.appblocker.data.AttemptCounter
 import com.appblocker.data.BlockMode
 import com.appblocker.data.BlockLog
@@ -828,7 +829,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         // accepted trade — the service restarts by itself, whereas battery and permission settings
         // are ones the owner is told to change.
         val danger = ourOwnServicePage(text) ||      // our accessibility page: the real off-switch
-            uninstallConfirmation(pkg, text) ||     // the "uninstall this app?" dialog
+            uninstallConfirmation(pkg, cn, text) || // the "uninstall this app?" dialog
             deviceAdminRemoval(cn, text)            // deactivating device admin
         if (!danger) return false
 
@@ -956,8 +957,23 @@ class BlockerAccessibilityService : AccessibilityService() {
      * so being in one of them and naming us is enough, and nothing here depends on a string that
      * an OEM translates or rephrases.
      */
-    private fun uninstallConfirmation(pkg: String, text: String): Boolean =
-        pkg in INSTALLER_PACKAGES && aboutUs(text) == true
+    private fun uninstallConfirmation(pkg: String, cn: String, text: String): Boolean {
+        if (pkg !in INSTALLER_PACKAGES) return false
+        // We opened this ourselves to install an update. The installer screen for an update is the
+        // same package showing the same app name as the one for a removal, so without this the
+        // guard bounced its own updates — and a guard that blocks its own updates blocks the fix
+        // for itself. Knowing we opened it beats reading it, in any language. See InstallPrompt.
+        if (InstallPrompt.recentlyRequested()) return false
+        // Second, independent signal for an install we did NOT open — sideloading the APK from a
+        // browser or a file manager. Activity CLASS names are not translated, so unlike the screen
+        // text they mean the same thing on every phone and in every language. Only a name that
+        // says install *without* saying uninstall counts; "uninstall" contains "install", which is
+        // exactly the trap the device-admin check fell into with "deactivate"/"activate".
+        if (cn.contains("install") && !cn.contains("uninstall") && !cn.contains("delete")) {
+            return false
+        }
+        return aboutUs(text) == true
+    }
 
     /**
      * The device-admin screen, when it is about *removing* our admin rather than adding it.
