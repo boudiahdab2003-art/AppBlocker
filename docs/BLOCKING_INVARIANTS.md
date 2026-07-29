@@ -726,6 +726,33 @@ own blocked words, and had that line been missing, opening it would have blocked
 own list — a tidy explanation for "flashing inside the app itself" that turns out **not** to be the
 cause. Ruled out, so nobody re-derives it.
 
+### Swept in the seventeenth "bug hunt" (29 Jul 2026) — every hand-written serializer
+
+Prompted by the bug found the same day in `BugReportQueue`, whose encoder listed eight fields
+while the report had ten, so `context` and `recentBlocks` were dropped on the way to disk and
+**every report ever sent arrived without them**. That suggested a kind to enumerate:
+
+```
+grep -rln "fun encode|private fun decode|joinToString(\"|\")|split('|')" data/
+```
+
+Four serializers, checked field-by-field against their data classes. One more miss:
+
+- **`GuardedDeadline` has six fields and `encode` wrote five** — `note` was dropped. That note is
+  the *word that caused a keyword lockout*, and the map holding these says the word and its
+  deadline "can't drift"; the encoder made them drift. It survived only in memory, so every
+  restore — every reboot, every app update, every OEM kill-and-revive — turned "“casino” was found
+  here" into the generic "A blocked word was found here". Now written last and rejoined on the way
+  back, because unlike a package name the note is user-typed and may itself contain a `'|'`.
+- `BlockArrangement` (5 fields), `Goals` (6), `BlockLog` — all complete, and `BlockArrangement`
+  notably handles fields added later with `getOrElse` rather than positional indexing.
+
+**The shape to remember: a field added to a data class and not to its serializer.** It cannot be
+seen in memory — the object is complete right up until it is stored — and it produces a silent
+partial loss rather than a crash. Both instances found today were fields added *after* the
+serializer was written, by someone (me) who did not think of it as a schema. Every one of these
+pairs now has a round-trip test, which is the only thing that catches it.
+
 ### Swept in the sixteenth "bug hunt" (29 Jul 2026) — the PIN, boot recovery
 
 **The PIN was asked once per task and never again.** `LockGate` held `unlocked` in a

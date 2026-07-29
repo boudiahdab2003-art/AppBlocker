@@ -180,4 +180,41 @@ class GuardedDeadlineTest {
         assertEquals(pkg, GuardedDeadline.decode(lockout().encode(pkg))!!.first)
         assertNotNull(GuardedDeadline.decode(lockout().encode("a.b.c.d_e")))
     }
+
+    // --- the note, which is the word that caused the lockout ---
+
+    @Test
+    fun `the word survives being written to disk`() {
+        // It did not. `encode` listed five numbers and stopped, so the word lived only in memory:
+        // every restore — every reboot, every app update, every OEM kill-and-revive — turned
+        // "“casino” was found here" into the generic "A blocked word was found here". The map
+        // holding these says the word and its deadline "can't drift"; the encoder made them.
+        val withNote = lockout().copy(note = "casino")
+        assertEquals("casino", GuardedDeadline.decode(withNote.encode(pkg))!!.second.note)
+    }
+
+    @Test
+    fun `a word containing the separator survives too`() {
+        // Unlike a package name, the note is typed by the owner and may contain anything. It goes
+        // last and is rejoined, rather than truncating at the first '|'.
+        val odd = "bet|win"
+        val back = GuardedDeadline.decode(lockout().copy(note = odd).encode(pkg))!!
+        assertEquals(pkg, back.first)
+        assertEquals(odd, back.second.note)
+        assertEquals(halfHour, back.second.remainingAt(boot, nowRt = 1_000L, nowWall = 1L))
+    }
+
+    @Test
+    fun `records written before the note existed still read`() {
+        // Six fields, no note: the form every lockout on the owner's phone is stored in today.
+        val old = "$pkg|1000|2000|3000|4000|$boot"
+        val back = GuardedDeadline.decode(old)!!.second
+        assertNull(back.note)
+        assertEquals(boot, back.bootCount)
+    }
+
+    @Test
+    fun `an empty note reads as no note`() {
+        assertNull(GuardedDeadline.decode("$pkg|1000|2000|3000|4000|$boot|")!!.second.note)
+    }
 }

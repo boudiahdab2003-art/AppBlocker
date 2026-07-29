@@ -60,9 +60,23 @@ internal data class GuardedDeadline(
     )
 
 
-    /** `pkg|rtStart|rtEnd|wallStart|wallEnd|boot`. Package names cannot contain '|'. */
+    /**
+     * `pkg|rtStart|rtEnd|wallStart|wallEnd|boot[|note]`. Package names cannot contain '|'.
+     *
+     * **The note used to be missing here**, and that is the whole reason for the trailing field.
+     * The record carries the word that caused a keyword lockout — deliberately, so the word and
+     * its deadline "can't drift", as the map that holds them says. But `encode` listed five
+     * numbers and stopped, so the word survived only in memory: every restore from disk, which
+     * means every reboot, every app update and every time an OEM kills and revives the service,
+     * turned "“<word>” was found here" into the generic "A blocked word was found here". Naming
+     * the word he typed is most of what makes that screen land.
+     *
+     * The note goes **last** and is rejoined on the way back, because unlike a package name it is
+     * user-typed and may itself contain a '|'.
+     */
     fun encode(pkg: String): String =
-        "$pkg|$realtimeStart|$realtimeEnd|$wallStart|$wallEnd|$bootCount"
+        "$pkg|$realtimeStart|$realtimeEnd|$wallStart|$wallEnd|$bootCount" +
+            (note?.takeIf { it.isNotBlank() }?.let { "|$it" } ?: "")
 
     companion object {
         /** A deadline [durationMs] from now, anchored to both clocks and the current boot. Both
@@ -90,13 +104,17 @@ internal data class GuardedDeadline(
         fun decode(entry: String): Pair<String, GuardedDeadline>? {
             val parts = entry.split('|')
             val pkg = parts.firstOrNull()?.takeIf { it.isNotBlank() } ?: return null
-            return when (parts.size) {
-                6 -> {
-                    val n = parts.drop(1).map { it.toLongOrNull() ?: return null }
-                    pkg to GuardedDeadline(n[0], n[1], n[2], n[3], n[4].toInt())
+            return when {
+                // Six numbers, then an optional note. `>= 6` rather than `== 6` so records
+                // written before the note existed still read, and a note containing '|' is
+                // rejoined rather than truncating at the first one.
+                parts.size >= 6 -> {
+                    val n = parts.subList(1, 6).map { it.toLongOrNull() ?: return null }
+                    val note = parts.drop(6).joinToString("|").takeIf { it.isNotBlank() }
+                    pkg to GuardedDeadline(n[0], n[1], n[2], n[3], n[4].toInt(), note)
                 }
                 // Legacy: expiry only. bootCount -1 forces the wall-clock path in SessionClock.
-                2 -> {
+                parts.size == 2 -> {
                     val until = parts[1].toLongOrNull() ?: return null
                     pkg to GuardedDeadline(0L, 0L, 0L, until, -1)
                 }
