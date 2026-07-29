@@ -573,7 +573,7 @@ object AiCoach {
         val minuteOfDay = nowCal.get(Calendar.HOUR_OF_DAY) * 60 + nowCal.get(Calendar.MINUTE)
         return buildString {
             appendLine("Time right now: ${hm(minuteOfDay)} — the day is ${minuteOfDay * 100 / 1440}% over. Every \"today\" number below is a running count for this UNFINISHED day, not a final daily total.")
-            appendLine("Screen time so far today: ${fmt(UsageTracker.totalMinutesToday(snapshot))}")
+            appendLine("Screen time so far today: ${fmt(UsageTracker.screenMinutesToday(ctx))}")
             runCatching {
                 val yStart = UsageTracker.startOfDayAgo(1)
                 val byNow = UsageTracker.totalMinutesInRange(ctx, yStart, yStart + minuteOfDay * 60_000L)

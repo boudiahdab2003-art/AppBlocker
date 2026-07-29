@@ -270,7 +270,7 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
         return InsightsState(
             loaded = true,
             usageAccess = hasUsageAccess(ctx),
-            screenMinutes = UsageTracker.totalMinutesToday(snapshot),
+            screenMinutes = UsageTracker.screenMinutesToday(ctx),
             weekMinutes = weekly.sum(),
             strictMinutes = StatsStore.strictMinutesToday(ctx),
             hourly = UsageTracker.hourlyMinutesToday(ctx),

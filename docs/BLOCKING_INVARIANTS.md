@@ -601,10 +601,11 @@ Two things worth carrying forward:
   reads `isAppBlock` without `isShowing` is the guard's safety net, and the guard's own `show()`
   resets the flag on the way in), so it was left alone rather than churned before a release. It is
   still two sources of truth with a window between them. **Best remaining candidate.**
-- The Insights-side of `UsageTracker`'s bucket queries. `queryUsageStats(INTERVAL_DAILY, …)` returns
-  whole daily buckets that merely *overlap* the range rather than clipping to it, so every
-  range-based figure can be off by part of a day at the edges. `totalMinutesInRange` already says so
-  in its KDoc; the charts do not. Cosmetic, and it needs a device to judge.
+- ~~The Insights-side of `UsageTracker`'s bucket queries.~~ **Not cosmetic — the owner hit it the
+  same day it was written down here.** See the sweep-fourteen entry below: dismissing it as "off by
+  part of a day at the edges" understated it, because for *today* the edge is the whole of
+  yesterday. The lesson is about the note, not the code: an imprecision worth writing down is worth
+  bounding, and "cosmetic" was a guess about size that nobody had measured.
 - The rest of the UI's live state. Sweep thirteen took the `remember`-blocks pass and found the
   one that mattered (`KeywordsScreen`'s phase), but only audited the blocks that gate a
   *protection*. `BlockEditorScreen` and `BlockingScreen` cache a dozen settings each and were read
@@ -724,6 +725,39 @@ so the keyword scanner can never read our own screens. The Blocked-words screen 
 own blocked words, and had that line been missing, opening it would have blocked the app with its
 own list — a tidy explanation for "flashing inside the app itself" that turns out **not** to be the
 cause. Ruled out, so nobody re-derives it.
+
+### Swept in the fourteenth "bug hunt" (29 Jul 2026) — two sources for one number
+
+Reported, not audited: **five hours of screen time on a day he had not been awake five hours**,
+while the hour-by-hour chart beside it looked right. That pairing is the whole diagnosis, and it is
+the recurring shape in a new place — **two sources of truth for one quantity**:
+
+| Figure | Built from |
+|---|---|
+| Day chart (correct) | `queryEvents(dayStart, now)` — the event stream, scoped to today |
+| Headline total (inflated) | `queryUsageStats(INTERVAL_DAILY, …)` — Android's pre-aggregated buckets |
+
+`queryUsageStats` returns whole buckets that merely **overlap** the requested range, each carrying
+its full period's total, so "midnight → now" can include time from before midnight. It cannot
+express a partial day. This file's own `totalMinutesInRange` KDoc already said as much — written
+for the coach's yesterday comparison, while the headline number stayed on buckets.
+
+The reach is the part worth remembering: the same figure decided whether a **screen-time goal** was
+blown, was the "screen time so far today" line the **coach** reasoned from, and — through the range
+variant — fed `ProtectionWatchdog`'s STALLED threshold, where inflation raises a false "blocking has
+stopped" alert. A wrong number on a stats screen is cosmetic; the same number wired into four
+decisions is not.
+
+Second defect found alongside: three separate copies of the same event walk had drifted — two
+summed overlapping app intervals while `sessionStatsToday` merged them. So an hour of the chart
+could hold more than sixty minutes. There is now one walk (`walkForeground`) and one merge
+(`mergeIntervals`, lifted out of the copy that was right), and the merge is unit-tested — the first
+test coverage this file has had beyond `addInterval`.
+
+Left alone deliberately: the 30-day history and week-over-week trends still come from bucket
+queries. Events do not reach back that far, and a bucket covering a *whole* day is roughly what the
+bucket holds anyway — the error is in partial days, which means today, and today now comes from
+events even inside that chart.
 
 ### Strict Mode's broad rule is gone, and a fix that reached one call site (v1.110)
 
