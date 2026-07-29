@@ -80,6 +80,61 @@ import com.appblocker.service.timeScheduleCanFire
 
 private val DAY_LABELS = listOf("S", "M", "T", "W", "T", "F", "S") // bit0 = Sunday
 
+/**
+ * "Is this schedule actually doing anything?" — answered, and changed, on the screen you land on
+ * when you tap a schedule.
+ *
+ * Before this, the on/off switch existed only on the card in the list. Tapping that card opened
+ * the editor, so the one screen dedicated to a schedule was the one screen that couldn't tell you
+ * whether it was running, and you had to go back out to turn it on.
+ *
+ * Says what "off" means rather than leaving it to be guessed: a switched-off schedule is not a
+ * deleted one, and the difference matters on a screen that also has a delete button.
+ */
+@Composable
+private fun ScheduleEnabledRow(
+    on: Boolean,
+    isNew: Boolean,
+    canChange: Boolean,
+    onChange: (Boolean) -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                when {
+                    isNew && on -> "Start blocking straight away"
+                    isNew -> "Create it switched off"
+                    on -> "This schedule is on"
+                    else -> "This schedule is off"
+                },
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                when {
+                    !canChange -> "Strict Mode is running. A schedule can be switched on while " +
+                        "it is, but not off."
+                    isNew && on -> "It'll start working as soon as you create it."
+                    isNew -> "It'll be saved in your list, ready to switch on later."
+                    on -> "It's being enforced right now."
+                    else -> "It's kept in your list, but it isn't blocking anything."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Switch(checked = on, enabled = canChange, onCheckedChange = onChange)
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ScheduleEditorScreen(
@@ -106,6 +161,10 @@ fun ScheduleEditorScreen(
     var radius by remember { mutableIntStateOf(existing?.radiusMeters ?: 150) }
     var locCaptured by remember { mutableStateOf((existing?.latitude ?: 0.0) != 0.0) }
     val selected = remember { (existing?.packages ?: emptyList()).toMutableStateList() }
+    // Whether the schedule is actually being enforced. It used to live only on the card in the
+    // list, which meant tapping a schedule took you to the one screen that could not answer
+    // "is this on?" — the owner asked for it in here, where he already is.
+    var enabled by remember { mutableStateOf(existing?.enabled ?: true) }
     var appsOpen by rememberSaveable { mutableStateOf(true) } // collapsible Apps list
     var appQuery by remember { mutableStateOf("") }
     var expandedCats by rememberSaveable { mutableStateOf(listOf<String>()) } // open categories
@@ -144,6 +203,7 @@ fun ScheduleEditorScreen(
                             longitude = lng,
                             radiusMeters = radius,
                             packages = selected.toList(),
+                            enabled = enabled,
                         )
                     )
                     onBack()
@@ -165,6 +225,24 @@ fun ScheduleEditorScreen(
         LazyColumn(Modifier.padding(padding).fillMaxSize().padding(horizontal = 16.dp)) {
             item {
                 Spacer(Modifier.padding(top = 8.dp))
+                ScheduleEnabledRow(
+                    on = enabled,
+                    isNew = existing == null,
+                    // Deliberately NOT `editable`. That rule locks an existing schedule outright
+                    // while Strict is running, which is right for its settings — but switching a
+                    // schedule ON strengthens blocking, and Strict has always allowed that (it is
+                    // exactly what the card in the list allows). Using `editable` here would have
+                    // made this screen stricter than Strict.
+                    canChange = existing == null || !strictActive || !enabled,
+                    onChange = { on ->
+                        enabled = on
+                        // An existing schedule's switch takes effect at once, exactly as it does
+                        // on the card — and it has to, because during Strict the Save button
+                        // below is disabled, and turning one on is the thing Strict permits.
+                        if (existing != null) vm.setEnabled(existing, on)
+                    },
+                )
+                Spacer(Modifier.padding(top = 12.dp))
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
