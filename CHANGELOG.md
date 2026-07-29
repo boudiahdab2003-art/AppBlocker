@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.112
+- The guard no longer blocks your own updates, and the app now updates itself. New versions download on Wi-Fi and install on their own, with no screen and no tap. Blocking keeps running straight through an update that installs itself, instead of switching off and waiting for a tap you never knew was needed. The first one may still ask you once, and you get a notification when it does.
+
 ## v1.111
 - Your screen time was wrong — it was counting time from before midnight as today's, which is why you saw 5 hours on a day you hadn't been awake 5 hours. It's now worked out the same way as the hour-by-hour chart, so the bars add up to the number above them. That figure also decided whether you'd blown a screen-time goal, what the coach was told about your day, and whether daily limits had been reached, so all of those were wrong too. The coach now tells you WHY it can't answer instead of one grey line for every cause, and it no longer loses a long reply or gets stuck on the weaker model for a week. Bug reports finally carry the settings and the block log they were built to send — the queue had been dropping both. Plus: schedules that could never run are now refused with the reason, newly installed apps get a safety net if Android's message is missed, your PIN is asked again after the app has been away a couple of minutes instead of once ever, the block screen remembers which word it caught after a restart, and the block-screen appearance controls no longer break words in half.
 
