@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.113
+- The screen where you type the paragraph has been rebuilt so you can actually type on it: a clock bar you can read at a glance, one line of explanation instead of six, and the paragraph now follows you word by word and turns red the moment you mistype. Schedules can be switched on and off from their own page, and you delete one by swiping it left. The adult filter no longer blocks the general words for porn, which is why you were getting stopped on YouTube and in other blocker apps. Plus four fixes in the new auto-update code, found by auditing it.
+
 ## v1.112
 - The guard no longer blocks your own updates, and the app now updates itself. New versions download on Wi-Fi and install on their own, with no screen and no tap. Blocking keeps running straight through an update that installs itself, instead of switching off and waiting for a tap you never knew was needed. The first one may still ask you once, and you get a notification when it does.
 
