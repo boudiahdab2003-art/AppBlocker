@@ -91,6 +91,21 @@ class ScreenTimeTest {
     }
 
     @Test
+    fun `per-app totals may exceed screen time, and that is not a bug`() {
+        // Two apps overlapping for an hour: one hour of screen time, but an hour for each app.
+        // They answer different questions ("how long was the phone on" vs "how long was I in
+        // YouTube"), so a future reader who notices the rows out-summing the header should find
+        // this test rather than "correct" one of them into the other.
+        val youtube = listOf(iv(0, hour))
+        val chrome = listOf(iv(0, hour))
+        val screen = totalOf(youtube + chrome)
+        val perApp = totalOf(youtube) + totalOf(chrome)
+        assertEquals(hour, screen)
+        assertEquals(2 * hour, perApp)
+        assertTrue(perApp >= screen)
+    }
+
+    @Test
     fun `no hour can hold more than sixty minutes`() {
         // The chart's bars are the merged timeline poured through addInterval, so an impossible
         // bar is now unrepresentable rather than merely unlikely.

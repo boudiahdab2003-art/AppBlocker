@@ -527,7 +527,6 @@ object AiCoach {
     /** Compact plain-text usage summary — aggregate numbers and app names only, nothing
      *  sensitive. Shared by daily tips and chat; everything reads from day-cached sources. */
     suspend fun usageSummary(ctx: Context): String {
-        val snapshot = UsageTracker.todaySnapshot(ctx)
         val monthly = UsageTracker.dailyMinutes(ctx, 30)
         val weekly = monthly.copyOfRange(23, 30)
         InstalledAppsRepository.ensureLoaded(ctx)
@@ -584,7 +583,7 @@ object AiCoach {
             appendLine("Yesterday: ${fmt(weekly.getOrElse(5) { 0 })}")
             appendLine("Last 7 days (oldest first, ending today): $last7")
             appendLine("Weekday average: ${fmt(avg(weekdayVals))}, weekend average: ${fmt(avg(weekendVals))}")
-            val top = UsageTracker.topAppsToday(snapshot, 3)
+            val top = UsageTracker.topAppsToday(ctx, 3)
             if (top.isNotEmpty()) {
                 appendLine("Top apps today: " +
                     top.joinToString { "${label(it.packageName)} (${fmt(it.minutes)})" })
@@ -601,7 +600,7 @@ object AiCoach {
                 }
             }
             runCatching {
-                val cats = UsageTracker.categoryMinutesToday(snapshot)
+                val cats = UsageTracker.categoryMinutesToday(ctx)
                     .entries.sortedByDescending { it.value }.take(4)
                 if (cats.isNotEmpty()) {
                     appendLine("Time by category today: " +

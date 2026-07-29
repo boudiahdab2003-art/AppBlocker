@@ -46,6 +46,11 @@ object UsageTracker {
     @Volatile private var pastDaysCache: Triple<Int, Int, IntArray>? = null // (dayStamp, days, values)
     @Volatile private var lastWeekCache: Pair<Int, Map<String, Int>>? = null // (dayStamp, per-app mins)
 
+    // Today's per-app minutes, walked from events once per TTL rather than per package: the
+    // blocking check asks for one package at a time, and a full event walk per app switch would
+    // be far heavier than the bucket query it replaces. (dayStamp, elapsedRealtime, map)
+    @Volatile private var byPackageCache: Triple<Int, Long, Map<String, Int>>? = null
+
     private fun cachePrefs(context: Context) =
         context.getSharedPreferences(CACHE_PREFS, Context.MODE_PRIVATE)
 
@@ -98,12 +103,12 @@ object UsageTracker {
         val today = todayStamp()
         val known = usedTodayCache[packageName]?.takeIf { it.dayStamp == today }
         if (known != null && now - known.atRt < USED_TODAY_TTL_MS) return known.minutes
-        // Null means no usage access at all: keep whatever today's best figure was (nothing, for
-        // a phone that never had access) and don't cache, so a grant takes effect immediately.
-        val stats = todaySnapshot(context) ?: return known?.minutes ?: 0
-        val totalMs = stats.filter { it.packageName == packageName }
-            .sumOf { it.totalTimeInForeground }
-        val minutes = mergeUsedToday(known?.minutes, (totalMs / 60_000L).toInt())
+        // Unreadable: keep whatever today's best figure was (nothing, for a phone that never had
+        // access) and don't cache, so a grant takes effect immediately.
+        val fresh = minutesByPackageToday(context)[packageName] ?: run {
+            if (todaySnapshot(context) == null) return known?.minutes ?: 0 else 0
+        }
+        val minutes = mergeUsedToday(known?.minutes, fresh)
         usedTodayCache[packageName] = UsedToday(today, now, minutes)
         return minutes
     }
@@ -112,22 +117,45 @@ object UsageTracker {
      *  needs a live system service and cannot have one. */
     internal fun mergeUsedToday(previous: Int?, fresh: Int): Int = max(previous ?: 0, fresh)
 
-    /** Minutes used per package today, summed across entries, biggest first. */
+    /** Minutes used per app today, biggest first. Excludes AppBlocker — the question is which of
+     *  *your* apps took the time, and the app you opened to ask isn't an interesting answer. */
     fun topAppsToday(context: Context, limit: Int = 5): List<AppUsage> =
-        topAppsToday(todaySnapshot(context), limit)
-
-    fun topAppsToday(stats: List<UsageStats>?, limit: Int = 5): List<AppUsage> {
-        stats ?: return emptyList()
-        return stats.groupBy { it.packageName }
-            .mapValues { (_, list) -> list.sumOf { it.totalTimeInForeground } / 60_000L }
-            .filter { it.value > 0 && it.key != OWN_PACKAGE }
-            .map { AppUsage(it.key, it.value.toInt()) }
+        minutesByPackageToday(context)
+            .filter { it.key != OWN_PACKAGE && it.value > 0 }
+            .map { AppUsage(it.key, it.value) }
             .sortedByDescending { it.minutes }
             .take(limit)
+
+    /**
+     * Foreground minutes today keyed by package, **from the event stream** — the same source as
+     * the screen-time headline, so the app list and the total no longer disagree.
+     *
+     * This mattered well beyond the stats screen: [usedMinutesToday] reads it, and that is what a
+     * **daily limit** is compared against. On buckets, yesterday's time could sit in today's
+     * figure, so an app could be blocked in the morning against a limit the owner had not spent —
+     * over-blocking, on the blocking path. (And the monotonic guard above, which exists to stop a
+     * failed read resetting the count, would then hold that inflated figure for the rest of the
+     * day. A safeguard is only as good as the number it is protecting.)
+     *
+     * Falls back to the buckets when the events can't be read at all — see [screenMinutesToday]
+     * for why "nothing readable" must not become "zero".
+     */
+    fun minutesByPackageToday(context: Context): Map<String, Int> {
+        val now = SystemClock.elapsedRealtime()
+        val today = todayStamp()
+        byPackageCache?.let { (stamp, at, map) ->
+            if (stamp == today && now - at < USED_TODAY_TTL_MS) return map
+        }
+        val walk = walkForeground(context, startOfToday(), System.currentTimeMillis())
+        val map = if (walk == null || !walk.sawAnyEvent) bucketMinutesByPackage(context)
+        else walk.minutesByPackage().filterValues { it > 0 }
+        byPackageCache = Triple(today, now, map)
+        return map
     }
 
-    /** Foreground minutes today keyed by package (only apps used > 0 min). */
-    fun minutesByPackageToday(context: Context): Map<String, Int> {
+    /** The pre-aggregated fallback. Not to be used for a partial day on its own — see
+     *  [totalMinutesToday] for what these buckets do to "today". */
+    private fun bucketMinutesByPackage(context: Context): Map<String, Int> {
         val stats = todaySnapshot(context) ?: return emptyMap()
         return stats.groupBy { it.packageName }
             .mapValues { (_, list) -> (list.sumOf { it.totalTimeInForeground } / 60_000L).toInt() }
@@ -170,29 +198,42 @@ object UsageTracker {
         val dayStart = startOfToday()
         val walk = walkForeground(context, dayStart, System.currentTimeMillis())
         if (walk == null || !walk.sawAnyEvent) return totalMinutesToday(context)
-        return (mergeIntervals(walk.intervals).sumOf { it[1] - it[0] } / 60_000L).toInt()
+        return (walk.union().sumOf { it[1] - it[0] } / 60_000L).toInt()
     }
 
-    /** Minutes per app category today (keyed by AppCategory.name), biggest first. */
-    fun categoryMinutesToday(context: Context): Map<String, Int> =
-        categoryMinutesToday(todaySnapshot(context))
-
-    fun categoryMinutesToday(stats: List<UsageStats>?): Map<String, Int> {
-        stats ?: return emptyMap()
-        val byCat = HashMap<String, Long>()
-        stats.forEach { s ->
-            if (s.packageName == OWN_PACKAGE) return@forEach
-            val cat = AppCategories.categoryOf(s.packageName).name
-            byCat[cat] = (byCat[cat] ?: 0L) + s.totalTimeInForeground
+    /** Minutes per app category today (keyed by AppCategory.name), biggest first. Same per-app
+     *  source as everything else on the Today screen, so the slices agree with the rows above. */
+    fun categoryMinutesToday(context: Context): Map<String, Int> {
+        val byCat = HashMap<String, Int>()
+        minutesByPackageToday(context).forEach { (pkg, mins) ->
+            if (pkg == OWN_PACKAGE) return@forEach
+            val cat = AppCategories.categoryOf(pkg).name
+            byCat[cat] = (byCat[cat] ?: 0) + mins
         }
-        return byCat.mapValues { (it.value / 60_000L).toInt() }
-            .filter { it.value > 0 }
+        return byCat.filter { it.value > 0 }
             .toList().sortedByDescending { it.second }.toMap()
     }
 
+    /** One app's stretch in the foreground. */
+    private class Session(val pkg: String, val from: Long, val to: Long)
+
     /** What one walk of the event stream found. [sawAnyEvent] separates "the phone wasn't used"
-     *  from "we couldn't read anything", which are opposite facts that both yield no intervals. */
-    private class Walk(val intervals: List<LongArray>, val sawAnyEvent: Boolean)
+     *  from "we couldn't read anything", which are opposite facts that both yield no sessions. */
+    private class Walk(val sessions: List<Session>, val sawAnyEvent: Boolean) {
+        /** The phone-level timeline: who was in front doesn't matter, only that it was on. */
+        fun union(): List<LongArray> =
+            mergeIntervals(sessions.map { longArrayOf(it.from, it.to) })
+
+        /** Minutes per package, each app's own stretches merged. Note these can sum to MORE than
+         *  [union] — two apps overlapping is one minute of screen time but a minute for each of
+         *  them, which is the right answer to two different questions. */
+        fun minutesByPackage(): Map<String, Int> = sessions
+            .groupBy { it.pkg }
+            .mapValues { (_, s) ->
+                (mergeIntervals(s.map { longArrayOf(it.from, it.to) })
+                    .sumOf { it[1] - it[0] } / 60_000L).toInt()
+            }
+    }
 
     /**
      * Every app's foreground stretches within [start]..[end], as `[from, to]` pairs — **unmerged**,
@@ -213,7 +254,7 @@ object UsageTracker {
             UsageEvents.Event.ACTIVITY_PAUSED
         else @Suppress("DEPRECATION") UsageEvents.Event.MOVE_TO_BACKGROUND
         val fgStart = HashMap<String, Long>()
-        val out = ArrayList<LongArray>()
+        val out = ArrayList<Session>()
         var sawAnyEvent = false
         val events = usm.queryEvents(start, end)
         val e = UsageEvents.Event()
@@ -223,12 +264,12 @@ object UsageTracker {
                 fgEvent -> fgStart[e.packageName] = e.timeStamp
                 bgEvent -> {
                     val s = fgStart.remove(e.packageName) ?: continue
-                    out.add(longArrayOf(max(s, start), e.timeStamp))
+                    out.add(Session(e.packageName, max(s, start), e.timeStamp))
                 }
             }
         }
         // Still in the foreground when the window closed: count up to the end, not to nothing.
-        for ((_, s) in fgStart) out.add(longArrayOf(max(s, start), end))
+        for ((pkg, s) in fgStart) out.add(Session(pkg, max(s, start), end))
         return Walk(out, sawAnyEvent)
     }
 
@@ -266,7 +307,7 @@ object UsageTracker {
         val walk = walkForeground(context, dayStart, System.currentTimeMillis())
             ?: return IntArray(24)
         val buckets = LongArray(24)
-        mergeIntervals(walk.intervals).forEach { addInterval(buckets, it[0], it[1], dayStart) }
+        walk.union().forEach { addInterval(buckets, it[0], it[1], dayStart) }
         return IntArray(24) { (buckets[it] / 60_000L).toInt() }
     }
 
@@ -310,7 +351,7 @@ object UsageTracker {
             ?: return 0 to 0
         // This function's own inline copy of the merge is what became [mergeIntervals]: it was
         // the only one of the three event walks that got this right, so it became the shared one.
-        val merged = mergeIntervals(walk.intervals)
+        val merged = walk.union()
         if (merged.isEmpty()) return 0 to 0
         val longestUse = merged.maxOf { it[1] - it[0] }
         var longestGap = 0L
@@ -331,7 +372,7 @@ object UsageTracker {
         // mattered in two places that are not charts: the coach's "by this time yesterday"
         // comparison, and ProtectionWatchdog's "minutes of active use with no events" — where an
         // inflated figure declares blocking STALLED sooner than it should.
-        return (mergeIntervals(walk.intervals).sumOf { it[1] - it[0] } / 60_000L).toInt()
+        return (walk.union().sumOf { it[1] - it[0] } / 60_000L).toInt()
     }
 
     // ---- History (multi-day) ----

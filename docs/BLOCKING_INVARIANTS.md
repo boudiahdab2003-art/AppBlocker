@@ -754,6 +754,23 @@ could hold more than sixty minutes. There is now one walk (`walkForeground`) and
 (`mergeIntervals`, lifted out of the copy that was right), and the merge is unit-tested — the first
 test coverage this file has had beyond `addInterval`.
 
+**The follow-on sweep, which is the part worth copying.** Having moved the *headline* onto events,
+the first question asked was "what else reads the broken source?" — and the answer was every
+per-app figure on the same screen, including `usedMinutesToday`, **which is what a daily limit is
+compared against**. On buckets, yesterday's time could sit in today's per-app figure, so an app
+could be blocked in the morning against a limit the owner had not spent. Over-blocking, on the
+blocking path, reached by fixing something else. (And the monotonic guard added earlier that day —
+"a lower reading is a failed read" — would then have pinned the inflated figure for the rest of the
+day: a safeguard is only as good as the number it protects.)
+
+Generalises to: **fixing one consumer of a bad source is half a fix.** The half-done state is worse
+than the original, because the corrected number and the uncorrected one sit next to each other and
+neither is obviously the liar. Finish by grepping the source, not the symptom.
+
+Recorded so nobody "fixes" it: per-app minutes can now sum to MORE than screen time. Two apps
+overlapping for a minute is one minute of phone use and a minute for each app — different
+questions. There is a test saying so.
+
 Left alone deliberately: the 30-day history and week-over-week trends still come from bucket
 queries. Events do not reach back that far, and a bucket covering a *whole* day is roughly what the
 bucket holds anyway — the error is in partial days, which means today, and today now comes from
