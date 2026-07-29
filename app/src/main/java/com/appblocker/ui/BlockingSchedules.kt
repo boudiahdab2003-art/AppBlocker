@@ -1,15 +1,21 @@
 package com.appblocker.ui
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -24,10 +30,7 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -36,20 +39,26 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.appblocker.data.Schedule
 import com.appblocker.data.ScheduleType
 import com.appblocker.ui.theme.AppGradients
 import com.appblocker.ui.theme.softGlow
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /** One "create a schedule" tile. [modifier] carries the width — a fixed 116dp on phones
  *  (scrolling row) or weight(1f) on wide screens where the five tiles share the full row. */
@@ -110,6 +119,25 @@ internal fun ScheduleTile(
     }
 }
 
+/**
+ * One saved schedule: what it does, whether it's running, and — by swiping it left — a way to
+ * delete it.
+ *
+ * **Why the bin icon is gone.** It sat between the summary and the switch, and at the owner's
+ * system font size that left the summary about half the row: "9:00 AM – 12:00 PM · Every day ·
+ * 8 apps" wrapped onto three lines, breaking after the separators, while a grey bin crowded the
+ * one control anyone actually uses. Moving delete onto a swipe gives the width back to the text,
+ * which is the thing being read.
+ *
+ * **The swipe still confirms.** A gesture is much easier to make by accident than a deliberate
+ * tap on a bin, and a deleted schedule cannot be undone — so passing the threshold slides the
+ * card away and asks, and cancelling slides it back. The gesture replaces the button, not the
+ * confirmation.
+ *
+ * **And it is off during Strict**, exactly as the bin was. Deleting a schedule weakens blocking,
+ * and a new gesture that could do it during a Strict session would be a new door in the one mode
+ * whose whole point is that there isn't one.
+ */
 @Composable
 internal fun ScheduleCard(
     schedule: Schedule,
@@ -121,43 +149,140 @@ internal fun ScheduleCard(
     // During Strict you may turn a schedule ON (strengthen) but not OFF; the card still opens
     // (the editor itself stays read-only for an existing schedule during Strict).
     val toggleEnabled = !strictActive || !schedule.enabled
+    val canDelete = onDelete != null && !strictActive
     var confirmDelete by remember { mutableStateOf(false) }
-    Card(
-        Modifier.fillMaxWidth().clickable(onClick = onClick),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    ) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                // 10dp, matching every other 40dp icon tile in the app (the app rounds icons at
-                // about a quarter of their size). This one alone was 11dp.
-                Modifier.size(40.dp).clip(RoundedCornerShape(10.dp))
-                    .background(AppGradients.accentVertical),
-                contentAlignment = Alignment.Center,
+    val shape = RoundedCornerShape(20.dp)
+    val slide = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+
+    Box(Modifier.fillMaxWidth()) {
+        // The backdrop the swipe reveals. Sized to the card rather than given a height of its
+        // own, so it can never be the thing that decides how tall the row is.
+        Box(
+            Modifier.matchParentSize().clip(shape)
+                .background(MaterialTheme.colorScheme.errorContainer),
+            contentAlignment = Alignment.CenterEnd,
+        ) {
+            Row(
+                Modifier.padding(end = 22.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(scheduleIcon(schedule.type), contentDescription = null, tint = Color.White)
+                Icon(
+                    Icons.Filled.Delete, contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "Delete", style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                )
             }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(schedule.name, style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-                Text(scheduleSummary(schedule), style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            // Deleting weakens blocking, so the shortcut disappears during Strict Mode
-            // (mirrors the editor, which goes read-only for existing schedules then).
-            if (onDelete != null && !strictActive) {
-                IconButton(onClick = { confirmDelete = true }) {
-                    Icon(Icons.Filled.Delete, contentDescription = "Delete ${schedule.name}",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Row(
+            Modifier.fillMaxWidth()
+                .offset { IntOffset(slide.value.roundToInt(), 0) }
+                .height(IntrinsicSize.Min)
+                .clip(shape)
+                .background(MaterialTheme.colorScheme.surface)
+                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), shape)
+                .clickable(onClick = onClick)
+                .pointerInput(canDelete) {
+                    if (!canDelete) return@pointerInput
+                    detectHorizontalDragGestures(
+                        onDragEnd = {
+                            scope.launch {
+                                // A third of the row: far enough that a stray sideways nudge
+                                // during a scroll doesn't reach it, near enough that deleting
+                                // doesn't need a full-width drag.
+                                if (-slide.value > size.width / 3f) {
+                                    slide.animateTo(-size.width.toFloat(), tween(160))
+                                    confirmDelete = true
+                                } else {
+                                    slide.animateTo(0f, tween(160))
+                                }
+                            }
+                        },
+                        onDragCancel = { scope.launch { slide.animateTo(0f, tween(160)) } },
+                        onHorizontalDrag = { change, delta ->
+                            change.consume()
+                            scope.launch {
+                                // Left only, and never past the card's own width. Swiping right
+                                // does nothing: there is nothing on that side to reveal, and a
+                                // card that slides off its own list looks like a bug.
+                                slide.snapTo(
+                                    (slide.value + delta).coerceIn(-size.width.toFloat(), 0f),
+                                )
+                            }
+                        },
+                    )
+                },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // Full-height accent rail. The switch already states on/off, but it is one small
+            // control at the far end of a row read left-to-right; this makes the answer the first
+            // thing on the card rather than the last.
+            Box(
+                Modifier.fillMaxHeight().width(5.dp).background(
+                    if (schedule.enabled) AppGradients.accentVertical
+                    else SolidColor(MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
+                ),
+            )
+            Row(
+                Modifier.weight(1f).padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(
+                    // 10dp, matching every other 40dp icon tile in the app (the app rounds icons
+                    // at about a quarter of their size).
+                    Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(
+                        if (schedule.enabled) AppGradients.accentVertical
+                        else SolidColor(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)),
+                    ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        scheduleIcon(schedule.type), contentDescription = null,
+                        tint = if (schedule.enabled) Color.White
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
+                Spacer(Modifier.width(12.dp))
+                val (headline, detail) = scheduleDetail(schedule)
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        schedule.name, style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (schedule.enabled) MaterialTheme.colorScheme.onSurface
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    // Two deliberate lines rather than one long string left to wrap where it
+                    // likes. The old single summary broke after a "·" at the owner's font size,
+                    // stranding "PM ·" and "8 apps" on lines of their own.
+                    Text(
+                        headline, style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        detail, style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                Switch(
+                    checked = schedule.enabled,
+                    enabled = toggleEnabled,
+                    onCheckedChange = onToggle,
+                )
             }
-            Switch(checked = schedule.enabled, enabled = toggleEnabled, onCheckedChange = onToggle)
         }
     }
     if (confirmDelete && onDelete != null) {
         AlertDialog(
-            onDismissRequest = { confirmDelete = false },
+            onDismissRequest = {
+                confirmDelete = false
+                scope.launch { slide.animateTo(0f, tween(160)) }
+            },
             title = { Text("Delete this schedule?") },
             text = { Text("“${schedule.name}” — ${scheduleSummary(schedule)}. This can't be undone.") },
             confirmButton = {
@@ -166,7 +291,12 @@ internal fun ScheduleCard(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { confirmDelete = false }) { Text("Cancel") }
+                TextButton(onClick = {
+                    confirmDelete = false
+                    // Put the card back. Without this it would sit swiped-open with no way to
+                    // close it — the cancel would have looked like it did nothing.
+                    scope.launch { slide.animateTo(0f, tween(160)) }
+                }) { Text("Cancel") }
             },
         )
     }
@@ -180,15 +310,29 @@ private fun scheduleIcon(type: ScheduleType): ImageVector = when (type) {
     ScheduleType.LOCATION -> Icons.Filled.LocationOn
 }
 
-private fun scheduleSummary(s: Schedule): String {
+/**
+ * A schedule in two lines: **what triggers it**, then the qualifiers.
+ *
+ * One string was fine until a large system font turned it into three ragged lines that broke
+ * after the "·" separators. Splitting it at the point the sentence already divides means the
+ * important half — the time window, the limit, the place — gets a line of its own and stays
+ * readable at any font size.
+ */
+private fun scheduleDetail(s: Schedule): Pair<String, String> {
     val apps = "${s.packages.size} app${if (s.packages.size == 1) "" else "s"}"
     return when (s.type) {
         ScheduleType.TIME ->
-            "${fmtWindow(s.startMinutes, s.endMinutes)} · ${daysText(s.daysMask)} · $apps"
-        ScheduleType.USAGE_LIMIT -> "${fmtDuration(s.limitMinutes)}/day · $apps"
-        ScheduleType.LAUNCH_COUNT -> "${s.limitCount} opens/day · $apps"
-        ScheduleType.WIFI -> (if (s.wifiSsid.isBlank()) "Any Wi-Fi" else "Wi-Fi: ${s.wifiSsid}") + " · $apps"
-        ScheduleType.LOCATION -> "Within ${s.radiusMeters} m · $apps"
+            fmtWindow(s.startMinutes, s.endMinutes) to "${daysText(s.daysMask)} · $apps"
+        ScheduleType.USAGE_LIMIT -> "${fmtDuration(s.limitMinutes)}/day" to apps
+        ScheduleType.LAUNCH_COUNT -> "${s.limitCount} opens/day" to apps
+        ScheduleType.WIFI ->
+            (if (s.wifiSsid.isBlank()) "Any Wi-Fi" else "Wi-Fi: ${s.wifiSsid}") to apps
+        ScheduleType.LOCATION -> "Within ${s.radiusMeters} m" to apps
     }
 }
+
+/** The same facts on one line, for the delete confirmation — where it is a phrase inside a
+ *  sentence rather than a layout. */
+private fun scheduleSummary(s: Schedule): String =
+    scheduleDetail(s).let { (headline, detail) -> "$headline · $detail" }
 

@@ -8,6 +8,8 @@ import android.provider.Settings
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
@@ -98,8 +100,26 @@ object Updater {
         }
     }.map(::looksLikeApk).getOrDefault(false)
 
+    /**
+     * One download at a time.
+     *
+     * Every download writes the same `update.apk`, which was safe while the only downloader was
+     * the owner tapping Update. It stopped being safe the day [com.appblocker.service.AutoUpdateWorker]
+     * arrived: the six-hourly check can be streaming into that file at the moment he opens the app
+     * and taps Update, and two writers on one path interleave into a file that is neither release.
+     * The magic-byte check would pass it — the first four bytes are still a ZIP header — so the
+     * corruption would reach the installer rather than being caught.
+     *
+     * Serialising is enough. The second caller simply waits and then rewrites the file from the
+     * start, which is the correct outcome for both of them.
+     */
+    private val downloadLock = Mutex()
+
     /** Downloads the APK to external files dir, reporting 0..100 progress. Returns the file. */
     suspend fun download(context: Context, url: String, onProgress: (Int) -> Unit): File =
+        downloadLock.withLock { downloadNow(context, url, onProgress) }
+
+    private suspend fun downloadNow(context: Context, url: String, onProgress: (Int) -> Unit): File =
         withContext(Dispatchers.IO) {
             // External files dir can be null (unmounted storage) — fall back to internal files.
             // Both are declared in res/xml/file_paths.xml so FileProvider can serve either.

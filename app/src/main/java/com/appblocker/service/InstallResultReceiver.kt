@@ -44,9 +44,20 @@ class InstallResultReceiver : BroadcastReceiver() {
 
     private fun onResult(context: Context, intent: Intent) {
         val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, Int.MIN_VALUE)
-        // Whatever happens below, this is no longer an automatic install. The marker exists to stop
-        // a *silent* update pausing blocking; an update the owner taps through himself means he is
-        // standing right there, and should pause exactly as it always has.
+
+        // **Success must not touch the marker, and this early return is load-bearing.**
+        //
+        // A successful self-install kills this process and the replacement starts; the marker is
+        // what tells that new version "nobody asked for this, leave blocking alone". Both this
+        // broadcast and ACTION_MY_PACKAGE_REPLACED land around the same moment with no ordering
+        // between them, so clearing here can easily happen *before* UpdatePause has read it —
+        // and then the new version arms the pause and switches all blocking off silently, after
+        // an update the owner never requested. UpdatePause consumes the marker itself, which is
+        // the only place that knows the read actually happened.
+        if (status == PackageInstaller.STATUS_SUCCESS) return
+
+        // Every other outcome means no automatic install took place. Clear it, so a later update
+        // the owner taps through himself pauses exactly as it always has — he is standing there.
         SettingsStore.setAutoInstalled(context, false)
 
         if (status != PackageInstaller.STATUS_PENDING_USER_ACTION) return

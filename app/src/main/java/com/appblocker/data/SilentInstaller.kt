@@ -58,37 +58,48 @@ object SilentInstaller {
      * not that the install succeeded: the outcome arrives later, and the only outcome that matters
      * (the app is replaced) is one this process does not survive to observe.
      */
-    fun install(context: Context, apk: File): Boolean = runCatching {
+    fun install(context: Context, apk: File): Boolean {
         if (!possible()) return false
-        // Marked BEFORE the commit, not after: this process is killed the moment the replacement
-        // lands, so anything written afterwards would never be written at all. The flag is what
-        // stops the new version pausing blocking on the owner's behalf — see the class KDoc.
-        SettingsStore.setAutoInstalled(context, true)
         val installer = context.packageManager.packageInstaller
-        val params = PackageInstaller.SessionParams(
-            PackageInstaller.SessionParams.MODE_FULL_INSTALL,
-        ).apply {
-            setAppPackageName(context.packageName)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
-            }
-        }
-        val sessionId = installer.createSession(params)
-        installer.openSession(sessionId).use { session ->
-            apk.inputStream().use { input ->
-                session.openWrite("appblocker", 0, apk.length()).use { output ->
-                    input.copyTo(output)
-                    session.fsync(output)
+        // Held outside the try so the failure path can abandon it. A session that is created and
+        // then never committed or abandoned stays on the system's books: PackageInstaller caps how
+        // many an app may hold open, so a step that keeps throwing after createSession succeeds —
+        // no space to stage, an unreadable APK — would quietly fill that cap over successive
+        // releases until creating one became impossible, and auto-update would stop for good with
+        // nothing to see.
+        var sessionId = -1
+        return try {
+            // Marked BEFORE the commit, not after: this process is killed the moment the
+            // replacement lands, so anything written afterwards would never be written at all.
+            // The flag is what stops the new version pausing blocking on the owner's behalf —
+            // see the class KDoc, and SettingsStore.setAutoInstalled on why it is a commit().
+            SettingsStore.setAutoInstalled(context, true)
+            val params = PackageInstaller.SessionParams(
+                PackageInstaller.SessionParams.MODE_FULL_INSTALL,
+            ).apply {
+                setAppPackageName(context.packageName)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
                 }
             }
-            session.commit(resultSender(context, sessionId))
+            sessionId = installer.createSession(params)
+            installer.openSession(sessionId).use { session ->
+                apk.inputStream().use { input ->
+                    session.openWrite("appblocker", 0, apk.length()).use { output ->
+                        input.copyTo(output)
+                        session.fsync(output)
+                    }
+                }
+                session.commit(resultSender(context, sessionId))
+            }
+            true
+        } catch (e: Exception) {
+            // The mark must not outlive a failed attempt, or the NEXT update — a manual one he
+            // taps through himself — would skip the pause on the strength of this one.
+            runCatching { SettingsStore.setAutoInstalled(context, false) }
+            if (sessionId != -1) runCatching { installer.abandonSession(sessionId) }
+            false
         }
-        true
-    }.getOrElse {
-        // The mark must not outlive a failed attempt, or the NEXT update — a manual one he taps
-        // through himself — would skip the pause on the strength of this one.
-        runCatching { SettingsStore.setAutoInstalled(context, false) }
-        false
     }
 
     /** Where the system reports what happened — [com.appblocker.service.InstallResultReceiver],

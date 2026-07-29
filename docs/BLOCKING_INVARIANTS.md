@@ -595,12 +595,13 @@ Two things worth carrying forward:
 
 ### Not yet swept
 
-- The rest of `BlockOverlay`. Sweep thirteen checked that `remove()` clears `counterKey` and
-  `isAppBlock`, and noted that `show()` sets both *before* the `addView` that can throw — so a
-  failed show leaves them set with nothing on screen. No reader is harmed today (the one place that
-  reads `isAppBlock` without `isShowing` is the guard's safety net, and the guard's own `show()`
-  resets the flag on the way in), so it was left alone rather than churned before a release. It is
-  still two sources of truth with a window between them. **Best remaining candidate.**
+- ~~The rest of `BlockOverlay`.~~ **Swept in the eighteenth hunt** — all eleven readers traced, the
+  set-before-`addView` window confirmed unreachable, one latent trap (`onClose`) recorded. See that
+  entry. It is no longer the best candidate.
+- **The new best candidate: the AI coach's persistence and the report queue's disk format.**
+  Sweep 17 swept the serializers in `data/`; the coach's own stores (`CoachProfile`, the advice
+  ledger, `MoodStore`) were only glanced at in sweep 10, and `BugReportQueue` has been the source
+  of a bug on two separate days.
 - ~~The Insights-side of `UsageTracker`'s bucket queries.~~ **Not cosmetic — the owner hit it the
   same day it was written down here.** See the sweep-fourteen entry below: dismissing it as "off by
   part of a day at the edges" understated it, because for *today* the edge is the whole of
@@ -725,6 +726,70 @@ so the keyword scanner can never read our own screens. The Blocked-words screen 
 own blocked words, and had that line been missing, opening it would have blocked the app with its
 own list — a tidy explanation for "flashing inside the app itself" that turns out **not** to be the
 cause. Ruled out, so nobody re-derives it.
+
+### Swept in the eighteenth "bug hunt" (29 Jul 2026) — the auto-updater, hours old
+
+Method: sweep 10's — **audit the day's own changes** — pointed at the silent self-updater, written
+today and never run on a phone. It is the highest-risk new code in the app: it replaces the
+running APK without anyone watching, and every one of its failure modes is invisible by
+construction. Four findings, all mine, all from this morning.
+
+The primitive that produced two of them: **a write that has to outlive the process that makes it.**
+
+1. **`apply()` on the one flag written to survive a process kill — the worst of the four.**
+   `SilentInstaller` sets `autoInstalled = true` immediately before committing the install, with a
+   comment explaining that anything written *after* the commit would never be written at all,
+   because the process is killed the moment the replacement lands. It then wrote the flag with
+   `SharedPreferences.apply()` — which returns immediately and flushes to disk on a background
+   thread. A kill is not an orderly exit, so the flush is simply dropped. The new version then
+   reads "nobody marked this as automatic", arms the after-update pause, and switches **all
+   blocking off** — silently, on a phone whose owner never asked for an update and has no reason
+   to open the app and find out. The comment named the hazard correctly and the code did not
+   defend against it. Now `commit()`.
+   - Generalises: **"written before the kill" is a claim about durability, and `apply()` does not
+     provide it.** Every other prefs write in this app is fine as `apply()` — including
+     `UpdatePause`'s, whose ordering argument survives losing *both* writes because the work is
+     re-runnable. This one is the single write whose loss flips the outcome.
+
+2. **A race that clears the same flag before it is read.** `InstallResultReceiver` cleared
+   `autoInstalled` on *every* status, including `STATUS_SUCCESS`. But success is delivered to the
+   **new** process, and `ACTION_MY_PACKAGE_REPLACED` — which is what makes `UpdatePause` read the
+   flag — arrives around the same moment with no ordering between them. Lose the race and the flag
+   is cleared before it is read: same outcome as finding 1, by a different route. Success now
+   returns without touching it; `UpdatePause` consumes it, being the only place that knows the
+   read happened.
+   - Two independent paths to one silent failure, in ~120 lines written in one sitting. That is
+     the profile of the area, not bad luck: the correct behaviour here is *nothing visible
+     happening*, so both bugs look exactly like success.
+
+3. **`PackageInstaller` sessions leaked on the failure path.** `createSession` succeeded and a
+   later step (staging space, an unreadable APK) threw; nothing abandoned the session. Sessions
+   persist and an app may hold only so many, so a persistent failure would fill the cap over
+   successive releases until `createSession` itself threw — auto-update stopping for good, with
+   nothing to see. Now abandoned in the catch.
+
+4. **Two downloaders, one fixed path.** `Updater.download` has always written `update.apk`, which
+   was safe while the only caller was the owner tapping Update. `AutoUpdateWorker` made it two:
+   the six-hourly check can be streaming into that file at the moment he taps Update, and the two
+   writers interleave into a file that is neither release. Sweep 12's magic-byte check does not
+   catch it — the first four bytes are still a ZIP header — so the corruption would reach the
+   installer. A `Mutex` around the download serialises them; the second caller rewrites from the
+   start, which is right for both.
+   - Worth naming: **adding a second caller to a single-caller resource is a change to that
+     resource**, even when its own code is untouched. Sweep 12 enumerated "every write to a fixed
+     path" and found this one correct — it was, until today.
+
+**`BlockOverlay` — swept, and the standing candidate is confirmed harmless.** This file has listed
+"the rest of `BlockOverlay`" as the best remaining candidate since sweep 13. `show()` does set
+`counterKey` and `isAppBlock` before the `addView` that can throw, so a failed show leaves both set
+with nothing on screen. All eleven readers were traced: nine pair the flag with `isShowing`, and
+the two that do not (the Strict guard's 1500 ms safety net, and the `isAppBlock && !shouldBlock`
+teardown) both end in `overlay.remove()`, which is a no-op when no view is attached. It is still
+two sources of truth with a window between them; it is not reachable as a bug today, and it is no
+longer the best candidate. **One latent trap found instead, not a bug:** `onClose` is a `show()`
+parameter but is only ever wired at *inflation*, and the view outlives many blocks — so a caller
+passing a per-block closure would silently keep the first one forever. Both call sites pass
+`::onCoverDismissed`, so nothing is wrong now; the parameter simply promises more than it delivers.
 
 ### Swept in the seventeenth "bug hunt" (29 Jul 2026) — every hand-written serializer
 
