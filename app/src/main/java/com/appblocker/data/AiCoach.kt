@@ -82,6 +82,12 @@ object AiCoach {
     private const val TAG = "AiCoach"
     private const val PREFS = "ai_coach"
     private const val MODEL_REPROBE_MS = 7L * 24 * 60 * 60 * 1000
+
+    /** How long a *fallback* winner is trusted before the preferred model is tried again. Six
+     *  hours, because the usual reason for falling back is quota and quota resets daily — see
+     *  [attemptWithModelFallback]. One 404 every six hours is a cheap price for not spending a
+     *  week on the second-best model after one exhausted afternoon. */
+    private const val FALLBACK_REPROBE_MS = 6L * 60 * 60 * 1000
     // Sent per request. The coach model has a large context window and the system prompt carries
     // the durable context, but continuity is most of what makes the coach feel like it knows the
     // user — a 16-turn window was the main reason it seemed to forget mid-conversation.
@@ -455,13 +461,30 @@ object AiCoach {
                 .put("system_instruction", JSONObject()
                     .put("parts", JSONArray().put(JSONObject().put("text", system))))
                 .put("contents", contents)
-                .put("generationConfig", JSONObject().put("responseMimeType", "application/json"))
+                .put(
+                    "generationConfig",
+                    JSONObject()
+                        .put("responseMimeType", "application/json")
+                        // The reply must be ONE valid JSON object, so hitting the output ceiling
+                        // does not truncate an answer — it destroys it: the object never closes,
+                        // the parse throws, and the whole reply is lost. The requests most likely
+                        // to hit a ceiling are exactly the ones worth having (a weekly report, a
+                        // plan), so the ceiling is set high enough that a long answer plus its
+                        // goals, suggestions and profile fields fit inside it.
+                        .put("maxOutputTokens", 4096),
+                )
 
             var triesLeft = 2
             var lastFailure: Throwable? = null
+            var salvaged: String? = null
             while (triesLeft-- > 0) {
                 val attempt = runCatching {
-                    val obj = JSONObject(callGemini(ctx, key, body, COACH_CHAIN))
+                    val raw = callGemini(ctx, key, body, COACH_CHAIN)
+                    // Keep what he can still be shown if the strict parse below fails. A reply cut
+                    // off by the output ceiling leaves an object that never closes, and throwing
+                    // it away costs him the whole answer over a missing brace.
+                    salvaged = salvageReply(raw)
+                    val obj = JSONObject(raw)
                     val reply = obj.getString("reply").trim()
                     obj.optJSONArray("goals")?.let { g -> applyGoalUpdate(ctx, g) }
                     obj.optJSONObject("profile")?.let { pr ->
@@ -483,6 +506,15 @@ object AiCoach {
                 lastFailure = attempt.exceptionOrNull()
                 if (!retryWorthwhile(lastFailure)) break
             }
+            // Both tries failed to parse, but the model did answer and the answer is readable:
+            // show it rather than "the coach replied in a form the app couldn't read". Only the
+            // words are salvaged — goals, profile updates and advice all need a well-formed
+            // object, and half-applying a goal update from a truncated one is exactly the kind of
+            // silent wrong state this app cannot afford.
+            salvaged?.takeIf { it.isNotBlank() }?.let {
+                clearError(ctx)
+                return@withContext CoachOutcome.Ok(CoachReply(it, emptyList()))
+            }
             // A success with nothing usable in it (a blank reply, an unparsable object) leaves
             // lastFailure null — that is BAD_REPLY, not UNKNOWN: the call worked and the content
             // was the problem.
@@ -491,6 +523,50 @@ object AiCoach {
             recordError(ctx, error)
             CoachOutcome.Failed(error)
         }
+
+    /**
+     * Pulls the `reply` text out of an answer that is *nearly* JSON.
+     *
+     * The coach is asked for one JSON object, so an answer cut off by the output ceiling — which
+     * happens on exactly the requests worth having, a weekly report or a plan — leaves an object
+     * that never closes. `JSONObject` throws, and the whole answer is lost over a missing brace.
+     *
+     * Deliberately dumb: find `"reply"`, take the string that follows, unescape it. It does not
+     * try to repair the object, because anything cleverer would eventually "repair" a goals array
+     * into something the owner never agreed to. Words only; see the caller.
+     */
+    internal fun salvageReply(raw: String): String? {
+        val key = raw.indexOf("\"reply\"")
+        if (key < 0) return null
+        val open = raw.indexOf('"', raw.indexOf(':', key) + 1)
+        if (open < 0) return null
+        val sb = StringBuilder()
+        var i = open + 1
+        while (i < raw.length) {
+            when (val c = raw[i]) {
+                '\\' -> {
+                    if (i + 1 >= raw.length) break
+                    when (val esc = raw[i + 1]) {
+                        'n' -> sb.append('\n')
+                        't' -> sb.append('\t')
+                        'r' -> Unit
+                        'u' -> {
+                            val hex = raw.substring(i + 2, minOf(i + 6, raw.length))
+                            hex.toIntOrNull(16)?.let { sb.append(it.toChar()) }
+                            i += 4
+                        }
+                        else -> sb.append(esc) // \" and \\ land here, as themselves
+                    }
+                    i += 2
+                }
+                // The closing quote of the reply — anything after it is structure we don't need.
+                '"' -> return sb.toString().trim().ifBlank { null }
+                else -> { sb.append(c); i++ }
+            }
+        }
+        // Ran off the end: the string itself was truncated mid-sentence. Still his answer.
+        return sb.toString().trim().ifBlank { null }
+    }
 
     /** Turns the coach's goal objects into real [Goals], keeping the id (and so the whole
      *  hit history) of any goal that survives the update unchanged. */
@@ -779,8 +855,22 @@ object AiCoach {
         val okKey = "model_ok_${chain.name}"
         val okAtKey = "model_ok_at_${chain.name}"
         val remembered = prefs.getString(okKey, null)
-            ?.takeIf { System.currentTimeMillis() - prefs.getLong(okAtKey, 0) < MODEL_REPROBE_MS }
             ?.takeIf { it in chain.models } // a chain edit retires the old winner
+            ?.takeIf {
+                val age = System.currentTimeMillis() - prefs.getLong(okAtKey, 0)
+                // A fallback is remembered for hours; the first choice for a week.
+                //
+                // The chain is a PREFERENCE order — the model at the top is the one whose answers
+                // are worth having. Quota is what usually knocks it out, and quota resets daily,
+                // so remembering "flash answered" for a full week means one exhausted afternoon
+                // costs seven days of second-best coaching, silently. Nobody would notice: the
+                // coach still replies, just less well.
+                //
+                // The long memory exists for a different case — an id this key does not serve at
+                // all, which costs a 404 every time it is tried. That only applies to the model
+                // we actually settled on being the best available, so it keeps the long window.
+                age < if (it == chain.models.first()) MODEL_REPROBE_MS else FALLBACK_REPROBE_MS
+            }
         val order =
             if (remembered == null) chain.models
             else listOf(remembered) + chain.models.filter { it != remembered }
