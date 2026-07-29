@@ -185,4 +185,36 @@ class WebContentFilterTest {
             assertFalse("$name is empty", entries.isEmpty())
         }
     }
+
+    /**
+     * **The words used to talk about porn are not porn.**
+     *
+     * The owner was blocked on YouTube and inside other blocker apps, because the pack carried the
+     * general nouns and adjectives — "pornography", "porno", Arabic "اباحية" — and those are the
+     * vocabulary of an anti-porn store listing, a news piece, a sermon, a recovery video. The pack
+     * was blocking the material that argues against the thing it exists to block.
+     *
+     * Pinned as a test because this is the easiest kind of entry to add back "for coverage": each
+     * of these looks like an obvious omission until you remember where it actually appears. The
+     * compounds asserted below are what carries the coverage instead — nobody writes "free porn"
+     * except to find it.
+     */
+    @Test fun thePackHasNoGeneralWordsForPornItself() {
+        val entries = File("src/main/assets/adult_words_pack.txt").readLines()
+            .map { it.substringBefore('#').trim() }
+            .filter { it.isNotEmpty() }
+        val general = listOf(
+            "porn", "porno", "pornos", "pornography", "pornographic",
+            "بورنو", "اباحي", "اباحية", "الاباحي", "الاباحية", "اباحيات",
+        )
+        assertEquals(
+            "these describe porn rather than being it, and blocked people discussing it",
+            emptyList<String>(),
+            general.filter { it in entries },
+        )
+        // …and the specific side is still doing the work.
+        for (kept in listOf("pornhub", "free porn", "porn video", "افلام اباحية", "سكس")) {
+            assertTrue("$kept must stay in the pack", kept in entries)
+        }
+    }
 }

@@ -12,6 +12,15 @@
 # "قضيب" (metal rod), "لواط" (religious texts), "حلمات" (breastfeeding).
 # Keep it that way. Deliberate exception: the cuckold/BNWO family stays
 # complete even where a term has another meaning.
+#
+# SECOND RULE, added after the owner was blocked on YouTube and inside other
+# blocker apps: **the words used to TALK about porn are not porn.** "Porn" is
+# what an anti-porn app's own description says, what a news piece says, what a
+# sermon or a recovery video says — so the general nouns and adjectives
+# ("pornography", "pornographic", "porno", Arabic "اباحية"/"بورنو") blocked the
+# very material that argues against it. They are gone. What stays is porn
+# itself: the site and brand names, and the compounds nobody writes unless
+# they are looking for it ("free porn", "porn video", "افلام اباحية").
 
 # --- porn sites & brands ---
 pornhub
@@ -80,13 +89,12 @@ nutaku
 redgifs
 
 # --- porn, generic ---
-# NOTE: the bare word "porn" is intentionally omitted — it appears in plenty of
-# non-sexual contexts (news, chat, app UI), so it caused false blocks. The
-# unambiguous compounds below ("porn video", "free porn", …) still match.
-porno
-pornos
-pornography
-pornographic
+# NOTE: the standalone porn words are intentionally omitted — "porn",
+# "pornography", "pornographic", "porno", "pornos". They are the vocabulary of
+# people DISCUSSING porn, not of porn: an anti-porn app's own store listing, a
+# news article, a recovery video. They fired on all of those. The unambiguous
+# compounds below ("porn video", "free porn", …) still match, and no porn site
+# has ever been reachable only through the word "pornography".
 pornstar
 porn star
 porn video
@@ -342,16 +350,16 @@ onahole
 # listed when no word in them is blocked standalone.
 
 # core porn terms + glued forms
+# NOTE: "بورنو" and the "اباحي/اباحية" family are omitted for the same reason as
+# English "pornography" — they are how Arabic *writes about* porn, so they fired
+# on articles, sermons, recovery videos and other blockers' own screens. The
+# phrases further down ("افلام اباحية", "مواقع اباحية") still match, and they are
+# what someone actually searching types.
 سكس
 السكس
 سيكس
 سكسي
 سكسية
-بورنو
-اباحي
-اباحية
-الاباحية
-الاباحي
 
 # vulgar core + glued forms
 نيك
@@ -424,7 +432,6 @@ onahole
 نيك محارم
 نيكني
 بورن هاب
-اباحيات
 افلام اباحية
 مواقع اباحية
 مقاطع اباحية
