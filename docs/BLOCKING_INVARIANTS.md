@@ -726,6 +726,42 @@ own blocked words, and had that line been missing, opening it would have blocked
 own list — a tidy explanation for "flashing inside the app itself" that turns out **not** to be the
 cause. Ruled out, so nobody re-derives it.
 
+### Swept in the fifteenth "bug hunt" (29 Jul 2026) — schedules, and new-app auto-blocking
+
+Both areas were on the "never swept" list; the owner picked them. Four findings, and the two that
+matter are the same shape: **a protection that reports itself as on while doing nothing.**
+
+1. **A TIME schedule can be saved in a state where it can never fire.** The day chips are free
+   toggles, so `daysMask` reaches 0; and the window is half-open, so `start == end` contains no
+   minute. Either one saves without complaint and sits in the list looking enabled. Save now
+   refuses both, and the editor says which. `timeScheduleCanFire` is pure and tested. Deliberately
+   does *not* reinterpret `09:00–09:00` as "all day" — guessing intent is a different way to be
+   wrong, and the editor suggests `00:00–23:59` instead.
+
+2. **New-app auto-blocking rides on one broadcast with no retry.** `PACKAGE_ADDED` is not
+   delivered to an app in the **stopped** state — what a force stop produces, and v1.109
+   deliberately stopped guarding Force stop. Also lost if the DB write fails or the process can't
+   start. `NewAppWatcher.catchUp` reconciles installed apps against a stored baseline on every
+   service start; the receiver stays the fast path.
+
+   **The interesting part is the failure direction.** A wrong baseline blocks every app on the
+   phone at once — far worse than the hole. So `newlyInstalled(baseline, current)` returns nothing
+   when the baseline is **null** (never looked): first run teaches, second enforces. And the
+   baseline is refreshed even while the setting is OFF, or switching it on after a year would treat
+   a year of installs as new. Both properties have tests, and the null case is the first one.
+
+3. An exception in the receiver's coroutine had no handler above it — a bare `CoroutineScope`, so
+   a database hiccup crashed the process in the background, minutes after an install, with nothing
+   connecting the two. Every other background path in this app is wrapped; this one was missed.
+
+4. The receiver upserted a **fresh** `AppRule`, so reinstalling an app silently reset the mode and
+   daily limit the owner had chosen. `AppRuleDao` gains a single-row `get` so both paths keep an
+   existing rule.
+
+Worth noting for the next sweep: findings 1 and 2 were both reachable from the *editor and the
+manifest*, not from the watcher — the file that has absorbed almost every sweep so far. The
+watcher is well-trodden ground now; the untested edges are increasingly elsewhere.
+
 ### Swept in the fourteenth "bug hunt" (29 Jul 2026) — two sources for one number
 
 Reported, not audited: **five hours of screen time on a day he had not been awake five hours**,
