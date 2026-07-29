@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.110
+- The AI coach answers again — it was giving up when your first-choice model ran out of daily quota instead of trying the next one. Bug reports now actually carry the settings and the recent-block log they were built to send; one small failure used to empty the whole report silently. Strict Mode no longer blocks the whole Settings app — both modes now guard only the three screens that actually end protection, so your battery settings and other accessibility apps stay reachable. Turning off Prevent uninstall now costs a typed paragraph, and that paragraph is a race: 40 words in 3 minutes, a fresh one if the clock beats you, and pasting is properly blocked. Plus six bugs found by auditing rather than by you hitting them — including a block screen that could flash over apps that aren't blocked, a Got it that could drop the cover without getting you out, adult protection that could be switched off after its window closed, and daily limits that could quietly stop counting.
+
 ## v1.109
 - The guard stops blocking pages you actually need. It was blocking your battery settings — that page has an "Uninstall" button at the bottom, so it matched the words the guard watches for. Blocking it is self-defeating too, because this app tells you to set battery to "No restrictions" so blocking survives in the background.
 
