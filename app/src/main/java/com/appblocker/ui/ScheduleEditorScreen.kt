@@ -76,6 +76,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.appblocker.data.SavedPlace
 import com.appblocker.data.Schedule
 import com.appblocker.data.ScheduleType
+import com.appblocker.service.timeScheduleCanFire
 
 private val DAY_LABELS = listOf("S", "M", "T", "W", "T", "F", "S") // bit0 = Sunday
 
@@ -149,7 +150,10 @@ fun ScheduleEditorScreen(
                 },
                 enabled = editable && selected.isNotEmpty() &&
                     (type != ScheduleType.LOCATION || locCaptured) &&
-                    (type != ScheduleType.USAGE_LIMIT || limit >= 1),
+                    (type != ScheduleType.USAGE_LIMIT || limit >= 1) &&
+                    // A schedule that can never fire must not be saveable — it would sit in the
+                    // list looking on, and protect nothing. See timeScheduleCanFire.
+                    (type != ScheduleType.TIME || timeScheduleCanFire(daysMask, start, end)),
                 modifier = Modifier
                     .fillMaxWidth()
                     .navigationBarsPadding()
@@ -186,6 +190,20 @@ fun ScheduleEditorScreen(
                             val on = (daysMask shr i) and 1 == 1
                             ChipBtn(label, on, editable) { daysMask = daysMask xor (1 shl i) }
                         }
+                    }
+                    // Says why Save is greyed out. Without it the button just looks broken — and
+                    // the alternative (letting it save) is a schedule that protects nothing while
+                    // looking like it does, which is the failure nobody notices.
+                    if (!timeScheduleCanFire(daysMask, start, end)) {
+                        Spacer(Modifier.padding(top = 8.dp))
+                        Text(
+                            if ((daysMask and 0b1111111) == 0)
+                                "Pick at least one day — otherwise this schedule would never run."
+                            else "Start and end are the same, so this would never run. " +
+                                "For a whole day, use 00:00 to 23:59.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                        )
                     }
                     Spacer(Modifier.padding(top = 12.dp))
                 }

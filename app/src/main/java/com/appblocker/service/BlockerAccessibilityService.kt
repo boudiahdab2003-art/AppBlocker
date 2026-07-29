@@ -37,6 +37,7 @@ import com.appblocker.data.FocusState
 import com.appblocker.data.GuardedDeadline
 import com.appblocker.data.InstalledAppsRepository
 import com.appblocker.data.LaunchCounter
+import com.appblocker.data.NewAppWatcher
 import com.appblocker.data.OffSwitchGuard
 import com.appblocker.data.OwnUi
 import com.appblocker.data.QuickSession
@@ -553,6 +554,11 @@ class BlockerAccessibilityService : AccessibilityService() {
                 true
             }
             .launchIn(scope)
+        // Catch up on any app installed while we weren't listening. PACKAGE_ADDED is a single
+        // delivery with no retry, and Android withholds it from an app in the stopped state — the
+        // state a force stop produces, which v1.109 stopped guarding. Service start is the right
+        // moment: it happens at boot, after an update, and after the service is revived.
+        scope.launch { runCatching { NewAppWatcher.catchUp(applicationContext) } }
         // Warm the block overlay off the connect path (inflate only, NOT addView), so the
         // very first block doesn't pay layout inflation while the blocked app is visible.
         handler.post { overlay.warmUp(::onCoverDismissed) }
