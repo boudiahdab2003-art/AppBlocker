@@ -595,10 +595,16 @@ Two things worth carrying forward:
 
 ### Not yet swept
 
-- `UsageTracker`'s Insights-side reads: `sessionStatsToday`'s interval merging, `hourlyMinutesToday`
-  and the `pastDaysCache` / `lastWeekCache` prefs memoisation. Sweep thirteen took `usedMinutesToday`
-  (the one on the blocking path) and left these, since a wrong number there is visible on a chart
-  rather than invisible in a block that never happened. **Best remaining candidate.**
+- The rest of `BlockOverlay`. Sweep thirteen checked that `remove()` clears `counterKey` and
+  `isAppBlock`, and noted that `show()` sets both *before* the `addView` that can throw — so a
+  failed show leaves them set with nothing on screen. No reader is harmed today (the one place that
+  reads `isAppBlock` without `isShowing` is the guard's safety net, and the guard's own `show()`
+  resets the flag on the way in), so it was left alone rather than churned before a release. It is
+  still two sources of truth with a window between them. **Best remaining candidate.**
+- The Insights-side of `UsageTracker`'s bucket queries. `queryUsageStats(INTERVAL_DAILY, …)` returns
+  whole daily buckets that merely *overlap* the range rather than clipping to it, so every
+  range-based figure can be off by part of a day at the edges. `totalMinutesInRange` already says so
+  in its KDoc; the charts do not. Cosmetic, and it needs a device to judge.
 - The rest of the UI's live state. Sweep thirteen took the `remember`-blocks pass and found the
   one that mattered (`KeywordsScreen`'s phase), but only audited the blocks that gate a
   *protection*. `BlockEditorScreen` and `BlockingScreen` cache a dozen settings each and were read
@@ -697,6 +703,15 @@ answer is not data):
    The lesson is about the audit, not the feature: *a claim about a second call site is a claim to
    verify, not to assume from a grep hit.* The grep found `toggleDeviceAdmin` in two files; only
    reading the surrounding `if` showed what the second one could actually do.
+
+**Fourth pass — swept and clean, recorded so they are not re-derived:** `UsageTracker`'s history
+caches (`cachedPastDays`, `lastWeekAppMinutes`) already refuse to memoise an all-zero or empty
+result, which is invariant 10 applied by someone who had learnt it; `dailyMinutes`' only callers
+pass a literal 30, so its `days - 1` arithmetic has no reachable edge; `CoverGate`'s suppression and
+counting rules, `OwnUi`'s activity lifecycle, `AttemptCounter`/`LaunchCounter`'s day rollovers, and
+every remaining day-stamp arithmetic site (all going through `dayGap`, itself a past bug) held up.
+The rule flow's `retryWhen` and the per-entry `mapNotNull` in `SettingsStore.keywordLockouts` are
+both the "one bad row must not lose the rest" shape, already correct.
 
 **A known limit, deliberately not fixed:** daily limits and daily open counts are *calendar-day*
 facts (`todayStamp()`, `startOfToday()`), so winding the device clock back a day resets both. Every
