@@ -738,12 +738,24 @@ grep -rln "fun encode|private fun decode|joinToString(\"|\")|split('|')" data/
 
 Four serializers, checked field-by-field against their data classes. One more miss:
 
-- **`GuardedDeadline` has six fields and `encode` wrote five** — `note` was dropped. That note is
-  the *word that caused a keyword lockout*, and the map holding these says the word and its
-  deadline "can't drift"; the encoder made them drift. It survived only in memory, so every
-  restore — every reboot, every app update, every OEM kill-and-revive — turned "“casino” was found
-  here" into the generic "A blocked word was found here". Now written last and rejoined on the way
-  back, because unlike a package name the note is user-typed and may itself contain a `'|'`.
+- **`GuardedDeadline` has six fields and `encode` wrote five** — `note` (the *word that caused a
+  keyword lockout*) was dropped, so it survived only in memory and every restore — every reboot,
+  app update and OEM kill-and-revive — turned "“casino” was found here" into the generic "A blocked
+  word was found here".
+
+  **This one was deliberate, and the tests said so.** `the word is deliberately not persisted`
+  asserted the omission, with the reason: a user keyword can contain the format's `'|'` separator,
+  and a note in the middle of a pipe-delimited record corrupts every field after it — including the
+  numbers the lockout itself is read from. I changed it before reading them, and the build caught
+  me. The change stands because the *reason* is now answered rather than ignored: the note goes
+  **last** and decode rejoins everything past the sixth field, so a separator inside it lands
+  harmlessly in the note's own text. The two tests were rewritten to assert that, rather than
+  deleted.
+
+  **Lesson, and it is the second time today**: a test that asserts an absence is documenting a
+  decision. Read the tests for the thing you are about to "fix" — earlier the same day I claimed a
+  second door to the uninstall switch existed without reading the `if` around it. Both were
+  assertions about the codebase made without checking, and both cost a round trip.
 - `BlockArrangement` (5 fields), `Goals` (6), `BlockLog` — all complete, and `BlockArrangement`
   notably handles fields added later with `getOrElse` rather than positional indexing.
 

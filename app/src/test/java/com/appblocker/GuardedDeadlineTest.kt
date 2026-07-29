@@ -131,17 +131,27 @@ class GuardedDeadlineTest {
     // --- the stored format ---
 
     @Test
-    fun `encode and decode round-trip, minus the word`() {
+    fun `encode and decode round-trip, including the word`() {
+        // The word used to be dropped here, deliberately: "a user keyword can contain anything,
+        // including this format's separator", and a note in the middle of a pipe-delimited record
+        // would corrupt every field after it. That reason was real, and it is now answered rather
+        // than ignored — the note goes LAST and decode rejoins everything past the sixth field, so
+        // a separator inside it lands harmlessly in the note's own text.
         val original = lockout()
         val (decodedPkg, decoded) = GuardedDeadline.decode(original.encode(pkg))!!
         assertEquals(pkg, decodedPkg)
-        assertEquals(original.copy(note = null), decoded)
+        assertEquals(original, decoded)
     }
 
     @Test
-    fun `the word is deliberately not persisted`() {
-        // A user keyword can contain anything, including this format's separator.
-        assertNull(GuardedDeadline.decode(lockout(note = "a|b").encode(pkg))!!.second.note)
+    fun `a word containing the separator no longer corrupts the record`() {
+        // The case that forced the omission. Every numeric field must survive it, or the lockout
+        // itself — not just its label — would be read wrong.
+        val (decodedPkg, decoded) = GuardedDeadline.decode(lockout(note = "a|b").encode(pkg))!!
+        assertEquals(pkg, decodedPkg)
+        assertEquals("a|b", decoded.note)
+        assertEquals(boot, decoded.bootCount)
+        assertEquals(halfHour, decoded.remainingAt(boot, nowRt = 1_000L, nowWall = 1L))
     }
 
     @Test
@@ -191,17 +201,6 @@ class GuardedDeadlineTest {
         // holding these says the word and its deadline "can't drift"; the encoder made them.
         val withNote = lockout().copy(note = "casino")
         assertEquals("casino", GuardedDeadline.decode(withNote.encode(pkg))!!.second.note)
-    }
-
-    @Test
-    fun `a word containing the separator survives too`() {
-        // Unlike a package name, the note is typed by the owner and may contain anything. It goes
-        // last and is rejoined, rather than truncating at the first '|'.
-        val odd = "bet|win"
-        val back = GuardedDeadline.decode(lockout().copy(note = odd).encode(pkg))!!
-        assertEquals(pkg, back.first)
-        assertEquals(odd, back.second.note)
-        assertEquals(halfHour, back.second.remainingAt(boot, nowRt = 1_000L, nowWall = 1L))
     }
 
     @Test
