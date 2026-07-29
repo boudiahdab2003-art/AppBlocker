@@ -730,6 +730,17 @@ private fun SegmentedRow(
     }
 }
 
+/** Names a control inside a piece card. Matches the "Size" label in [StepperRow] — the two sit
+ *  one above the other in the same card, and were different sizes with different indents. */
+@Composable
+private fun ChipRowLabel(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
 /**
  * The block screen itself, inflated and rendered by the very code the service uses
  * ([BlockScreenRenderer]), then scaled down to fit.
