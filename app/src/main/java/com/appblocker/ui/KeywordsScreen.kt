@@ -236,9 +236,10 @@ fun KeywordsScreen(
             FrictionGate(
                 title = "Turn off adult protection",
                 blurb = "This lowers your guard. To be sure it's really you and really " +
-                    "deliberate, type the paragraph below — you can't paste it — and wait for " +
-                    "the timer. Even then the pack stays on for another 24 hours; only after " +
-                    "that can you flip the switch off.",
+                    "deliberate, type the paragraph below — you can't paste it — before the " +
+                    "clock runs out. Miss it and you get a fresh paragraph and a fresh clock. " +
+                    "Even then the pack stays on for another 24 hours; only after that can you " +
+                    "flip the switch off.",
                 confirmLabel = "Start the 24-hour wait",
                 dismissLabel = "Keep it on",
                 onDismiss = { showDisableGate = false },

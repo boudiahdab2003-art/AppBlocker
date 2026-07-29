@@ -236,8 +236,9 @@ fun PreventUninstallGate(onDismiss: () -> Unit, onConfirm: () -> Unit) {
         blurb = "This is the switch that actually refuses an uninstall — the guard only makes the " +
             "Settings page hard to reach. With it off, AppBlocker can be removed in a few taps, " +
             "and every block goes with it.\n\nSo, to be sure it's really you and really " +
-            "deliberate: type the paragraph below — you can't paste it — and wait for the timer. " +
-            "Turning it back on is always one tap.",
+            "deliberate: type the paragraph below — you can't paste it — before the clock runs " +
+            "out. Miss it and you get a fresh paragraph and a fresh clock. Turning it back on is " +
+            "always one tap.",
         confirmLabel = "Turn protection off",
         dismissLabel = "Keep it on",
         onDismiss = onDismiss,
