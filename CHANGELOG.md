@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.116
+- "Keep it on" is gone — the back arrow and your phone's back gesture already did the same job, and it was sitting in the middle of the empty space. The paragraph now grows into that space instead of leaving it blank: it works out how much room there actually is and takes it, bigger with the keyboard down, smaller with it up, and never below a floor it can't drop under.
+
 ## v1.115
 - Opening the keyboard no longer makes the paragraph disappear. It was the only thing on that screen without a size of its own — it took whatever was left over, and the keyboard left nothing. It now has a fixed panel that can't shrink, the title and countdown stay pinned at the top, and everything below scrolls like the app you showed me. The typing box says "Type the paragraph above" so it's clear where to look.
 
