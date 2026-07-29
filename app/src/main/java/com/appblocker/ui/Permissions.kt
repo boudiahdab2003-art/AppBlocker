@@ -237,7 +237,6 @@ fun PreventUninstallGate(onDismiss: () -> Unit, onConfirm: () -> Unit) {
             "and every block goes with it. Miss the clock and you get a fresh paragraph and a " +
             "fresh clock. Turning it back on is always one tap.",
         confirmLabel = "Turn protection off",
-        dismissLabel = "Keep it on",
         onDismiss = onDismiss,
         onConfirm = onConfirm,
     )
