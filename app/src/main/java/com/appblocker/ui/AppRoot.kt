@@ -10,6 +10,8 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -81,6 +83,9 @@ private sealed interface Overlay {
 fun AppRoot(openPermissionsOnStart: Boolean = false) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var overlay by remember { mutableStateOf<Overlay?>(null) }
+    // The typed-paragraph gate, requested from a tab and drawn over the window. See the layer
+    // below for why it cannot be drawn where it is asked for.
+    var gate by remember { mutableStateOf<Pair<GateCopy, () -> Unit>?>(null) }
     val focusVm: FocusViewModel = viewModel()
     val strictActive by focusVm.isActive.collectAsState()
     val updateVm: UpdateViewModel = viewModel()
@@ -190,6 +195,43 @@ fun AppRoot(openPermissionsOnStart: Boolean = false) {
                 onOpenSteps = { overlay = Overlay.TwelveSteps },
                 onOpenIconPicker = { overlay = Overlay.IconPicker },
                 onOpenBlockThemePicker = { overlay = Overlay.BlockThemePicker },
+                onRequestGate = { copy, confirm -> gate = copy to confirm },
+            )
+        }
+    }
+
+    // **The typed gate is drawn here, over everything, and not where it is asked for.**
+    //
+    // [FrictionGate] divides the space it is handed between the paragraph, the field and the
+    // button, so it has to be handed the window. Profile asked for it from inside the scaffold,
+    // where "fill the screen" means the tab content area: the bottom tab bar stayed visible
+    // underneath it, and the keyboard's height came off twice — once in the padding the scaffold
+    // hands down (which `Modifier.padding` does not consume) and again in the gate's own
+    // `safeDrawingPadding`. The field ended up below the fold with the keyboard open, which is the
+    // bug five rewrites inside FrictionGate.kt could not reach.
+    //
+    // A layer rather than an [Overlay]: an overlay would unmount MainScaffold, and Profile's
+    // device-admin badge is `remember(resumeTick)` — rebuilt on return by re-reading a state that
+    // `removeActiveAdmin` has not finished changing yet, which is exactly what its `adminOn =
+    // false` exists to avoid. Keeping the scaffold composed underneath keeps that behaviour.
+    //
+    // The clickable is a tap sink, not a button: it catches taps that would otherwise fall through
+    // to the tab bar now hidden behind the gate. Children are hit first, so the field and the
+    // buttons inside are unaffected.
+    gate?.let { (copy, confirm) ->
+        Box(
+            Modifier.fillMaxSize().clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+            ) {}
+        ) {
+            FrictionGate(
+                title = copy.title,
+                blurb = copy.blurb,
+                detail = copy.detail,
+                confirmLabel = copy.confirmLabel,
+                onDismiss = { gate = null },
+                onConfirm = { confirm(); gate = null },
             )
         }
     }
@@ -259,6 +301,9 @@ private fun MainScaffold(
     onOpenSteps: () -> Unit,
     onOpenIconPicker: () -> Unit,
     onOpenBlockThemePicker: () -> Unit,
+    /** Ask for the typed gate. It is drawn by AppRoot, over the window — not here; see the layer
+     *  in [AppRoot] and the window note in [FrictionGate]. */
+    onRequestGate: (GateCopy, () -> Unit) -> Unit,
 ) {
     Scaffold(
         containerColor = Color.Transparent,
@@ -329,6 +374,7 @@ private fun MainScaffold(
                     onOpenSteps = onOpenSteps,
                     onOpenIconPicker = onOpenIconPicker,
                     onOpenBlockThemePicker = onOpenBlockThemePicker,
+                    onRequestGate = onRequestGate,
                     updateVm = updateVm,
                 )
             }

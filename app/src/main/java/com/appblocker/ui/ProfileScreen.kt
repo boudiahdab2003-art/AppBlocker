@@ -93,6 +93,23 @@ import com.appblocker.ui.theme.AppGradients
 import com.appblocker.ui.theme.LocalThemeController
 import kotlinx.coroutines.delay
 
+/**
+ * The wording of the gate in front of turning the off-switch guard off.
+ *
+ * A function rather than a constant only because the copy names the guard's own delays, which are
+ * read off [OffSwitchGuard]. Confirming it starts the wait; it does not lower the guard.
+ */
+private fun guardOffGate() = GateCopy(
+    title = "Turn off the guard",
+    blurb = "This is the switch that stops you switching blocking off in a bad moment. " +
+        "Type the paragraph below — you can't paste it — before the clock runs out.",
+    detail = "Miss the clock and you get a fresh paragraph and a fresh clock, as many " +
+        "times as it takes. Even once you've typed it, the guard stays on for another " +
+        "${OffSwitchGuard.DELAY_LABEL}; after that you have " +
+        "${OffSwitchGuard.WINDOW_LABEL} to turn it off.",
+    confirmLabel = "Start the ${OffSwitchGuard.DELAY_LABEL} wait",
+)
+
 @Composable
 fun ProfileScreen(
     strictActive: Boolean = false,
@@ -104,6 +121,9 @@ fun ProfileScreen(
     onOpenSteps: () -> Unit = {},
     onOpenIconPicker: () -> Unit = {},
     onOpenBlockThemePicker: () -> Unit = {},
+    /** Ask AppRoot for the typed gate. This screen must not draw it itself: it is a tab inside the
+     *  scaffold, and [FrictionGate] sizes itself from the space it is handed. */
+    onRequestGate: (GateCopy, () -> Unit) -> Unit = { _, _ -> },
     updateVm: UpdateViewModel = viewModel(),
     vm: HomeViewModel = viewModel(),
     scheduleVm: ScheduleViewModel = viewModel(),
@@ -116,7 +136,18 @@ fun ProfileScreen(
     val resumeTick = resumeTick()
     var pinSet by remember(resumeTick) { mutableStateOf(PinStore.isSet(context)) }
     val protectionStatus = remember(resumeTick) { protectionStatus(context) }
-    var adminOn by remember(resumeTick) { mutableStateOf(isDeviceAdminActive(context)) }
+    // **Deliberately not `remember(resumeTick)` like its neighbours — see [onRequestGate].**
+    // The typed gate is composed by AppRoot, so the confirm action handed to it is a lambda that
+    // OUTLIVES this composition, and `remember(key)` builds a *new* MutableState every time the
+    // key changes. Leave the app and come back while the paragraph is being typed — three minutes
+    // is long enough — and that lambda is holding the state object from before the resume:
+    // `disableDeviceAdmin` still runs, but the write lands nowhere and the row goes on saying
+    // "On. AppBlocker can't be uninstalled" about a protection that is now off. One state for the
+    // life of the screen, its VALUE refreshed on resume, is the same freshness with a stable
+    // target. (The neighbours below are only ever written from lambdas built during composition,
+    // so they cannot be stranded this way.)
+    var adminOn by remember { mutableStateOf(isDeviceAdminActive(context)) }
+    LaunchedEffect(resumeTick) { adminOn = isDeviceAdminActive(context) }
     val blocksToday = remember(resumeTick) { AttemptCounter.summary(context).sumOf { it.today } }
     // Swallowed-error report, re-read on resume like the rest of this screen's live state.
     var healthErrors by remember(resumeTick) { mutableStateOf(ServiceHealth.errorCount(context)) }
@@ -138,12 +169,12 @@ fun ProfileScreen(
     // the app sits in the background.
     val boot = remember { DeviceBoot.count(context) }
     var guardOn by remember(resumeTick) { mutableStateOf(SettingsStore.guardOffSwitch(context)) }
-    var guardRequest by remember(resumeTick) {
-        mutableStateOf(SettingsStore.guardUnlockRequest(context))
-    }
+    // Same reason as [adminOn] above: the guard's gate confirms from AppRoot, so its lambda holds
+    // this state after a resume has been through. Stranded, the two-hour wait it just started
+    // would not appear on the row until the next resume — a countdown that silently didn't start.
+    var guardRequest by remember { mutableStateOf(SettingsStore.guardUnlockRequest(context)) }
+    LaunchedEffect(resumeTick) { guardRequest = SettingsStore.guardUnlockRequest(context) }
     var autoUpdate by remember(resumeTick) { mutableStateOf(SettingsStore.autoUpdate(context)) }
-    var showGuardGate by remember { mutableStateOf(false) }
-    var showAdminGate by remember { mutableStateOf(false) }
     var showReport by remember { mutableStateOf(false) }
     // `tick` only drives redraws of the countdown; the deadline itself is what decides.
     var guardTick by remember { mutableStateOf(0) }
@@ -284,7 +315,12 @@ fun ProfileScreen(
                 // every protection in the app.
                 onClick = {
                     if (isDeviceAdminActive(context)) {
-                        showAdminGate = true
+                        onRequestGate(PREVENT_UNINSTALL_GATE) {
+                            // removeActiveAdmin completes asynchronously, so flip the badge
+                            // ourselves rather than re-reading a state that hasn't changed yet.
+                            disableDeviceAdmin(context)
+                            adminOn = false
+                        }
                     } else {
                         enableDeviceAdmin(context)
                         adminOn = isDeviceAdminActive(context) // corrected on resume anyway
@@ -327,7 +363,16 @@ fun ProfileScreen(
                             SettingsStore.clearGuardUnlockRequest(context)
                         }
                         // Nothing pending: turning it off starts at the type-and-wait gate.
-                        guardPhase == OffSwitchGuard.Phase.GUARDED -> showGuardGate = true
+                        guardPhase == OffSwitchGuard.Phase.GUARDED ->
+                            onRequestGate(guardOffGate()) {
+                                // Passing the gate does NOT lower the guard — it starts the wait.
+                                // The guard keeps standing until that is served and the owner acts
+                                // inside the window.
+                                SettingsStore.setGuardUnlockRequest(
+                                    context, OffSwitchGuard.UNLOCK_DELAY_MS, boot,
+                                )
+                                guardRequest = SettingsStore.guardUnlockRequest(context)
+                            }
                         // else: waiting — the subtitle above shows the countdown.
                     }
                 },
@@ -527,40 +572,6 @@ fun ProfileScreen(
                 BugReportSender.reportNote(context, note)
                 showReport = false
                 Toast.makeText(context, "Sent — thank you", Toast.LENGTH_SHORT).show()
-            },
-        )
-    }
-    if (showGuardGate) {
-        FrictionGate(
-            title = "Turn off the guard",
-            blurb = "This is the switch that stops you switching blocking off in a bad moment. " +
-                "Type the paragraph below — you can't paste it — before the clock runs out.",
-            detail = "Miss the clock and you get a fresh paragraph and a fresh clock, as many " +
-                "times as it takes. Even once you've typed it, the guard stays on for another " +
-                "${OffSwitchGuard.DELAY_LABEL}; after that you have " +
-                "${OffSwitchGuard.WINDOW_LABEL} to turn it off.",
-            confirmLabel = "Start the ${OffSwitchGuard.DELAY_LABEL} wait",
-            onDismiss = { showGuardGate = false },
-            onConfirm = {
-                // Passing the gate does NOT lower the guard — it starts the wait. The guard keeps
-                // standing until that is served and the owner acts inside the window.
-                SettingsStore.setGuardUnlockRequest(
-                    context, OffSwitchGuard.UNLOCK_DELAY_MS, boot,
-                )
-                guardRequest = SettingsStore.guardUnlockRequest(context)
-                showGuardGate = false
-            },
-        )
-    }
-    if (showAdminGate) {
-        PreventUninstallGate(
-            onDismiss = { showAdminGate = false },
-            onConfirm = {
-                // removeActiveAdmin completes asynchronously, so flip the badge ourselves rather
-                // than re-reading a state that hasn't changed yet.
-                disableDeviceAdmin(context)
-                adminOn = false
-                showAdminGate = false
             },
         )
     }

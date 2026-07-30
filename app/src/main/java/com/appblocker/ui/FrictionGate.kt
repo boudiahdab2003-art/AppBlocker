@@ -55,6 +55,20 @@ import com.appblocker.data.TypedChallenge
 import kotlinx.coroutines.delay
 
 /**
+ * The wording of one gate, so a screen can *ask* for the gate without composing it.
+ *
+ * Needed because of where the gate has to be drawn: see [FrictionGate]'s note on the window. A
+ * screen inside the tab scaffold hands one of these upwards and AppRoot composes the gate over the
+ * whole window, so the copy has to survive the trip as plain data.
+ */
+data class GateCopy(
+    val title: String,
+    val blurb: String,
+    val detail: String,
+    val confirmLabel: String,
+)
+
+/**
  * The app's one "are you really sure, and is it really you" gate: type a fresh random 40-word
  * paragraph (pasting disabled) **before a three-minute clock runs out**. Run out of time and the
  * paragraph is replaced with a new one and the clock starts again — as many times as it takes.
@@ -88,6 +102,17 @@ import kotlinx.coroutines.delay
  * A full screen in the activity window, deliberately NOT a Dialog: dialog windows report zero
  * insets on the owner's device (see DurationPickerDialog in WheelPicker.kt), which left the
  * keyboard sitting on top of the challenge field — typing was invisible.
+ *
+ * **It must be given the whole window, and that is the caller's job.** Every height below is
+ * derived from the space this composable is handed, so handing it less than the window silently
+ * rescales the screen rather than failing: emitted from inside [ProfileScreen] — a tab inside the
+ * scaffold — it got the tab content area, which meant the bottom tab bar stayed visible under a
+ * "full screen" gate and the keyboard inset was subtracted twice (once by the scaffold's padding,
+ * which nothing consumes, then again by `safeDrawingPadding` here). With the keyboard up that left
+ * roughly 300dp instead of 550dp, the paragraph card sat on its 200dp floor, and the field and
+ * button fell below the fold — the owner was typing into a field that was off screen. Five
+ * rewrites of *this file* chased that and none of them could have fixed it. Ask for the gate with
+ * a [GateCopy] and let AppRoot compose it over everything; do not emit it from inside a tab.
  */
 @Composable
 fun FrictionGate(

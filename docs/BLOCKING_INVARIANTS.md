@@ -598,10 +598,16 @@ Two things worth carrying forward:
 - ~~The rest of `BlockOverlay`.~~ **Swept in the eighteenth hunt** — all eleven readers traced, the
   set-before-`addView` window confirmed unreachable, one latent trap (`onClose`) recorded. See that
   entry. It is no longer the best candidate.
-- **The new best candidate: the AI coach's persistence and the report queue's disk format.**
-  Sweep 17 swept the serializers in `data/`; the coach's own stores (`CoachProfile`, the advice
-  ledger, `MoodStore`) were only glanced at in sweep 10, and `BugReportQueue` has been the source
-  of a bug on two separate days.
+- ~~The AI coach's persistence and the report queue's disk format.~~ **Swept in the nineteenth
+  hunt** — `BugReportQueue`'s cap was found counting the wrong side of the queue; `CoachProfile`'s
+  write-back-on-failed-read and the unordered sent-key trim were both judged and left, with the
+  reasons recorded there. `MoodStore` and the advice ledger are clean. No longer a candidate.
+- **The new best candidate: state that escapes its composition.** The nineteenth hunt's first
+  finding was a lambda holding a `remember(key)` state that a resume had already replaced, and it
+  only enumerated the two sites in `ProfileScreen`. The general question — *which callbacks in this
+  app outlive the composition that built them, and what do they write?* — has not been asked of
+  `BlockEditorScreen`, `BlockingScreen`, `ScheduleEditorScreen` or the overlay screens, all of which
+  hand callbacks upwards to `AppRoot`.
 - ~~The Insights-side of `UsageTracker`'s bucket queries.~~ **Not cosmetic — the owner hit it the
   same day it was written down here.** See the sweep-fourteen entry below: dismissing it as "off by
   part of a day at the edges" understated it, because for *today* the edge is the whole of
@@ -761,6 +767,84 @@ content — squeezing it scrolls rather than starving what is inside.
 Generalises beyond Compose: whenever a layout has one flexible element and many rigid ones, the
 flexible one absorbs every future addition. Ask which element the screen exists for, and make sure
 it is not that one.
+
+### Swept in the nineteenth "bug hunt" (30 Jul 2026) — this morning's own change, and the report queue
+
+Two targets: sweep 10's method (**audit the day's own changes**) pointed at the typed gate's move,
+made hours earlier; and this file's own standing candidate, the coach's persistence and
+`BugReportQueue`. Both findings are of the same family — **a safety mechanism whose two halves
+disagree** — and neither is on the blocking path, which is worth saying plainly rather than
+dressing up.
+
+1. **A confirm action that outlived the state it writes — 1 bug, mine, from this morning.** Moving
+   the typed gate out of `ProfileScreen` and into `AppRoot` (so it gets the whole window; see the
+   layout rule above) meant the gate's confirm action became a lambda stored in AppRoot's state.
+   Every other thing that writes `adminOn` is a lambda built during composition, so it always holds
+   the current state object. This one does not — and `adminOn` was `remember(resumeTick)`, which
+   builds a **new** `MutableState` on every resume.
+   - So: open the gate, leave the app and come back while typing — three minutes is long enough to
+     take a call — and the confirm lambda is holding the pre-resume state. `disableDeviceAdmin`
+     still runs, the protection really is off, and the row goes on saying *"On. AppBlocker can't be
+     uninstalled until you turn this off"*. It self-heals on the next resume, so it is the quiet
+     kind: **a protection reporting itself as on while doing nothing**, which is the shape sweeps 2,
+     3, 13 and 15 each found somewhere else.
+   - `guardRequest` is the same, one row down: the two-hour wait would start on disk and not appear
+     on the row, so the countdown looks like it never began.
+   - Fixed by keeping **one** state for the life of the screen and refreshing its *value* on resume
+     (`remember { }` + `LaunchedEffect(resumeTick)`) instead of rebuilding the state itself. Same
+     freshness, stable target.
+   - **The generalisable rule, and it is new to this file:** `remember(key)` is not just a cache
+     hint, it is an *object identity* that changes when the key does. The moment anything outside
+     the composition holds a reference to that state — a callback handed upwards, a lambda parked in
+     someone else's `remember` — the key becomes a way to silently strand the writer. Grep for
+     state written by a lambda that escapes its composition; there are exactly two in this app and
+     both were created this morning.
+
+2. **The daily report cap counted the wrong side of the queue — 1 bug.** `MAX_PER_DAY = 12` is
+   described in its own KDoc as "a hard stop on issues opened per day, whatever goes wrong… the
+   backstop that cannot be reasoned around". `enqueue` checks it; only `markSent` increments it —
+   and nothing is sent until the next app open. A bad day therefore queues report after report
+   against a counter still reading **zero spent**, and the next `flush` posts the lot in one pass.
+   The real ceiling was `MAX_PENDING` (20), not 12.
+   - Fixed in `BugReportSender.flush`, which now re-checks `remainingToday` before each post and
+     stops when it is spent; what does not go out stays queued for tomorrow, which is the cost the
+     KDoc already describes. No test — the queue needs a `Context`, the same reason its per-day cap
+     has never had one.
+   - Worth naming as a shape: **a limit is only as good as the event it counts.** This one counted
+     sends while being enforced at queue time, and those two moments are decoupled *precisely* when
+     it matters, because trouble correlates with being offline — which is the queue's whole reason
+     for existing.
+
+**Considered and deliberately left** (so the next sweep doesn't re-litigate them):
+
+- `BugReportQueue.markSent` trims the sent-key memory with `keys.toList().takeLast(200)`, but the
+  keys come from a `getStringSet` — a `HashSet`, with no ordering and no timestamp in the entries —
+  so "the most recent 200" is arbitrary rather than recent. The newly added key does survive (it is
+  appended last), so the immediate guarantee holds; what can be evicted is an *old but still
+  recurring* bug's key, costing one duplicate issue. Reaching 200 distinct keys needs months at 12
+  a day with dedup working. Giving it a real ordering means stamping the entries, i.e. a stored
+  format change, for a memory whose worst failure is one extra issue in a private tracker. Not
+  worth it — but note the sibling got this right: the advice ledger is also a `StringSet` and
+  recovers its order by sorting on the day stamp it stores (sweep 10).
+- `CoachProfile.merge` is a read-modify-write over a read that returns `emptyMap()` on failure, so a
+  parse failure would not merely fail open — it would **persist** the empty map and erase everything
+  the coach has learned. Invariant 10's write-back variant, and the nastier one. Left because it is
+  not reachable in practice: the file is written only from a `Map<String, String>` and
+  SharedPreferences replaces its XML atomically with a backup file, so there is no partial-write
+  path to corrupt it. Worth revisiting the day anything else writes that key.
+
+**Verified clean, so a later sweep can skip them:**
+
+- Profile's off-switch-guard block is the sibling of the `KeywordsScreen` phase bug (sweep 13,
+  finding 3) and already has the right shape: `guardPhase` is derived on every recomposition from
+  `OffSwitchGuard.phase`, the tested state machine, and the one-second ticker only drives the
+  countdown's redraw. No phase decision depends on the ticker having run, so backgrounding cannot
+  strand it.
+- `ProfileScreen.onRequestGate` defaults to a no-op, so a wiring mistake in `MainScaffold` would
+  make the row silently do nothing rather than turn the protection off — the safe direction, and
+  checked rather than assumed (the wiring is present).
+- `MoodStore`, the advice ledger and `BugReportQueue.encode`/`decode` all round-trip their fields;
+  the day-stamp arithmetic goes through `dayGap`/`stampDaysAgo` per the sweep-1 lesson.
 
 ### Swept in the eighteenth "bug hunt" (29 Jul 2026) — the auto-updater, hours old
 
