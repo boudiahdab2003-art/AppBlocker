@@ -225,22 +225,21 @@ fun rememberGatedFix(perm: Perm): () -> Unit {
  * hours-long wait. Deliberate: device admin has no emergency escape of its own, and "you cannot
  * uninstall this app or hand this phone over for two hours" is a real harm rather than a
  * hypothetical one. The paragraph is what stops a bad moment; the wait would only punish a good one.
+ *
+ * The copy, not the composable: the gate is drawn over the whole window by AppRoot rather than by
+ * the screen that asks for it, because every height in it is derived from the space it is handed
+ * and a tab hands it the tab. See [FrictionGate].
  */
-@Composable
-fun PreventUninstallGate(onDismiss: () -> Unit, onConfirm: () -> Unit) {
-    FrictionGate(
-        title = "Allow uninstalling",
-        blurb = "This is the switch that actually refuses an uninstall. Type the paragraph " +
-            "below — you can't paste it — before the clock runs out.",
-        detail = "The guard only makes the Settings page hard to reach; this is the switch that " +
-            "refuses the uninstall itself. With it off, AppBlocker can be removed in a few taps, " +
-            "and every block goes with it. Miss the clock and you get a fresh paragraph and a " +
-            "fresh clock. Turning it back on is always one tap.",
-        confirmLabel = "Turn protection off",
-        onDismiss = onDismiss,
-        onConfirm = onConfirm,
-    )
-}
+val PREVENT_UNINSTALL_GATE = GateCopy(
+    title = "Allow uninstalling",
+    blurb = "This is the switch that actually refuses an uninstall. Type the paragraph " +
+        "below — you can't paste it — before the clock runs out.",
+    detail = "The guard only makes the Settings page hard to reach; this is the switch that " +
+        "refuses the uninstall itself. With it off, AppBlocker can be removed in a few taps, " +
+        "and every block goes with it. Miss the clock and you get a fresh paragraph and a " +
+        "fresh clock. Turning it back on is always one tap.",
+    confirmLabel = "Turn protection off",
+)
 
 /** Whether AppBlocker is currently an active device admin (so it can't be uninstalled). */
 fun isDeviceAdminActive(ctx: Context): Boolean {
