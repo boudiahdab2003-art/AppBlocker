@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.117
+- You can finally see what you're typing when you turn off Prevent uninstall. The typing page now covers the whole screen, so the box you type into and the button sit above the keyboard instead of falling off the bottom. The gate itself is unchanged - same forty words, same three-minute clock, still no pasting. Also fixed: if you left the app while typing and came back, turning the protection off worked but the row still said On.
+
 ## v1.116
 - "Keep it on" is gone — the back arrow and your phone's back gesture already did the same job, and it was sitting in the middle of the empty space. The paragraph now grows into that space instead of leaving it blank: it works out how much room there actually is and takes it, bigger with the keyboard down, smaller with it up, and never below a floor it can't drop under.
 
