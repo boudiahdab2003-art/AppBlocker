@@ -173,7 +173,15 @@ object BugReportSender {
         val app = context.applicationContext
         scope.launch {
             runCatching {
-                BugReportQueue.pending(app).forEach { report ->
+                // **The daily cap is checked here as well as at enqueue, and it has to be.**
+                // `remainingToday` only moves when a report is *sent*, and nothing is sent until
+                // the next app open — so a bad day queues reports against a counter that is still
+                // reading zero spent, and one flush then posts the whole queue at once. The cap
+                // said 12 and the real ceiling was MAX_PENDING, 20. Checking it per report is what
+                // makes the KDoc's "backstop that cannot be reasoned around" true; what does not
+                // go out stays queued for tomorrow, which is the intended cost.
+                for (report in BugReportQueue.pending(app)) {
+                    if (BugReportQueue.remainingToday(app) <= 0) break
                     if (post(report)) BugReportQueue.markSent(app, report)
                     else BugReportQueue.markFailed(app, report)
                 }

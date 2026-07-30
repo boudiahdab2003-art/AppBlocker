@@ -13,6 +13,14 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.117", "Jul 30, 2026", "The typing page finally gets the whole screen", listOf(
+        "**You could not see what you were typing, and now you can.** Turning off Prevent uninstall means typing a paragraph against a clock — and with the keyboard open, the box you type into was pushed off the bottom of the screen and the \"Turn protection off\" button with it. You were typing blind at a button you couldn't reach.",
+        "The cause was that the page was being drawn inside the tab area instead of over the whole screen — which is why your bottom tab bar was still showing underneath it, and why the keyboard's space was subtracted twice. It now covers the whole screen, the way the Blocked-words version of the same page always has.",
+        "This is the same page that was rebuilt three times last week. Those three attempts all changed the inside of the page; the page was never the problem, the space it was given was.",
+        "**Nothing about the gate got easier.** Same forty words, same three-minute clock, same no pasting, same fresh paragraph when the clock runs out.",
+        "**A related fix you'd only have hit at the worst moment:** if you left the app while typing and came back to finish, confirming really did turn the protection off — but the row kept saying \"On\". It now says what's true.",
+        "Also: on a bad day the app could file more automatic problem reports than its own daily limit allowed. It now sticks to the limit and sends the rest the next day."
+    )),
     VersionLog("1.116", "Jul 29, 2026", "No more empty half-screen on the typing page", listOf(
         "**\"Keep it on\" is gone.** It was a third way of doing what the back arrow at the top and your phone's back gesture already do, and it sat right in the middle of the empty space you pointed at.",
         "**And the paragraph now grows into that space instead of leaving it blank.** Yesterday it had one fixed size, which was safe but meant the page just ended early with a third of the screen doing nothing. It now works out how much room there actually is and takes it — bigger with the keyboard down, smaller with it up, and never below a floor it can't go under whatever your font size is.",
