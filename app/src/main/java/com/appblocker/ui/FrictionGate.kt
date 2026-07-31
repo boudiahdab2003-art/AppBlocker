@@ -44,6 +44,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalTextToolbar
 import androidx.compose.ui.platform.TextToolbar
 import androidx.compose.ui.platform.TextToolbarStatus
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
@@ -67,6 +68,16 @@ data class GateCopy(
     val detail: String,
     val confirmLabel: String,
 )
+
+/**
+ * Test tag on the paragraph card, for `FrictionGateTest`.
+ *
+ * The paragraph is the one element on this screen a test cannot find by its text — the words are
+ * drawn at random on every attempt — and it is precisely the element that three releases in a row
+ * collapsed to nothing. The rendering test needs a handle on exactly it, so it gets one. Nothing
+ * reads this at runtime.
+ */
+const val GATE_PARAGRAPH_TAG = "gate-paragraph"
 
 /**
  * The app's one "are you really sure, and is it really you" gate: type a fresh random 40-word
@@ -241,6 +252,7 @@ fun FrictionGate(
                     // when the keyboard is down: the paragraph uses the room rather than the page
                     // ending early. The ceiling stops it swallowing a tall screen whole.
                     modifier = Modifier.height((viewport - 220.dp).coerceIn(200.dp, 420.dp))
+                        .testTag(GATE_PARAGRAPH_TAG)
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                 )
 

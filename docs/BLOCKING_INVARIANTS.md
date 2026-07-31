@@ -768,6 +768,73 @@ Generalises beyond Compose: whenever a layout has one flexible element and many 
 flexible one absorbs every future addition. Ask which element the screen exists for, and make sure
 it is not that one.
 
+**This rule now has a test (31 Jul 2026).** The sentence above ended "both of the states that broke
+it are ones a cloud session cannot see", and that was true of every kind of test the project had:
+the defect only exists once something has been *measured*, so no JVM test could ever hold it. There
+is now a rendering layer in **`app/src/androidTest`**, run on a device:
+
+- `FrictionGateTest` — the gate at several viewports and at a large system font. The paragraph must
+  keep its stated floor and the field and button must stay reachable. **Restore `weight(1f)` on the
+  phrase card and it fails**, which is the whole point: the rule is enforced rather than remembered.
+- `FontScaleTest` — the schedule tiles must actually grow with the system font. v1.54 shipped them
+  clipped, found from a photo of the owner's phone, because every screenshot taken in development
+  was of a font size he does not use.
+- `BlockScreenMatrixTest` — every layout × theme × arrangement, measured on a tall screen and a
+  short one, asserting the one thing that must never fail: **"Got it" is on screen.** This is the
+  fear `BlockLayouts` already wrote down about the Focus layout, now checked instead of hoped.
+
+They run in CI on `master`, on demand, and — the part that matters — as a **gate in front of every
+release** (`publish.yml` will not build an APK until they pass). It costs ~10 minutes per publish.
+Given v1.104→v1.110 and v1.113→v1.117, that is cheap.
+
+**So: when a fix is a layout fix, add a case here.** The failure mode this file keeps recording is
+a lesson learnt and then relearnt; a test is the only form of a lesson that cannot be forgotten.
+
+### The same rule, found in the block screens (31 Jul 2026) — by the test, on its first run
+
+`BlockScreenMatrixTest` was written to check one thing — *is the way out on screen?* — and failed
+immediately, on **five** combinations across three of the four layouts:
+
+| Layout | Screen | "Got it" ended |
+|---|---|---|
+| editorial | short 1080×1600 | 341px below the bottom |
+| focus | **tall 1080×2340** | 12px below |
+| focus | short 1080×1600 | 52px below |
+| scoreboard | **tall 1080×2340** | 185px below |
+| scoreboard | short 1080×1600 | 386px below |
+
+Two of those are on a **tall** screen — the owner's phone is 1080×2400, so Scoreboard at "Huge"
+put the only button on the block screen about 125px off the bottom of his own device. Nothing in
+the editor prevents that combination.
+
+**It is the layout rule above, in a different file.** Each layout was one `LinearLayout` ending in
+the button, with a weight above it: on `el_quote` in Editorial and Quote, on a spacer in Focus and
+Scoreboard. Grow the fixed pieces past the screen — the size steps reach 1.8×, Scoreboard's number
+is 150sp before that multiplier, a long quote wraps — and the weight goes to zero, the fixed
+children overflow, and the button is pushed out of the screen. Identical shape to the friction
+gate: *one flexible element among rigid ones, which collapses silently at exactly the configuration
+nobody tested.*
+
+Fixed the same way it was fixed there: the pieces went into a `ScrollView` carrying the weight, and
+the button became a **sibling** of the scroller rather than a child, so nothing above it can move
+it. `fillViewport="true"` stretches the inner column to the viewport whenever the content fits, so
+every existing weight still divides the same space and the hand-tuned look is unchanged — asserted,
+not assumed, by `theDefaultLookIsUnchangedByTheScroller`, which requires the content to be *exactly*
+the viewport height at the default arrangement. Applied to all four layouts, including Quote, which
+did not fail but has the largest quote in the app (42sp) and was one longer line from the same bug.
+
+Two lessons worth keeping:
+
+- **The rule generalises further than it was written.** It was recorded as a fact about
+  `FrictionGate.kt`. It was actually a fact about every screen in the app that ends in a button,
+  and nobody looked. When a rule like this is written down, grep for its *primitive* — here,
+  `layout_weight` above a fixed control — exactly as the standing guidance says.
+- **A test that cannot fail is worse than no test.** The first version of `BlockScreenMatrixTest`
+  inflated the layouts without filling in any text, so it was measuring empty views; it still caught
+  Editorial, but it would have passed Focus and Scoreboard — the two that reach the owner's own
+  screen. It now fills in real content, including `Quotes.longest()`. This file's warning about
+  diagnostics that fail silently applies to the tests as much as to the app.
+
 ### Swept in the nineteenth "bug hunt" (30 Jul 2026) — this morning's own change, and the report queue
 
 Two targets: sweep 10's method (**audit the day's own changes**) pointed at the typed gate's move,
