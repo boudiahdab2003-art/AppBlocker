@@ -12,8 +12,18 @@ enforcement). Owner is non-technical; explain things in plain language.
   with the bundled Gradle (`_tools\gradle\gradle-8.9\bin\gradle.bat -p . :app:assembleGithubDebug
   :app:testGithubDebugUnitTest`) — there is no gradle wrapper, and the `github`/`play` flavors
   make bare `assembleDebug` ambiguous. Test on the `appblocker_test` emulator.
+- **Rendering tests** live in `app/src/androidTest` and run on a device:
+  `gradle -p . :app:connectedGithubDebugAndroidTest` (needs the `appblocker_test` emulator
+  running). They exist for the bugs a JVM test structurally cannot have — a button under
+  the keyboard, a label clipped at a large system font, a block screen whose "Got it" has
+  been pushed off the bottom. Those only appear once something has been *measured*.
+  **Add one whenever a fix is a layout fix**; the five releases it took to make the typed
+  gate usable are what this layer is for. In CI they run on `master`, on demand, and as
+  the gate in front of every release.
 - **Releases are cloud-published**: merge to `master`, then trigger the
   **"Publish release"** workflow (`publish.yml`) with a plain-language release note —
+  it now runs the rendering tests on an emulator FIRST and refuses to build if they fail
+  (~10 extra minutes per publish, deliberately) —
   it bumps the version, builds the signed APK (key in repo secrets, fingerprint
   verified), updates CHANGELOG.md, tags, and publishes the GitHub release the
   in-app updater reads. **Only publish when the owner says "publish".**

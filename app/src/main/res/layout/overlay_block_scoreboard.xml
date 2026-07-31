@@ -1,7 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- "Scoreboard" block screen: today's reclaimed minutes as the whole point, centred, with the
      app that prompted it in a small row underneath. No quote. Same view ids as
-     overlay_block.xml (see the note there); the quote ids are simply absent. -->
+     overlay_block.xml (see the note there); the quote ids are simply absent.
+
+     This was the worst of the four: a 150sp number at the "Huge" size step is 270sp, and
+     BlockScreenMatrixTest measured the button 185px below a TALL screen and 386px below a short
+     one. The pieces now scroll and the button is pinned outside the scroller — see the note in
+     overlay_block.xml. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -18,88 +23,104 @@
         android:paddingTop="72dp"
         android:paddingBottom="36dp">
 
-        <LinearLayout
-            android:id="@+id/el_kicker"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="vertical">
-
-        <TextView
-            android:id="@+id/overlay_title"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textAllCaps="true"
-            android:letterSpacing="0.18"
-            android:fontFamily="sans-serif-black"
-            android:textColor="@color/block_text_secondary"
-            android:textSize="13sp" />
-
-        </LinearLayout>
-
-        <View
+        <ScrollView
+            android:id="@+id/overlay_scroll"
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1" />
+            android:layout_weight="1"
+            android:fillViewport="true"
+            android:scrollbars="none">
 
-        <LinearLayout
-            android:id="@+id/el_number"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:gravity="center_horizontal">
-
-        <TextView
-            android:id="@+id/overlay_stat_number"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:fontFamily="serif"
-            android:textColor="@color/block_text_primary"
-            android:textSize="150sp"
-            android:includeFontPadding="false" />
-
-        <TextView
-            android:id="@+id/overlay_stat_label"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:text="Minutes reclaimed today"
-            android:textAllCaps="true"
-            android:letterSpacing="0.15"
-            android:gravity="center"
-            android:fontFamily="sans-serif-black"
-            android:textColor="@color/block_accent"
-            android:textSize="15sp" />
-
-        </LinearLayout>
-
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1" />
-
-        <LinearLayout
-            android:id="@+id/el_app"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:layout_marginBottom="24dp">
-
-            <ImageView
-                android:id="@+id/overlay_icon"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:contentDescription="@null" />
-
-            <TextView
-                android:id="@+id/overlay_subtitle"
-                android:layout_width="wrap_content"
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="12dp"
-                android:fontFamily="sans-serif-medium"
-                android:textColor="@color/block_text_primary"
-                android:textSize="17sp" />
-        </LinearLayout>
+                android:orientation="vertical"
+                android:gravity="center_horizontal">
+
+                <LinearLayout
+                    android:id="@+id/el_kicker"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/overlay_title"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textAllCaps="true"
+                        android:letterSpacing="0.18"
+                        android:fontFamily="sans-serif-black"
+                        android:textColor="@color/block_text_secondary"
+                        android:textSize="13sp" />
+
+                </LinearLayout>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1" />
+
+                <LinearLayout
+                    android:id="@+id/el_number"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:gravity="center_horizontal">
+
+                    <TextView
+                        android:id="@+id/overlay_stat_number"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="serif"
+                        android:textColor="@color/block_text_primary"
+                        android:textSize="150sp"
+                        android:includeFontPadding="false" />
+
+                    <TextView
+                        android:id="@+id/overlay_stat_label"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="Minutes reclaimed today"
+                        android:textAllCaps="true"
+                        android:letterSpacing="0.15"
+                        android:gravity="center"
+                        android:fontFamily="sans-serif-black"
+                        android:textColor="@color/block_accent"
+                        android:textSize="15sp" />
+
+                </LinearLayout>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1" />
+
+                <LinearLayout
+                    android:id="@+id/el_app"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginBottom="24dp">
+
+                    <ImageView
+                        android:id="@+id/overlay_icon"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:contentDescription="@null" />
+
+                    <TextView
+                        android:id="@+id/overlay_subtitle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:fontFamily="sans-serif-medium"
+                        android:textColor="@color/block_text_primary"
+                        android:textSize="17sp" />
+                </LinearLayout>
+            </LinearLayout>
+        </ScrollView>
 
         <Button
             android:id="@+id/overlay_close"

@@ -1,4 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- "Editorial" block screen: minutes reclaimed up top, the quote as the hero, the app in a
+     footer.
+
+     THE WAY OUT IS PINNED, THE PIECES SCROLL. Every layout in this folder used to be one
+     LinearLayout ending in the "Got it" button, with a weight somewhere above it — here, on the
+     quote block. A weight is not a size, it is whatever is left over, so once the pieces above it
+     grew past the screen (the size steps go to 1.8x, the system font goes further, and a long
+     quote wraps) the weight collapsed to zero, the fixed pieces overflowed, and the button was
+     pushed off the bottom. BlockScreenMatrixTest measured it: at every piece "Huge" this layout
+     put the button 341px below a 1600px screen, and Scoreboard managed it on a tall one.
+
+     A block screen with no way out is the worst thing this app can do, so the structure now makes
+     it impossible: the button is a sibling of the scroller, not a child of it, so nothing above
+     can displace it. This is the same fix, and the same lesson, as ui/FrictionGate.kt —
+     docs/BLOCKING_INVARIANTS.md, "A layout rule, learnt three times in one day": a weight on a
+     scroll container is safe in the way it is not on content, because squeezing it scrolls
+     instead of starving what is inside.
+
+     fillViewport keeps the look identical whenever the content fits: the inner column is
+     stretched to the viewport, so el_quote's weight still centres the hero exactly as it did.
+     It only scrolls when it would otherwise have overflowed. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -14,132 +35,147 @@
         android:paddingTop="72dp"
         android:paddingBottom="36dp">
 
-        <!-- Kicker: shield badge + what happened, magazine-label style. -->
-        <LinearLayout
-            android:id="@+id/el_kicker"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
-
-            <FrameLayout
-                android:id="@+id/overlay_badge_bg"
-                android:layout_width="30dp"
-                android:layout_height="30dp"
-                android:background="@drawable/overlay_badge">
-
-                <ImageView
-                    android:layout_width="18dp"
-                    android:layout_height="18dp"
-                    android:layout_gravity="center"
-                    android:src="@drawable/ic_shield_white"
-                    android:contentDescription="@null" />
-            </FrameLayout>
-
-            <TextView
-                android:id="@+id/overlay_title"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="12dp"
-                android:text="Blocked"
-                android:textAllCaps="true"
-                android:letterSpacing="0.14"
-                android:fontFamily="sans-serif-black"
-                android:textColor="@color/block_text_secondary"
-                android:textSize="15sp" />
-        </LinearLayout>
-
-        <!-- Masthead: today's win, giant editorial serif. -->
-        <LinearLayout
-            android:id="@+id/el_number"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="vertical">
-
-        <TextView
-            android:id="@+id/overlay_stat_number"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="28dp"
-            android:fontFamily="serif"
-            android:textColor="@color/block_text_primary"
-            android:textSize="120sp"
-            android:includeFontPadding="false" />
-
-        <TextView
-            android:id="@+id/overlay_stat_label"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Minutes reclaimed today"
-            android:textAllCaps="true"
-            android:letterSpacing="0.15"
-            android:fontFamily="sans-serif-black"
-            android:textColor="@color/block_accent"
-            android:textSize="15sp" />
-
-        </LinearLayout>
-
-        <!-- The hero: the quote owns the screen, editorial serif. -->
-        <LinearLayout
-            android:id="@+id/el_quote"
+        <ScrollView
+            android:id="@+id/overlay_scroll"
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
-            android:orientation="vertical"
-            android:gravity="center_vertical">
-
-            <TextView
-                android:id="@+id/overlay_quote"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:fontFamily="serif"
-                android:textColor="@color/block_text_primary"
-                android:textSize="38sp"
-                android:lineSpacingMultiplier="1.12" />
-
-            <TextView
-                android:id="@+id/overlay_quote_author"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="18dp"
-                android:textAllCaps="true"
-                android:letterSpacing="0.1"
-                android:fontFamily="sans-serif-black"
-                android:textColor="@color/block_accent"
-                android:textSize="17sp" />
-        </LinearLayout>
-
-        <!-- Context footer: small app icon + what's blocked + attempt counts. -->
-        <LinearLayout
-            android:id="@+id/el_app"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:layout_marginBottom="24dp">
-
-            <ImageView
-                android:id="@+id/overlay_icon"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:contentDescription="@null" />
+            android:fillViewport="true"
+            android:scrollbars="none">
 
             <LinearLayout
-                android:layout_width="0dp"
-                android:layout_weight="1"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="14dp"
                 android:orientation="vertical">
 
-                <TextView
-                    android:id="@+id/overlay_subtitle"
+                <!-- Kicker: shield badge + what happened, magazine-label style. -->
+                <LinearLayout
+                    android:id="@+id/el_kicker"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:fontFamily="sans-serif-medium"
-                    android:textColor="@color/block_text_primary"
-                    android:textSize="17sp" />
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <FrameLayout
+                        android:id="@+id/overlay_badge_bg"
+                        android:layout_width="30dp"
+                        android:layout_height="30dp"
+                        android:background="@drawable/overlay_badge">
+
+                        <ImageView
+                            android:layout_width="18dp"
+                            android:layout_height="18dp"
+                            android:layout_gravity="center"
+                            android:src="@drawable/ic_shield_white"
+                            android:contentDescription="@null" />
+                    </FrameLayout>
+
+                    <TextView
+                        android:id="@+id/overlay_title"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:text="Blocked"
+                        android:textAllCaps="true"
+                        android:letterSpacing="0.14"
+                        android:fontFamily="sans-serif-black"
+                        android:textColor="@color/block_text_secondary"
+                        android:textSize="15sp" />
+                </LinearLayout>
+
+                <!-- Masthead: today's win, giant editorial serif. -->
+                <LinearLayout
+                    android:id="@+id/el_number"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/overlay_stat_number"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="28dp"
+                        android:fontFamily="serif"
+                        android:textColor="@color/block_text_primary"
+                        android:textSize="120sp"
+                        android:includeFontPadding="false" />
+
+                    <TextView
+                        android:id="@+id/overlay_stat_label"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Minutes reclaimed today"
+                        android:textAllCaps="true"
+                        android:letterSpacing="0.15"
+                        android:fontFamily="sans-serif-black"
+                        android:textColor="@color/block_accent"
+                        android:textSize="15sp" />
+
+                </LinearLayout>
+
+                <!-- The hero: the quote owns the screen, editorial serif. -->
+                <LinearLayout
+                    android:id="@+id/el_quote"
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:id="@+id/overlay_quote"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="serif"
+                        android:textColor="@color/block_text_primary"
+                        android:textSize="38sp"
+                        android:lineSpacingMultiplier="1.12" />
+
+                    <TextView
+                        android:id="@+id/overlay_quote_author"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="18dp"
+                        android:textAllCaps="true"
+                        android:letterSpacing="0.1"
+                        android:fontFamily="sans-serif-black"
+                        android:textColor="@color/block_accent"
+                        android:textSize="17sp" />
+                </LinearLayout>
+
+                <!-- Context footer: small app icon + what's blocked. -->
+                <LinearLayout
+                    android:id="@+id/el_app"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginBottom="24dp">
+
+                    <ImageView
+                        android:id="@+id/overlay_icon"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:contentDescription="@null" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="14dp"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/overlay_subtitle"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="sans-serif-medium"
+                            android:textColor="@color/block_text_primary"
+                            android:textSize="17sp" />
+                    </LinearLayout>
+                </LinearLayout>
             </LinearLayout>
-        </LinearLayout>
+        </ScrollView>
 
         <Button
             android:id="@+id/overlay_close"

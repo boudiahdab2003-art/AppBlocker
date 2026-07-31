@@ -24,6 +24,17 @@ object Quotes {
         return ALL[i]
     }
 
+    /**
+     * The longest line in the list — the block screen's genuine worst case for height.
+     *
+     * Exists for `BlockScreenMatrixTest`, which measures whether "Got it" is still on screen. That
+     * test is only worth anything if it uses text the app can really produce: an invented string
+     * would report failures that cannot happen, and an empty one reports success that isn't real.
+     * Reading it from [ALL] also means adding a longer quote re-runs the worst case automatically,
+     * rather than leaving the test pinned to whatever was longest the day it was written.
+     */
+    internal fun longest(): Quote = ALL.maxByOrNull { it.text.length } ?: ALL.first()
+
     /** Poster-style text size: short quotes go huge, long ones stay readable. */
     fun sizeSpFor(text: String): Float = when {
         text.length <= 60 -> 38f

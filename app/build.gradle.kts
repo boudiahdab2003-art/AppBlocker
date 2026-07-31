@@ -24,6 +24,12 @@ android {
         versionCode = 118
         versionName = "1.117"
 
+        // Runs the rendering tests in app/src/androidTest — the layer that catches what unit tests
+        // structurally cannot: a button under the keyboard, a label clipped at a large system font,
+        // a block-screen layout that composes to nothing. Every one of those shipped to the owner's
+        // phone and was found by him, because nothing in the pipeline ever drew a screen.
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
         // AI Coach server proxy (docs/SERVER.md #1). When both are non-empty the coach routes
         // requests through our VM (which holds the Gemini key) instead of needing an on-device
         // key. Empty = proxy off (the app falls back to the user's own key, unchanged behaviour).
@@ -140,4 +146,15 @@ dependencies {
     // assertion pass against an empty string and prove nothing. A redaction test that cannot
     // fail is worse than no test.
     testImplementation("org.json:json:20240303")
+
+    // Rendering tests (app/src/androidTest). These run on a device or emulator because the bugs
+    // they exist for are measurement bugs: they only appear once something has actually been laid
+    // out against a real width, height, density and font scale. A JVM test cannot have them.
+    androidTestImplementation(composeBom)
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    // Supplies the bare ComponentActivity that createComposeRule() hosts the composable in.
+    // debugImplementation, not androidTestImplementation: it contributes a manifest entry, which
+    // has to be merged into the app under test rather than into the test APK.
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
