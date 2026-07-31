@@ -89,4 +89,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: rendering-test-report
-          path: app/build/reports/androidTests/
+          # Both, and the second one is the important one: the HTML report says which test failed
+          # but not WHY, and the assertion message is the entire diagnostic here — it names the
+          # layout, theme and screen size, or the height the paragraph collapsed to. The XML
+          # results carry it; the HTML does not.
+          path: |
+            app/build/reports/androidTests/
+            app/build/outputs/androidTest-results/

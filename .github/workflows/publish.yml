@@ -76,7 +76,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: rendering-test-report
-          path: app/build/reports/androidTests/
+          # The XML carries the assertion message; the HTML report only names the failing test.
+          path: |
+            app/build/reports/androidTests/
+            app/build/outputs/androidTest-results/
 
   publish:
     needs: rendering

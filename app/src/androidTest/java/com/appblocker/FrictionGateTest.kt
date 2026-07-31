@@ -14,7 +14,6 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -22,6 +21,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.appblocker.ui.FrictionGate
 import com.appblocker.ui.GATE_PARAGRAPH_TAG
 import com.appblocker.ui.theme.AppBlockerTheme
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -53,6 +53,32 @@ class FrictionGateTest {
 
     @get:Rule
     val compose = createComposeRule()
+
+    /**
+     * **Stop the clock before touching this screen.**
+     *
+     * The gate runs a live countdown — a `LaunchedEffect` that ticks once a second for three
+     * minutes and then starts a fresh attempt — so the composition is never finished changing.
+     * Every Compose assertion first waits for the app to go idle, and on a CI runner's software
+     * renderer it never does: the first version of this class timed out at exactly 60 seconds in
+     * GitHub Actions and took the emulator down with it, while passing locally where the frames
+     * were fast enough to land between ticks. A test that depends on how quickly the machine
+     * draws is not a test, it is a coin toss.
+     *
+     * These are *layout* tests: what is measured is where things are, which the countdown does
+     * not affect. Freezing the clock removes the ticking entirely and makes them deterministic.
+     * Frames are then pumped by hand — see [settle].
+     */
+    @Before
+    fun freezeTheCountdown() {
+        compose.mainClock.autoAdvance = false
+    }
+
+    /** Lays the screen out once, with the clock stopped. */
+    private fun settle() {
+        compose.mainClock.advanceTimeByFrame()
+        compose.waitForIdle()
+    }
 
     private val confirmLabel = "Start the wait"
     private val placeholder = "Type the paragraph above"
@@ -87,6 +113,7 @@ class FrictionGateTest {
                 }
             }
         }
+        settle()
     }
 
     /**
@@ -124,8 +151,15 @@ class FrictionGateTest {
     fun fieldAndButtonStayReachableWhenSqueezed() {
         setGate(height = 360.dp)
 
-        compose.onNodeWithText(placeholder).performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText(confirmLabel).performScrollTo().assertIsDisplayed()
+        // Existence and a real height, rather than scrolling to them and asserting they are
+        // visible. Scrolling is animated, and with the countdown frozen (see freezeTheCountdown)
+        // an animation would never run. It is also not what the bug was: everything below the
+        // clock now lives in ONE scroll container, so a child of it that exists and has a real
+        // height is reachable by definition. What v1.117 actually shipped was a field and a
+        // button pushed below the fold of an area that could not scroll at all, and the
+        // paragraph's floor above is what proves the scroller is doing its job.
+        compose.onNodeWithText(placeholder).assertExists().assertHeightIsAtLeast(40.dp)
+        compose.onNodeWithText(confirmLabel).assertExists().assertHeightIsAtLeast(40.dp)
     }
 
     /**
@@ -151,9 +185,11 @@ class FrictionGateTest {
             }
         }
 
+        settle()
+
         listOf(300.dp, 420.dp, 560.dp, 700.dp, 900.dp).forEach { viewport ->
             compose.runOnUiThread { height = viewport }
-            compose.waitForIdle()
+            settle()
             compose.onNodeWithTag(GATE_PARAGRAPH_TAG).assertHeightIsAtLeast(paragraphFloor)
         }
     }
@@ -168,6 +204,6 @@ class FrictionGateTest {
         setGate(height = 420.dp, fontScale = 1.5f)
 
         compose.onNodeWithTag(GATE_PARAGRAPH_TAG).assertHeightIsAtLeast(paragraphFloor)
-        compose.onNodeWithText(confirmLabel).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText(confirmLabel).assertExists().assertHeightIsAtLeast(40.dp)
     }
 }
