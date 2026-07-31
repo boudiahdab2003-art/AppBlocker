@@ -66,7 +66,7 @@ jobs:
           arch: x86_64
           profile: pixel_6
           emulator-options: >-
-            -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+            -no-window -gpu swangle_indirect -noaudio -no-boot-anim
             -no-snapshot -camera-back none
           disable-animations: true
           script: gradle -p . :app:connectedGithubDebugAndroidTest

@@ -76,8 +76,15 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_6
+          # swangle_indirect, NOT swiftshader_indirect. With SwiftShader the emulator process
+          # *died* part-way through the run — "Failed to start Emulator console", "device
+          # emulator-5554 not found", "Expected 12 tests, received 7" — and always on the same
+          # test. The tests that only measure views survive it (they never reach a draw pass);
+          # the one that draws FrictionGate full-screen does not, and that screen paints a
+          # full-screen radial-gradient shader. A renderer crash, not a failing assertion, which
+          # is why its recorded failure had no message at all.
           emulator-options: >-
-            -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+            -no-window -gpu swangle_indirect -noaudio -no-boot-anim
             -no-snapshot -camera-back none
           disable-animations: true
           script: gradle -p . :app:connectedGithubDebugAndroidTest
