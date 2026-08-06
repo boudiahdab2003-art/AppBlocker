@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.119
+- The blocked site stops paying you to come back
+
 ## v1.118
 - A block screen you could not close - and the check that found it
 
