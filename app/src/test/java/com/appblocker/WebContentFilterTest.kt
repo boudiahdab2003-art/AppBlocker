@@ -1,6 +1,7 @@
 package com.appblocker
 
 import com.appblocker.service.WebContentFilter
+import com.appblocker.service.looksLikeHost
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -82,6 +83,103 @@ class WebContentFilterTest {
             adultPack = false, blockAdult = false,
         )
         assertNull(hit)
+    }
+
+    // ---- checkUrl: the undebounced address-bar path -------------------------------------
+
+    /**
+     * The fast path must reach the verdict the full scan would have reached a quarter-second
+     * later — arriving sooner may not change what happens, or a site blocks one way and not the
+     * other depending only on how quickly the page settled.
+     *
+     * Near-tautological while [WebContentFilter.check] delegates to checkUrl, and deliberately
+     * kept anyway: it is the tripwire for the obvious future "fix" of re-implementing one of the
+     * two in place. It cannot catch a bug the two share — the per-case tests below do that.
+     */
+    @Test fun checkUrlAgreesWithTheFullCheckOnEveryUrlCase() {
+        val f = filter(pack = listOf("anal"))
+        val words = listOf("instagram")
+        val sites = listOf("facebook")
+        for (url in listOf(
+            "instagram.com/reels/xyz", "m.instagram.com/reels", "https://www.facebook.com/",
+            "instagrammers.example.com", "news.ycombinator.com", "wikipedia.org/wiki/cat",
+            "facebook.com/marketplace", "  ",
+        )) {
+            val fast = f.checkUrl(url, words, sites)
+            val full = f.check(
+                text = url, url = url, userKeywords = words, siteKeywords = sites,
+                adultPack = false, blockAdult = false,
+            )
+            assertEquals(url, full?.title, fast?.title)
+            assertEquals(url, full?.word, fast?.word)
+            assertEquals(url, full?.site, fast?.site)
+        }
+    }
+
+    @Test fun checkUrlBlocksABlockedAppsSite() {
+        val hit = filter().checkUrl("instagram.com/reels/xyz", emptyList(), listOf("instagram"))
+        assertTrue(hit?.site == true)
+    }
+
+    /** A typed word must still read as NOT a site, because that is what arms the app lockout —
+     *  the fast path must not turn a word block into the gentler website block. */
+    @Test fun checkUrlMarksAUserKeywordAsNotASite() {
+        val hit = filter().checkUrl("instagram.com/reels/xyz", listOf("instagram"), emptyList())
+        assertEquals("instagram", hit?.word)
+        assertFalse(hit!!.site)
+    }
+
+    @Test fun checkUrlLeavesUnrelatedSitesAlone() {
+        val f = filter()
+        assertNull(f.checkUrl("wikipedia.org/wiki/cat", listOf("instagram"), listOf("facebook")))
+        assertNull(f.checkUrl("instagrammers.example.com", emptyList(), listOf("instagram")))
+        assertNull(f.checkUrl("   ", listOf("instagram"), listOf("facebook")))
+    }
+
+    // ---- checkUrlAdult: the adult layers on the fast path -------------------------------
+
+    @Test fun checkUrlAdultCatchesAPackWordInTheAddress() {
+        val hit = filter(pack = listOf("anal"))
+            .checkUrlAdult("x.com/anal/1", adultPack = true, blockAdult = false)
+        assertEquals("anal", hit?.word)
+    }
+
+    @Test fun checkUrlAdultCatchesAListedSite() {
+        val hit = filter(domains = listOf("example-adult.com"))
+            .checkUrlAdult("https://example-adult.com/x", adultPack = false, blockAdult = true)
+        assertNotNull(hit)
+    }
+
+    /** Same whole-word rule as the page scan — the v1.70 false-positive class must not come
+     *  back through a second door. */
+    @Test fun checkUrlAdultKeepsWholeWordMatching() {
+        val f = filter(pack = listOf("anal"))
+        assertNull(f.checkUrlAdult("en.wikipedia.org/wiki/analysis", adultPack = true, blockAdult = false))
+    }
+
+    @Test fun checkUrlAdultRespectsBothSwitches() {
+        val f = filter(domains = listOf("example-adult.com"), pack = listOf("anal"))
+        assertNull(f.checkUrlAdult("example-adult.com/anal", adultPack = false, blockAdult = false))
+        assertNull(f.checkUrlAdult("wikipedia.org", adultPack = true, blockAdult = true))
+    }
+
+    // ---- looksLikeHost: "he actually went there" vs "he is still typing" ----------------
+
+    @Test fun aLoadedAddressLooksLikeAHost() {
+        assertTrue(looksLikeHost("instagram.com"))
+        assertTrue(looksLikeHost("https://www.instagram.com/reels/x"))
+        assertTrue(looksLikeHost("m.instagram.com"))
+    }
+
+    /** The owner asked for the fast block to wait until he has really gone to the site, so
+     *  half-typed text and searches must read as "not yet". Declining costs nothing: the page
+     *  scan still catches a blocked word typed into the address bar. */
+    @Test fun typingAndSearchingDoNotLookLikeAHost() {
+        assertFalse(looksLikeHost("instagram"))              // mid-word, no dot yet
+        assertFalse(looksLikeHost("instagram."))             // still typing the suffix
+        assertFalse(looksLikeHost("how to quit instagram"))  // a search
+        assertFalse(looksLikeHost(""))
+        assertFalse(looksLikeHost("   "))
     }
 
     // ---- whole-word matching: the v1.70 false-positive class ----------------------------

@@ -75,6 +75,31 @@ internal object CoverGate {
     }
 
     /**
+     * Whether a confirmed foreground change to [newPkg] means the dismiss grace recorded for
+     * [dismissedPkg] has done its job and must be released.
+     *
+     * The grace exists to absorb the events the *departing* app emits on the way out. Once a
+     * different app is genuinely in front, the departing app is off screen and there is nothing
+     * left to absorb — so returning to it later has to be watched from the first event rather
+     * than treated as still-leaving. Nothing used to release it at all, which is why "Got it"
+     * followed by re-opening the browser found both scanners switched off and the blocked site
+     * sitting there unwatched.
+     *
+     * **This is a rule about *which event* releases it, and that is the part that went wrong.**
+     * The release was first hung off the exit watcher's `left = true` verdict, which sounds
+     * equivalent and is not: that watcher gives up *blind* whenever it cannot read the window
+     * tree — routine with gesture navigation — and reports `left = false` when it does. The grace
+     * then ran its full [DISMISS_GRACE_STUCK_MS] with the user already back on the site. Three
+     * emulator rounds still reproduced the bug before the logs said why. Hence a named rule with
+     * tests, rather than a line buried in the watcher.
+     *
+     * Staying in the blocked app keeps [newPkg] equal to [dismissedPkg], so the stuck case the
+     * long window exists for is deliberately untouched.
+     */
+    fun graceSpentBy(newPkg: String?, dismissedPkg: String?): Boolean =
+        dismissedPkg != null && newPkg != null && newPkg != dismissedPkg
+
+    /**
      * Whether a cover raised for [offenceKey] should record a new attempt, so that one open of a
      * blocked app is one attempt however many times the cover has to be drawn to keep the user
      * out — otherwise the cover's "minutes reclaimed" and the Insights totals over-report.

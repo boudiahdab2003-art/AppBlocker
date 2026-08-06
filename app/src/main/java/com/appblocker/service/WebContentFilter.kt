@@ -44,36 +44,96 @@ class WebContentFilter internal constructor(
         // MENTIONING "instagram" doesn't block — only being on instagram.com or searching
         // for it does), and fall back to the whole visible text when it couldn't
         // (fullscreen video, non-browser app) so a hidden omnibox is never a bypass.
-        val keywordHay = url?.lowercase()?.takeIf { it.isNotBlank() } ?: lower
-        for (k in userKeywords) {
-            // Whole-word like the pack below: a bare keyword ("instagram") must not fire on
-            // loose UI text that merely contains it ("instagrammer", icon labels). '.' and '/'
-            // are boundaries, so it still matches inside "instagram.com/reels".
-            val kw = k.trim().lowercase()
-            if (kw.isNotEmpty() && containsWord(keywordHay, kw)) {
-                return Hit("Blocked word", "“$kw” is on your blocked list.", kw)
-            }
-        }
-        // Blocked-app websites: match the URL only. "Block the website, not the word" — so a
-        // blocked app's site is covered, but a page that just mentions its name is not, and no
-        // URL means no match (never blocks on page text).
         val host = url?.lowercase()?.takeIf { it.isNotBlank() }
         if (host != null) {
-            for (k in siteKeywords) {
+            // Both URL layers, in order — the same two [checkUrl] runs on its own for the
+            // undebounced address-bar check, so the fast path and the full scan can never
+            // disagree about what a URL means.
+            checkUrl(host, userKeywords, siteKeywords)?.let { return it }
+        } else {
+            for (k in userKeywords) {
+                // Whole-word like the pack below: a bare keyword ("instagram") must not fire on
+                // loose UI text that merely contains it ("instagrammer", icon labels).
                 val kw = k.trim().lowercase()
-                if (kw.isNotEmpty() && containsWord(host, kw)) {
-                    return Hit(
-                        "Website blocked",
-                        "This site is blocked because its app is on your blocked list.",
-                        site = true,
-                    )
+                if (kw.isNotEmpty() && containsWord(lower, kw)) {
+                    return Hit("Blocked word", "“$kw” is on your blocked list.", kw)
                 }
             }
+            // Site keywords are deliberately skipped with no URL: "block the website, not the
+            // word", so a page that merely mentions a blocked app's name never blocks.
         }
         if (adultPack && packWords.isNotEmpty()) {
             // Pack words match whole-word only (a short entry like "anal" or Arabic "كس" must
             // not fire inside "analysis" or "كسر"), against Arabic-normalized text so spelling
             // variants (alef forms, diacritics, tatweel) still match.
+            val norm = normalizeArabic(lower)
+            for (w in packWords) {
+                if (containsWord(norm, w)) {
+                    return Hit("Adult content blocked", "“$w” is a blocked adult word.", w)
+                }
+            }
+        }
+        if (blockAdult) {
+            for (d in adultDomains) {
+                if (lower.contains(d)) {
+                    return Hit("Adult site blocked", "This site is on the adult-content list.")
+                }
+            }
+            for (k in adultKeywords) {
+                if (lower.contains(k)) {
+                    return Hit("Adult content blocked", "That search or page looks like adult content.")
+                }
+            }
+        }
+        return null
+    }
+
+    /**
+     * The two layers that need nothing but the address bar: the user's own words, then the
+     * websites of the apps they blocked. Both whole-word against [url].
+     *
+     * Split out of [check] so the watcher can run it the moment the omnibox changes, without
+     * waiting for the debounce and the page-text walk [check] needs for the adult layers. That
+     * wait was worth seconds of a blocked site on every visit — long enough that leaving and
+     * coming straight back always paid out, which is what made a dismissed block worth
+     * retrying. Nothing here reads the page, so being early costs nothing.
+     */
+    fun checkUrl(url: String, userKeywords: List<String>, siteKeywords: List<String>): Hit? {
+        val host = url.lowercase().takeIf { it.isNotBlank() } ?: return null
+        for (k in userKeywords) {
+            // '.' and '/' are word boundaries, so a bare "instagram" still matches inside
+            // "instagram.com/reels" while "instagrammer" doesn't.
+            val kw = k.trim().lowercase()
+            if (kw.isNotEmpty() && containsWord(host, kw)) {
+                return Hit("Blocked word", "“$kw” is on your blocked list.", kw)
+            }
+        }
+        for (k in siteKeywords) {
+            val kw = k.trim().lowercase()
+            if (kw.isNotEmpty() && containsWord(host, kw)) {
+                return Hit(
+                    "Website blocked",
+                    "This site is blocked because its app is on your blocked list.",
+                    site = true,
+                )
+            }
+        }
+        return null
+    }
+
+    /**
+     * The adult layers — pack words, then the adult site list, then the adult search list —
+     * matched against [url] alone, in the order [check] runs them.
+     *
+     * Kept separate from [checkUrl] rather than folded into it because in [check] these three
+     * match the **page text**, not the address: an adult page that never names itself in its URL
+     * must still be caught. Making [check] delegate them to a URL matcher would quietly narrow
+     * what it blocks. So this is purely additive — the address-bar check gets the adult pack at
+     * the same speed as everything else, and [check] keeps reading the page exactly as before.
+     */
+    fun checkUrlAdult(url: String, adultPack: Boolean, blockAdult: Boolean): Hit? {
+        val lower = url.lowercase().takeIf { it.isNotBlank() } ?: return null
+        if (adultPack && packWords.isNotEmpty()) {
             val norm = normalizeArabic(lower)
             for (w in packWords) {
                 if (containsWord(norm, w)) {

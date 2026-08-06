@@ -71,7 +71,29 @@ internal fun AccessibilityService.isShortsOnScreen(): Boolean? {
  * page-text matching so fullscreen can't become a bypass. Chromium browsers expose
  * the omnibox as <pkg>:id/url_bar (flagReportViewIds is set in our service config).
  */
-internal fun AccessibilityService.extractBrowserUrl(pkg: String): String? {
+internal fun AccessibilityService.extractBrowserUrl(pkg: String): String? =
+    omniboxText(pkg, settledOnly = false)
+
+/**
+ * The omnibox, but only once it has **settled into an address the user actually went to** —
+ * null while they are still typing into it.
+ *
+ * The undebounced address-bar check acts within a couple of hundred milliseconds, which is
+ * quick enough to fire on half-typed text: "instagr…" on the way to a search would cover the
+ * screen before the user finished the word. The owner asked for the block to wait until he has
+ * really gone to the site, so this rejects a focused omnibox (Chrome focuses it while editing)
+ * and anything that doesn't look like a host.
+ *
+ * **Declining here costs no coverage**, which is what makes the strictness safe: the debounced
+ * whole-page scan still reads the omnibox through [extractVisibleText], so a blocked word typed
+ * into the address bar is still caught — at the speed it was always caught at. This function
+ * failing to recognise some future Chrome layout therefore degrades to the old behaviour rather
+ * than to no blocking.
+ */
+internal fun AccessibilityService.extractSettledBrowserUrl(pkg: String): String? =
+    omniboxText(pkg, settledOnly = true)
+
+private fun AccessibilityService.omniboxText(pkg: String, settledOnly: Boolean): String? {
     val urlBarId = "$pkg:id/url_bar"
     val roots = ArrayList<AccessibilityNodeInfo>()
     rootInActiveWindow?.let(roots::add) // the omnibox the user sees wins
@@ -85,10 +107,31 @@ internal fun AccessibilityService.extractBrowserUrl(pkg: String): String? {
             .getOrNull() ?: continue
         for (n in nodes) {
             val t = n.text?.toString()?.trim()?.lowercase()
-            if (!t.isNullOrBlank()) return t
+            if (t.isNullOrBlank()) continue
+            // isFocused is the edit state: Chrome gives the omnibox input focus while it is
+            // being typed into, and takes it away once a page is showing. The host shape is
+            // the backstop for anything that reports focus differently.
+            if (settledOnly && (runCatching { n.isFocused }.getOrDefault(true) || !looksLikeHost(t))) {
+                continue
+            }
+            return t
         }
     }
     return null
+}
+
+/**
+ * Whether omnibox text reads as an address rather than something being typed or searched for.
+ *
+ * Deliberately crude — it only has to separate "he is on a site" from "he is typing" — and
+ * deliberately strict, because a false NO costs nothing (the page scan still runs) while a false
+ * YES is the instant-block-while-typing behaviour the owner asked not to have.
+ */
+internal fun looksLikeHost(text: String): Boolean {
+    val t = text.trim()
+    if (t.isEmpty() || t.contains(' ')) return false // a search query, not an address
+    val host = t.substringAfter("://").substringBefore('/')
+    return host.contains('.') && !host.startsWith('.') && !host.endsWith('.')
 }
 
 /**

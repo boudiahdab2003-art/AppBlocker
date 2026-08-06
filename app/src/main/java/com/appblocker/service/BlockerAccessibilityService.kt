@@ -334,6 +334,14 @@ class BlockerAccessibilityService : AccessibilityService() {
         }
     }
 
+    // The address-bar check that runs with NO debounce (see scheduleUrlScan). Separate job so
+    // it can't be cancelled by, or cancel, the heavier text scan running alongside it.
+    @Volatile private var urlScanJob: Job? = null
+    // The omnibox text this fast path last decided on, so a page emitting a burst of content
+    // events costs one node lookup rather than one per event. Null = decide again on the next
+    // event; it is cleared everywhere lastWebText is, so coming back to a page re-checks it.
+    @Volatile private var lastCheckedUrl: String? = null
+
     // YouTube Shorts: when on, cover the Shorts player but leave the rest of YouTube usable.
     @Volatile private var shortsScanJob: Job? = null
     /**
@@ -600,6 +608,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                     // The dangerous Settings pages often fill in their title/labels on a
                     // content event after the window opens, so re-check the guard here too.
                     if (pkg != null) handleSettingsGuard(pkg, event.className?.toString())
+                    scheduleUrlScan()
                     scheduleWebScan()
                     scheduleShortsScan()
                 }
@@ -679,6 +688,14 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (pkg != null && pkg != lastForegroundPkg) {
             lastForegroundPkg = pkg
             LaunchCounter.recordOpen(applicationContext, pkg) // for LAUNCH_COUNT
+            // A different app is genuinely in front now, so the app the cover was over is off
+            // screen and the dismiss grace has done its job — see CoverGate.graceSpentBy for
+            // why this is the releasing event and the exit watcher is not.
+            if (dismissedKey != null && CoverGate.graceSpentBy(pkg, dismissedPkg)) {
+                dismissedKey = null
+                dismissedPkg = null
+                dismissedAt = 0L
+            }
         }
         // Keep the location fix current (and recover after a late permission grant).
         if (schedules.any { it.enabled && it.type == ScheduleType.LOCATION }) {
@@ -696,6 +713,8 @@ class BlockerAccessibilityService : AccessibilityService() {
         handler.removeCallbacks(recheckRunnable)
         if (pkg != null && recheckMatters(pkg)) handler.postDelayed(recheckRunnable, RECHECK_MS)
         lastWebText = null // new page/app: force a fresh re-check
+        lastCheckedUrl = null
+        scheduleUrlScan()
         scheduleWebScan()
         scheduleShortsScan()
     }
@@ -729,6 +748,7 @@ class BlockerAccessibilityService : AccessibilityService() {
             // Leaving a scannable app: a scan queued there (or already running) must not
             // put its cover up over Home/Settings.
             webScanJob?.cancel()
+            urlScanJob?.cancel()
             webScanQueuedAt = 0L
             return
         }
@@ -737,6 +757,27 @@ class BlockerAccessibilityService : AccessibilityService() {
         val delay =
             if (now - webScanQueuedAt >= WEB_SCAN_MAX_WAIT_MS) 0L else WEB_SCAN_DEBOUNCE_MS
         handler.postDelayed(webScanRunnable, delay)
+    }
+
+    /**
+     * The address bar, checked immediately — no debounce, no waiting for the page to settle.
+     *
+     * [scheduleWebScan]'s wait plus a 400-node text walk is the right price for finding a word
+     * somewhere inside a page, but it is the wrong price for "which site is this": the omnibox
+     * says so in one node lookup, before the page has drawn anything. Paying the full price for
+     * a blocked site meant every visit showed real content first, and leaving and coming
+     * straight back showed it again — a dismissed block that reliably pays out is a block worth
+     * retrying forever.
+     *
+     * Only browsers have an omnibox, so no other app schedules this. One lookup at a time: a
+     * scrolling page fires content events continuously, and the in-flight check already covers
+     * the burst it belongs to.
+     */
+    private fun scheduleUrlScan() {
+        val pkg = lastForegroundPkg ?: return
+        if (pkg !in browserPackages || !shouldScanPkg(pkg)) return
+        if (urlScanJob?.isActive == true) return
+        urlScanJob = scope.launch { scanBrowserUrl(pkg) }
     }
 
     /** Debounced YouTube-Shorts check (quicker than the web scan so Shorts is caught fast).
@@ -1230,6 +1271,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         handler.removeCallbacks(recheckRunnable)
         handler.removeCallbacks(confirmForegroundRunnable)
         webScanJob?.cancel()
+        urlScanJob?.cancel()
         // The Shorts scan was the one thing screen-off never stopped — so it could finish after
         // all the cleanup below and raise a cover with nothing left to take it down.
         shortsScanJob?.cancel()
@@ -1243,6 +1285,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         }
         lastForegroundPkg = null
         lastWebText = null
+        lastCheckedUrl = null
     }
 
     /** True if connected to Wi-Fi and (target empty = any, else SSID matches). */
@@ -1386,6 +1429,56 @@ class BlockerAccessibilityService : AccessibilityService() {
             .toList()
     }
 
+    /**
+     * Covers a blocked site the moment the address bar says we're on one — the fast half of
+     * [scanWebContent], carrying the same guards in the same order.
+     *
+     * Deliberately does NOT replace the full scan: it only ever sees the address bar, which is
+     * hidden in fullscreen video and absent in browsers that don't expose it, so page text,
+     * search boxes and adult pages that don't name themselves in their URL all remain
+     * [scanWebContent]'s job. This only removes the wait in the case where the answer was
+     * already on screen — and because the full scan is untouched, this one is free to decline
+     * whenever it is unsure: the worst case is the old speed, never a miss.
+     */
+    private suspend fun scanBrowserUrl(pkg: String) {
+        if (lastForegroundPkg != pkg || !shouldScanPkg(pkg)) return
+        // A cover is already up, so everything under it is unreachable and there is nothing
+        // new to block.
+        if (overlay.isShowing && !shortsCovering) return
+        // Mid-dismissal: the page is still on screen for the trip Home. The grace is released
+        // as soon as another app is really in front, so a deliberate re-open is caught at once.
+        if (dismissedKey != null && withinDismissWindow()) {
+            if (DEBUG) Log.d(TAG, "urlScan[$pkg]: suppressed by dismiss grace")
+            return
+        }
+        // Settled addresses only: acting on half-typed omnibox text would cover the screen
+        // mid-word, and the owner asked for the block to wait until he has actually gone to the
+        // site. Typing a blocked word is still caught by the page scan, at its usual speed.
+        val url = extractSettledBrowserUrl(pkg) ?: return
+        if (url == lastCheckedUrl) return
+        lastCheckedUrl = url
+        if (DEBUG) Log.d(TAG, "urlScan[$pkg]: $url")
+        // The user's own words pause after an update exactly as they do in the full scan; the
+        // adult layer deliberately does not, since an update must not become the easy way out.
+        val ownWords = if (updatePauseActive()) emptyList() else userKeywords
+        val hit = filter.checkUrl(url, ownWords, autoSocialKeywords())
+            ?: filter.checkUrlAdult(url, adultPackOn, SettingsStore.blockAdult(applicationContext))
+            ?: return
+        if (DEBUG) Log.d(TAG, "URL BLOCK[$url]: ${hit.title}")
+        withContext(Dispatchers.Main) {
+            if (lastForegroundPkg == pkg && stillOnScreen(pkg)) {
+                // Identical to the full scan's cover path on purpose — a blocked WORD still
+                // locks the app so "Got it" isn't a free pass back in, a blocked WEBSITE still
+                // just covers the page. Arriving sooner must not change what happens.
+                if (!hit.site) addKeywordLockout(pkg, hit.word)
+                showBlockScreen(
+                    title = hit.title, message = hit.message, packageName = null,
+                    counterKey = "web", offenceKey = pkg,
+                )
+            } else lastCheckedUrl = null // left during the lookup — re-decide on the way back
+        }
+    }
+
     /** Runs on a background dispatcher (the node-tree walk is heavy); only the block UI hops to main. */
     private suspend fun scanWebContent() {
         // Scan browsers (word + adult + social-domain filtering) and, when the user has blocked
@@ -1406,7 +1499,10 @@ class BlockerAccessibilityService : AccessibilityService() {
         // lastWebText, so detection re-arms the moment the suppression ends. Any dismissal
         // suppresses the scan (key-agnostic, as before), on the same extended window as
         // showBlockScreen (tablets: HOME can land slowly).
-        if (dismissedKey != null && withinDismissWindow()) return
+        if (dismissedKey != null && withinDismissWindow()) {
+            if (DEBUG) Log.d(TAG, "scan[$pkg]: suppressed by dismiss grace")
+            return
+        }
         // Under a keyword lockout the app is blocked outright — cover it on any content
         // event, no text matching. This path fires from cached state, so it demands positive
         // confirmation that the locked app is REALLY the visible one (an unreadable root is
@@ -1720,6 +1816,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         // Re-arm word detection: coming back to the page that was just blocked must
         // block again, not read as "already handled" via the text dedup.
         lastWebText = null
+        lastCheckedUrl = null
         if (wasShorts) {
             // The Shorts cover is scoped to the player, so it must NOT be held until the user
             // leaves YouTube — the rest of the app is meant to keep working. Taking it down
@@ -1764,6 +1861,15 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (left) {
             lastCountedOffence = null
             resumingOffence = null
+            // Spend the dismiss grace here too, for the exits that never pass through a
+            // foreground change at all — screen-off calls this directly. NOT the main release:
+            // this branch is unreachable whenever the watcher cannot read the window tree, which
+            // is most of the time on gesture nav, and relying on it left the grace running in
+            // exactly the case that mattered. onForegroundChanged owns the release; see
+            // CoverGate.graceSpentBy.
+            dismissedKey = null
+            dismissedPkg = null
+            dismissedAt = 0L
         } else if (confirmed) {
             // HOME never landed and the user IS still in the blocked app. The cover has to come
             // down (never trap anyone), so schedule the re-check for just after the dismiss

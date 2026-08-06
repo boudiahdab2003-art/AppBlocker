@@ -97,6 +97,47 @@ class CoverGateTest {
         assertFalse(CoverGate.inGrace(app, app, CoverGate.DISMISS_GRACE_STUCK_MS))
     }
 
+    // --- Releasing the grace when the user really leaves ---
+
+    @Test
+    fun `leaving the blocked app for another one spends the grace`() {
+        // The whole point: the grace absorbs the departing app's stragglers, so once something
+        // else is genuinely in front it has nothing left to do. Without this it kept running,
+        // and coming straight back to the blocked site found both scanners switched off.
+        assertTrue(CoverGate.graceSpentBy(newPkg = other, dismissedPkg = app))
+    }
+
+    @Test
+    fun `staying in the blocked app does not spend the grace`() {
+        // Home was swallowed and the app really is still on screen — the long window exists
+        // for exactly this, so releasing here would re-block during the transition.
+        assertFalse(CoverGate.graceSpentBy(newPkg = app, dismissedPkg = app))
+    }
+
+    @Test
+    fun `there is nothing to spend when no cover was dismissed`() {
+        assertFalse(CoverGate.graceSpentBy(newPkg = other, dismissedPkg = null))
+    }
+
+    @Test
+    fun `an unknown foreground app never spends the grace`() {
+        // A null package is "we could not tell", and acting on that is how covers ended up over
+        // the wrong screen. Not knowing must leave the grace alone.
+        assertFalse(CoverGate.graceSpentBy(newPkg = null, dismissedPkg = app))
+    }
+
+    @Test
+    fun `leaving then returning is watched again immediately`() {
+        // The two rules composed, which is the behaviour the owner actually reported: after the
+        // grace is spent on the way out, re-opening the browser is NOT in grace any more, at a
+        // moment when the un-spent version was still suppressing everything.
+        val backInsideTheOldWindow = CoverGate.DISMISS_GRACE_STUCK_MS - 1
+        assertTrue(CoverGate.inGrace(app, app, backInsideTheOldWindow))
+        assertTrue(CoverGate.graceSpentBy(newPkg = other, dismissedPkg = app))
+        // Spent means dismissedPkg is cleared, so the same instant now reads as no grace.
+        assertFalse(CoverGate.inGrace(null, app, backInsideTheOldWindow))
+    }
+
     // --- Attempt counting ---
 
     @Test
