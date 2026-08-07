@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.120
+- Force stop is no longer a way out of Strict Mode
+
 ## v1.119
 - The blocked site stops paying you to come back
 
