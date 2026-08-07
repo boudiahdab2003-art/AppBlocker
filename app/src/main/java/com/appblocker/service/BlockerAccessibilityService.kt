@@ -23,6 +23,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
+import com.appblocker.BuildConfig
 import com.appblocker.R
 import com.appblocker.data.AppRule
 import com.appblocker.data.AdminPrompt
@@ -859,19 +860,35 @@ class BlockerAccessibilityService : AccessibilityService() {
         // node tree for itself, so a single decision could walk it three times — on a screen the
         // budget deliberately lets run to 800 nodes, on every foreground change inside Settings.
         val text = guardScreenText()
-        // Exactly three screens, in both modes: the ones that actually END protection. Everything
-        // else the old broad rule covered was collateral.
+        // Three screens in both modes: the ones that actually END protection. Everything else the
+        // old broad rule covered was collateral.
         //
-        // The lesson of six attempts is that the App-info page is the wrong target. It is a HUB —
-        // battery, permissions, storage, notifications and uninstall on one page — so guarding it
-        // to protect one button costs the owner all the rest. Worse, it is self-defeating: this
-        // app *asks* him to set battery to "no restrictions" so blocking survives, and then
-        // blocked the page where that is done. Force-stop is given up with it, which is an
-        // accepted trade — the service restarts by itself, whereas battery and permission settings
-        // are ones the owner is told to change.
+        // The lesson of six attempts is that the App-info page is the wrong target *in general*.
+        // It is a HUB — battery, permissions, storage, notifications and uninstall on one page —
+        // so guarding it for everyone costs the owner all the rest, and it is self-defeating:
+        // this app *asks* him to set battery to "no restrictions" so blocking survives, and then
+        // blocked the page where that is done.
+        //
+        // Force-stop was given up with it, on the reasoning that "the service restarts by itself".
+        // MEASURED, and that reasoning is false: force-stopping us does not merely kill the
+        // process, Android REMOVES us from enabled_accessibility_services. Checked at +5s, +15s,
+        // +30s and +60s — process dead, the setting reads null, no events, no recovery. Force
+        // stop is a permanent off-switch, not a pause.
+        //
+        // It is also a SILENT one. A force stop puts us in Android's stopped state (see
+        // onServiceConnected), where the WorkManager watchdog and BootReceiver cannot run either,
+        // so the "protection turned off" alert cannot fire. The owner hit exactly this during a
+        // Strict session: "no protection anymore".
+        //
+        // So the fourth screen is added back at the narrowest scope that fixes it, which is the
+        // scope the owner chose: OUR page, and only while a Strict session is running. Every
+        // other app's App-info page stays open, and outside a session nothing changes at all —
+        // so the battery setting he is told to change is reachable whenever no session is on,
+        // which is what made the broad rule intolerable.
         val danger = ourOwnServicePage(text) ||      // our accessibility page: the real off-switch
             uninstallConfirmation(pkg, cn, text) || // the "uninstall this app?" dialog
-            deviceAdminRemoval(cn, text)            // deactivating device admin
+            deviceAdminRemoval(cn, text) ||         // deactivating device admin
+            (strict && ourOwnAppInfoPage(cn, text)) // our App info page: Force stop lives there
         if (!danger) return false
 
         // Monotonic, not the wall clock: this throttle claims "already bouncing" WITHOUT
@@ -990,6 +1007,19 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (text.isBlank()) return null
         return text.contains("appblocker")
     }
+
+    /**
+     * **Our own** App-info page — the one carrying Force stop. Strict-only; see the call site.
+     *
+     * Two conditions, and the order matters. [aboutUs] must answer a definite `true`: a page that
+     * cannot be read yet answers null, and null must not bounce (v1.104 — answering "yes" on an
+     * unbuilt window is what threw covers over other apps' App-info pages). [AppInfoScreen] then
+     * says whether this is the App-info page at all, which is what keeps the Settings app list —
+     * which names every app, including us — from matching.
+     */
+    private fun ourOwnAppInfoPage(cn: String, text: String): Boolean =
+        aboutUs(text) == true &&
+            AppInfoScreen.looksLikeAppInfo(cn, text, BuildConfig.VERSION_NAME)
 
     /**
      * The system's "do you want to uninstall this app?" dialog, for us.
