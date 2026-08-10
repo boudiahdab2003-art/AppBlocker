@@ -13,6 +13,14 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.121", "Aug 10, 2026", "AppBlocker is now anybody's app", listOf(
+        "**Until now this was literally one person's app.** The name on the Profile page wasn't a setting with a sensible default — it was your name, written into the code. Anyone else who installed AppBlocker was greeted by it, and by the AI Coach using it, with no obvious place to change it.",
+        "**There's a new page: Profile ▸ Your profile.** Your name, a live preview of how you'll be greeted, and a plain statement of where it does and doesn't get used. It also holds \"Run setup again\", which replays the welcome walkthrough without touching a single block, schedule, word or your PIN.",
+        "**The first-run setup now asks who you are** — one question, right after Welcome, and you can skip it. Skip it and the app simply says \"You\"; nothing needs a name to work.",
+        "**Still no account, no sign-in and nothing uploaded.** Your name is stored on this phone in the same place as every other setting, and uninstalling removes it. That isn't a limitation to fix later — it's the point.",
+        "**Changing your name used to happen in a pop-up dialog with a text box in it.** On your phone those report no room for the keyboard, which is the same fault that made the typed gate unusable for five releases. The new page is a full screen with the Save button pinned above the keyboard, and there's now a rendering test on a real emulator that squeezes it and checks the field and the button both survive.",
+        "One thing to expect the first time you open this version: **the Profile page will say \"You\" instead of your name.** Tap it, type your name, save — it's back, and this time it's a setting rather than a line of code.",
+    )),
     VersionLog("1.120", "Aug 7, 2026", "Force stop is no longer a way out of Strict Mode", listOf(
         "**You found a real hole and you were right about it.** During a Strict session you could open Settings, reach AppBlocker's own App info page, and tap Force stop — and the blocking was gone.",
         "**It turns out to be worse than either of us thought, and I measured it rather than guessing.** Force stop doesn't just pause the app. Android *removes* AppBlocker from its accessibility list entirely. I checked at five seconds, fifteen, thirty and a full minute after: the app was dead, the setting was empty, and nothing came back. It is not a pause, it is a permanent off-switch, and protection stays off until you turn it back on by hand.",
@@ -562,7 +570,7 @@ val changelog: List<VersionLog> = listOf(
         "The usage-limit blocking check became a cached map read instead of a system call on every app switch — snappier blocking.",
     )),
     VersionLog("1.40", "Jul 1, 2026", "Your name on it, your templates, deeper stats", listOf(
-        "Profile now greets you by name — Abdallah Ahdab — with an avatar and a rename option.",
+        "Profile now greets you by name, with an avatar and a rename option.",
         "Templates are finally yours: an edit pencil on each template card lets you choose exactly which apps it blocks.",
         "YouTube Shorts blocking now starts and stops together with Quick Block.",
         "Insights went deep: a real Trend tab with a 30-day chart, this-week-vs-last-week, weekday-vs-weekend patterns, 'Trending this week' per-app changes, and phone unlocks per day.",

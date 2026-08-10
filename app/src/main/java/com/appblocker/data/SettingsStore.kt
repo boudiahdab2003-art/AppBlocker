@@ -120,12 +120,25 @@ object SettingsStore {
     fun setBlockYoutubeShorts(context: Context, value: Boolean) =
         prefs(context).edit().putBoolean(KEY_BLOCK_YT_SHORTS, value).apply()
 
-    /** The owner's display name shown on the Profile page. */
+    /**
+     * The name the person using this phone chose, or **""** if they have not given one.
+     *
+     * This defaulted to the original owner's own name until v1.120, which meant anybody else who
+     * installed the app was greeted by a stranger's name on the Profile page and by the AI Coach.
+     * The default is now blank, and blank is a value the whole app has to handle — read it through
+     * [DisplayName] rather than dropping it into a sentence. [DisplayName] explains why blank is
+     * kept distinct from the word "You".
+     */
     fun userName(context: Context): String =
-        prefs(context).getString("user_name", "Abdallah Ahdab") ?: "Abdallah Ahdab"
+        prefs(context).getString(KEY_USER_NAME, "") ?: ""
 
     fun setUserName(context: Context, value: String) =
-        prefs(context).edit().putString("user_name", value.trim()).apply()
+        prefs(context).edit().putString(KEY_USER_NAME, DisplayName.sanitize(value)).apply()
+
+    /** Whether they have actually told us a name — the setup wizard asks once, and can be skipped. */
+    fun nameSet(context: Context): Boolean = DisplayName.isSet(userName(context))
+
+    private const val KEY_USER_NAME = "user_name"
 
     const val KEY_THEME_MODE = "theme_mode"
 
@@ -206,6 +219,11 @@ object SettingsStore {
 
     fun setSetupSeen(context: Context) =
         prefs(context).edit().putBoolean("setup_seen", true).apply()
+
+    /** Re-arm the first-run wizard ("Run setup again" on the profile page). Touches nothing else —
+     *  no blocks, schedules, words or PIN are involved in having seen a walkthrough. */
+    fun clearSetupSeen(context: Context) =
+        prefs(context).edit().putBoolean("setup_seen", false).apply()
 
     /** Quick Block paused = its apps aren't enforced (selection kept). Schedules unaffected. */
     fun quickBlockPaused(context: Context): Boolean =

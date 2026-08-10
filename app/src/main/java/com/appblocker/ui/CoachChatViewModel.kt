@@ -8,6 +8,7 @@ import com.appblocker.data.ChatMsg
 import com.appblocker.data.CoachError
 import com.appblocker.data.CoachOutcome
 import com.appblocker.data.CoachProfile
+import com.appblocker.data.DisplayName
 import com.appblocker.data.Goal
 import com.appblocker.data.Goals
 import com.appblocker.data.SettingsStore
@@ -46,9 +47,12 @@ class CoachChatViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun greeting(): ChatMsg {
-        val first = SettingsStore.userName(getApplication()).substringBefore(' ')
+        // The name can be unset — someone who skipped it during setup would otherwise be met with
+        // "Hi !" as the very first thing the coach ever says to them.
+        val stored = SettingsStore.userName(getApplication())
+        val hello = if (DisplayName.isSet(stored)) "Hi ${DisplayName.first(stored)}!" else "Hi!"
         return ChatMsg("local",
-            "Hi $first! I'm your coach — I can see your screen time and what's set up in the " +
+            "$hello I'm your coach — I can see your screen time and what's set up in the " +
                 "app. Ask me anything, or let's set a goal together. The more we talk, the " +
                 "better I get to know you.")
     }

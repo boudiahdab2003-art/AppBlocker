@@ -383,7 +383,41 @@ viable path — not a consolation prize.
 
 ## Where we are right now (update as we go)
 
-- **Status:** Detailed plan written and saved. No product work started yet.
+- **Status:** Phase 1 has begun — the app is no longer one person's app.
+- **Phase 1.1 — de-personalise: DONE (v1.121).** `SettingsStore.userName` defaulted to
+  the owner's own name, so a stranger installing the app was greeted by it on the
+  Profile page and by the AI Coach. The default is now blank, and blank is handled
+  everywhere by a new `data/DisplayName.kt` (display / first name / initials /
+  sanitize) — an unset name reads as "You" on screen and "the user" in the coach's
+  prompts, instead of producing "Hi !" and "on the phone of .". The two remaining
+  personal strings (an in-app changelog line and a code comment) were reworded. The
+  only personal thing left in the source is the **GitHub repo URL**, which is correct —
+  it is where the self-updater fetches releases from, and the `play` flavor doesn't
+  self-update anyway.
+- **Phase 1.2 — onboarding wizard: PARTLY DONE.** The wizard now opens with Welcome →
+  **"What should we call you?"** (skippable) before the AI Coach step and the
+  permission steps. Still outstanding from 1.2: the **plain-language accessibility
+  disclosure screen** shown *before* asking for the permission — that one is also
+  Phase 2.2 and is the single most important screen for Play approval — and step 4
+  ("pick what to block" during setup).
+- **New in v1.121: a "Your profile" page** (`ui/AccountScreen.kt`, reached from
+  Profile ▸ Your profile or the header pencil). Name + live preview, a plain statement
+  that there is **no account and no sign-in and nothing leaves the phone**, and "Run
+  setup again". It replaced an `AlertDialog` with a text field in it — dialogs report
+  zero insets on the owner's device, so the keyboard covered the field. It is a full
+  screen with the button pinned, and `app/src/androidTest/.../AccountScreenTest.kt`
+  measures that on an emulator.
+  - **Deliberately not built:** email/password sign-up, or any online account. That
+    would put personal data off-device and cost us the "nothing is uploaded" answer to
+    the Data Safety form (2.6) and the privacy policy (2.5), which is currently one of
+    this app's strongest selling points. The feature that would genuinely justify a
+    backend is the **accountability partner** (3.3), not a name field.
+  - **Deliberately not built:** multiple people on one phone. Every entity in the Room
+    DB plus the block decision would need an owner column; nothing in this plan asks
+    for it.
+- **Still to do in Phase 1:** 1.3 (audit the defaults a brand-new user gets), 1.4
+  (survive being someone else's phone — different launcher, language, installed apps),
+  1.5 (watch one real person set it up from scratch).
 - **Third-party text — clear as of v1.105.** The Twelve Steps screen
   (`ui/TwelveStepsScreen.kt`) contains **only original wording** plus attribution and a
   link, so it carries no licence obligation into a Play release. This was deliberate:
@@ -392,8 +426,9 @@ viable path — not a consolation prize.
   likewise copyrighted by AA World Services, so they are not an alternative.) **If verbatim
   text is ever added under permission, record that permission here before publishing** —
   a store review is exactly where an unrecorded licence becomes a problem.
-- **Next step when the owner says "play version":** begin **Phase 1**
-  (de-personalise + build the onboarding wizard) — it unlocks everything else and
-  reveals whether other people want the app before we invest in payments and
-  store paperwork.
+- **Next step when the owner says "play version":** finish **Phase 1** — the
+  accessibility disclosure screen (1.2 / 2.2), the fresh-install defaults audit (1.3),
+  and then get **one real person** to install it and set it up with no help (1.5).
+  That last one is the cheapest way to learn whether any of this is worth doing,
+  before we invest in payments and store paperwork.
 - **Open Phase-0 decisions still to make:** app name, price model, lead audience.

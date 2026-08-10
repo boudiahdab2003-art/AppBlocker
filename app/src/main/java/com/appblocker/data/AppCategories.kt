@@ -69,9 +69,10 @@ object AppCategories {
         else -> null
     }
 
-    // Package -> category. Built with Gemini 3.1 Pro (2026-07-11): global top apps +
-    // Germany-popular (where Abdallah lives) + Arabic staples. Wrong guesses were told to be
-    // skipped, so unknown apps simply fall through to the system category, then Other.
+    // Package -> category. Built with Gemini 3.1 Pro (2026-07-11): global top apps, plus the ones
+    // popular in Germany and the Arabic-speaking world (where this app's first users are). Wrong
+    // guesses were told to be skipped, so unknown apps simply fall through to the system
+    // category, then Other.
     private val MAP: Map<String, AppCategory> = mapOf(
 // SOCIAL
     "com.instagram.android" to SOCIAL,

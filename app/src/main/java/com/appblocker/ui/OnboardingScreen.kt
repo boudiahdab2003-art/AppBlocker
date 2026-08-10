@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,11 +33,14 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -43,11 +48,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.appblocker.data.DisplayName
+import com.appblocker.data.SettingsStore
 import com.appblocker.ui.theme.AppGradients
 import com.appblocker.ui.theme.appBackground
+
+/** Test tags for the rendering test — the name field and the way onward from it. */
+const val ONBOARDING_NAME_FIELD_TAG = "onboarding_name_field"
+const val ONBOARDING_NAME_CONTINUE_TAG = "onboarding_name_continue"
 
 /**
  * First-run wizard: walks the user through the essential permissions one step at a time, then the
@@ -61,10 +75,17 @@ fun OnboardingScreen(onDone: () -> Unit) {
     val essentials = perms.filter { it.essential }
     val recommended = perms.filter { it.key == "usage" || it.key == "battery" }
 
-    // Layout: 0 = Welcome, 1 = AI Coach intro, 2..N+1 = one essential each, then recommended, Done.
-    val coachStep = 1
-    val recommendedStep = essentials.size + 2
-    val doneStep = essentials.size + 3
+    // Layout: Welcome, Name, AI Coach intro, one step per essential permission, the recommended
+    // ones, Done. Named rather than written out as arithmetic at each use — the offsets were
+    // spelled `essentials[step - 2]` and `essentials.size + 2` in three places, which is one
+    // inserted step away from an off-by-one that lands on the wrong screen.
+    val welcomeStep = 0
+    val nameStep = 1
+    val coachStep = 2
+    val firstEssentialStep = 3
+    val lastEssentialStep = firstEssentialStep + essentials.size - 1
+    val recommendedStep = lastEssentialStep + 1
+    val doneStep = recommendedStep + 1
     val totalSteps = doneStep // steps shown in the progress header (Welcome excluded)
 
     var step by rememberSaveable { mutableIntStateOf(0) }
@@ -84,10 +105,11 @@ fun OnboardingScreen(onDone: () -> Unit) {
             }
 
             when {
-                step == 0 -> WelcomeStep(onNext = { step++ })
+                step == welcomeStep -> WelcomeStep(onNext = { step++ })
+                step == nameStep -> NameStep(onNext = { step++ })
                 step == coachStep -> CoachStep(onNext = { step++ })
-                step <= essentials.size + 1 -> EssentialStep(
-                    perm = essentials[step - 2],
+                step <= lastEssentialStep -> EssentialStep(
+                    perm = essentials[step - firstEssentialStep],
                     onContinue = { step++ },
                     onSkip = { step = doneStep },
                 )
@@ -183,6 +205,74 @@ private fun WelcomeStep(onNext: () -> Unit) {
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
+        )
+    }
+}
+
+/**
+ * "What should we call you?" — the one question the app asks about the person using it.
+ *
+ * It is here, second, because until v1.120 there was no question at all: the display name
+ * defaulted to the original owner's, so anyone else who installed AppBlocker was greeted by a
+ * stranger's name and had no idea where to change it.
+ *
+ * **Skippable on purpose.** A blocker that demands personal details before it will block anything
+ * loses the person it was meant to help, and nothing in the app needs a name to work — leave it
+ * empty and the app says "You" ([DisplayName]). The field is saved on Continue rather than on
+ * every keystroke so a half-typed name isn't what gets stored if they back out.
+ */
+@Composable
+private fun NameStep(onNext: () -> Unit) {
+    val context = LocalContext.current
+    var text by remember { mutableStateOf(SettingsStore.userName(context)) }
+    val typed = DisplayName.sanitize(text)
+
+    fun saveAndGo() {
+        SettingsStore.setUserName(context, text)
+        onNext()
+    }
+
+    StepScaffold(
+        footer = {
+            GradientButton(
+                text = if (typed.isEmpty()) "Continue" else "Continue as $typed",
+                onClick = { saveAndGo() },
+                modifier = Modifier.testTag(ONBOARDING_NAME_CONTINUE_TAG),
+            )
+            TextButton(onClick = { saveAndGo() }) {
+                Text("Skip", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        },
+    ) {
+        Spacer(Modifier.height(8.dp))
+        StepIcon(Icons.Filled.Person)
+        Spacer(Modifier.height(24.dp))
+        Text(
+            "What should we call you?",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "A first name is plenty. It's only used to greet you on your profile and in the AI " +
+                "Coach — it stays on this phone, and you can change or remove it any time.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(24.dp))
+        OutlinedTextField(
+            value = text,
+            onValueChange = { text = it.take(DisplayName.MAX_LENGTH) },
+            label = { Text("Your name") },
+            placeholder = { Text("Optional") },
+            singleLine = true,
+            shape = RoundedCornerShape(12.dp),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { saveAndGo() }),
+            modifier = Modifier.fillMaxWidth().testTag(ONBOARDING_NAME_FIELD_TAG),
         )
     }
 }

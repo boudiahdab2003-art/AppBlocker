@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.SelfImprovement
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Shield
@@ -80,6 +81,7 @@ import com.appblocker.data.AttemptCounter
 import com.appblocker.data.BlockLayouts
 import com.appblocker.data.BlockThemes
 import com.appblocker.data.DeviceBoot
+import com.appblocker.data.DisplayName
 import com.appblocker.data.OffSwitchGuard
 import com.appblocker.data.PinStore
 import com.appblocker.data.ServiceHealth
@@ -114,6 +116,7 @@ private fun guardOffGate() = GateCopy(
 fun ProfileScreen(
     strictActive: Boolean = false,
     onOpenPermissions: () -> Unit = {},
+    onOpenAccount: () -> Unit = {},
     onOpenChangelog: () -> Unit = {},
     onOpenInstructions: () -> Unit = {},
     onOpenDetox: () -> Unit = {},
@@ -153,8 +156,10 @@ fun ProfileScreen(
     var healthErrors by remember(resumeTick) { mutableStateOf(ServiceHealth.errorCount(context)) }
     val healthError = remember(resumeTick) { ServiceHealth.lastError(context) }
     var showSetPin by remember { mutableStateOf(false) }
-    var userName by remember(resumeTick) { mutableStateOf(SettingsStore.userName(context)) }
-    var showRename by remember { mutableStateOf(false) }
+    // Plain read, not a MutableState: the name is now edited on its own full-screen page, and
+    // opening an overlay unmounts this scaffold (see the gate note in AppRoot), so coming back
+    // re-runs this `remember` and picks the new name up. resumeTick covers the rest.
+    val userName = remember(resumeTick) { SettingsStore.userName(context) }
     var showTheme by remember { mutableStateOf(false) }
     var currentIcon by remember { mutableStateOf(AppIcons.current(context)) }
     // resumeTick so the row updates after returning from the picker.
@@ -214,7 +219,7 @@ fun ProfileScreen(
             appsBlocked = appsBlocked,
             schedules = schedules.size,
             blocksToday = blocksToday,
-            onEditName = { showRename = true },
+            onEditName = onOpenAccount,
             onFix = { if (protectionStatus.fixable) onOpenPermissions() },
         )
 
@@ -229,6 +234,24 @@ fun ProfileScreen(
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary,
                 )
             }
+        }
+
+        SectionTitle("You")
+        SettingCard {
+            ProfileRow(
+                icon = Icons.Filled.Person,
+                title = "Your profile",
+                subtitle = if (DisplayName.isSet(userName)) {
+                    "You're set up as ${DisplayName.display(userName)}. Change your name, or run " +
+                        "the setup walkthrough again."
+                } else {
+                    "Tell the app what to call you — it's stored on this phone and nowhere else."
+                },
+                chevron = true,
+                // A name is not a protection setting, so Strict Mode has no reason to freeze it.
+                enabled = true,
+                onClick = onOpenAccount,
+            )
         }
 
         SectionTitle("Protection")
@@ -558,13 +581,6 @@ fun ProfileScreen(
             onDismiss = { showSetPin = false },
         )
     }
-    if (showRename) {
-        RenameDialog(
-            initial = userName,
-            onSet = { newName -> SettingsStore.setUserName(context, newName); userName = newName; showRename = false },
-            onDismiss = { showRename = false },
-        )
-    }
     if (showReport) {
         ReportProblemSheet(
             onDismiss = { showReport = false },
@@ -628,7 +644,8 @@ private fun ThemeDialog(current: String, onSelect: (String) -> Unit, onDismiss: 
     )
 }
 
-/** Gradient hero: the owner's identity (avatar + name) + live protection status + key numbers. */
+/** Gradient hero: who's using the app (avatar + name) + live protection status + key numbers.
+ *  [name] is the raw stored name and may be empty — [DisplayName] decides what that looks like. */
 @Composable
 private fun ProfileHeader(
     name: String,
@@ -652,18 +669,22 @@ private fun ProfileHeader(
                     Modifier.size(56.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.18f)),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(initials(name), style = MaterialTheme.typography.titleLarge,
+                    Text(DisplayName.initials(name), style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold, color = Color.White)
                 }
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(name.ifBlank { "Your name" }, style = MaterialTheme.typography.headlineSmall,
+                    Text(DisplayName.display(name), style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
-                    Text("AppBlocker · v$version", style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.8f))
+                    Text(
+                        if (DisplayName.isSet(name)) "AppBlocker · v$version"
+                        else "Tap to add your name",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.8f),
+                    )
                 }
                 IconButton(onClick = onEditName) {
-                    Icon(Icons.Filled.Edit, contentDescription = "Edit name", tint = Color.White)
+                    Icon(Icons.Filled.Edit, contentDescription = "Your profile", tint = Color.White)
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -704,41 +725,6 @@ private fun HeroStat(value: String, label: String, modifier: Modifier = Modifier
         Text(label, style = MaterialTheme.typography.labelSmall,
             color = Color.White.copy(alpha = 0.85f), maxLines = 1)
     }
-}
-
-/** Up-to-two initials from a name, e.g. "Abdallah Ahdab" -> "AA". */
-private fun initials(name: String): String {
-    val parts = name.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
-    return when {
-        parts.isEmpty() -> "?"
-        parts.size == 1 -> parts[0].take(1).uppercase()
-        else -> (parts[0].take(1) + parts.last().take(1)).uppercase()
-    }
-}
-
-/** Simple rename dialog for the profile name. */
-@Composable
-private fun RenameDialog(initial: String, onSet: (String) -> Unit, onDismiss: () -> Unit) {
-    var text by remember { mutableStateOf(initial) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Your name") },
-        confirmButton = {
-            TextButton(
-                enabled = text.trim().isNotEmpty(),
-                onClick = { onSet(text.trim()) },
-            ) { Text("Save") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        },
-        text = {
-            OutlinedTextField(
-                value = text, onValueChange = { text = it.take(40) },
-                label = { Text("Name") }, singleLine = true,
-            )
-        },
-    )
 }
 
 /** What the hero's status pill should say, and whether tapping it can help. */

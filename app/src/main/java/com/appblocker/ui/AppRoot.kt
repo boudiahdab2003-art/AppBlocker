@@ -67,6 +67,7 @@ private sealed interface Overlay {
     data class EditTemplate(val template: Template) : Overlay
     data object Permissions : Overlay
     data object Onboarding : Overlay
+    data object Account : Overlay
     data object CoachChat : Overlay
     data object Changelog : Overlay
     data object Instructions : Overlay
@@ -149,6 +150,18 @@ fun AppRoot(openPermissionsOnStart: Boolean = false) {
                     SettingsStore.setSetupSeen(context)
                     overlay = null
                 })
+            is Overlay.Account ->
+                AccountScreen(
+                    onBack = { overlay = null },
+                    // Replays the walkthrough only. "Setup seen" is cleared as well so that
+                    // quitting part-way through leaves the wizard waiting on the next launch,
+                    // exactly as it behaves on a first install — Overlay.Onboarding's onDone is
+                    // what sets it again.
+                    onRunSetupAgain = {
+                        SettingsStore.clearSetupSeen(context)
+                        overlay = Overlay.Onboarding
+                    },
+                )
             is Overlay.CoachChat ->
                 CoachChatScreen(onBack = { overlay = null })
             is Overlay.Changelog ->
@@ -187,6 +200,7 @@ fun AppRoot(openPermissionsOnStart: Boolean = false) {
                 onNewSchedule = { overlay = Overlay.NewSchedule(it) },
                 onEditSchedule = { overlay = Overlay.EditSchedule(it) },
                 onOpenPermissions = { overlay = Overlay.Permissions },
+                onOpenAccount = { overlay = Overlay.Account },
                 onOpenCoach = { overlay = Overlay.CoachChat },
                 onOpenChangelog = { overlay = Overlay.Changelog },
                 onOpenInstructions = { overlay = Overlay.Instructions },
@@ -293,6 +307,7 @@ private fun MainScaffold(
     onNewSchedule: (ScheduleType) -> Unit,
     onEditSchedule: (Schedule) -> Unit,
     onOpenPermissions: () -> Unit,
+    onOpenAccount: () -> Unit,
     onOpenCoach: () -> Unit,
     onOpenChangelog: () -> Unit,
     onOpenInstructions: () -> Unit,
@@ -367,6 +382,7 @@ private fun MainScaffold(
                 else -> ProfileScreen(
                     strictActive = strictActive,
                     onOpenPermissions = onOpenPermissions,
+                    onOpenAccount = onOpenAccount,
                     onOpenChangelog = onOpenChangelog,
                     onOpenInstructions = onOpenInstructions,
                     onOpenDetox = onOpenDetox,

@@ -364,7 +364,10 @@ object AiCoach {
             val setup = runCatching { setupSnapshot(ctx) }.getOrDefault("")
             val goals = Goals.all(ctx).map { it.label() }
             val profile = runCatching { CoachProfile.promptText(ctx) }.getOrDefault("")
-            val name = SettingsStore.userName(ctx).substringBefore(' ')
+            // Every use of this in fetchTips is possessive third person ("$name's coach", "what
+            // you know about $name"), so an unset name has to become a noun — "the user" — and
+            // not the empty string, which turns the prompt into "You are 's personal coach".
+            val name = DisplayName.possessiveSubject(SettingsStore.userName(ctx))
             // One retry to ride out transient blips, same as the updater — but never after a
             // timeout (see retryWorthwhile). A while loop, not repeat(2): `return@repeat` would
             // continue to the next attempt rather than abandon it, which is the opposite.
@@ -400,11 +403,24 @@ object AiCoach {
             }
             val today = SimpleDateFormat("EEEE, MMM d, yyyy", Locale.US).format(Date())
             val nowTime = SimpleDateFormat("H:mm", Locale.US).format(Date())
-            val first = SettingsStore.userName(ctx).substringBefore(' ')
+            // The name can be unset — the app no longer assumes one (see [DisplayName]). Both the
+            // sentences that talk ABOUT the user and the instruction to USE their name have to
+            // survive that, so the former take a noun ("the user") and the latter is swapped for
+            // an explicit "you don't know it". Interpolating "" here read as "on the phone of ."
+            // and asked the model to use the first name of nobody, which invites it to invent one.
+            val storedName = SettingsStore.userName(ctx)
+            val who = DisplayName.possessiveSubject(storedName)
+            val first = DisplayName.first(storedName)
+            val nameLine = if (DisplayName.isSet(storedName)) {
+                "Use $first's first name naturally, not in every message."
+            } else {
+                "You have NOT been told the user's name — address them as \"you\", never invent " +
+                    "a name, and don't ask for one."
+            }
             val system = buildString {
-                appendLine("You are the AI Coach inside AppBlocker, a screen-time app on the phone of ${SettingsStore.userName(ctx)}. Today is $today, and the time right now is $nowTime — the day is still in progress.")
-                appendLine("Personality: warm, celebratory, direct — a coach who is genuinely proud when $first makes progress. Lead with the most positive TRUE thing in the data (a streak alive, a goal hit, a number down vs last week) before advice or bad news. Use $first's first name naturally, not in every message.")
-                appendLine("How to write: like a person talking, not like a form. Short natural paragraphs. Match the length to what was asked — a sentence or two for a small question, more when $first asks for a plan, a report or an explanation, and don't pad to fill space. Use a list ONLY when you are genuinely enumerating steps or options; never break an ordinary thought into bullets. **Bold** at most one thing that really matters (usually a number) — not by rule, and not in every reply. No headings unless the reply is long enough to genuinely need them. No other markdown (#, backticks, tables). At most 2 fitting emojis, often zero. Ask at most one question per reply. Vary how you open — never start consecutive replies the same way.")
+                appendLine("You are the AI Coach inside AppBlocker, a screen-time app on the phone of $who. Today is $today, and the time right now is $nowTime — the day is still in progress.")
+                appendLine("Personality: warm, celebratory, direct — a coach who is genuinely proud when $who makes progress. Lead with the most positive TRUE thing in the data (a streak alive, a goal hit, a number down vs last week) before advice or bad news. $nameLine")
+                appendLine("How to write: like a person talking, not like a form. Short natural paragraphs. Match the length to what was asked — a sentence or two for a small question, more when $who asks for a plan, a report or an explanation, and don't pad to fill space. Use a list ONLY when you are genuinely enumerating steps or options; never break an ordinary thought into bullets. **Bold** at most one thing that really matters (usually a number) — not by rule, and not in every reply. No headings unless the reply is long enough to genuinely need them. No other markdown (#, backticks, tables). At most 2 fitting emojis, often zero. Ask at most one question per reply. Vary how you open — never start consecutive replies the same way.")
                 appendLine("Your job: help the user understand their usage, agree on goals together, and track progress against those goals using the data below. Suggest specific app features with concrete settings when they would help.")
                 appendLine("Today's numbers are PARTIAL — the day is not over. Never declare a daily goal hit today or call today a win; the strongest claim allowed is \"on track\", tied to the clock (like \"only 40m by 14:00\"). Judge today against \"by this same time yesterday\" rather than full-day averages, and treat a phone-free stretch that includes the night as sleep, not willpower. Finished days (yesterday, streaks, weekly trends) are fair game to celebrate.")
                 appendLine("When the user wants a goal or plan for the week: propose ONE specific, measurable weekly goal grounded in the data (for example a daily-average target around 10-20% below their current average — realistic, not drastic), then give a concrete plan: which apps to limit with which feature and what setting, and what to check each day. Save the goal via the goals field prefixed 'This week: '. When a weekly goal already exists, report progress against it using the per-day numbers.")
@@ -412,8 +428,8 @@ object AiCoach {
                 val profileText = runCatching { CoachProfile.promptText(ctx) }.getOrDefault("")
                 appendLine(
                     if (profileText.isBlank())
-                        "What you know about $first personally: nothing yet — you're still getting to know them."
-                    else "What you know about $first personally (learned in past chats — use it like a friend would):\n$profileText"
+                        "What you know about $who personally: nothing yet — you're still getting to know them."
+                    else "What you know about $who personally (learned in past chats — use it like a friend would):\n$profileText"
                 )
                 appendLine("Getting to know the user: you remember facts permanently through the \"profile\" field described below — chat history gets trimmed, the profile does not. When it fits the moment, weave in AT MOST ONE natural get-to-know-you question per reply — never interrogate, and skip it when the user asked a direct question that deserves a direct answer. Worth learning over time: why they want to block apps, which app and time of day tempts them most, what they'd rather do with the time they win back, their work or study rhythm, and what kind of encouragement lands with them. Whenever the user reveals something personal in ANY message, save it via \"profile\" and reference it naturally from then on.")
                 appendLine()
@@ -427,7 +443,7 @@ object AiCoach {
                 appendLine()
                 val advice = runCatching { advicePromptText(ctx) }.getOrDefault("")
                 if (advice.isBlank()) {
-                    appendLine("You have not given $first any concrete advice yet.")
+                    appendLine("You have not given $who any concrete advice yet.")
                 } else {
                     appendLine("What YOU advised recently, and when you said it:")
                     appendLine(advice)
