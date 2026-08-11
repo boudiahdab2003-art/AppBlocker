@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.121
+- You can now add time to a running Strict session — +15m, +30m, +1h or any amount you choose. It only goes one way: time can be added, never taken away. Plus a proper screen explaining what AppBlocker can see before you're asked to allow it, closing a button that used to send you straight to Android's settings with no explanation at all. And AppBlocker is no longer one person's app — it asks your name during setup, and there's a new Your profile page.
+
 ## v1.120
 - Force stop is no longer a way out of Strict Mode
 
