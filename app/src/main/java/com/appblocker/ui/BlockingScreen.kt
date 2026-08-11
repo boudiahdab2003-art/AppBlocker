@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -338,24 +337,18 @@ fun BlockingScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.padding(top = 12.dp))
         }
-        items(appTemplates.chunked(2)) { rowItems ->
-            // IntrinsicSize.Min lets both cards grow to the taller one's content instead of
-            // clipping a fixed height (time labels were getting cut off on some font scales).
-            Row(
-                Modifier.fillMaxWidth().height(IntrinsicSize.Min),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                rowItems.forEach { t ->
-                    TemplateCard(
-                        Modifier.weight(1f), t,
-                        active = isTemplateActive(t, schedules, context),
-                        // Every template is now customisable (apps and/or extra options).
-                        onEditApps = { onEditTemplate(t) },
-                    ) { pending = t }
-                }
-                if (rowItems.size == 1) Spacer(Modifier.weight(1f))
-            }
-            Spacer(Modifier.padding(top = 12.dp))
+        // One full-width card per row. They were a two-column grid, which left each tile ~154dp
+        // wide — no room for a title bigger than 16sp, and nowhere for the emoji and the schedule
+        // line to breathe. Six cards is a long section, but it is the last one on the tab, so the
+        // length costs nothing above it.
+        items(appTemplates, key = { it.id }) { t ->
+            TemplateCard(
+                Modifier, t,
+                active = isTemplateActive(t, schedules, context),
+                // Every template is customisable (apps and/or extra options).
+                onEditApps = { onEditTemplate(t) },
+            ) { pending = t }
+            Spacer(Modifier.padding(top = 20.dp))
         }
 
         item { Spacer(Modifier.padding(top = 16.dp)) }
