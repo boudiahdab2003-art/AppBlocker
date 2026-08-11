@@ -59,21 +59,25 @@ class AddTimeRowTest {
     fun allFourWaysToAddTimeAreOnScreen() {
         setRow(height = null)
 
-        compose.onAllNodesWithTag(ADD_TIME_CHIP_TAG).assertCountEquals(4)
+        compose.onAllNodesWithTag(ADD_TIME_CHIP_TAG).assertCountEquals(QUICK_CHIPS)
         compose.onNodeWithTag(ADD_TIME_CHOOSE_TAG).assertIsDisplayed()
     }
 
     /**
-     * Four chips sharing a row at 1.5× font is where this would fail — each one still has to be a
+     * Three chips sharing a row at 1.5× font is where this would fail — each one still has to be a
      * real, tappable target, not a sliver. 40dp is Android's own minimum touch size.
+     *
+     * There were four here at first, with "Choose…" as the fourth. That put the longest label in
+     * the narrowest column, so it moved to its own full-width row; this asserts the split holds.
      */
     @Test
     fun chipsStayTappableAtALargeSystemFont() {
         setRow(height = null, fontScale = 1.5f)
 
         val chips = compose.onAllNodesWithTag(ADD_TIME_CHIP_TAG)
-        chips.assertCountEquals(4)
-        repeat(4) { i -> chips[i].assertIsDisplayed().assertHeightIsAtLeast(40.dp) }
+        chips.assertCountEquals(QUICK_CHIPS)
+        repeat(QUICK_CHIPS) { i -> chips[i].assertIsDisplayed().assertHeightIsAtLeast(40.dp) }
+        compose.onNodeWithTag(ADD_TIME_CHOOSE_TAG).assertIsDisplayed().assertHeightIsAtLeast(40.dp)
     }
 
     /** And on a short viewport, which is what a small phone hands the running-session column. */
@@ -81,7 +85,12 @@ class AddTimeRowTest {
     fun chipsSurviveAShortViewport() {
         setRow(height = 200.dp)
 
-        compose.onAllNodesWithTag(ADD_TIME_CHIP_TAG).assertCountEquals(4)
+        compose.onAllNodesWithTag(ADD_TIME_CHIP_TAG).assertCountEquals(QUICK_CHIPS)
         compose.onNodeWithTag(ADD_TIME_CHOOSE_TAG).assertIsDisplayed().assertHeightIsAtLeast(40.dp)
+    }
+
+    private companion object {
+        /** +15m, +30m, +1h. "Choose another amount" is a separate full-width row, not a chip. */
+        const val QUICK_CHIPS = 3
     }
 }

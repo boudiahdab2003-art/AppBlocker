@@ -298,7 +298,14 @@ internal fun AddTimeRow(remaining: Long, onAdd: (Int) -> Unit) {
         AddChip("+15m", Modifier.weight(1f)) { onAdd(15) }
         AddChip("+30m", Modifier.weight(1f)) { onAdd(30) }
         AddChip("+1h", Modifier.weight(1f)) { onAdd(60) }
-        AddChip("Choose…", Modifier.weight(1f).testTag(ADD_TIME_CHOOSE_TAG)) { showPicker = true }
+    }
+    // "Choose…" gets its own full-width row rather than being a fourth chip. Four equal columns
+    // put the longest label in the narrowest space, and at the large system font the owner runs
+    // that is where a label gets clipped — the exact defect FontScaleTest exists for. Three short,
+    // fixed labels share a row safely; an open-ended one does not.
+    Spacer(Modifier.height(8.dp))
+    AddChip("Choose another amount", Modifier.fillMaxWidth().testTag(ADD_TIME_CHOOSE_TAG)) {
+        showPicker = true
     }
     Spacer(Modifier.height(10.dp))
     Text(
