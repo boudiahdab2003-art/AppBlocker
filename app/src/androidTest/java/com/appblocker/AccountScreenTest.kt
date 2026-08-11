@@ -14,6 +14,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -133,23 +134,51 @@ class AccountScreenTest {
 
     // ---- The same question, asked during first-run setup ------------------------------------
 
-    /**
-     * The wizard's name step is the very first thing a new user types into, and a first-run screen
-     * with its button under the keyboard is an install that ends there. The wizard opens on
-     * Welcome, so this walks one step forward to reach it.
-     */
-    @Test
-    fun wizardNameStepKeepsItsFieldAndButtonWhenSqueezed() {
-        setScreen(height = 380.dp) { OnboardingScreen(onDone = {}) }
-
+    /** The wizard opens on Welcome; the name step is one tap further in. */
+    private fun openWizardNameStep(height: Dp, fontScale: Float = 1f) {
+        setScreen(height = height, fontScale = fontScale) { OnboardingScreen(onDone = {}) }
         compose.onNodeWithText("Get started").performClick()
         compose.waitForIdle()
+    }
 
-        compose.onNodeWithTag(ONBOARDING_NAME_FIELD_TAG).assertIsDisplayed()
+    /**
+     * **What the squeeze is allowed to cost, and what it is not.**
+     *
+     * `StepScaffold` puts the step's content in a scroller and pins the footer below it, so on a
+     * viewport this short the field legitimately sits below the fold — that is the trade the
+     * scaffold exists to make, and `FrictionGateTest` states the same rule: squeezing must cost
+     * scrolling, never the element the screen exists for. So the field is asserted **reachable**
+     * (scroll to it, and it really is on screen once there), while the buttons are asserted
+     * **displayed**, because they are pinned and must never be the thing that scrolls away.
+     *
+     * The first version of this test asserted the field was displayed here and failed on the
+     * emulator. It was the assertion that was wrong, not the screen — but it did surface a real
+     * problem, fixed in `NameStep`: the field used to sit below a four-line paragraph, so on a
+     * short screen a new user saw a question with no visible answer box.
+     */
+    @Test
+    fun wizardNameStepKeepsItsFieldReachableAndItsButtonsPinnedWhenSqueezed() {
+        openWizardNameStep(height = 380.dp)
+
+        compose.onNodeWithTag(ONBOARDING_NAME_FIELD_TAG).performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag(ONBOARDING_NAME_CONTINUE_TAG)
             .assertIsDisplayed().assertHeightIsAtLeast(40.dp)
-        // Skipping has to stay reachable too: the step is optional, and an unreachable "Skip" is
-        // a required question wearing a disguise.
+        // Skipping has to stay pinned too: the step is optional, and a "Skip" that scrolls away
+        // is a required question wearing a disguise.
         compose.onNodeWithText("Skip").assertIsDisplayed()
+    }
+
+    /**
+     * At a viewport like an ordinary phone with the keyboard up, no scrolling should be needed at
+     * all: the very first thing a new user is asked for must be visible along with the box to type
+     * it into. This is what the field's position in `NameStep` is actually for — assert it, or the
+     * paragraph creeps back above the field and nothing notices.
+     */
+    @Test
+    fun wizardNameStepShowsItsFieldWithoutScrollingAtKeyboardHeight() {
+        openWizardNameStep(height = 560.dp)
+
+        compose.onNodeWithTag(ONBOARDING_NAME_FIELD_TAG).assertIsDisplayed()
+        compose.onNodeWithTag(ONBOARDING_NAME_CONTINUE_TAG).assertIsDisplayed()
     }
 }

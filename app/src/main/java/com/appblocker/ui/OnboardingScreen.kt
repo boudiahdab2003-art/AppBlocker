@@ -254,15 +254,12 @@ private fun NameStep(onNext: () -> Unit) {
             color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Center,
         )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            "A first name is plenty. It's only used to greet you on your profile and in the AI " +
-                "Coach — it stays on this phone, and you can change or remove it any time.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(16.dp))
+        // The field sits directly under the question, ABOVE the reassurance below it. That order
+        // is deliberate: the paragraph is reassurance, not instruction, and with the keyboard up
+        // this content area is only a couple of hundred dp tall — putting the paragraph first
+        // pushed the field off the bottom of it, so the answer to "what should we call you?" was
+        // below the fold on the first screen a new user ever sees.
         OutlinedTextField(
             value = text,
             onValueChange = { text = it.take(DisplayName.MAX_LENGTH) },
@@ -273,6 +270,14 @@ private fun NameStep(onNext: () -> Unit) {
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { saveAndGo() }),
             modifier = Modifier.fillMaxWidth().testTag(ONBOARDING_NAME_FIELD_TAG),
+        )
+        Spacer(Modifier.height(16.dp))
+        Text(
+            "A first name is plenty. It's only used to greet you on your profile and in the AI " +
+                "Coach — it stays on this phone, and you can change or remove it any time.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
         )
     }
 }
