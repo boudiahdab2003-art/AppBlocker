@@ -63,6 +63,24 @@ class FocusViewModel(app: Application) : AndroidViewModel(app) {
         remainingMillis.map { it > 0L }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
+    /**
+     * Add [minutes] to the running session. The one change a live Strict session allows.
+     *
+     * No friction, no confirmation gate, no waiting period — unlike everything else that touches
+     * a protection in this app. Those exist because the dangerous direction is *less* blocking,
+     * decided in a bad moment. This only ever moves the deadline later, so the worst outcome is
+     * that someone is protected for longer than they meant to be.
+     *
+     * Deliberately does not read the row first: the arithmetic and both invariants ("only forward"
+     * and "never resurrect a finished session") live in one SQL statement, which is what keeps it
+     * from racing the two writers that zero this row on expiry. See [com.appblocker.data.FocusDao.extend].
+     */
+    fun extend(minutes: Int) {
+        if (minutes <= 0) return
+        StatsStore.addStrictMinutes(getApplication(), minutes)
+        viewModelScope.launch { dao.extend(minutes * 60_000L) }
+    }
+
     /** Start an un-stoppable Strict Mode session. There is intentionally no "stop". */
     fun start(minutes: Int) {
         StatsStore.addStrictMinutes(getApplication(), minutes)

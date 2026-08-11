@@ -113,4 +113,64 @@ class SessionClockTest {
             ),
         )
     }
+
+    // ---- Extending a running session ---------------------------------------------------------
+    //
+    // "Add more time" moves BOTH deadlines later by the same delta and touches neither start
+    // anchor (the statement that does it is FocusDao.extend; FocusExtendTest proves the write).
+    // These prove that choice of fields is the right one on both of this file's paths — that the
+    // extension is real within a boot, and that it survives a reboot without also widening the
+    // hole a wrong clock could walk through.
+
+    @Test fun extendingAddsExactlyTheDeltaWithinABoot() {
+        val before = SessionClock.remainingAt(
+            realtimeStart = 5_000, realtimeEnd = 10_000,
+            wallStart = 7_000, wallEnd = 12_000,
+            savedBootCount = 5, currentBootCount = 5,
+            nowRt = 6_000, nowWall = 6_000,
+        )
+        val delta = 3_000L
+        val after = SessionClock.remainingAt(
+            realtimeStart = 5_000, realtimeEnd = 10_000 + delta,
+            wallStart = 7_000, wallEnd = 12_000 + delta,
+            savedBootCount = 5, currentBootCount = 5,
+            nowRt = 6_000, nowWall = 6_000,
+        )
+        assertEquals(before + delta, after)
+    }
+
+    /**
+     * The reason the start anchors must NOT be re-anchored when extending.
+     *
+     * After a reboot the monotonic deadline is dead and remaining is capped at the session's total
+     * length, `wallEnd - wallStart` — the guard that stops a backwards clock handing back more time
+     * than the session ever had. Moving `wallEnd` alone grows that cap by exactly the amount added,
+     * so the extension is honoured and the guard still holds. Re-anchoring `wallStart` to "now"
+     * would shrink the cap instead, which is a way of *shortening* a session that nobody asked for.
+     */
+    @Test fun extendingSurvivesARebootAndKeepsItsCap() {
+        val delta = 3_000L
+        val rem = SessionClock.remainingAt(
+            realtimeStart = 5_000, realtimeEnd = 10_000 + delta,
+            wallStart = 1_000, wallEnd = 11_000 + delta,
+            savedBootCount = 4, currentBootCount = 5, // rebooted: wall path
+            nowRt = 500, nowWall = 4_000,
+        )
+        assertEquals(7_000L + delta, rem)
+        assertTrue("must stay capped at the session's total length", rem <= (11_000 + delta) - 1_000)
+    }
+
+    /** An extension of a session that already ran out stays run out. */
+    @Test fun extendingAnExpiredSessionIsStillExpired() {
+        // The row is zeroed on expiry, so this is what "extend the dead row" would compute.
+        assertEquals(
+            0L,
+            SessionClock.remainingAt(
+                realtimeStart = 0, realtimeEnd = 0,
+                wallStart = 0, wallEnd = 0,
+                savedBootCount = 5, currentBootCount = 5,
+                nowRt = 6_000, nowWall = 6_000,
+            ),
+        )
+    }
 }

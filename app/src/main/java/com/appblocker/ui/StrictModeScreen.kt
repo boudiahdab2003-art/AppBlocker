@@ -43,6 +43,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -100,9 +101,11 @@ fun StrictModeScreen(
                 color = MaterialTheme.colorScheme.primary,
             )
             Spacer(Modifier.height(8.dp))
-            Text("No stopping early — that was the point.",
+            Text("No stopping early — that was the point. You can add time, never take it away.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+            Spacer(Modifier.height(24.dp))
+            AddTimeRow(remaining = remaining, onAdd = { vm.extend(it) })
             Spacer(Modifier.height(24.dp))
             LockedList()
         } else {
@@ -245,9 +248,110 @@ private fun UnlockMethod(canActivate: Boolean, summary: String, onActivate: (Int
             text = {
                 Text(
                     "Your blocks will be locked for ${humanDuration(minutes)} — until " +
-                        "${endsAt(minutes)}.\n\nYou can't stop early.",
+                        "${endsAt(minutes)}.\n\nYou can't stop early. You'll be able to add " +
+                        "more time while it runs, but never cut it short.",
                 )
             },
+        )
+    }
+}
+
+/** Test tags for the rendering test — the fast path and the unbounded one. */
+const val ADD_TIME_CHIP_TAG = "add_time_chip"
+const val ADD_TIME_CHOOSE_TAG = "add_time_choose"
+
+/**
+ * "Add more time" — the only control a running Strict session offers, and the only change it
+ * accepts.
+ *
+ * Extending is the safe direction, so it gets none of this app's usual friction: no typed
+ * paragraph, no cooling-off, no PIN. Every one of those exists to stand between a bad moment and
+ * *less* protection. The worst thing this button can do is leave someone protected for longer
+ * than they meant.
+ *
+ * **Why the chips act immediately and "Choose…" confirms.** Adding time cannot be undone, and this
+ * app puts friction in front of things that cannot be undone — but proportional to the size of the
+ * mistake. A mis-tapped chip costs at most an hour, and the end time is on screen before the tap.
+ * The wheel goes up to thirty days, which is why starting a session already confirms; the same
+ * dialog guards the same magnitude here.
+ *
+ * Stateless apart from its own dialog flags, and separate from [StrictModeScreen], so a rendering
+ * test can measure it without standing up a [FocusViewModel] and Room.
+ */
+@Composable
+internal fun AddTimeRow(remaining: Long, onAdd: (Int) -> Unit) {
+    var showPicker by remember { mutableStateOf(false) }
+    var pendingMinutes by remember { mutableIntStateOf(0) }
+    // The session's current deadline — what an extension is measured from, not "now".
+    val deadline = System.currentTimeMillis() + remaining
+
+    Text(
+        "ADD MORE TIME", style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center,
+    )
+    Spacer(Modifier.height(10.dp))
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        AddChip("+15m", Modifier.weight(1f)) { onAdd(15) }
+        AddChip("+30m", Modifier.weight(1f)) { onAdd(30) }
+        AddChip("+1h", Modifier.weight(1f)) { onAdd(60) }
+        AddChip("Choose…", Modifier.weight(1f).testTag(ADD_TIME_CHOOSE_TAG)) { showPicker = true }
+    }
+    Spacer(Modifier.height(10.dp))
+    Text(
+        "Ends ${endsAt(0, deadline)}. Adding time can't be undone.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center,
+    )
+
+    if (showPicker) {
+        DurationPickerDialog(
+            title = "Add more time",
+            initialMinutes = 30,
+            // Measured from the session's deadline, so the picker's live "Ends …" preview tells
+            // the truth about an extension rather than about a fresh session.
+            baseMillis = deadline,
+            onSave = { pendingMinutes = it },
+            onDismiss = { showPicker = false },
+        )
+    }
+    if (pendingMinutes > 0) {
+        AlertDialog(
+            onDismissRequest = { pendingMinutes = 0 },
+            confirmButton = {
+                TextButton(onClick = { val m = pendingMinutes; pendingMinutes = 0; onAdd(m) }) {
+                    Text("Add the time")
+                }
+            },
+            dismissButton = { TextButton(onClick = { pendingMinutes = 0 }) { Text("Cancel") } },
+            title = { Text("Add ${humanDuration(pendingMinutes)}?") },
+            text = {
+                Text(
+                    "Your blocks will stay locked until ${endsAt(pendingMinutes, deadline)}." +
+                        "\n\nYou can't undo this or cut it short.",
+                )
+            },
+        )
+    }
+}
+
+@Composable
+private fun AddChip(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Box(
+        modifier.testTag(ADD_TIME_CHIP_TAG).clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label, style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary,
+            maxLines = 1,
         )
     }
 }
@@ -262,9 +366,14 @@ private fun humanDuration(minutes: Int): String {
     return parts.joinToString(" ")
 }
 
-/** When a lock of [minutes] would end, e.g. "Mon, Jun 23 at 3:45 PM". */
-private fun endsAt(minutes: Int): String {
-    val end = Date(System.currentTimeMillis() + minutes * 60_000L)
+/**
+ * When a lock of [minutes] measured from [baseMillis] would end, e.g. "Mon, Jun 23 at 3:45 PM".
+ *
+ * [baseMillis] defaults to now, which is right for starting a session and wrong for extending one:
+ * adding an hour to a session with two hours left ends in three hours, not one.
+ */
+private fun endsAt(minutes: Int, baseMillis: Long = System.currentTimeMillis()): String {
+    val end = Date(baseMillis + minutes * 60_000L)
     return SimpleDateFormat("EEE, MMM d 'at' h:mm a", Locale.getDefault()).format(end)
 }
 

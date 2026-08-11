@@ -176,13 +176,21 @@ private fun WheelColumn(
     }
 }
 
-/** Full-screen "Set the timer" picker: wheel + live "Ends …" preview + Save. */
+/**
+ * Full-screen "Set the timer" picker: wheel + live "Ends …" preview + Save.
+ *
+ * [baseMillis] is the moment the chosen duration is measured FROM, and it defaults to now because
+ * that is true for starting something. It is a parameter because it is **not** true for extending
+ * something: adding 15 minutes to a Strict session that has 40 minutes left ends in 55 minutes,
+ * not 15, and a preview that says otherwise is a confident lie about an irreversible choice.
+ */
 @Composable
 fun DurationPickerDialog(
     title: String,
     initialMinutes: Int,
     onSave: (Int) -> Unit,
     onDismiss: () -> Unit,
+    baseMillis: Long = System.currentTimeMillis(),
 ) {
     // History of this button: (1) the dialog's own window reports ZERO insets on HyperOS;
     // (2) WindowInsets.safeDrawing read here is zero-bottom too (MainScaffold's content
@@ -227,7 +235,8 @@ fun DurationPickerDialog(
                     DurationWheel(initialMinutes) { minutes = it }
                     Spacer(Modifier.height(16.dp))
                     Text(
-                        if (minutes <= 0) "Choose a duration." else "Ends ${endsAtText(minutes)}.",
+                        if (minutes <= 0) "Choose a duration."
+                        else "Ends ${endsAtText(minutes, baseMillis)}.",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.fillMaxWidth(),
@@ -239,7 +248,7 @@ fun DurationPickerDialog(
     }
 }
 
-private fun endsAtText(minutes: Int): String {
-    val end = Date(System.currentTimeMillis() + minutes * 60_000L)
+private fun endsAtText(minutes: Int, baseMillis: Long): String {
+    val end = Date(baseMillis + minutes * 60_000L)
     return SimpleDateFormat("M/d, h:mm a", Locale.getDefault()).format(end)
 }

@@ -58,7 +58,22 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
    deadline that must survive a reboot goes through `GuardedDeadline`/`SessionClock`. The user can
    move the wall clock; a negative interval reads as "no time has passed", which silently freezes
    whatever the timer was guarding. This has now been the cause of three separate sweeps' findings.
-10. **An empty or failed answer is not data.** Every package/asset query in this app swallows its
+10. **A Strict deadline may only move later — and a finished one may never move at all.**
+    `focus_state` has four writers: `FocusViewModel.start`, the two that zero the row when a
+    session expires (`FocusViewModel`'s ticker and the watcher's `focusClearRunnable`), and
+    `FocusDao.extend`. That last one exists so "add more time" is possible, and it is written as a
+    single `UPDATE … SET end = end + :delta … WHERE :delta > 0 AND (end > 0 OR realtimeEnd > 0)`
+    rather than a read-modify-write in Kotlin. The reason is the race with the two clear paths, and
+    it is asymmetric: losing it one way drops an extension the user asked for; losing it the other
+    way **resurrects a session that has already ended and unlocked their blocks**. Doing the
+    arithmetic inside SQLite closes the window instead of narrowing it, and `+ :delta` (never
+    `= :newEnd`) makes shortening inexpressible rather than merely absent. Both end columns move
+    together or neither does — `SessionClock` reads the monotonic one within a boot and the
+    wall-clock one after a reboot. The start anchors are never touched: the post-reboot path caps
+    remaining at `end - start`, so raising the end raises the cap by the same amount, while
+    re-anchoring the start would shrink it and thereby *shorten* a session. Proven by
+    `FocusExtendTest` (the write) and `SessionClockTest` (the choice of fields).
+11. **An empty or failed answer is not data.** Every package/asset query in this app swallows its
     errors into an empty collection, and "no browsers", "no launcher", "no adult words" is never
     true. Adopting one silently fails *open*. Adopt a result only when it is non-empty, keep the
     previous value, and record the failure (`refreshPackageSets`, `WebContentFilter.get`).
