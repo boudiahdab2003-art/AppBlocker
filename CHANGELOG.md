@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.122
+- The templates have been redesigned. One card per row now, each with its own emoji so you can tell them apart at a glance, the name large and centred, and the schedule in plain words — "Mon–Fri, 9:00 AM – 5:00 PM". An applied template finally looks applied: it takes a coloured border and a glow instead of a tiny badge. Also: the bare word "onlyfans" no longer blocks every page that merely mentions it — a news article, a review, a thread about quitting. The site itself is still blocked.
+
 ## v1.121
 - You can now add time to a running Strict session — +15m, +30m, +1h or any amount you choose. It only goes one way: time can be added, never taken away. Plus a proper screen explaining what AppBlocker can see before you're asked to allow it, closing a button that used to send you straight to Android's settings with no explanation at all. And AppBlocker is no longer one person's app — it asks your name during setup, and there's a new Your profile page.
 
