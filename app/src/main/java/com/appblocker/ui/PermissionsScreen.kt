@@ -34,7 +34,12 @@ import com.appblocker.ui.theme.AppShapes
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PermissionsScreen(onBack: () -> Unit) {
+fun PermissionsScreen(
+    onBack: () -> Unit,
+    /** Ask AppRoot for [AccessibilityDisclosureScreen]. This screen must not draw it itself: the
+     *  Grant buttons live inside a scrolling column, where a full-screen page does not lay out. */
+    onRequestDisclosure: (() -> Unit) -> Unit = {},
+) {
     val context = LocalContext.current
     val perms = rememberPermissions()
     val remaining = perms.count { !it.granted && it.essential }
@@ -54,7 +59,7 @@ fun PermissionsScreen(onBack: () -> Unit) {
             )
             Spacer(Modifier.padding(top = 12.dp))
             perms.forEach { p ->
-                PermCard(p)
+                PermCard(p, onRequestDisclosure)
                 Spacer(Modifier.padding(top = 12.dp))
             }
             Text(
@@ -88,7 +93,7 @@ fun PermissionsScreen(onBack: () -> Unit) {
 }
 
 @Composable
-private fun PermCard(p: Perm) {
+private fun PermCard(p: Perm, onRequestDisclosure: (() -> Unit) -> Unit) {
     Column(
         Modifier.fillMaxWidth().clip(AppShapes.card)
             .background(MaterialTheme.colorScheme.surface).padding(18.dp),
@@ -120,7 +125,7 @@ private fun PermCard(p: Perm) {
             Spacer(Modifier.padding(top = 12.dp))
             GradientButton(
                 text = if (p.key == "autostart") "Open settings" else "Grant",
-                onClick = rememberGatedFix(p),
+                onClick = gatedFix(p, onRequestDisclosure),
             )
         }
     }

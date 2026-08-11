@@ -13,7 +13,11 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
-    VersionLog("1.121", "Aug 10, 2026", "AppBlocker is now anybody's app", listOf(
+    VersionLog("1.121", "Aug 11, 2026", "AppBlocker is now anybody's app", listOf(
+        "**A button was sending you to Android's Accessibility page with no explanation at all.** When protection is off, the Blocking tab shows a \"Turn on protection\" banner. Every other route to that page first showed you what the app can see and asked you to agree — that one didn't. It went straight there. And it appears exactly when protection is off, which is the moment you're most likely to press it.",
+        "**The explanation is now a proper screen, and every route goes through it.** \"What AppBlocker can see\": which app is in front, and — in browsers only — the page address and text, with a plain list of what never happens (never stored, never sent, no account, no server, the AI Coach never sees your screen, no ads or tracking). Agree and it takes you to Android's settings; \"Not now\" grants nothing.",
+        "It used to be a pop-up. Pop-ups are the one thing that misbehaves on your phone — it's the same fault that made the typed gate unusable for five releases — and a pop-up you can swipe away is also the weakest possible version of \"we told you.\" It's a full screen now, with both answers pinned above the keyboard, and a test on a real emulator that squeezes it to check they stay there.",
+        "**Profile ▸ About now has a Privacy policy link**, and the policy itself has been brought up to date — including which parts only apply to the version you install directly rather than from a store.",
         "**Until now this was literally one person's app.** The name on the Profile page wasn't a setting with a sensible default — it was your name, written into the code. Anyone else who installed AppBlocker was greeted by it, and by the AI Coach using it, with no obvious place to change it.",
         "**There's a new page: Profile ▸ Your profile.** Your name, a live preview of how you'll be greeted, and a plain statement of where it does and doesn't get used. It also holds \"Run setup again\", which replays the welcome walkthrough without touching a single block, schedule, word or your PIN.",
         "**The first-run setup now asks who you are** — one question, right after Welcome, and you can skip it. Skip it and the app simply says \"You\"; nothing needs a name to work.",

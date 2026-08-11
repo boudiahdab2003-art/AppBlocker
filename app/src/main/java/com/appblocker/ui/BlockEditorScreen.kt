@@ -93,6 +93,8 @@ private enum class EditorPage { SUMMARY, APPS, WEBSITES, MODE }
 fun BlockEditorScreen(
     strictActive: Boolean,
     onBack: () -> Unit,
+    /** Ask AppRoot for [AccessibilityDisclosureScreen] — see [ProtectionBanner]. */
+    onRequestDisclosure: (() -> Unit) -> Unit = {},
     appsVm: AppListViewModel = viewModel(),
     webVm: WebFilterViewModel = viewModel(),
 ) {
@@ -195,7 +197,8 @@ fun BlockEditorScreen(
                         )
                         Spacer(Modifier.padding(top = 12.dp))
                         if (!AccessibilityUtil.isEnabled(context)) {
-                            ProtectionBanner(context); Spacer(Modifier.padding(top = 12.dp))
+                            ProtectionBanner(context, onRequestDisclosure)
+                            Spacer(Modifier.padding(top = 12.dp))
                         }
                         if (strictActive) {
                             Text(
@@ -646,7 +649,7 @@ private fun ShortsSubRow(
 }
 
 @Composable
-private fun ProtectionBanner(context: Context) {
+private fun ProtectionBanner(context: Context, onRequestDisclosure: (() -> Unit) -> Unit) {
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
             .background(MaterialTheme.colorScheme.surface).padding(16.dp),
@@ -663,10 +666,19 @@ private fun ProtectionBanner(context: Context) {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.padding(top = 12.dp))
+        // **Through the disclosure, like every other door to that settings page.**
+        // This button used to call startActivity directly. It never went near the consent gate,
+        // so it sent people to Android's Accessibility page with no disclosure at all — and it
+        // appears exactly when protection is off, which is the moment somebody is most likely to
+        // press it. That is the flow Google's AccessibilityService policy is written about, and
+        // it is the answer to "why does a self-control app get to read my screen?" going unasked.
         GradientButton(text = "Turn on protection", onClick = {
-            context.startActivity(
-                Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            )
+            onRequestDisclosure {
+                context.startActivity(
+                    Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            }
         })
     }
 }

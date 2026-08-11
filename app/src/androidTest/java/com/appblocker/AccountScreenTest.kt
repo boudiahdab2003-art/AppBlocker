@@ -23,7 +23,10 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.appblocker.data.SettingsStore
 import com.appblocker.ui.ACCOUNT_NAME_FIELD_TAG
 import com.appblocker.ui.ACCOUNT_SAVE_TAG
+import com.appblocker.ui.AccessibilityDisclosureScreen
 import com.appblocker.ui.AccountScreen
+import com.appblocker.ui.DISCLOSURE_AGREE_TAG
+import com.appblocker.ui.DISCLOSURE_DECLINE_TAG
 import com.appblocker.ui.ONBOARDING_NAME_CONTINUE_TAG
 import com.appblocker.ui.ONBOARDING_NAME_FIELD_TAG
 import com.appblocker.ui.OnboardingScreen
@@ -180,5 +183,53 @@ class AccountScreenTest {
 
         compose.onNodeWithTag(ONBOARDING_NAME_FIELD_TAG).assertIsDisplayed()
         compose.onNodeWithTag(ONBOARDING_NAME_CONTINUE_TAG).assertIsDisplayed()
+    }
+
+    // ---- The accessibility disclosure -------------------------------------------------------
+
+    /**
+     * The screen that has to be readable before anyone agrees to let this app watch their screen.
+     * It replaced an `AlertDialog` partly *because* of layout — dialogs report zero insets on the
+     * owner's device — so a version of it whose buttons fall off a short screen would have swapped
+     * one broken shape for another.
+     *
+     * Both buttons, at every size: agreeing is a consent action and must be deliberate, and "Not
+     * now" is the only thing standing between "I don't want this" and a user who taps the visible
+     * button because it is the only one they can reach.
+     */
+    @Test
+    fun disclosureKeepsBothAnswersOnScreenWhenSqueezed() {
+        setScreen(height = 340.dp) {
+            AccessibilityDisclosureScreen(onAgree = {}, onDecline = {})
+        }
+
+        compose.onNodeWithTag(DISCLOSURE_AGREE_TAG).assertIsDisplayed().assertHeightIsAtLeast(40.dp)
+        compose.onNodeWithTag(DISCLOSURE_DECLINE_TAG).assertIsDisplayed()
+    }
+
+    /** The owner runs a large system font, and so will plenty of the people this is written for. */
+    @Test
+    fun disclosureKeepsBothAnswersOnScreenAtALargeSystemFont() {
+        setScreen(height = 420.dp, fontScale = 1.5f) {
+            AccessibilityDisclosureScreen(onAgree = {}, onDecline = {})
+        }
+
+        compose.onNodeWithTag(DISCLOSURE_AGREE_TAG).assertIsDisplayed().assertHeightIsAtLeast(40.dp)
+        compose.onNodeWithTag(DISCLOSURE_DECLINE_TAG).assertIsDisplayed()
+    }
+
+    /**
+     * The disclosure is only a disclosure if the disclosing part is reachable. Given the window,
+     * the headline claim should need no scrolling at all — an "agree" button visible above text
+     * nobody can see is the pop-up problem with extra steps.
+     */
+    @Test
+    fun disclosureShowsWhatItReadsGivenTheWindow() {
+        setScreen(height = null) {
+            AccessibilityDisclosureScreen(onAgree = {}, onDecline = {})
+        }
+
+        compose.onNodeWithText("Which app is in front").assertIsDisplayed()
+        compose.onNodeWithText("It never leaves your phone").performScrollTo().assertIsDisplayed()
     }
 }

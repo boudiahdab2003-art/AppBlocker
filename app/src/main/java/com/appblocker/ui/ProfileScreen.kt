@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PrivacyTip
 import androidx.compose.material.icons.filled.SelfImprovement
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Shield
@@ -554,6 +555,18 @@ fun ProfileScreen(
                 )
             }
             Divider()
+            // Play expects the policy reachable from inside the app, not only from a store
+            // listing — and it is the document that backs up what the accessibility disclosure
+            // promises, so it belongs somewhere a suspicious person can find it.
+            ProfileRow(
+                icon = Icons.Filled.PrivacyTip,
+                title = "Privacy policy",
+                subtitle = "What the app stores, what it never sends, and what the AI Coach sees.",
+                chevron = true,
+                enabled = true,
+                onClick = { openUrl(context, PRIVACY_POLICY_URL) },
+            )
+            Divider()
             ProfileRow(
                 icon = Icons.Filled.Share,
                 title = "Share AppBlocker",
@@ -753,6 +766,13 @@ private fun protectionStatus(context: Context): ProtectionStatus {
         ProtectionState.PAUSED ->
             ProtectionStatus(false, "Paused after update — see Blocking tab", fixable = false)
     }
+}
+
+/** Opens [url] in a browser. Silent if the phone has none — this is never the only way to a fact. */
+private fun openUrl(context: Context, url: String) {
+    val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    runCatching { context.startActivity(intent) }
 }
 
 private fun shareApp(context: Context) {

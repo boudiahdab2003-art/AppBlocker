@@ -87,6 +87,10 @@ fun AppRoot(openPermissionsOnStart: Boolean = false) {
     // The typed-paragraph gate, requested from a tab and drawn over the window. See the layer
     // below for why it cannot be drawn where it is asked for.
     var gate by remember { mutableStateOf<Pair<GateCopy, () -> Unit>?>(null) }
+    // The accessibility disclosure, requested by whichever screen holds a "Grant" button and drawn
+    // over the window for the same reason as the gate. Holds the action to run on agreement — for
+    // every caller that is `Perm.onFix`, which opens Android's Accessibility settings.
+    var disclosure by remember { mutableStateOf<(() -> Unit)?>(null) }
     val focusVm: FocusViewModel = viewModel()
     val strictActive by focusVm.isActive.collectAsState()
     val updateVm: UpdateViewModel = viewModel()
@@ -137,19 +141,29 @@ fun AppRoot(openPermissionsOnStart: Boolean = false) {
     ) { o ->
         when (o) {
             is Overlay.QuickBlock ->
-                BlockEditorScreen(strictActive = strictActive, onBack = { overlay = null })
+                BlockEditorScreen(
+                    strictActive = strictActive,
+                    onBack = { overlay = null },
+                    onRequestDisclosure = { onAgree -> disclosure = onAgree },
+                )
             is Overlay.Keywords ->
                 KeywordsScreen(strictActive = strictActive, onBack = { overlay = null })
             is Overlay.EditTemplate ->
                 TemplateEditorScreen(template = o.template, strictActive = strictActive,
                     onBack = { overlay = null })
             is Overlay.Permissions ->
-                PermissionsScreen(onBack = { overlay = null })
+                PermissionsScreen(
+                    onBack = { overlay = null },
+                    onRequestDisclosure = { onAgree -> disclosure = onAgree },
+                )
             is Overlay.Onboarding ->
-                OnboardingScreen(onDone = {
-                    SettingsStore.setSetupSeen(context)
-                    overlay = null
-                })
+                OnboardingScreen(
+                    onDone = {
+                        SettingsStore.setSetupSeen(context)
+                        overlay = null
+                    },
+                    onRequestDisclosure = { onAgree -> disclosure = onAgree },
+                )
             is Overlay.Account ->
                 AccountScreen(
                     onBack = { overlay = null },
@@ -232,6 +246,25 @@ fun AppRoot(openPermissionsOnStart: Boolean = false) {
     // The clickable is a tap sink, not a button: it catches taps that would otherwise fall through
     // to the tab bar now hidden behind the gate. Children are hit first, so the field and the
     // buttons inside are unaffected.
+    // The accessibility disclosure, drawn here for the same reason as the gate below: it is asked
+    // for by a Grant button that lives inside a scrolling column, and a full-screen page emitted
+    // from inside one does not lay out correctly. It is drawn AFTER the AnimatedContent, so it
+    // covers the overlays (Permissions, Onboarding) that request it — which is also why it cannot
+    // itself be an Overlay: there is only one of those at a time.
+    disclosure?.let { onAgree ->
+        Box(
+            Modifier.fillMaxSize().clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+            ) {}
+        ) {
+            AccessibilityDisclosureScreen(
+                onAgree = { disclosure = null; onAgree() },
+                onDecline = { disclosure = null },
+            )
+        }
+    }
+
     gate?.let { (copy, confirm) ->
         Box(
             Modifier.fillMaxSize().clickable(

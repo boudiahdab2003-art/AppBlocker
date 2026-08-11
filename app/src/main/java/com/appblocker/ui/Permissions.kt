@@ -12,15 +12,10 @@ import android.os.Build
 import android.os.PowerManager
 import android.os.Process
 import android.provider.Settings
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
@@ -163,54 +158,43 @@ fun rememberPermissions(): List<Perm> {
 }
 
 /**
+ * The one rule this file exists to enforce: **an ungranted accessibility permission must be
+ * preceded by the disclosure.**
+ *
+ * Separated from the Compose plumbing so it can be unit tested. It is a two-line function and
+ * still worth testing, because what actually went wrong here was not the condition being subtly
+ * wrong — it was a Grant button that never asked the condition at all (see
+ * [AccessibilityDisclosureScreen]'s list of doors).
+ */
+fun needsDisclosure(key: String, granted: Boolean): Boolean = key == ACCESSIBILITY_PERM && !granted
+
+/** The [Perm.key] of the permission the whole app is built on. */
+const val ACCESSIBILITY_PERM = "accessibility"
+
+/**
  * Google Play's AccessibilityService policy requires a prominent disclosure and explicit consent
- * BEFORE sending the user to accessibility settings. Returns a click handler that shows the
- * consent dialog first for the (ungranted) accessibility perm and passes straight through for
- * everything else — so every Grant call site gets the gate by using this.
+ * BEFORE sending the user to accessibility settings. Returns a click handler that asks for
+ * [AccessibilityDisclosureScreen] first for the (ungranted) accessibility perm and passes straight
+ * through for everything else — so every Grant call site gets the gate by using this.
+ *
+ * **[onRequestDisclosure] rather than composing the screen here.** This used to raise an
+ * `AlertDialog` in place, which worked only because a dialog gets its own window. The disclosure
+ * is now a full screen, and every caller of this function sits inside a scrolling column, where a
+ * full-screen page does not lay out correctly — the same trap [FrictionGate] documents. So the
+ * screen is *requested*, and [AppRoot] draws it over the window.
  *
  * **It deliberately does not gate "Prevent uninstall".** It looked like a second door to that
  * switch and briefly grew a copy of the gate for it; both call sites
  * ([PermissionsScreen]'s `PermCard`, [OnboardingScreen]'s `EssentialStep`) render the Grant button
  * only under `if (!perm.granted)`, so this screen can turn device admin **on** and has no way to
- * turn it off. The copy was unreachable, and a full-screen [FrictionGate] emitted from inside a
- * card in a scrolling column would not have drawn correctly if it ever had been. Profile's row is
- * the one door, and it is gated there.
+ * turn it off. The copy was unreachable. Profile's row is the one door, and it is gated there.
  */
-@Composable
-fun rememberGatedFix(perm: Perm): () -> Unit {
-    // Declared unconditionally: a `return` before a `remember` would change the number of slots in
-    // the composition when `granted` flips, which is exactly what these rows do.
-    var showConsent by remember { mutableStateOf(false) }
-    if (showConsent) {
-        AlertDialog(
-            onDismissRequest = { showConsent = false },
-            title = { Text("How blocking works") },
-            text = {
-                Text(
-                    "AppBlocker uses Android's Accessibility service to know which app is on " +
-                        "screen, and — inside web browsers only — to read the page address and " +
-                        "visible text so it can block your chosen sites and keywords.\n\n" +
-                        "All of this is checked on your device only. Screen content is never " +
-                        "stored and never sent anywhere.\n\n" +
-                        "By continuing you agree to AppBlocker using the Accessibility service " +
-                        "for blocking.",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { showConsent = false; perm.onFix() }) {
-                    Text("Agree & continue")
-                }
-            },
-            dismissButton = { TextButton(onClick = { showConsent = false }) { Text("Cancel") } },
-        )
-    }
-    return if (perm.key == "accessibility" && !perm.granted) {
-        { showConsent = true }
+fun gatedFix(perm: Perm, onRequestDisclosure: (() -> Unit) -> Unit): () -> Unit =
+    if (needsDisclosure(perm.key, perm.granted)) {
+        { onRequestDisclosure(perm.onFix) }
     } else {
         perm.onFix
     }
-}
 
 /**
  * The typed-paragraph gate in front of turning **Prevent uninstall** off.

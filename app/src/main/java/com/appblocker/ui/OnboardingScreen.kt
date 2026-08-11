@@ -70,7 +70,11 @@ const val ONBOARDING_NAME_CONTINUE_TAG = "onboarding_name_continue"
  * when the user reaches the end (Finish) or skips out — AppRoot owns persisting "setup seen".
  */
 @Composable
-fun OnboardingScreen(onDone: () -> Unit) {
+fun OnboardingScreen(
+    onDone: () -> Unit,
+    /** Ask AppRoot for [AccessibilityDisclosureScreen] — see [gatedFix]. */
+    onRequestDisclosure: (() -> Unit) -> Unit = {},
+) {
     val perms = rememberPermissions()
     val essentials = perms.filter { it.essential }
     val recommended = perms.filter { it.key == "usage" || it.key == "battery" }
@@ -112,10 +116,12 @@ fun OnboardingScreen(onDone: () -> Unit) {
                     perm = essentials[step - firstEssentialStep],
                     onContinue = { step++ },
                     onSkip = { step = doneStep },
+                    onRequestDisclosure = onRequestDisclosure,
                 )
                 step == recommendedStep -> RecommendedStep(
                     perms = recommended,
                     onContinue = { step++ },
+                    onRequestDisclosure = onRequestDisclosure,
                 )
                 else -> DoneStep(
                     grantedEssentials = essentials.count { it.granted },
@@ -343,13 +349,18 @@ private fun CoachFeatureRow(icon: ImageVector, title: String, desc: String) {
 }
 
 @Composable
-private fun EssentialStep(perm: Perm, onContinue: () -> Unit, onSkip: () -> Unit) {
+private fun EssentialStep(
+    perm: Perm,
+    onContinue: () -> Unit,
+    onSkip: () -> Unit,
+    onRequestDisclosure: (() -> Unit) -> Unit,
+) {
     val icon = if (perm.key == "accessibility") Icons.Filled.Shield else Icons.Filled.Visibility
     StepScaffold(footer = {
         if (perm.granted) {
             GradientButton(text = "Continue", onClick = onContinue)
         } else {
-            GradientButton(text = "Grant", onClick = rememberGatedFix(perm))
+            GradientButton(text = "Grant", onClick = gatedFix(perm, onRequestDisclosure))
             Spacer(Modifier.height(8.dp))
             TextButton(onClick = onSkip) {
                 Text("Skip for now", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -379,7 +390,11 @@ private fun EssentialStep(perm: Perm, onContinue: () -> Unit, onSkip: () -> Unit
 }
 
 @Composable
-private fun RecommendedStep(perms: List<Perm>, onContinue: () -> Unit) {
+private fun RecommendedStep(
+    perms: List<Perm>,
+    onContinue: () -> Unit,
+    onRequestDisclosure: (() -> Unit) -> Unit,
+) {
     StepScaffold(footer = { GradientButton(text = "Continue", onClick = onContinue) }) {
         Spacer(Modifier.height(8.dp))
         StepIcon(Icons.Filled.BatteryChargingFull)
@@ -400,14 +415,14 @@ private fun RecommendedStep(perms: List<Perm>, onContinue: () -> Unit) {
         )
         Spacer(Modifier.height(20.dp))
         perms.forEach { p ->
-            RecommendedRow(p)
+            RecommendedRow(p, onRequestDisclosure)
             Spacer(Modifier.height(12.dp))
         }
     }
 }
 
 @Composable
-private fun RecommendedRow(p: Perm) {
+private fun RecommendedRow(p: Perm, onRequestDisclosure: (() -> Unit) -> Unit) {
     val icon = if (p.key == "usage") Icons.Filled.QueryStats else Icons.Filled.BatteryChargingFull
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
@@ -435,7 +450,11 @@ private fun RecommendedRow(p: Perm) {
                     fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             }
         } else {
-            TextButton(onClick = p.onFix) { Text("Grant") }
+            // Through the gate like every other Grant button. This row is only ever handed
+            // usage/battery today, so it cannot currently reach accessibility — but it was the
+            // one call site that bypassed the disclosure by construction, and "currently" is not
+            // a property anybody checks when adding a permission to the list.
+            TextButton(onClick = gatedFix(p, onRequestDisclosure)) { Text("Grant") }
         }
     }
 }
