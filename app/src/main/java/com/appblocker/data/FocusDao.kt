@@ -40,6 +40,11 @@ interface FocusDao {
      * by exactly the amount added and the wrong-clock guard keeps working; re-anchoring the start
      * would shrink the cap and could *shorten* the session after a reboot.
      * [GuardedDeadline.remaining] shifts a deadline the same way, for the same reason.
+     *
+     * **Returns the number of rows changed** — 1 when the extension applied, 0 when it was refused
+     * by one of the guards above. Callers must not assume it applied: the guards mean this is a
+     * no-op for an expired session, and anything recorded alongside it (a statistic, a log line)
+     * would otherwise describe time that was never actually added.
      */
     @Query(
         """
@@ -51,7 +56,7 @@ interface FocusDao {
            AND (endTimeMillis > 0 OR realtimeEndMillis > 0)
         """
     )
-    suspend fun extend(delta: Long)
+    suspend fun extend(delta: Long): Int
 
     // There is deliberately no query here that can move a deadline EARLIER, or set one to an
     // absolute value. Strict Mode's whole promise is that a session cannot be cut short, and the

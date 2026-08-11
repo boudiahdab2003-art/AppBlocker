@@ -608,6 +608,51 @@ Two things worth carrying forward:
   directly in the list, the service can now be turned off without the guard firing. Tapping into
   our entry still bounces, so the common route is defended.
 
+### Swept in the twentieth "bug hunt" (11 Aug 2026) — every mutating write, and hours-old code
+
+Two greps. One finding, and one sweep that came back clean and is worth recording *as* clean,
+because it is the sweep somebody will otherwise keep re-running.
+
+**`grep "@Delete\|@Insert\|@Upsert\|DELETE FROM\|UPDATE "` over the DAOs — every mutating
+write in the app, eleven of them.** The question asked of each: *can this be reached with a value
+that weakens protection while Strict Mode is running?* Only three can remove protection at all —
+`AppRuleDao.delete`, `BlockedKeywordDao.delete`, `ScheduleDao.delete` — and every caller is
+gated:
+
+- `ScheduleCard` (`BlockingSchedules.kt`) — `canDelete = onDelete != null && !strictActive`, and
+  `toggleEnabled = !strictActive || !schedule.enabled`, so a schedule can be turned **on** during
+  Strict but not off, and the swipe-to-delete gesture is off entirely.
+- `ScheduleEditorScreen` — the bin only renders when `existing != null && editable`, where
+  `editable = existing == null || !strictActive`.
+- `KeywordsScreen` — the remove button is `enabled = ed` where `ed = !strictActive`.
+- `BlockEditorScreen` — keyword removal `enabled = ed`; app deselection refuses the *weakening*
+  direction specifically (`if (strictActive && (if (allowlist) on else !on)) return`), which is
+  the correct asymmetry and not the blunt "no edits" it would be easy to write.
+- `commitQuickBlock` uses `upsertAll` and never deletes, so `save()` cannot remove a rule the UI
+  refused to let the user remove.
+
+This is the shape v1.110's "a fix that reached one call site" was, so it is now enumerated rather
+than assumed. **Clean — do not re-derive it; extend the list instead if a new writer appears.**
+
+One inconsistency noted and deliberately left: `BlockEditorScreen`'s adult-pack, auto-block-new-apps,
+purchases and unsupported-browser switches are gated on `ed` outright, so during Strict they cannot
+be turned **on** either. Everywhere else strengthening is allowed mid-session. It errs toward more
+blocking, so it is not a bug — but it is a UX inconsistency and the reason is recorded here rather
+than rediscovered.
+
+**The extend feature, hours old (sweep nineteen's precedent: audit your own newest code).**
+`FocusViewModel.extend` recorded the added minutes to `StatsStore` *before* and independently of
+the SQL — and `FocusDao.extend` is deliberately a no-op for an expired row. A session can expire
+between the button being drawn and the tap landing, or while the duration picker sits open, so
+Insights could report Strict minutes that never happened. Two sources of truth drifting, the
+shape this file opens with. `extend` now returns the row count and the statistic is recorded only
+when it is above zero; `FocusExtendTest` pins the count.
+
+Also checked and sound: the watcher re-arms `focusClearRunnable` from the same Room flow on any
+write, so an extension pushes the auto-clear out with it and does **not** leave enforcement ending
+at the old time; and the runnable re-checks `strictRemaining()` at fire time, so even a stale post
+cannot end a live session.
+
 ### Not yet swept
 
 - ~~The rest of `BlockOverlay`.~~ **Swept in the eighteenth hunt** — all eleven readers traced, the

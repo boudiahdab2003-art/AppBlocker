@@ -129,6 +129,24 @@ class FocusExtendTest {
         assertEquals(0L, after.realtimeEndMillis)
     }
 
+    /**
+     * The return value is not decoration — `FocusViewModel` records Strict minutes to the
+     * statistics only when this says the row moved. A session can expire between the button being
+     * drawn and the tap landing, or while the duration picker is open, and without this the
+     * statistic would report time that was never added.
+     */
+    @Test
+    fun theRowCountSaysWhetherTheExtensionApplied() = runBlocking {
+        dao.set(running())
+        assertEquals(1, dao.extend(600_000L))
+
+        assertEquals(0, dao.extend(0L))
+        assertEquals(0, dao.extend(-1L))
+
+        dao.set(FocusState(id = 0))
+        assertEquals(0, dao.extend(600_000L))
+    }
+
     @Test
     fun extensionsCompound() = runBlocking {
         dao.set(running())

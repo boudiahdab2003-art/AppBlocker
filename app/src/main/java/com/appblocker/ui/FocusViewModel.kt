@@ -77,8 +77,16 @@ class FocusViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun extend(minutes: Int) {
         if (minutes <= 0) return
-        StatsStore.addStrictMinutes(getApplication(), minutes)
-        viewModelScope.launch { dao.extend(minutes * 60_000L) }
+        viewModelScope.launch {
+            // **Record the minutes only if the row actually moved.** The DAO's guards make this a
+            // no-op for a session that has already expired — and a session CAN expire between the
+            // button being drawn and the tap landing, or while the duration picker is open. Adding
+            // to the statistic first meant Insights could report Strict minutes that never
+            // happened: the two-sources-of-truth drift this file's neighbours keep producing.
+            if (dao.extend(minutes * 60_000L) > 0) {
+                StatsStore.addStrictMinutes(getApplication(), minutes)
+            }
+        }
     }
 
     /** Start an un-stoppable Strict Mode session. There is intentionally no "stop". */
