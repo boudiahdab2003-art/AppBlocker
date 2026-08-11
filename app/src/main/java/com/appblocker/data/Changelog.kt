@@ -13,6 +13,11 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.122", "Aug 11, 2026", "\"onlyfans\" on its own no longer blocks the page", listOf(
+        "**The word pack is matched against the text on the page, not just the address** — so the bare word \"onlyfans\" blocked any page that merely mentioned it. A news article. A review. A thread about quitting. A recovery video. The word is how the subject gets discussed, and blocking the discussion isn't blocking the thing.",
+        "**The site itself is still blocked.** onlyfans.com stays on the adult domain list, so going there is stopped by address — and the phrases somebody types when they're actually looking for the content (\"onlyfans leak\", \"onlyfans leaks\") are still blocked words. Only the bare mention stopped firing.",
+        "This is the same fix as v1.113's, one step along: back then it was the general words — pornography, porno, the Arabic اباحية — that were blocking people talking about porn rather than looking at it. A brand name on its own turns out to behave the same way. There's now a test pinning both halves, so neither gets added back \"for coverage\".",
+    )),
     VersionLog("1.121", "Aug 11, 2026", "Add time to a running lock, and a real disclosure screen", listOf(
         "**You can now add time to a Strict session while it's running.** Under the countdown there's +15m, +30m, +1h and a \"Choose…\" for anything else. Before this, if a session was about to run out and you wanted to keep going, your only option was to let it expire, be unlocked for a moment, and start again — which is exactly where a good intention gets lost.",
         "**It only goes one way.** You can add time, never take it away, and nothing about that changed. Strict Mode still can't be stopped early — the new button can only make a session longer.",

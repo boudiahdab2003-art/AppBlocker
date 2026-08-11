@@ -315,4 +315,35 @@ class WebContentFilterTest {
             assertTrue("$kept must stay in the pack", kept in entries)
         }
     }
+
+    /**
+     * **A brand name on its own is a thing people talk about, not a thing they're looking at.**
+     *
+     * Same failure as the general nouns above, one step along: the pack is matched against **page
+     * text**, not only the address, so a bare "onlyfans" blocked any page that merely mentioned
+     * it — a news article, a review, a thread about quitting, a recovery video. The word is how
+     * the subject is discussed, and blocking discussion of the thing is not blocking the thing.
+     *
+     * Protection is not lost, and that is what makes the removal safe rather than a concession:
+     * **`onlyfans.com` is still on the adult domain list**, so the site itself is blocked by
+     * address, and the phrases people type when they are actually looking for the content are
+     * still pack words. Only the bare mention stopped firing.
+     */
+    @Test fun bareBrandNamesAreNotPackWords() {
+        val entries = File("src/main/assets/adult_words_pack.txt").readLines()
+            .map { it.substringBefore('#').trim() }.filter { it.isNotEmpty() }
+        assertFalse(
+            "a bare brand name blocks every page that mentions it, including ones arguing " +
+                "against it — the site is blocked by domain instead",
+            "onlyfans" in entries,
+        )
+        // The searches somebody makes to FIND the content stay blocked…
+        for (kept in listOf("onlyfans leak", "onlyfans leaks")) {
+            assertTrue("$kept must stay in the pack", kept in entries)
+        }
+        // …and so does the site itself, which is the protection that actually matters.
+        val domains = File("src/main/assets/adult_domains.txt").readLines()
+            .map { it.substringBefore('#').trim() }.filter { it.isNotEmpty() }
+        assertTrue("onlyfans.com must stay on the domain list", "onlyfans.com" in domains)
+    }
 }
