@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -94,6 +93,7 @@ import com.appblocker.service.ProtectionWatchdog
 import com.appblocker.ui.theme.AppCard
 import com.appblocker.ui.theme.AppGradients
 import com.appblocker.ui.theme.LocalThemeController
+import com.appblocker.ui.theme.pageWidth
 import kotlinx.coroutines.delay
 
 /**
@@ -208,7 +208,7 @@ fun ProfileScreen(
     // Cap the content width on wide screens (tablets) so cards don't stretch edge-to-edge.
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
     Column(
-        Modifier.widthIn(max = 640.dp).fillMaxWidth()
+        Modifier.pageWidth()
             .verticalScroll(rememberScrollState()).padding(16.dp)
     ) {
         ProfileHeader(

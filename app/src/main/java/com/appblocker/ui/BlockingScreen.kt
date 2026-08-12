@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -64,6 +65,7 @@ import com.appblocker.data.ScheduleType
 import com.appblocker.data.SettingsStore
 import com.appblocker.ui.theme.AppGradients
 import com.appblocker.ui.theme.AppShapes
+import com.appblocker.ui.theme.pageWidth
 import com.appblocker.ui.theme.softGlow
 import kotlinx.coroutines.delay
 
@@ -100,7 +102,9 @@ fun BlockingScreen(
     LaunchedEffect(Unit) { while (true) { tick = System.currentTimeMillis(); delay(1000) } }
     val session = remember(tick) { QuickSession.state(context) }
 
-    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
+    // fillMaxHeight().pageWidth(), not fillMaxSize(): pageWidth sets the width only, so a list
+    // that used fillMaxSize() would stop filling the screen vertically.
+    LazyColumn(Modifier.fillMaxHeight().pageWidth().padding(horizontal = 20.dp)) {
         item {
             Spacer(Modifier.padding(top = 16.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {

@@ -13,6 +13,12 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.123", "Aug 12, 2026", "The app is centred on a tablet now", listOf(
+        "**You spotted this on your tablet and you were right.** The two new pages kept their text in a neat column down the middle, but the button pinned at the bottom stretched right across the screen — so the page looked like two different pages stacked on top of each other.",
+        "The cause is worth saying plainly: the rule about how wide a page should be had never been a rule. It was written out by hand on three screens, and two of those were the ones I'd just built — where I capped the text and forgot the button underneath it. It's one shared rule now, so a page can't get it half right.",
+        "**While fixing it, the same treatment went on the Blocking, Strict Mode and Insights tabs**, which had never been centred at all. On a phone nothing changes. On a tablet the whole app now sits in one comfortable column instead of some screens stretching and others not.",
+        "There's a test that lays the pages out at tablet width and checks the buttons stay inside the column, because this was invisible on every phone-sized test we had.",
+    )),
     VersionLog("1.122", "Aug 11, 2026", "The templates got the redesign you asked for", listOf(
         "**You said they looked plain and flat, and that they all looked the same. You were right on both counts.** All six were the same layout in a different colour — and not even reliably different: Deep Focus used the app's own brand gradient, and Gaming Break's two colours were so close it barely read as a gradient at all. Two to a row, each card was about 154 pixels wide, which left no room to make anything bigger than it already was.",
         "**They're now one per row, in the style of the app you showed me.** A calm dark card with a hairline edge, a big emoji in the middle, the name large and centred underneath, and the schedule in plain words — \"Mon–Fri, 9:00 AM – 5:00 PM\". Each one has its own emoji, so you know which is which before reading a word, and its own colour glowing softly behind it.",

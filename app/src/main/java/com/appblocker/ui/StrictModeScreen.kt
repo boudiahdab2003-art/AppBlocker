@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -51,6 +52,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.appblocker.data.SettingsStore
 import com.appblocker.ui.theme.AppGradients
+import com.appblocker.ui.theme.pageWidth
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -74,7 +76,10 @@ fun StrictModeScreen(
     val hasSomethingToLock = appsBlocked > 0 || keywords > 0 || adultOn || enabledSchedules > 0
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
+        // pageWidth, not fillMaxWidth: on a tablet this screen used to stretch the countdown
+        // and the add-time chips across the whole display.
+        Modifier.fillMaxHeight().pageWidth()
+            .verticalScroll(rememberScrollState()).padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Spacer(Modifier.height(8.dp))

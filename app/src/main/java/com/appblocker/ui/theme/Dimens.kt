@@ -7,9 +7,12 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Shape
@@ -59,6 +62,34 @@ object Radius {
     /** Full-bleed sheets and the largest panels. */
     val large: Dp = 28.dp
 }
+
+/**
+ * The widest page content is allowed to get, whatever the screen.
+ *
+ * 640dp is not a new number — `BlockingScreen` already uses `maxWidth >= 640.dp` as its
+ * "this is a wide screen" test. It simply was never applied to page width in one place.
+ */
+val PageWidth: Dp = 640.dp
+
+/**
+ * Fill the width on a phone; on anything wider, stop at [PageWidth] and sit in the middle.
+ *
+ * **This exists because the cap was a copy-paste and copy-pastes get missed.** Before it, exactly
+ * three places in the app capped their width by hand — and two of them were the pages I had just
+ * built, which capped their *scrolling content* and left their *pinned footers* filling the
+ * window. On the owner's tablet that put a centred column of text above a Save button running the
+ * full width of the screen, which is what he reported.
+ *
+ * [wrapContentWidth] is what centres, and it is why this is a modifier rather than a wrapper
+ * composable: it needs no parent `Box(contentAlignment = TopCenter)`, so it applies identically to
+ * a `Column`, a `LazyColumn` and a footer. The wrapper was the ceremony that made it easy to cap
+ * one child and forget its sibling.
+ *
+ * Note for lists: this sets width only. A `LazyColumn` that was `fillMaxSize()` needs
+ * `fillMaxHeight().pageWidth()`, or it stops filling the screen vertically.
+ */
+fun Modifier.pageWidth(): Modifier =
+    fillMaxWidth().wrapContentWidth(Alignment.CenterHorizontally).widthIn(max = PageWidth)
 
 object AppShapes {
     val small = RoundedCornerShape(Radius.small)

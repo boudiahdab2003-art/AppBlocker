@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -53,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.appblocker.ui.theme.AppGradients
+import com.appblocker.ui.theme.pageWidth
 import com.appblocker.ui.theme.softGlow
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -72,7 +74,7 @@ fun InsightsScreen(
     // Rebuild the stats every time the tab is opened, so they're always current.
     LaunchedEffect(Unit) { vm.refresh() }
 
-    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
+    LazyColumn(Modifier.fillMaxHeight().pageWidth().padding(horizontal = 20.dp)) {
         item {
             Spacer(Modifier.padding(top = 14.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
