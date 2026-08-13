@@ -3,6 +3,7 @@ package com.appblocker.service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.pm.ResolveInfo
 import android.net.Uri
 import android.provider.Settings
 import android.telecom.TelecomManager
@@ -50,7 +51,7 @@ internal fun findLauncherPackages(context: Context): Set<String> = runCatching {
  * 3. [KNOWN_BROWSERS] that are actually installed. The vendor-string tier, last on purpose: it
  *    only ever *adds*, and a browser it doesn't name is no worse off than before.
  *
- * **`ResolveInfo.handleAllWebDataURI` is what makes the answer mean "browser".** Asking who can
+ * **[acceptsAnyWebAddress] is what makes the answer mean "browser".** Asking who can
  * open an https link is not that question, and the difference is not academic: the owner's phone
  * answered it with WPS Office, Coinbase, SHAREit and Bing, none of which browse anything. They
  * were there because an app that registers a *deep link* — its own site, opening its own screen —
@@ -69,8 +70,9 @@ internal fun findBrowserPackages(context: Context): Set<String> {
         runCatching {
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse("$scheme://example.com"))
                 .addCategory(Intent.CATEGORY_BROWSABLE)
-            pm.queryIntentActivities(intent, PackageManager.MATCH_ALL)
-                .filter { it.handleAllWebDataURI }
+            val flags = PackageManager.MATCH_ALL or PackageManager.GET_RESOLVED_FILTER
+            pm.queryIntentActivities(intent, flags)
+                .filter { acceptsAnyWebAddress(it) }
                 .mapNotNull { it.activityInfo?.packageName }
                 .let(found::addAll)
         }
@@ -78,8 +80,9 @@ internal fun findBrowserPackages(context: Context): Set<String> {
     runCatching {
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com"))
             .addCategory(Intent.CATEGORY_BROWSABLE)
-        pm.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
-            ?.takeIf { it.handleAllWebDataURI }
+        val flags = PackageManager.MATCH_DEFAULT_ONLY or PackageManager.GET_RESOLVED_FILTER
+        pm.resolveActivity(intent, flags)
+            ?.takeIf { acceptsAnyWebAddress(it) }
             ?.activityInfo?.packageName?.let(found::add)
     }
     for (pkg in KNOWN_BROWSERS) {
@@ -87,6 +90,23 @@ internal fun findBrowserPackages(context: Context): Set<String> {
     }
     return found.filter { it != context.packageName }.toSet()
 }
+
+/**
+ * Whether [info] is a browser rather than an app that merely opens its own links.
+ *
+ * `IntentFilter.handleAllWebDataURI()` is Android's own phrasing of the question — *does this
+ * filter accept **any** web address* — and it is the difference between Chrome and the
+ * Coinbase/WPS/SHAREit/Bing entries that were being treated as browsers, and therefore blocked
+ * as unreadable ones. The filter is only attached when `GET_RESOLVED_FILTER` was asked for, which
+ * is why both queries pass it.
+ *
+ * **A missing filter counts as yes**, deliberately. It should not happen with that flag, but if
+ * it ever does the choice is between an app wrongly filtered (visible, annoying) and a browser
+ * silently exempt from all blocking (invisible, and the failure this whole file is about). The
+ * app's standing rule is that can't-tell never takes the permissive branch.
+ */
+private fun acceptsAnyWebAddress(info: ResolveInfo): Boolean =
+    info.filter?.handleAllWebDataURI() ?: true
 
 /**
  * Browsers named outright, as the backstop tier of [findBrowserPackages].

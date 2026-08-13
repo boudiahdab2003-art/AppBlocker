@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import com.appblocker.data.QuickSession
 import com.appblocker.data.SettingsStore
 import com.appblocker.data.WatcherDiagnostics
+import com.appblocker.service.KNOWN_READABLE_BROWSERS
 import com.appblocker.service.findBrowserPackages
 import com.appblocker.ui.theme.AppCard
 import com.appblocker.ui.theme.Space
