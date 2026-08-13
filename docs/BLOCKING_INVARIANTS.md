@@ -77,6 +77,15 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     errors into an empty collection, and "no browsers", "no launcher", "no adult words" is never
     true. Adopting one silently fails *open*. Adopt a result only when it is non-empty, keep the
     previous value, and record the failure (`refreshPackageSets`, `WebContentFilter.get`).
+12. **A protection may not hang on recognising one vendor's spelling.** Invariant 11's sibling,
+    and the same failure with a narrower cause: not an empty *answer*, but a lookup that only
+    knows one name for the thing it is looking for. Website blocking read the address bar as the
+    single literal `"$pkg:id/url_bar"` — Chrome's — so in Brave, Edge, Samsung Internet or
+    Firefox it found nothing, and "no address" reads as "no site to block". A whole layer, off,
+    in every browser but one, for the app's entire life (13 Aug 2026). Where a vendor string is
+    unavoidable, match a *family* (`isOmniboxId`, suffix-matched) and put a vendor-agnostic tier
+    behind it (an editable, host-shaped node). Same rule as 4, applied to a lookup instead of a
+    window read: a failed identification is a failed measurement, never a confident "no".
 
 ## Device quirks these invariants exist for
 
@@ -653,7 +662,49 @@ write, so an extension pushes the auto-clear out with it and does **not** leave 
 at the old time; and the runnable re-checks `strictRemaining()` at fire time, so even a stale post
 cannot end a live session.
 
+### Reported, not swept (13 Aug 2026) — reading one vendor's view id
+
+*"Why isn't Instagram blocked on Brave?"* Because website blocking could only read **Chrome's**
+address bar, and had never been able to read any other.
+
+The trace: blocking a site (`instagram.com` because the Instagram *app* is blocked) is matched
+against the address bar **only**, never the page text — deliberately, so an article that merely
+mentions Instagram doesn't cover the screen (`WebContentFilter.check`: *"Site keywords are
+deliberately skipped with no URL"*). Reading the address bar was one literal lookup,
+`"$pkg:id/url_bar"`, written and verified against Chrome. Any browser spelling its toolbar
+differently returned nothing, and the site layer then did nothing at all.
+
+**The invariant this adds (#12): a layer that depends on recognising one vendor's spelling must
+degrade to a safe default, never to silence.** It is the can't-tell-is-not-a-no mistake (#4)
+pointed the other way — there, an unreadable screen answered "not on Shorts" and a cover came
+off; here, an unreadable address answered "no site to block" and no cover ever went up. Both are
+a failed *measurement* reported as a confident negative.
+
+Two things make it the file's own worst case. It is a **pure under-block**, so the owner could
+only ever find it by trying a specific site in a specific browser — he had it for the app's whole
+life. And the app **knew**: `SUPPORTED_BROWSERS = setOf("com.android.chrome")`, and
+`BlockDecision`'s comment names Brave as the example. The knowledge existed as a mitigation
+(the "Block unsupported browsers" switch, default **off**) instead of as a fix, so the default
+configuration was the unprotected one.
+
+`ScreenText.omniboxText` now tries three tiers — the exact id, then any `isOmniboxId` view id
+(suffix-matched, so a fork keeping Chromium's layout under its own package is read the same way),
+then any **editable** node whose text is host-shaped. Editability is what makes the last tier safe:
+a link on the page reading "instagram.com" is not editable, so the page-mention over-block the
+URL-only rule exists to prevent still cannot happen. `isOmniboxId` is pure and pinned in
+`WebContentFilterTest`; the node walk needs a device and is verified by hand.
+
+`SUPPORTED_BROWSERS` was deliberately **left alone**. Moving Brave into it would remove the blanket
+block for anyone who has the switch on, trading a guaranteed block for one that depends on a lookup
+that a future Brave release could break. The two are independent; the safety net stays up until the
+tiers are confirmed working on a real device.
+
 ### Not yet swept
+
+- **Where else does a lookup have exactly one spelling?** The 13 Aug report was a hardcoded
+  vendor string that silently meant "off". `SHORTS_ID_MARKERS` is the same shape and admits it
+  ("exact ids vary by YouTube version"); so are the launcher, IME and dialer detections, though
+  those fail *loudly* because the phone stops working. Nobody has enumerated the rest.
 
 - ~~The rest of `BlockOverlay`.~~ **Swept in the eighteenth hunt** — all eleven readers traced, the
   set-before-`addView` window confirmed unreachable, one latent trap (`onClose`) recorded. See that

@@ -10,8 +10,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertHeightIsAtLeast
-import androidx.compose.ui.test.assertWidthIsAtMost
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -20,6 +20,10 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+// DpRect.width is an extension property, not a member — getUnclippedBoundsInRoot().width does
+// not resolve without this. (Compose has assertWidthIsAtLeast but no at-most, hence the
+// hand-rolled comparison below.)
+import androidx.compose.ui.unit.width
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.appblocker.data.SettingsStore
@@ -35,6 +39,7 @@ import com.appblocker.ui.OnboardingScreen
 import com.appblocker.ui.theme.AppBlockerTheme
 import com.appblocker.ui.theme.PageWidth
 import org.junit.After
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -205,12 +210,22 @@ class AccountScreenTest {
     @Test
     fun onATabletThePinnedButtonsStayInsideTheContentColumn() {
         setScreen(height = null, width = 1000.dp) { AccountScreen(onBack = {}) }
-        compose.onNodeWithTag(ACCOUNT_SAVE_TAG).assertWidthIsAtMost(PageWidth)
+        assertNoWiderThanTheColumn("Save", ACCOUNT_SAVE_TAG)
 
         setScreen(height = null, width = 1000.dp) {
             AccessibilityDisclosureScreen(onAgree = {}, onDecline = {})
         }
-        compose.onNodeWithTag(DISCLOSURE_AGREE_TAG).assertWidthIsAtMost(PageWidth)
+        assertNoWiderThanTheColumn("Agree & continue", DISCLOSURE_AGREE_TAG)
+    }
+
+    /** Compose has `assertWidthIsAtLeast` but no at-most, so measure and compare. */
+    private fun assertNoWiderThanTheColumn(name: String, tag: String) {
+        val width = compose.onNodeWithTag(tag).getUnclippedBoundsInRoot().width
+        assertTrue(
+            "“$name” is $width wide on a 1000dp screen — past the $PageWidth content column " +
+                "above it, which is the tablet bug.",
+            width <= PageWidth,
+        )
     }
 
     // ---- The accessibility disclosure -------------------------------------------------------
