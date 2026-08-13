@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.123
+- Websites of blocked apps are now caught in browsers other than Chrome. Blocking a site (instagram.com because Instagram is blocked) is matched against the address bar, and the app could only read Chrome's — so in Brave, Edge, Samsung Internet or Firefox that whole layer was silently doing nothing. It now finds the address bar three ways, ending with any address-shaped box you can type into, which works regardless of the browser. Also: the app is centred properly on a tablet, on every tab.
+
 ## v1.122
 - The templates have been redesigned. One card per row now, each with its own emoji so you can tell them apart at a glance, the name large and centred, and the schedule in plain words — "Mon–Fri, 9:00 AM – 5:00 PM". An applied template finally looks applied: it takes a coloured border and a glow instead of a tiny badge. Also: the bare word "onlyfans" no longer blocks every page that merely mentions it — a news article, a review, a thread about quitting. The site itself is still blocked.
 
