@@ -3,6 +3,15 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.127
+- The app no longer throws you out for turning it on.
+
+You reported this from your tablet: it kicked you out of the accessibility page right after you switched the app on. The guard protects the page that can switch blocking off, and it never asked whether blocking was currently on — so the moment you enabled it, the app started up, saw itself sitting on its own off-switch page, and sent you to the home screen for doing the right thing.
+
+This was worse for new people than for you. The setup walkthrough sends every first-time user to that exact page, and then ejected them. Nobody would report that; they would just decide the app was broken.
+
+Now, for about eight seconds after you switch it on, that one page stops bouncing. Everything else the guard protects — uninstalling, device admin, force-stopping during Strict — keeps bouncing from the first instant.
+
 ## v1.126
 - WPS Office, Coinbase and SHAREit stop being treated as browsers.
 
