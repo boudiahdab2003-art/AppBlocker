@@ -208,10 +208,15 @@ class AccountScreenTest {
      * The defect is a footer that outgrows the column above it, so that is what is measured.
      */
     @Test
-    fun onATabletThePinnedButtonsStayInsideTheContentColumn() {
+    fun onATabletTheProfilesSaveButtonStaysInsideTheContentColumn() {
         setScreen(height = null, width = 1000.dp) { AccountScreen(onBack = {}) }
         assertNoWiderThanTheColumn("Save", ACCOUNT_SAVE_TAG)
+    }
 
+    /** Two tests, not one with two `setScreen` calls: `createComposeRule` allows a single
+     *  `setContent` per test and throws on the second. */
+    @Test
+    fun onATabletTheDisclosuresAgreeButtonStaysInsideTheContentColumn() {
         setScreen(height = null, width = 1000.dp) {
             AccessibilityDisclosureScreen(onAgree = {}, onDecline = {})
         }
