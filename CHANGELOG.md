@@ -3,6 +3,15 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.124
+- The real Brave fix, and a page that shows you why something isn't blocked.
+
+Brave's address bar slides away when you scroll. With it off screen there was nothing to read, and the app treated "I can't see an address" as "you're not on a blocked site" — so scrolling down a blocked site switched the site block off. It now remembers the last address it read while the bar is hidden, and forgets it when you switch apps.
+
+New: Profile > "What the blocker sees" — every browser it has found, what it last looked at, whether the address bar could be read, and whether blocking is on at all. Four different faults used to look identical from the outside; now they don't.
+
+Browser detection also asks four ways instead of one, so a browser can't be silently exempt from filtering.
+
 ## v1.123
 - Websites of blocked apps are now caught in browsers other than Chrome. Blocking a site (instagram.com because Instagram is blocked) is matched against the address bar, and the app could only read Chrome's — so in Brave, Edge, Samsung Internet or Firefox that whole layer was silently doing nothing. It now finds the address bar three ways, ending with any address-shaped box you can type into, which works regardless of the browser. Also: the app is centred properly on a tablet, on every tab.
 
