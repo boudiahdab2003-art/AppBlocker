@@ -104,6 +104,14 @@ class BlockerAccessibilityService : AccessibilityService() {
     @Volatile private var schedules: List<Schedule> = emptyList()
     // Browser packages installed on the device (for "Block unsupported browsers").
     @Volatile private var browserPackages: Set<String> = emptySet()
+
+    /**
+     * The subset of [browserPackages] that is really a browser rather than an app that opens its
+     * own links — see [findRealBrowserPackages]. Used only by the "block unsupported browsers"
+     * switch, because that is the one consumer for which a false positive means an ordinary app
+     * is blocked outright.
+     */
+    @Volatile private var realBrowserPackages: Set<String> = emptySet()
     // Home-screen (launcher) apps — never keyword-scanned, see findLauncherPackages(this).
     @Volatile private var launcherPackages: Set<String> = emptySet()
 
@@ -1160,7 +1168,8 @@ class BlockerAccessibilityService : AccessibilityService() {
                 // to read — needed because a blanket-blocked browser is never scanned, so without
                 // a seed a filterable browser could never demonstrate that it is one — and every
                 // other browser earns it by being read once. Unknown still counts as unsupported.
-                isUnsupportedBrowser = pkg in browserPackages && pkg !in KNOWN_READABLE_BROWSERS &&
+                isUnsupportedBrowser = pkg in realBrowserPackages &&
+                    pkg !in KNOWN_READABLE_BROWSERS &&
                     pkg !in SettingsStore.readableBrowsers(this),
                 unsupportedBrowserBlockingActive = {
                     SettingsStore.blockUnsupportedBrowsers(this) &&
@@ -1208,6 +1217,11 @@ class BlockerAccessibilityService : AccessibilityService() {
     private fun refreshPackageSets() {
         findBrowserPackages(applicationContext).takeIf { it.isNotEmpty() }
             ?.let { browserPackages = it }
+        // The blanket-block set is allowed to be empty — "no app on this phone is really a
+        // browser" is a possible truth, and adopting it costs only the blunt block, never
+        // filtering. The loose set above keeps the non-empty rule because an empty one there
+        // would silently disable every web layer.
+        realBrowserPackages = findRealBrowserPackages(applicationContext)
         findLauncherPackages(applicationContext).takeIf { it.isNotEmpty() }?.let {
             launcherPackages = it
             knownNonLauncherPkgs = emptySet() // a fresh answer retires every earlier guess

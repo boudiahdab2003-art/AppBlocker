@@ -72,24 +72,63 @@ internal fun findBrowserPackages(context: Context): Set<String> {
                 .addCategory(Intent.CATEGORY_BROWSABLE)
             val flags = PackageManager.MATCH_ALL or PackageManager.GET_RESOLVED_FILTER
             pm.queryIntentActivities(intent, flags)
-                .filter { acceptsAnyWebAddress(it) }
                 .mapNotNull { it.activityInfo?.packageName }
                 .let(found::addAll)
         }
     }
-    runCatching {
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com"))
-            .addCategory(Intent.CATEGORY_BROWSABLE)
-        val flags = PackageManager.MATCH_DEFAULT_ONLY or PackageManager.GET_RESOLVED_FILTER
-        pm.resolveActivity(intent, flags)
-            ?.takeIf { acceptsAnyWebAddress(it) }
-            ?.activityInfo?.packageName?.let(found::add)
-    }
+    runCatching { defaultBrowser(context)?.let(found::add) }
     for (pkg in KNOWN_BROWSERS) {
         runCatching { pm.getPackageInfo(pkg, 0) }.getOrNull()?.let { found.add(pkg) }
     }
     return found.filter { it != context.packageName }.toSet()
 }
+
+/**
+ * The subset of [findBrowserPackages] that is really a browser, rather than an app that happens
+ * to open its own links.
+ *
+ * **Why two sets rather than one accurate one.** The two consumers want opposite mistakes:
+ *
+ * - *Scanning* uses the loose set. Including an app that isn't a browser costs almost nothing —
+ *   it gets read for blocked words, which is fine — while excluding a real browser is a whole
+ *   browser exempt from filtering, invisibly.
+ * - *Blanket-blocking* ("block unsupported browsers") uses this one. Here the mistake reverses:
+ *   including something wrongly means the app is **blocked outright**, which is how WPS Office,
+ *   Coinbase and SHAREit ended up unusable on the owner's phone.
+ *
+ * Trying to make one set right for both is what produced that bug. A single strict test also has
+ * to be *correct*, and the first attempt at one — no data authority on the filter — did not
+ * actually exclude those four in practice. So this asks three ways and requires only one to say
+ * yes, while each individual answer of "can't tell" declines rather than blocks: an unrecognised
+ * browser loses the blunt blanket block but keeps every other layer, whereas a wrongly-blocked
+ * ordinary app is unusable.
+ */
+internal fun findRealBrowserPackages(context: Context): Set<String> {
+    val pm = context.packageManager
+    val found = mutableSetOf<String>()
+    runCatching {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com"))
+            .addCategory(Intent.CATEGORY_BROWSABLE)
+        val flags = PackageManager.MATCH_ALL or PackageManager.GET_RESOLVED_FILTER
+        pm.queryIntentActivities(intent, flags)
+            .filter { acceptsAnyWebAddress(it) }
+            .mapNotNull { it.activityInfo?.packageName }
+            .let(found::addAll)
+    }
+    runCatching { defaultBrowser(context)?.let(found::add) }
+    for (pkg in KNOWN_BROWSERS) {
+        runCatching { pm.getPackageInfo(pkg, 0) }.getOrNull()?.let { found.add(pkg) }
+    }
+    return found.filter { it != context.packageName }.toSet()
+}
+
+/** The user's default browser, which is a browser by definition whatever its filters say. */
+private fun defaultBrowser(context: Context): String? = runCatching {
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com"))
+        .addCategory(Intent.CATEGORY_BROWSABLE)
+    context.packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
+        ?.activityInfo?.packageName
+}.getOrNull()
 
 /**
  * Whether [info] is a browser rather than an app that merely opens its own links.
@@ -106,13 +145,14 @@ internal fun findBrowserPackages(context: Context): Set<String> {
  * are all public and have been since API 1. (The filter itself only arrives when
  * `GET_RESOLVED_FILTER` was requested, which is why both queries pass it.)
  *
- * **A missing filter counts as yes**, deliberately. It should not happen with that flag, but if it
- * ever does, the choice is between an app wrongly treated as a browser (visible, and at worst
- * annoying) and a browser silently exempt from all blocking (invisible, and the failure this whole
- * file is about). Can't-tell does not take the permissive branch.
+ * **A missing filter counts as no.** It first counted as yes, on the reasoning that can't-tell
+ * should never take the permissive branch — but that reasoning was imported from the wrong set.
+ * This one feeds the *blanket block*, where saying yes on no evidence makes an ordinary app
+ * unusable; the loose [findBrowserPackages] is where can't-tell still errs towards blocking, and
+ * it is the set that governs actual filtering.
  */
 private fun acceptsAnyWebAddress(info: ResolveInfo): Boolean {
-    val filter = info.filter ?: return true
+    val filter = info.filter ?: return false
     if (filter.hasCategory(Intent.CATEGORY_APP_BROWSER)) return true
     val web = filter.hasDataScheme("http") || filter.hasDataScheme("https")
     return web && filter.countDataAuthorities() == 0
