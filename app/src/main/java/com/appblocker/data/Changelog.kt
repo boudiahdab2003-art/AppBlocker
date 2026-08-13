@@ -13,6 +13,14 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.126", "Aug 13, 2026", "WPS Office, Coinbase and SHAREit stop being treated as browsers", listOf(
+        "**My last fix for this didn't work, and your screenshot showed it.** WPS Office, Coinbase, SHAREit and Bing were still listed as browsers in v1.125. The test I added — \"does this app accept any web address?\" — didn't actually rule them out on your phone, and I can't tell from here whether that's because Android didn't hand over the information or because those apps really do declare an unrestricted web filter.",
+        "**So the app stops trying to work it out.** Android has a label an app sets to say \"I am a browser\" — Chrome, Brave and Firefox set it; an office app doesn't. That, plus your chosen default browser, plus a list of browsers by name, is now how the question is answered. Three facts an app states about itself, instead of a third guess at reading between the lines.",
+        "Alongside that, the app keeps **two separate lists**, because the two jobs want opposite mistakes.",
+        "**For reading pages**, being generous is right: including an app that isn't really a browser costs nothing — it just gets checked for blocked words — while leaving a real browser out means a browser with no blocking at all, and you'd never see it happen.",
+        "**For blocking a browser outright**, being generous is exactly wrong: it's what made Coinbase and WPS unusable. That list is now strict, and anything it can't confirm is a browser is simply never blocked as one.",
+        "The \"What the blocker sees\" page now says which is which, so an app like Coinbase shows up as \"not really a browser — read for blocked words, never blocked as one\".",
+    )),
     VersionLog("1.125", "Aug 13, 2026", "Brave is filtered instead of banned, and four apps stop being called browsers", listOf(
         "**Your screenshot found a bug I'd have never guessed at.** The browser list showed WPS Office, Coinbase, SHAREit and Bing. None of those is a browser. They were there because the app asked Android \"who can open a web link?\", and any app that opens its own links — a payment link, a shared file — answers yes.",
         "That wasn't harmless. With \"Block unsupported browsers\" on, every one of them counted as a browser the app can't read, so **all four were being blocked outright**. If Coinbase or WPS ever showed you a \"Browser blocked\" screen, that was why. It now asks Android the right question — *does this app accept any web address at all* — which is the actual difference between a browser and an app with a link.",

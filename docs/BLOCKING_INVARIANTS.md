@@ -87,6 +87,18 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     behind it (an editable, host-shaped node). Same rule as 4, applied to a lookup instead of a
     window read: a failed identification is a failed measurement, never a confident "no".
 
+13. **One set, two consumers, opposite failure costs — make it two sets.** `browserPackages` fed
+    both the web scan and the "block unsupported browsers" switch, and those want opposite
+    mistakes: scanning must over-include (a browser left out is silently unfiltered, invisible),
+    blanket-blocking must under-include (an app wrongly included is *blocked outright*, which made
+    Coinbase, WPS Office and SHAREit unusable). One list cannot be tuned for both, and three
+    attempts at tuning it produced an under-block and then an over-block. Split it:
+    `findBrowserPackages` stays generous, `findRealBrowserPackages` is strict. **And decide the
+    strict one by self-declaration, not inference** — `CATEGORY_APP_BROWSER`, the default-browser
+    role, a known package. Both inference attempts ("handles an https link", "handles one with no
+    host restriction") were defeated by ordinary apps on the owner's phone, and which of the two
+    reasons applied was not decidable off-device.
+
 ## Device quirks these invariants exist for
 
 - Gesture-nav Home on HyperOS often emits **no accessibility event at all**, so the foreground

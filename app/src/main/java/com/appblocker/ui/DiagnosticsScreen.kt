@@ -35,6 +35,7 @@ import com.appblocker.data.SettingsStore
 import com.appblocker.data.WatcherDiagnostics
 import com.appblocker.service.KNOWN_READABLE_BROWSERS
 import com.appblocker.service.findBrowserPackages
+import com.appblocker.service.findRealBrowserPackages
 import com.appblocker.ui.theme.AppCard
 import com.appblocker.ui.theme.Space
 import com.appblocker.ui.theme.appBackground
@@ -123,15 +124,21 @@ fun DiagnosticsScreen(onBack: () -> Unit) {
                             FactRow(
                                 Fact(
                                     appLabel(context, b),
-                                    if (b in snapshot.readable) {
-                                        "$b — its address bar can be read, so blocked sites are " +
-                                            "caught here."
-                                    } else {
-                                        "$b — its address bar hasn't been read yet. Blocked " +
-                                            "words still work; blocked sites can't be caught " +
-                                            "until it has."
+                                    when {
+                                        b !in snapshot.realBrowsers ->
+                                            "$b — not really a browser, just an app that opens " +
+                                                "web links. It's read for blocked words, and it " +
+                                                "is never blocked as an unsupported browser."
+                                        b in snapshot.readable ->
+                                            "$b — its address bar can be read, so blocked sites " +
+                                                "are caught here."
+                                        else ->
+                                            "$b — its address bar hasn't been read yet. Blocked " +
+                                                "words still work; blocked sites can't be caught " +
+                                                "until it has."
                                     },
-                                    good = b in snapshot.readable,
+                                    good = if (b !in snapshot.realBrowsers) null
+                                    else b in snapshot.readable,
                                 ),
                             )
                         }
@@ -172,6 +179,9 @@ private data class Snapshot(
     /** Those whose address bar the app knows how to read, or has read. The rest can still
      *  catch blocked words from the page — it is site blocking that needs the address. */
     val readable: Set<String>,
+    /** Those that are really browsers rather than apps that open their own links. Only these
+     *  can ever be blocked outright by the "block unsupported browsers" switch. */
+    val realBrowsers: Set<String>,
     val lastLook: List<Fact>,
 )
 
@@ -301,6 +311,7 @@ private fun readSnapshot(context: Context): Snapshot {
         protection = protection,
         browsers = runCatching { findBrowserPackages(context).sorted() }.getOrDefault(emptyList()),
         readable = SettingsStore.readableBrowsers(context) + KNOWN_READABLE_BROWSERS,
+        realBrowsers = runCatching { findRealBrowserPackages(context) }.getOrDefault(emptySet()),
         lastLook = lastLook,
     )
 }
