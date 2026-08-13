@@ -51,6 +51,7 @@ import com.appblocker.data.SessionClock
 import com.appblocker.data.SettingsStore
 import com.appblocker.data.UnlockCounter
 import com.appblocker.data.UpdatePause
+import com.appblocker.data.WatcherDiagnostics
 import com.appblocker.ui.BlockScreenActivity
 import java.util.Calendar
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -342,6 +343,29 @@ class BlockerAccessibilityService : AccessibilityService() {
     // events costs one node lookup rather than one per event. Null = decide again on the next
     // event; it is cleared everywhere lastWebText is, so coming back to a page re-checks it.
     @Volatile private var lastCheckedUrl: String? = null
+
+    /**
+     * **The last address actually read in a browser, kept for while the toolbar is hidden.**
+     *
+     * Browsers slide the address bar away as you scroll — Brave conspicuously so, which is how
+     * this was found. With it off screen there is nothing to read, and [scanWebContent] handed the
+     * filter a null URL, which it treats as *"skip the site layer"*. So scrolling down a blocked
+     * site turned the site block off: the user is still on instagram.com, and the app has stopped
+     * believing it. Chrome escaped this only because its toolbar is up when a page first loads, so
+     * the block lands before there is anything to scroll.
+     *
+     * That is invariant 4 in `docs/BLOCKING_INVARIANTS.md`, in a new place: **a hidden toolbar is a
+     * failed measurement, not evidence the user has left the site.** Remembering the last answer
+     * is what turns "I can't see it" back into "I don't know, so assume what I knew".
+     *
+     * Bounded three ways so a memory can never become a phantom block: it is cleared on every
+     * foreground change (a different app is a different question), replaced outright the moment a
+     * different address IS read, and expired by [URL_MEMORY_MS]. In-browser navigation reveals the
+     * toolbar in every Chromium build, so the replacement path is the one that normally ends it.
+     */
+    @Volatile private var rememberedUrl: String? = null
+    @Volatile private var rememberedUrlPkg: String? = null
+    @Volatile private var rememberedUrlAt = 0L
 
     // YouTube Shorts: when on, cover the Shorts player but leave the rest of YouTube usable.
     @Volatile private var shortsScanJob: Job? = null
@@ -715,6 +739,18 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (pkg != null && recheckMatters(pkg)) handler.postDelayed(recheckRunnable, RECHECK_MS)
         lastWebText = null // new page/app: force a fresh re-check
         lastCheckedUrl = null
+        forgetBrowserUrl()
+        // Record what the watcher makes of this app BEFORE any scan runs, because the most
+        // important thing it can report is the case where no scan runs at all: a browser missing
+        // from browserPackages is exempt from every web-filtering layer there is, and from the
+        // outside that looks exactly like a browser whose address bar cannot be read. The scan
+        // overwrites this a moment later with the address, if it gets one.
+        pkg?.let {
+            WatcherDiagnostics.record(
+                this, it, isBrowser = it in browserPackages, host = null,
+                siteWords = autoSocialKeywords(), throttle = false,
+            )
+        }
         scheduleUrlScan()
         scheduleWebScan()
         scheduleShortsScan()
@@ -1509,6 +1545,38 @@ class BlockerAccessibilityService : AccessibilityService() {
         }
     }
 
+    /**
+     * The address bar for [pkg], falling back to the last one read there while it is hidden.
+     *
+     * See [rememberedUrl] for why. The order matters and is the whole safety argument: a live read
+     * always wins and always replaces the memory, so the remembered value is only ever consulted
+     * in the one case it is for — the toolbar is not on screen and there is nothing to read.
+     */
+    private fun rememberedBrowserUrl(pkg: String): String? {
+        val live = extractBrowserUrl(pkg)
+        val now = stopwatchNow()
+        if (live != null) {
+            rememberedUrl = live
+            rememberedUrlPkg = pkg
+            rememberedUrlAt = now
+            return live
+        }
+        if (rememberedUrlPkg != pkg) return null
+        if (now - rememberedUrlAt > URL_MEMORY_MS) {
+            rememberedUrl = null
+            return null
+        }
+        return rememberedUrl
+    }
+
+    /** Forgets the remembered address. Called on every foreground change: a different app is a
+     *  different question, and this must never answer for a page the user has left. */
+    private fun forgetBrowserUrl() {
+        rememberedUrl = null
+        rememberedUrlPkg = null
+        rememberedUrlAt = 0L
+    }
+
     /** Runs on a background dispatcher (the node-tree walk is heavy); only the block UI hops to main. */
     private suspend fun scanWebContent() {
         // Scan browsers (word + adult + social-domain filtering) and, when the user has blocked
@@ -1553,7 +1621,14 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (text == lastWebText) return
         // The site the user is actually ON (browsers only) — keyword matching prefers it
         // over the page text so a page merely mentioning a blocked word doesn't block.
-        val url = if (isBrowser) extractBrowserUrl(pkg) else null
+        val url = if (isBrowser) rememberedBrowserUrl(pkg) else null
+        // "Browser, but no address" is the shape this record exists to make visible — it is the
+        // whole difference between a Chrome that blocks a site and a Brave that says nothing.
+        // Only the host is kept; see WatcherDiagnostics.
+        WatcherDiagnostics.record(
+            applicationContext, pkg, isBrowser, WatcherDiagnostics.hostOf(url),
+            autoSocialKeywords(),
+        )
 
         // YouTube Shorts opened in a browser (youtube.com/shorts) — while Quick Block is active.
         if (isBrowser && SettingsStore.blockYoutubeShorts(applicationContext) && quickBlockActive() &&
@@ -1993,6 +2068,11 @@ class BlockerAccessibilityService : AccessibilityService() {
         // How soon to re-read the window tree after rejecting an unconfirmed window-state
         // event, so a real app switch that lost the race still blocks promptly.
         private const val CONFIRM_MS = 200L
+
+        // How long a read address stays believed once the toolbar has slid away (see
+        // rememberedUrl). Long enough to cover reading a page, and bounded only as a backstop:
+        // the foreground-change clear and the replace-on-next-read are what normally end it.
+        private const val URL_MEMORY_MS = 10 * 60_000L
 
         // Throttle for isLauncherPkg's on-miss launcher re-detection.
         private const val LAUNCHER_REFRESH_MS = 30_000L

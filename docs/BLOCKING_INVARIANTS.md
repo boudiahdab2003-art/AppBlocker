@@ -699,8 +699,39 @@ block for anyone who has the switch on, trading a guaranteed block for one that 
 that a future Brave release could break. The two are independent; the safety net stays up until the
 tiers are confirmed working on a real device.
 
+### The Brave report, finished (13 Aug 2026) — a hidden toolbar is not an absent site
+
+The 13 Aug entry above fixed the wrong half first, and it is worth recording *why*, because the
+method failed here in a way it usually doesn't. The address-bar lookup really was Chrome-only and
+really was a hole — but it was not what the owner had hit, and shipping it as the answer cost a
+release to disprove. **Reasoning from the source identified a defect; it did not identify the
+defect being reported.** The two are not the same thing and were treated as if they were.
+
+What it actually was, and the owner is the one who found it: *"the address bar is not fixed like
+Chrome's, it shows sometimes."* Browsers slide the toolbar away as you scroll. With it off screen
+`extractBrowserUrl` returns null, and `WebContentFilter.check` reads a null URL as **skip the site
+layer entirely** — so scrolling down a blocked site switched the site block off. Chrome escapes it
+only by accident of timing: its toolbar is up when a page loads, so the block lands before there
+is anything to scroll.
+
+**This is invariant 4 in a new place** — a hidden toolbar is a failed measurement, not evidence
+the user has left the site — and it is the third distinct bug from the same root as the stranded
+Shorts cover and the Chrome-only lookup. Fixed by remembering the last address read
+(`rememberedUrl`), bounded three ways so it can never become a phantom block: cleared on every
+foreground change, replaced the instant a different address is read, and expired by
+`URL_MEMORY_MS`.
+
+**The lasting fix is neither of those two, it is `DiagnosticsScreen`.** Four different faults —
+not a browser, unreadable toolbar, no live site words, blocking paused — all present as *nothing
+happening*, and there was no way to tell them apart on the phone. Every guess-and-ship round in
+this entry existed because the app could not be asked. It can now.
+
 ### Not yet swept
 
+- **Where else does a null answer mean "no" instead of "don't know"?** Three bugs now share this
+  root and the enumeration has never been done. The shape to grep for is a nullable read feeding a
+  decision where `null` takes the permissive branch — `?: return`, `if (x != null)`, `?.let` around
+  a block that blocks. `WebContentFilter.check`'s URL is one; there will be others.
 - **Where else does a lookup have exactly one spelling?** The 13 Aug report was a hardcoded
   vendor string that silently meant "off". `SHORTS_ID_MARKERS` is the same shape and admits it
   ("exact ids vary by YouTube version"); so are the launcher, IME and dialer detections, though
