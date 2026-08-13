@@ -3,6 +3,15 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.125
+- Two over-blocks, both found from your screenshot of the new diagnostics page.
+
+WPS Office, Coinbase, SHAREit and Bing were being counted as browsers, because the app asked "who can open a web link?" and any app that opens its own links says yes. With "Block unsupported browsers" on, all four were blocked outright. It now asks whether an app accepts ANY web address, which is the real difference between a browser and an app with a deep link.
+
+And Brave was blocked for being Brave: the list of browsers the app believed it could read had one name on it, Chrome, so every other browser was permanently "unfilterable" and therefore banned. That is now measured instead of guessed - the Chromium, Samsung Internet and Firefox toolbars are known up front, and any other browser joins the list once its address bar is genuinely read on your phone. A browser that really cannot be read is treated exactly as before.
+
+The diagnostics page now shows, per browser, whether its address bar can be read.
+
 ## v1.124
 - The real Brave fix, and a page that shows you why something isn't blocked.
 
