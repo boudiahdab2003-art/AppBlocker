@@ -353,6 +353,17 @@ class BlockerAccessibilityService : AccessibilityService() {
     @Volatile private var lastCheckedUrl: String? = null
 
     /**
+     * When this service last connected, from `stopwatchNow()`. Only the settings guard reads it,
+     * to recognise the seconds right after the user switched the service on — see
+     * [OffSwitchGuard.justEnabled].
+     *
+     * `Long.MIN_VALUE / 2` rather than 0 so it reads as "long ago" before it is ever set: a device
+     * a few seconds into its boot has a small `stopwatchNow()`, and starting from 0 would make
+     * `now - it` small too, i.e. an accidental grace at boot.
+     */
+    @Volatile private var serviceConnectedAt = Long.MIN_VALUE / 2
+
+    /**
      * **The last address actually read in a browser, kept for while the toolbar is hidden.**
      *
      * Browsers slide the address bar away as you scroll — Brave conspicuously so, which is how
@@ -512,6 +523,10 @@ class BlockerAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        // When the watcher started running, monotonically (invariant 9). Used by the settings
+        // guard to tell "the user is switching me ON" from "the user is switching me off" — see
+        // OffSwitchGuard.justEnabled. Set first, before anything below can take time.
+        serviceConnectedAt = stopwatchNow()
         // The service is rebound right after an update installs, so detect it here too —
         // the pause arms even if the app itself isn't opened.
         UpdatePause.checkVersionChange(this)
@@ -929,7 +944,18 @@ class BlockerAccessibilityService : AccessibilityService() {
         // other app's App-info page stays open, and outside a session nothing changes at all —
         // so the battery setting he is told to change is reachable whenever no session is on,
         // which is what made the broad rule intolerable.
-        val danger = ourOwnServicePage(text) ||      // our accessibility page: the real off-switch
+        // The accessibility page is the one screen a user is NECESSARILY on at the moment they
+        // switch the service on, and the guard used to bounce them for it — the service starts,
+        // sees its own off-switch page, and fires HOME at somebody who just turned protection on.
+        // Reported from the owner's tablet, and it broke the first run for every new user, since
+        // the disclosure screen sends them to exactly this page. See OffSwitchGuard.justEnabled.
+        //
+        // The grace is scoped to this arm alone. Uninstall, device-admin removal and the App-info
+        // page during Strict are nothing to do with enabling the service, so they keep bouncing
+        // from the first millisecond — a blanket "guard off after connect" would weaken three
+        // screens to fix one.
+        val justEnabled = OffSwitchGuard.justEnabled(stopwatchNow() - serviceConnectedAt)
+        val danger = (ourOwnServicePage(text) && !justEnabled) || // our accessibility page
             uninstallConfirmation(pkg, cn, text) || // the "uninstall this app?" dialog
             deviceAdminRemoval(cn, text) ||         // deactivating device admin
             (strict && ourOwnAppInfoPage(cn, text)) // our App info page: Force stop lives there

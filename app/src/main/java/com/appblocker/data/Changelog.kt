@@ -13,6 +13,13 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.127", "Aug 13, 2026", "The app no longer throws you out for turning it on", listOf(
+        "**You reported this from your tablet: the app kicked you out of the accessibility page right after you switched it on.** It did, and it was doing it to everyone.",
+        "The guard's job is to protect the page that can switch blocking off. It never asked whether blocking was currently *on*. So the moment you turned it on, the app started up, saw itself sitting on its own off-switch page, and sent you to the home screen — for doing the right thing.",
+        "It could only ever happen in those few seconds, because before you switch it on the app isn't running to see anything. That's why it went unnoticed so long: your phone was set up before you turned the guard on, and it took a fresh install on the tablet to show it.",
+        "**This was worse for new people than for you.** The setup walkthrough sends every first-time user to that exact page to switch the app on — and then threw them out to the home screen. Nobody would report that; they'd just decide the app was broken and delete it.",
+        "Now, for about eight seconds after you switch it on, that one page stops bouncing — long enough to read the confirmation and walk out yourself. Everything else the guard protects — uninstalling, device admin, force-stopping during Strict — keeps bouncing from the first instant, because none of those has anything to do with switching the app on.",
+    )),
     VersionLog("1.126", "Aug 13, 2026", "WPS Office, Coinbase and SHAREit stop being treated as browsers", listOf(
         "**My last fix for this didn't work, and your screenshot showed it.** WPS Office, Coinbase, SHAREit and Bing were still listed as browsers in v1.125. The test I added — \"does this app accept any web address?\" — didn't actually rule them out on your phone, and I can't tell from here whether that's because Android didn't hand over the information or because those apps really do declare an unrestricted web filter.",
         "**So the app stops trying to work it out.** Android has a label an app sets to say \"I am a browser\" — Chrome, Brave and Firefox set it; an office app doesn't. That, plus your chosen default browser, plus a list of browsers by name, is now how the question is answered. Three facts an app states about itself, instead of a third guess at reading between the lines.",

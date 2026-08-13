@@ -81,6 +81,40 @@ object OffSwitchGuard {
     /** True when the watcher should bounce the off-switch pages. Only [Phase.OPEN] stands down. */
     internal fun armed(enabled: Boolean, phase: Phase): Boolean = enabled && phase != Phase.OPEN
 
+    /**
+     * How long after the service starts the **Accessibility page alone** stops being bounced.
+     *
+     * **The guard was ejecting people for switching protection ON.** It knows the page in front
+     * can turn the service off; it never asked whether the service was currently off. So the
+     * moment someone enabled it, the freshly-started service saw its own accessibility page and
+     * fired HOME — reported from the owner's tablet, and worse than it sounds, because that is
+     * the exact path *every first-time user* walks after the disclosure screen. A protection that
+     * punishes the user for turning it on is an obstacle, not a protection.
+     *
+     * The only way to be looking at our accessibility page at the instant the service connects is
+     * that it was just switched on there, which is the opposite of what the guard defends against.
+     *
+     * **What it costs:** for these few seconds the toggle could be flipped straight back off
+     * unbounced. Close to nothing — whoever just enabled it was one tap away from never enabling
+     * it — against a first run that was broken for everyone. Eight seconds is enough to read the
+     * confirmation dialog and walk out of Settings, and short enough not to be an off-switch.
+     *
+     * Deliberately scoped to that page and no other: uninstall, device-admin removal and the
+     * App-info page during Strict have nothing to do with enabling the service, so they keep
+     * bouncing throughout. See `handleSettingsGuard`.
+     */
+    const val ENABLE_GRACE_MS = 8_000L
+
+    /**
+     * Whether the service was enabled so recently that the accessibility page in front of us is
+     * the one the user just used to switch it on.
+     *
+     * [msSinceConnected] must be measured monotonically (`stopwatchNow()`), never the wall clock —
+     * invariant 9, and a backwards clock here would hold the guard down indefinitely.
+     */
+    fun justEnabled(msSinceConnected: Long): Boolean =
+        msSinceConnected in 0 until ENABLE_GRACE_MS
+
     /** The current phase, read from prefs. */
     fun phase(context: Context, bootCount: Int): Phase {
         val request = SettingsStore.guardUnlockRequest(context)
