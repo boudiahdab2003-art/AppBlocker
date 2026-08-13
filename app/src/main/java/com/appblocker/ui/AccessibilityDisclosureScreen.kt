@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -50,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import com.appblocker.ui.theme.AppCard
 import com.appblocker.ui.theme.AppGradients
 import com.appblocker.ui.theme.appBackground
+import com.appblocker.ui.theme.pageWidth
 
 /** Test tags for the rendering test — the two ways off this screen. */
 const val DISCLOSURE_AGREE_TAG = "disclosure_agree"
@@ -101,7 +101,7 @@ fun AccessibilityDisclosureScreen(
         EditorTopBar("How blocking works", onBack = onDecline)
         Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) {
             Column(
-                Modifier.widthIn(max = 640.dp).fillMaxWidth()
+                Modifier.pageWidth()
                     .verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
             ) {
                 Hero()
@@ -184,7 +184,9 @@ fun AccessibilityDisclosureScreen(
 
         // Pinned below the scrolling content. The consent is the point of the screen, so the way
         // to give it — and the way to refuse — must never be the thing that scrolls off.
-        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+        // pageWidth on the footer as well as the content — see AccountScreen for the tablet
+        // bug that came from capping only one of the two.
+        Column(Modifier.pageWidth().padding(horizontal = 16.dp)) {
             GradientButton(
                 text = "Agree & continue",
                 onClick = onAgree,

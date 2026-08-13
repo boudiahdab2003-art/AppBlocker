@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -56,6 +55,7 @@ import com.appblocker.data.SettingsStore
 import com.appblocker.ui.theme.AppCard
 import com.appblocker.ui.theme.AppGradients
 import com.appblocker.ui.theme.appBackground
+import com.appblocker.ui.theme.pageWidth
 
 /** Test tags for the rendering test — the field and the way out of the screen. */
 const val ACCOUNT_NAME_FIELD_TAG = "account_name_field"
@@ -111,7 +111,7 @@ fun AccountScreen(
         EditorTopBar("Your profile", onBack = onBack)
         Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) {
             Column(
-                Modifier.widthIn(max = 640.dp).fillMaxWidth()
+                Modifier.pageWidth()
                     .verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
             ) {
                 NamePreview(pending)
@@ -178,7 +178,10 @@ fun AccountScreen(
         // Pinned below the scrolling content — the reason this page is not a Dialog. Keeping the
         // button out of the scroll is what stops the keyboard, or a large display size, from
         // leaving the user on a screen with nothing they can press.
-        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+        // pageWidth here as well as on the content above. Capping one and not the other is
+        // exactly the bug this fixes: on the owner's tablet the text sat in a centred column
+        // while the Save button ran the full width of the screen underneath it.
+        Column(Modifier.pageWidth().padding(horizontal = 16.dp)) {
             GradientButton(
                 text = "Save",
                 enabled = dirty,

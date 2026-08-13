@@ -4,12 +4,14 @@ import android.content.Context
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -18,6 +20,10 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+// DpRect.width is an extension property, not a member — getUnclippedBoundsInRoot().width does
+// not resolve without this. (Compose has assertWidthIsAtLeast but no at-most, hence the
+// hand-rolled comparison below.)
+import androidx.compose.ui.unit.width
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.appblocker.data.SettingsStore
@@ -31,7 +37,9 @@ import com.appblocker.ui.ONBOARDING_NAME_CONTINUE_TAG
 import com.appblocker.ui.ONBOARDING_NAME_FIELD_TAG
 import com.appblocker.ui.OnboardingScreen
 import com.appblocker.ui.theme.AppBlockerTheme
+import com.appblocker.ui.theme.PageWidth
 import org.junit.After
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -88,14 +96,15 @@ class AccountScreenTest {
     private fun setScreen(
         height: Dp?,
         fontScale: Float = 1f,
+        width: Dp? = null,
         content: @Composable () -> Unit,
     ) {
         compose.setContent {
             val base = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(base.density, fontScale)) {
                 AppBlockerTheme(darkTheme = true) {
-                    val modifier = if (height == null) Modifier.fillMaxWidth()
-                    else Modifier.fillMaxWidth().height(height)
+                    val sized = if (width == null) Modifier.fillMaxWidth() else Modifier.width(width)
+                    val modifier = if (height == null) sized else sized.height(height)
                     Box(modifier) { content() }
                 }
             }
@@ -183,6 +192,45 @@ class AccountScreenTest {
 
         compose.onNodeWithTag(ONBOARDING_NAME_FIELD_TAG).assertIsDisplayed()
         compose.onNodeWithTag(ONBOARDING_NAME_CONTINUE_TAG).assertIsDisplayed()
+    }
+
+    // ---- Tablet width ------------------------------------------------------------------------
+
+    /**
+     * **The tablet bug, pinned.**
+     *
+     * Both of these pages capped their scrolling content at 640dp and centred it, and left their
+     * pinned footers on a plain `fillMaxWidth()`. On the owner's tablet that put a tidy centred
+     * column of text above a Save button running the whole width of the screen — which is how he
+     * found it, and which no phone-width test could ever have shown.
+     *
+     * Asserting the *button* rather than the content is deliberate: the content was always right.
+     * The defect is a footer that outgrows the column above it, so that is what is measured.
+     */
+    @Test
+    fun onATabletTheProfilesSaveButtonStaysInsideTheContentColumn() {
+        setScreen(height = null, width = 1000.dp) { AccountScreen(onBack = {}) }
+        assertNoWiderThanTheColumn("Save", ACCOUNT_SAVE_TAG)
+    }
+
+    /** Two tests, not one with two `setScreen` calls: `createComposeRule` allows a single
+     *  `setContent` per test and throws on the second. */
+    @Test
+    fun onATabletTheDisclosuresAgreeButtonStaysInsideTheContentColumn() {
+        setScreen(height = null, width = 1000.dp) {
+            AccessibilityDisclosureScreen(onAgree = {}, onDecline = {})
+        }
+        assertNoWiderThanTheColumn("Agree & continue", DISCLOSURE_AGREE_TAG)
+    }
+
+    /** Compose has `assertWidthIsAtLeast` but no at-most, so measure and compare. */
+    private fun assertNoWiderThanTheColumn(name: String, tag: String) {
+        val width = compose.onNodeWithTag(tag).getUnclippedBoundsInRoot().width
+        assertTrue(
+            "“$name” is $width wide on a 1000dp screen — past the $PageWidth content column " +
+                "above it, which is the tablet bug.",
+            width <= PageWidth,
+        )
     }
 
     // ---- The accessibility disclosure -------------------------------------------------------

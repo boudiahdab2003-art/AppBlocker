@@ -1,6 +1,7 @@
 package com.appblocker
 
 import com.appblocker.service.WebContentFilter
+import com.appblocker.service.isOmniboxId
 import com.appblocker.service.looksLikeHost
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -180,6 +181,36 @@ class WebContentFilterTest {
         assertFalse(looksLikeHost("how to quit instagram"))  // a search
         assertFalse(looksLikeHost(""))
         assertFalse(looksLikeHost("   "))
+    }
+
+    // ---- isOmniboxId: which browsers the address bar can be found in ---------------------
+
+    /**
+     * **Why this rule is a suffix.** Blocking a site (rather than a word) is matched against the
+     * address bar only — never the page text — so if the address bar can't be found, website
+     * blocking doesn't degrade, it goes *silent*. The lookup used to be the single literal
+     * `"<pkg>:id/url_bar"`, which is Chrome's; every other browser therefore opened blocked
+     * sites freely, with nothing on screen to say so. The owner found it in Brave.
+     *
+     * The id carries the browser's own package as its prefix, so matching the tail is what makes
+     * one rule cover all of them.
+     */
+    @Test fun everyChromiumForkAddressBarIsRecognised() {
+        for (pkg in listOf("com.android.chrome", "com.brave.browser", "com.microsoft.emmx",
+            "com.opera.browser", "com.vivaldi.browser")) {
+            assertTrue(pkg, isOmniboxId("$pkg:id/url_bar"))
+        }
+        assertTrue(isOmniboxId("com.sec.android.app.sbrowser:id/location_bar_edit_text"))
+        assertTrue(isOmniboxId("org.mozilla.firefox:id/mozac_browser_toolbar_url_view"))
+    }
+
+    /** `endsWith`, not `contains` — the toolbar is full of views named around the url bar, and
+     *  treating the scrim or the wrapper as the address would feed junk to the site matcher. */
+    @Test fun viewsMerelyNamedAroundTheAddressBarAreNotIt() {
+        assertFalse(isOmniboxId("com.brave.browser:id/url_bar_scrim"))
+        assertFalse(isOmniboxId("com.brave.browser:id/url_bar_container"))
+        assertFalse(isOmniboxId("com.android.chrome:id/search_box_text"))
+        assertFalse(isOmniboxId(""))
     }
 
     // ---- whole-word matching: the v1.70 false-positive class ----------------------------

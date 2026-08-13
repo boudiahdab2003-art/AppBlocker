@@ -331,8 +331,10 @@ private val TOPICS = listOf(
                 "everywhere, on by default. Turning the pack off is deliberately hard and " +
                 "impossible during Strict Mode.",
             "Unsupported browsers" to
-                "AppBlocker can only read pages in Chrome. Turn on \"Block unsupported " +
-                "browsers\" so other browsers can't be used as a loophole.",
+                "Blocked words are read from the page in any browser. Blocking a site because " +
+                "you blocked its app needs the address bar, which AppBlocker can read in most " +
+                "browsers but can't promise in all of them. Turn on \"Block unsupported " +
+                "browsers\" so an unreadable one can't be used as a loophole.",
             "Auto site blocking" to
                 "Blocking a social app adds its domains and short links (fb.watch, redd.it, " +
                 "pin.it, t.co…) without you typing anything.",
