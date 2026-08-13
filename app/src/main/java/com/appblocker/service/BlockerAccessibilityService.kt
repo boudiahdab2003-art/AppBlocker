@@ -1155,7 +1155,13 @@ class BlockerAccessibilityService : AccessibilityService() {
                 allowlistMode = allowlistMode,
                 isEssential = { isEssentialAllowed(pkg) },
                 schedules = schedules,
-                isUnsupportedBrowser = pkg in browserPackages && pkg !in SUPPORTED_BROWSERS,
+                // "Unsupported" now means "we have never managed to read this one", not "it isn't
+                // Chrome". KNOWN_READABLE_BROWSERS seeds the answer with the toolbars we know how
+                // to read — needed because a blanket-blocked browser is never scanned, so without
+                // a seed a filterable browser could never demonstrate that it is one — and every
+                // other browser earns it by being read once. Unknown still counts as unsupported.
+                isUnsupportedBrowser = pkg in browserPackages && pkg !in KNOWN_READABLE_BROWSERS &&
+                    pkg !in SettingsStore.readableBrowsers(this),
                 unsupportedBrowserBlockingActive = {
                     SettingsStore.blockUnsupportedBrowsers(this) &&
                         (userKeywords.isNotEmpty() || adultPackOn || SettingsStore.blockAdult(this))
@@ -1559,6 +1565,10 @@ class BlockerAccessibilityService : AccessibilityService() {
             rememberedUrl = live
             rememberedUrlPkg = pkg
             rememberedUrlAt = now
+            // This browser has now demonstrably been read, so it stops counting as one we
+            // "can't filter" — see SettingsStore.readableBrowsers. Cheap: a set lookup unless
+            // it is the first time.
+            SettingsStore.addReadableBrowser(applicationContext, pkg)
             return live
         }
         if (rememberedUrlPkg != pkg) return null
@@ -2080,8 +2090,8 @@ class BlockerAccessibilityService : AccessibilityService() {
         // is noticed quickly, but enough to keep Settings.Secure off the per-event path.
         private const val IME_REFRESH_MS = 10_000L
 
-        // Browsers whose on-screen content the web filter can read; others are "unsupported".
-        private val SUPPORTED_BROWSERS = setOf("com.android.chrome")
+        // The seed for "we know how to read this one" lives in PackageSets.kt beside the
+        // browser detection it belongs with; see KNOWN_READABLE_BROWSERS.
 
         // Never keyword-scanned even with "every app" on: System UI (notification shade,
         // recents — shows app labels) and Settings (Settings→Apps lists every app's name; a

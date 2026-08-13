@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import com.appblocker.data.QuickSession
 import com.appblocker.data.SettingsStore
 import com.appblocker.data.WatcherDiagnostics
+import com.appblocker.service.KNOWN_READABLE_BROWSERS
 import com.appblocker.service.findBrowserPackages
 import com.appblocker.ui.theme.AppCard
 import com.appblocker.ui.theme.Space
@@ -119,7 +120,20 @@ fun DiagnosticsScreen(onBack: () -> Unit) {
                             modifier = Modifier.padding(bottom = Space.sm),
                         )
                         for (b in snapshot.browsers) {
-                            FactRow(Fact(appLabel(context, b), b, good = true))
+                            FactRow(
+                                Fact(
+                                    appLabel(context, b),
+                                    if (b in snapshot.readable) {
+                                        "$b — its address bar can be read, so blocked sites are " +
+                                            "caught here."
+                                    } else {
+                                        "$b — its address bar hasn't been read yet. Blocked " +
+                                            "words still work; blocked sites can't be caught " +
+                                            "until it has."
+                                    },
+                                    good = b in snapshot.readable,
+                                ),
+                            )
                         }
                     }
                 }
@@ -155,6 +169,9 @@ internal data class Fact(val title: String, val detail: String, val good: Boolea
 private data class Snapshot(
     val protection: List<Fact>,
     val browsers: List<String>,
+    /** Those whose address bar the app knows how to read, or has read. The rest can still
+     *  catch blocked words from the page — it is site blocking that needs the address. */
+    val readable: Set<String>,
     val lastLook: List<Fact>,
 )
 
@@ -283,6 +300,7 @@ private fun readSnapshot(context: Context): Snapshot {
     return Snapshot(
         protection = protection,
         browsers = runCatching { findBrowserPackages(context).sorted() }.getOrDefault(emptyList()),
+        readable = SettingsStore.readableBrowsers(context) + KNOWN_READABLE_BROWSERS,
         lastLook = lastLook,
     )
 }

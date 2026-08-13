@@ -1,5 +1,6 @@
 package com.appblocker
 
+import com.appblocker.service.KNOWN_READABLE_BROWSERS
 import com.appblocker.service.WebContentFilter
 import com.appblocker.service.isOmniboxId
 import com.appblocker.service.looksLikeHost
@@ -211,6 +212,37 @@ class WebContentFilterTest {
         assertFalse(isOmniboxId("com.brave.browser:id/url_bar_container"))
         assertFalse(isOmniboxId("com.android.chrome:id/search_box_text"))
         assertFalse(isOmniboxId(""))
+    }
+
+    /**
+     * **The two lists that must agree.** `KNOWN_READABLE_BROWSERS` is the claim "we can read this
+     * browser's address bar", and the only thing that makes the claim true is [isOmniboxId]
+     * recognising that browser's toolbar id. Naming a browser in one and not the other is how the
+     * pair goes wrong, and it fails in the silent direction: the browser stops being blanket-
+     * blocked *and* cannot actually be filtered, so it becomes the one thing this whole area keeps
+     * producing — a browser with no blocking and nothing on screen to say so.
+     *
+     * Chromium's `url_bar` covers all but two, which are asserted by name.
+     */
+    @Test fun everyBrowserClaimedReadableHasAnOmniboxIdWeRecognise() {
+        val exceptions = mapOf(
+            "com.sec.android.app.sbrowser" to "location_bar_edit_text",
+            "org.mozilla.firefox" to "mozac_browser_toolbar_url_view",
+            "org.mozilla.firefox_beta" to "mozac_browser_toolbar_url_view",
+            "org.mozilla.fenix" to "mozac_browser_toolbar_url_view",
+            "org.mozilla.focus" to "mozac_browser_toolbar_url_view",
+        )
+        for (pkg in KNOWN_READABLE_BROWSERS) {
+            val id = "$pkg:id/${exceptions[pkg] ?: "url_bar"}"
+            assertTrue("$pkg is claimed readable but $id is not recognised", isOmniboxId(id))
+        }
+    }
+
+    /** A seed that has been emptied silently reintroduces the original bug: every browser
+     *  "unsupported", so every browser blanket-blocked when that switch is on. */
+    @Test fun theReadableSeedStillHasChromeAndBrave() {
+        assertTrue("com.android.chrome" in KNOWN_READABLE_BROWSERS)
+        assertTrue("com.brave.browser" in KNOWN_READABLE_BROWSERS)
     }
 
     // ---- whole-word matching: the v1.70 false-positive class ----------------------------
