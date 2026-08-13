@@ -113,6 +113,39 @@ object SettingsStore {
     fun setBlockUnsupportedBrowsers(context: Context, value: Boolean) =
         prefs(context).edit().putBoolean(KEY_BLOCK_UNSUPPORTED, value).apply()
 
+    private const val KEY_READABLE_BROWSERS = "readable_browsers"
+
+    /**
+     * Browsers whose address bar this phone has actually been seen to read.
+     *
+     * **"Supported" used to be a guess, and the guess was one string long.** `SUPPORTED_BROWSERS`
+     * named Chrome and nothing else, so every other browser was permanently "can't be filtered" —
+     * which, with "block unsupported browsers" on, means blocked outright, *whether or not the
+     * app can in fact read it*. Brave is the case that showed it up: the address bar is readable
+     * (it is Chromium underneath), and the app was blocking the whole browser anyway because a
+     * constant said so.
+     *
+     * So the question is answered by measurement instead. A browser joins this set the first time
+     * its address bar is genuinely read, and being in it means website filtering demonstrably
+     * works there, so blanket-blocking it is no longer warranted.
+     *
+     * **The direction of safety is preserved:** unknown stays unsupported. A browser never
+     * observed to be readable keeps exactly today's treatment, so nothing is relaxed on a guess —
+     * only on evidence, and only evidence this phone produced itself.
+     */
+    fun readableBrowsers(context: Context): Set<String> =
+        prefs(context).getStringSet(KEY_READABLE_BROWSERS, emptySet()) ?: emptySet()
+
+    /** Records that [pkg]'s address bar was read. No-op when already known, so the service's
+     *  scan path costs a set lookup rather than a write. */
+    fun addReadableBrowser(context: Context, pkg: String) {
+        val current = readableBrowsers(context)
+        if (pkg in current) return
+        prefs(context).edit()
+            .putStringSet(KEY_READABLE_BROWSERS, current + pkg)
+            .apply()
+    }
+
     /** Block only the YouTube Shorts feed/player (the rest of YouTube still works). */
     fun blockYoutubeShorts(context: Context): Boolean =
         prefs(context).getBoolean(KEY_BLOCK_YT_SHORTS, false)

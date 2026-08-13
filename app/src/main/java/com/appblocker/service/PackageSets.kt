@@ -41,19 +41,26 @@ internal fun findLauncherPackages(context: Context): Set<String> = runCatching {
  * already carries the same lesson in its comment (MATCH_ALL has missed the default home on some
  * OEM builds); this asked one question, with flags `0`, and trusted the answer.
  *
- * Hence four sources rather than one, on the principle that a browser only has to be found *once*:
+ * Hence three sources rather than one, on the principle that a browser only has to be found *once*:
  *
- * 1. `https://` + BROWSABLE with **MATCH_ALL**, matching `findLauncherPackages`.
- * 2. The same for `http://`. Filters are usually declared for both, but "usually" is what put
- *    this comment here.
- * 3. The **default browser**, resolved explicitly — the exact belt-and-braces the launcher
- *    lookup needed for the same reason.
- * 4. [KNOWN_BROWSERS] that are actually installed, checked one by one. This is the vendor-string
- *    tier and it is last on purpose: it only ever *adds*, it can never shrink what the queries
- *    found, and a browser it doesn't name is no worse off than before.
+ * 1. `https://` + BROWSABLE with **MATCH_ALL**, matching `findLauncherPackages`, then `http://`
+ *    as well — filters are usually declared for both, but "usually" is what put this comment here.
+ * 2. The **default browser**, resolved explicitly — the exact belt-and-braces the launcher lookup
+ *    needed for the same reason.
+ * 3. [KNOWN_BROWSERS] that are actually installed. The vendor-string tier, last on purpose: it
+ *    only ever *adds*, and a browser it doesn't name is no worse off than before.
  *
- * All four are individually wrapped: one throwing must not empty the set (invariant 11 — an
- * empty answer is not data; the caller only adopts a non-empty result).
+ * **`ResolveInfo.handleAllWebDataURI` is what makes the answer mean "browser".** Asking who can
+ * open an https link is not that question, and the difference is not academic: the owner's phone
+ * answered it with WPS Office, Coinbase, SHAREit and Bing, none of which browse anything. They
+ * were there because an app that registers a *deep link* — its own site, opening its own screen —
+ * matches the same query a browser does. Being wrongly in this set is not harmless: with "block
+ * unsupported browsers" on, every one of them is a browser we cannot read, so all four were
+ * **blocked outright**. A real browser declares it accepts *any* web address, and that flag is
+ * Android's own way of saying so.
+ *
+ * Each source is wrapped separately: one throwing must not empty the set (invariant 11 — an empty
+ * answer is not data; the caller only adopts a non-empty result).
  */
 internal fun findBrowserPackages(context: Context): Set<String> {
     val pm = context.packageManager
@@ -63,6 +70,7 @@ internal fun findBrowserPackages(context: Context): Set<String> {
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse("$scheme://example.com"))
                 .addCategory(Intent.CATEGORY_BROWSABLE)
             pm.queryIntentActivities(intent, PackageManager.MATCH_ALL)
+                .filter { it.handleAllWebDataURI }
                 .mapNotNull { it.activityInfo?.packageName }
                 .let(found::addAll)
         }
@@ -71,6 +79,7 @@ internal fun findBrowserPackages(context: Context): Set<String> {
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com"))
             .addCategory(Intent.CATEGORY_BROWSABLE)
         pm.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
+            ?.takeIf { it.handleAllWebDataURI }
             ?.activityInfo?.packageName?.let(found::add)
     }
     for (pkg in KNOWN_BROWSERS) {
@@ -136,3 +145,39 @@ internal fun currentImePackage(context: Context): String? = runCatching {
         context.contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD,
     )?.substringBefore('/')?.takeIf { it.isNotBlank() }
 }.getOrNull()
+
+/**
+ * Browsers whose toolbar spelling the app knows, so it can read the address bar in them.
+ *
+ * **This was `setOf("com.android.chrome")`, and that one line was doing real damage.**
+ * Everything else counted as "can't be filtered", which with "block unsupported browsers"
+ * on means *blocked outright* — so Brave, which is Chromium underneath and whose address
+ * bar the app reads perfectly well, was having the whole browser blocked because a
+ * constant said it couldn't be read. Over-blocking justified by a stale guess.
+ *
+ * The list now says what it means: these are the packages whose omnibox matches one of
+ * `OMNIBOX_ID_SUFFIXES` in `ScreenText.kt`, and the two must be edited together — a
+ * browser named here whose id is not there is claimed readable and is not, which is the
+ * silent under-block this whole area keeps producing.
+ *
+ * It is a seed, not the whole answer. Any browser at all joins
+ * [SettingsStore.readableBrowsers] the moment its address bar is genuinely read, so a
+ * browser missing here is only ever *temporarily* treated as unreadable — and one that
+ * is never readable keeps exactly the old treatment. The seed exists because a browser
+ * that is blanket-blocked never gets scanned, so without it a filterable browser could
+ * never demonstrate that it is filterable.
+ */
+internal val KNOWN_READABLE_BROWSERS = setOf(
+    // Chromium and its forks — all expose the omnibox as <pkg>:id/url_bar.
+    "com.android.chrome", "com.chrome.beta", "com.chrome.dev", "com.chrome.canary",
+    "com.google.android.apps.chrome",
+    "com.brave.browser", "com.brave.browser_beta", "com.brave.browser_nightly",
+    "com.microsoft.emmx", "com.opera.browser", "com.opera.gx",
+    "com.vivaldi.browser", "com.kiwibrowser.browser", "com.duckduckgo.mobile.android",
+    "com.ecosia.android", "com.mi.globalbrowser", "com.android.browser",
+    // <pkg>:id/location_bar_edit_text
+    "com.sec.android.app.sbrowser",
+    // <pkg>:id/mozac_browser_toolbar_url_view
+    "org.mozilla.firefox", "org.mozilla.firefox_beta", "org.mozilla.fenix",
+    "org.mozilla.focus",
+)
