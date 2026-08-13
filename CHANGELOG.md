@@ -3,6 +3,15 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.126
+- WPS Office, Coinbase and SHAREit stop being treated as browsers.
+
+They were in the browser list because the app asked "who can open a web link?", and any app that opens its own links says yes. With "Block unsupported browsers" on, that meant all of them were blocked outright. The previous attempt at fixing this did not work on your phone, so the app now stops trying to infer the answer: it uses the label an app sets to say "I am a browser", your chosen default browser, and a list of browsers by name. Three things an app states about itself instead of a guess.
+
+It also keeps two separate lists now, because the two jobs want opposite mistakes: being generous is right for reading pages, and wrong for blocking a browser outright.
+
+No change to Brave, which was already fixed in v1.124.
+
 ## v1.125
 - Two over-blocks, both found from your screenshot of the new diagnostics page.
 
