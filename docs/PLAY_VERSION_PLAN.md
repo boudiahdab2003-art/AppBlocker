@@ -418,6 +418,21 @@ viable path — not a consolation prize.
 - **Still to do in Phase 1:** 1.3 (audit the defaults a brand-new user gets), 1.4
   (survive being someone else's phone — different launcher, language, installed apps),
   1.5 (watch one real person set it up from scratch).
+- **Donations (v1.127) — sideloaded build only, and that is a decision Phase 3 should
+  revisit rather than rediscover.** The owner asked for a way for people to donate;
+  it is a GitHub Sponsors link on one row at the bottom of Profile ▸ About, gated on
+  the new `Dist.DONATIONS` flag, which is **false in the `play` flavour**. Two reasons
+  it is kept out of the Play build: Google's payments policy is strict about money
+  leaving an app outside Play Billing, and donations that unlock nothing are usually
+  tolerated but not reliably enough to gamble a first submission on; and the Play build
+  is the one intended to be **paid for** (3.1), so asking that user to donate as well is
+  the wrong ask. When 3.1 settles the free/paid split, decide deliberately whether a
+  donate link has any place beside a price — the flag makes it a one-line change either
+  way.
+  - **Deliberately not built:** any prompt, banner, timed pop-up or block-screen mention.
+    The row is the quietest thing on the Profile page on purpose. This app is opened by
+    people mid-compulsion, and a payment prompt aimed at that moment trades on it. If a
+    growth idea in Phase 3 proposes surfacing it harder, that is the reason to say no.
 - **Third-party text — clear as of v1.105.** The Twelve Steps screen
   (`ui/TwelveStepsScreen.kt`) contains **only original wording** plus attribution and a
   link, so it carries no licence obligation into a Play release. This was deliberate:

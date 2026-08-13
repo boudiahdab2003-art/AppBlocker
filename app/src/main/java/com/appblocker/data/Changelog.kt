@@ -13,6 +13,12 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.127", "Aug 13, 2026", "A way to support the app, if you want to", listOf(
+        "**There's now a \"Support AppBlocker\" row at the bottom of Profile ▸ About.** It opens a GitHub Sponsors page. That's the whole feature.",
+        "**It will never be more than that.** No pop-up after a month of use, no banner on the home screen, no line on the block screen. This app gets opened by people in a bad moment — sometimes at their worst — and putting a payment prompt in front of that moment would be trading on it. One quiet row at the bottom of a settings page is the most this will ever be.",
+        "Nothing is locked, limited, or held back. The app is free, has no ads and collects nothing, and it stays that way whether anyone gives a penny or not — which is why the row says so out loud.",
+        "It's in the sideloaded version only, not the Google Play one. Two reasons: Google has strict rules about money leaving an app outside its own payment system, and the Play version is the one meant to be paid for — asking that person for a donation as well would be the wrong ask.",
+    )),
     VersionLog("1.126", "Aug 13, 2026", "WPS Office, Coinbase and SHAREit stop being treated as browsers", listOf(
         "**My last fix for this didn't work, and your screenshot showed it.** WPS Office, Coinbase, SHAREit and Bing were still listed as browsers in v1.125. The test I added — \"does this app accept any web address?\" — didn't actually rule them out on your phone, and I can't tell from here whether that's because Android didn't hand over the information or because those apps really do declare an unrestricted web filter.",
         "**So the app stops trying to work it out.** Android has a label an app sets to say \"I am a browser\" — Chrome, Brave and Firefox set it; an office app doesn't. That, plus your chosen default browser, plus a list of browsers by name, is now how the question is answered. Three facts an app states about itself, instead of a third guess at reading between the lines.",

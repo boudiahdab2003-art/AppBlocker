@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Diversity3
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
@@ -112,6 +113,14 @@ private fun guardOffGate() = GateCopy(
         "${OffSwitchGuard.WINDOW_LABEL} to turn it off.",
     confirmLabel = "Start the ${OffSwitchGuard.DELAY_LABEL} wait",
 )
+
+/**
+ * Where "Support AppBlocker" goes. Named here in the house style of [PRIVACY_POLICY_URL] rather
+ * than inline, so the one thing in this app that touches money is a single greppable line.
+ *
+ * Only ever reached from the row guarded by `Dist.DONATIONS`; the `play` flavour never opens it.
+ */
+const val SPONSOR_URL = "https://github.com/sponsors/boudiahdab2003-art"
 
 @Composable
 fun ProfileScreen(
@@ -586,6 +595,29 @@ fun ProfileScreen(
                 enabled = true,
                 onClick = { shareApp(context) },
             )
+            // **The only place in the app that ever asks for money, and it stays that way.**
+            //
+            // Last row of the last section, no badge, no accent, nothing that pulls the eye —
+            // deliberately the quietest thing on the screen. The obvious "improvement" here is to
+            // surface it: a dialog after N days, a banner on the home tab, a line on the block
+            // screen. **Don't.** This app is opened by people mid-compulsion, sometimes at their
+            // worst, and a payment prompt aimed at that moment would be the app trading on it.
+            // The subtitle says everything works the same either way because that has to be true
+            // and has to be visible; a donate row that hints at a paywall is a different product.
+            //
+            // Sideloaded builds only — see Dist.DONATIONS in the play flavour for why.
+            if (Dist.DONATIONS) {
+                Divider()
+                ProfileRow(
+                    icon = Icons.Filled.Favorite,
+                    title = "Support AppBlocker",
+                    subtitle = "It's free, has no ads, and collects nothing about you. If it's " +
+                        "helped, you can chip in — everything works exactly the same either way.",
+                    chevron = true,
+                    enabled = true,
+                    onClick = { openUrl(context, SPONSOR_URL) },
+                )
+            }
         }
 
         Spacer(Modifier.height(20.dp))

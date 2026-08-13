@@ -1,0 +1,4 @@
+# Puts a "Sponsor" button on the repository page. The in-app equivalent is the
+# "Support AppBlocker" row in Profile ▸ About, which exists in the sideloaded
+# build only (see Dist.DONATIONS).
+github: boudiahdab2003-art
