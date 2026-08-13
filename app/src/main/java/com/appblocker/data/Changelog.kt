@@ -13,8 +13,13 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
-    VersionLog("1.127", "Aug 13, 2026", "A way to support the app, if you want to", listOf(
-        "**There's now a \"Support AppBlocker\" row at the bottom of Profile ▸ About.** It opens a GitHub Sponsors page. That's the whole feature.",
+    VersionLog("1.127", "Aug 13, 2026", "The app no longer throws you out for turning it on", listOf(
+        "**You reported this from your tablet: the app kicked you out of the accessibility page right after you switched it on.** It did, and it was doing it to everyone.",
+        "The guard's job is to protect the page that can switch blocking off. It never asked whether blocking was currently *on*. So the moment you turned it on, the app started up, saw itself sitting on its own off-switch page, and sent you to the home screen — for doing the right thing.",
+        "It could only ever happen in those few seconds, because before you switch it on the app isn't running to see anything. That's why it went unnoticed so long: your phone was set up before you turned the guard on, and it took a fresh install on the tablet to show it.",
+        "**This was worse for new people than for you.** The setup walkthrough sends every first-time user to that exact page to switch the app on — and then threw them out to the home screen. Nobody would report that; they'd just decide the app was broken and delete it.",
+        "Now, for about eight seconds after you switch it on, that one page stops bouncing — long enough to read the confirmation and walk out yourself. Everything else the guard protects — uninstalling, device admin, force-stopping during Strict — keeps bouncing from the first instant, because none of those has anything to do with switching the app on.",
+        "**Also in this version: there's now a \"Support AppBlocker\" row at the bottom of Profile ▸ About.** It opens a GitHub Sponsors page. That's the whole feature.",
         "**It will never be more than that.** No pop-up after a month of use, no banner on the home screen, no line on the block screen. This app gets opened by people in a bad moment — sometimes at their worst — and putting a payment prompt in front of that moment would be trading on it. One quiet row at the bottom of a settings page is the most this will ever be.",
         "Nothing is locked, limited, or held back. The app is free, has no ads and collects nothing, and it stays that way whether anyone gives a penny or not — which is why the row says so out loud.",
         "It's in the sideloaded version only, not the Google Play one. Two reasons: Google has strict rules about money leaving an app outside its own payment system, and the Play version is the one meant to be paid for — asking that person for a donation as well would be the wrong ask.",

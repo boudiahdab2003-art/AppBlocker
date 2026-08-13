@@ -99,6 +99,20 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     host restriction") were defeated by ordinary apps on the owner's phone, and which of the two
     reasons applied was not decidable off-device.
 
+14. **A guard on a page must know which direction the user is moving.** `handleSettingsGuard`
+    bounced AppBlocker's own accessibility page whenever the guard was armed, and never asked
+    whether the service was currently *off* — so switching it **on** started the watcher, which
+    immediately saw its own off-switch page and fired `GLOBAL_ACTION_HOME` at somebody who had
+    just turned protection on. It could only ever fire in those seconds (before that the service
+    is not running to see anything), which is why it survived so long: the owner's phone was set
+    up before he armed the guard, and it took a fresh install on his tablet to surface it.
+    **The blast radius was every new user** — the accessibility disclosure sends all of them to
+    that page — and nobody would report it; they would conclude the app was broken. Fixed with
+    `OffSwitchGuard.justEnabled`, scoped to that one screen: uninstall, device-admin removal and
+    the App-info page during Strict are not part of enabling the service and keep bouncing
+    throughout. The general shape to watch for: **a protection that fires on a location rather
+    than on an action will eventually fire on the user doing the right thing.**
+
 ## Device quirks these invariants exist for
 
 - Gesture-nav Home on HyperOS often emits **no accessibility event at all**, so the foreground

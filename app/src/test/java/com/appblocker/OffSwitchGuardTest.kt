@@ -133,6 +133,50 @@ class OffSwitchGuardTest {
         assertTrue(window >= 10 * 60_000L)
     }
 
+    /**
+     * **The guard used to eject people for switching protection ON.**
+     *
+     * It bounces the page that can turn the service off, and never asked whether the service was
+     * currently off — so enabling it meant the freshly-started watcher saw its own accessibility
+     * page and fired HOME at somebody doing the right thing. Reported from the owner's tablet,
+     * and it broke the first run for *every* new user, since the disclosure screen sends them to
+     * that exact page.
+     *
+     * Only the arithmetic is pinned here. **That the grace applies to the accessibility page and
+     * to nothing else lives in `handleSettingsGuard` and is verified by reading** — the guard has
+     * no extracted decision function the way `decideBlock` does, and a test that re-asserts this
+     * comparison against itself would look like coverage without being any.
+     */
+    @Test
+    fun `the grace covers switching on and then gets out of the way`() {
+        assertTrue(OffSwitchGuard.justEnabled(0L))
+        assertTrue(OffSwitchGuard.justEnabled(OffSwitchGuard.ENABLE_GRACE_MS - 1))
+        assertFalse(OffSwitchGuard.justEnabled(OffSwitchGuard.ENABLE_GRACE_MS))
+        // A service running for any real length of time guards the page as it always did.
+        assertFalse(OffSwitchGuard.justEnabled(60_000L))
+        assertFalse(OffSwitchGuard.justEnabled(24 * 60 * 60_000L))
+    }
+
+    /**
+     * A negative interval means the reading is nonsense — a clock that went backwards, or the
+     * "long ago" sentinel before the service has ever connected. It must read as **not** just
+     * enabled: answering yes there would hold the guard down on no evidence, which is the same
+     * clock-driven bypass this file's deadlines already defend against (invariant 9).
+     */
+    @Test
+    fun `a nonsensical interval does not open the grace`() {
+        assertFalse(OffSwitchGuard.justEnabled(-1L))
+        assertFalse(OffSwitchGuard.justEnabled(Long.MIN_VALUE / 2))
+    }
+
+    /** Long enough to read the confirmation dialog and walk out of Settings; short enough that it
+     *  is not itself an off-switch. */
+    @Test
+    fun `the grace is seconds, not minutes`() {
+        assertTrue(OffSwitchGuard.ENABLE_GRACE_MS >= 3_000L)
+        assertTrue(OffSwitchGuard.ENABLE_GRACE_MS <= 30_000L)
+    }
+
     @Test
     fun `the labels say the same thing as the constants`() {
         // The block screen, the Profile row and the gate all print these words while the guard
