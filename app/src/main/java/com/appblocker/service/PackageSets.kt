@@ -94,19 +94,29 @@ internal fun findBrowserPackages(context: Context): Set<String> {
 /**
  * Whether [info] is a browser rather than an app that merely opens its own links.
  *
- * `IntentFilter.handleAllWebDataURI()` is Android's own phrasing of the question — *does this
- * filter accept **any** web address* — and it is the difference between Chrome and the
- * Coinbase/WPS/SHAREit/Bing entries that were being treated as browsers, and therefore blocked
- * as unreadable ones. The filter is only attached when `GET_RESOLVED_FILTER` was asked for, which
- * is why both queries pass it.
+ * **The test is "no host restriction".** A browser's filter says *any* `http`/`https` address; an
+ * app with a deep link names its own site, so its filter carries an authority. That single
+ * difference is what separates Chrome from the WPS Office, Coinbase, SHAREit and Bing entries that
+ * were being counted as browsers on the owner's phone — and, with "block unsupported browsers" on,
+ * blocked as unreadable ones.
  *
- * **A missing filter counts as yes**, deliberately. It should not happen with that flag, but if
- * it ever does the choice is between an app wrongly filtered (visible, annoying) and a browser
- * silently exempt from all blocking (invisible, and the failure this whole file is about). The
- * app's standing rule is that can't-tell never takes the permissive branch.
+ * This is what Android's own `IntentFilter.handleAllWebDataURI()` does — a web scheme, no
+ * authorities, or the explicit browser category — spelled out because that method is hidden API
+ * and does not compile against the SDK. `hasDataScheme`, `countDataAuthorities` and `hasCategory`
+ * are all public and have been since API 1. (The filter itself only arrives when
+ * `GET_RESOLVED_FILTER` was requested, which is why both queries pass it.)
+ *
+ * **A missing filter counts as yes**, deliberately. It should not happen with that flag, but if it
+ * ever does, the choice is between an app wrongly treated as a browser (visible, and at worst
+ * annoying) and a browser silently exempt from all blocking (invisible, and the failure this whole
+ * file is about). Can't-tell does not take the permissive branch.
  */
-private fun acceptsAnyWebAddress(info: ResolveInfo): Boolean =
-    info.filter?.handleAllWebDataURI() ?: true
+private fun acceptsAnyWebAddress(info: ResolveInfo): Boolean {
+    val filter = info.filter ?: return true
+    if (filter.hasCategory(Intent.CATEGORY_APP_BROWSER)) return true
+    val web = filter.hasDataScheme("http") || filter.hasDataScheme("https")
+    return web && filter.countDataAuthorities() == 0
+}
 
 /**
  * Browsers named outright, as the backstop tier of [findBrowserPackages].
