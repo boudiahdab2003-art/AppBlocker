@@ -15,7 +15,8 @@ data class VersionLog(
 val changelog: List<VersionLog> = listOf(
     VersionLog("1.126", "Aug 13, 2026", "WPS Office, Coinbase and SHAREit stop being treated as browsers", listOf(
         "**My last fix for this didn't work, and your screenshot showed it.** WPS Office, Coinbase, SHAREit and Bing were still listed as browsers in v1.125. The test I added — \"does this app accept any web address?\" — didn't actually rule them out on your phone, and I can't tell from here whether that's because Android didn't hand over the information or because those apps really do declare an unrestricted web filter.",
-        "So instead of trying to make one test perfect, the app now keeps **two separate lists**, because the two jobs want opposite mistakes.",
+        "**So the app stops trying to work it out.** Android has a label an app sets to say \"I am a browser\" — Chrome, Brave and Firefox set it; an office app doesn't. That, plus your chosen default browser, plus a list of browsers by name, is now how the question is answered. Three facts an app states about itself, instead of a third guess at reading between the lines.",
+        "Alongside that, the app keeps **two separate lists**, because the two jobs want opposite mistakes.",
         "**For reading pages**, being generous is right: including an app that isn't really a browser costs nothing — it just gets checked for blocked words — while leaving a real browser out means a browser with no blocking at all, and you'd never see it happen.",
         "**For blocking a browser outright**, being generous is exactly wrong: it's what made Coinbase and WPS unusable. That list is now strict, and anything it can't confirm is a browser is simply never blocked as one.",
         "The \"What the blocker sees\" page now says which is which, so an app like Coinbase shows up as \"not really a browser — read for blocked words, never blocked as one\".",

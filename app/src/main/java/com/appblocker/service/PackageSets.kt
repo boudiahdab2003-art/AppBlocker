@@ -3,7 +3,6 @@ package com.appblocker.service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.content.pm.ResolveInfo
 import android.net.Uri
 import android.provider.Settings
 import android.telecom.TelecomManager
@@ -32,7 +31,7 @@ internal fun findLauncherPackages(context: Context): Set<String> = runCatching {
 }.getOrDefault(emptySet())
 
 /**
- * Browsers this device has, gathered from four sources and unioned.
+ * Everything that can open a web address — **deliberately generous, and used for scanning only.**
  *
  * **Being missing from this set switches a browser's entire filtering off, silently.** It gates
  * the web scan (`shouldScanPkg`), the address-bar read, blocked apps' websites, the adult site
@@ -51,14 +50,13 @@ internal fun findLauncherPackages(context: Context): Set<String> = runCatching {
  * 3. [KNOWN_BROWSERS] that are actually installed. The vendor-string tier, last on purpose: it
  *    only ever *adds*, and a browser it doesn't name is no worse off than before.
  *
- * **[acceptsAnyWebAddress] is what makes the answer mean "browser".** Asking who can
- * open an https link is not that question, and the difference is not academic: the owner's phone
- * answered it with WPS Office, Coinbase, SHAREit and Bing, none of which browse anything. They
- * were there because an app that registers a *deep link* — its own site, opening its own screen —
- * matches the same query a browser does. Being wrongly in this set is not harmless: with "block
- * unsupported browsers" on, every one of them is a browser we cannot read, so all four were
- * **blocked outright**. A real browser declares it accepts *any* web address, and that flag is
- * Android's own way of saying so.
+ * **This set contains things that are not browsers, and that is fine here.** An app registering a
+ * *deep link* — its own site, opening its own screen — answers the same query a browser does, so
+ * the owner's phone returns WPS Office, Coinbase, SHAREit and Bing. Scanning them costs a check
+ * for blocked words, which is harmless and occasionally useful. **Do not tighten this set to fix
+ * that.** The harm came from the blanket block reading the same list, and the fix for it is
+ * [findRealBrowserPackages], not a narrower answer here — narrowing here is how a real browser
+ * goes silently unfiltered.
  *
  * Each source is wrapped separately: one throwing must not empty the set (invariant 11 — an empty
  * answer is not data; the caller only adopts a non-empty result).
@@ -70,8 +68,7 @@ internal fun findBrowserPackages(context: Context): Set<String> {
         runCatching {
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse("$scheme://example.com"))
                 .addCategory(Intent.CATEGORY_BROWSABLE)
-            val flags = PackageManager.MATCH_ALL or PackageManager.GET_RESOLVED_FILTER
-            pm.queryIntentActivities(intent, flags)
+            pm.queryIntentActivities(intent, PackageManager.MATCH_ALL)
                 .mapNotNull { it.activityInfo?.packageName }
                 .let(found::addAll)
         }
@@ -96,22 +93,30 @@ internal fun findBrowserPackages(context: Context): Set<String> {
  *   including something wrongly means the app is **blocked outright**, which is how WPS Office,
  *   Coinbase and SHAREit ended up unusable on the owner's phone.
  *
- * Trying to make one set right for both is what produced that bug. A single strict test also has
- * to be *correct*, and the first attempt at one — no data authority on the filter — did not
- * actually exclude those four in practice. So this asks three ways and requires only one to say
- * yes, while each individual answer of "can't tell" declines rather than blocks: an unrecognised
- * browser loses the blunt blanket block but keeps every other layer, whereas a wrongly-blocked
- * ordinary app is unusable.
+ * **Membership is by self-declaration, not by inference from intent filters.** Two attempts were
+ * made at inferring it — "handles an https link", then "handles one with no host restriction" —
+ * and the owner's phone defeated both: WPS Office, Coinbase, SHAREit and Bing survived the second
+ * as well, and from a distance it is not decidable whether Android returned no resolved filter or
+ * those apps really do declare a scheme-only web filter. Guessing a third time is the mistake, not
+ * the specific guess. What is *not* ambiguous is whether an app says it is a browser:
+ *
+ * 1. **[Intent.CATEGORY_APP_BROWSER]** — the category an app declares to mean "I am the browser",
+ *    and what `Intent.makeMainSelectorActivity` opens. An office app does not declare it under
+ *    either explanation above, which is what makes this robust where filter shape was not.
+ * 2. **The default browser** — a browser by definition, whatever its filters say.
+ * 3. **[KNOWN_BROWSERS]** that are installed.
+ *
+ * Any one is enough; none of them is inferred. The cost is a browser declaring none of the three
+ * and not being the default: it escapes the *blanket block* while keeping every other layer,
+ * because it is still in the loose set. That is the right way round — the blanket block is
+ * belt-and-braces, and its failure mode today is a Coinbase that will not open.
  */
 internal fun findRealBrowserPackages(context: Context): Set<String> {
     val pm = context.packageManager
     val found = mutableSetOf<String>()
     runCatching {
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com"))
-            .addCategory(Intent.CATEGORY_BROWSABLE)
-        val flags = PackageManager.MATCH_ALL or PackageManager.GET_RESOLVED_FILTER
-        pm.queryIntentActivities(intent, flags)
-            .filter { acceptsAnyWebAddress(it) }
+        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_BROWSER)
+        pm.queryIntentActivities(intent, PackageManager.MATCH_ALL)
             .mapNotNull { it.activityInfo?.packageName }
             .let(found::addAll)
     }
@@ -130,33 +135,6 @@ private fun defaultBrowser(context: Context): String? = runCatching {
         ?.activityInfo?.packageName
 }.getOrNull()
 
-/**
- * Whether [info] is a browser rather than an app that merely opens its own links.
- *
- * **The test is "no host restriction".** A browser's filter says *any* `http`/`https` address; an
- * app with a deep link names its own site, so its filter carries an authority. That single
- * difference is what separates Chrome from the WPS Office, Coinbase, SHAREit and Bing entries that
- * were being counted as browsers on the owner's phone — and, with "block unsupported browsers" on,
- * blocked as unreadable ones.
- *
- * This is what Android's own `IntentFilter.handleAllWebDataURI()` does — a web scheme, no
- * authorities, or the explicit browser category — spelled out because that method is hidden API
- * and does not compile against the SDK. `hasDataScheme`, `countDataAuthorities` and `hasCategory`
- * are all public and have been since API 1. (The filter itself only arrives when
- * `GET_RESOLVED_FILTER` was requested, which is why both queries pass it.)
- *
- * **A missing filter counts as no.** It first counted as yes, on the reasoning that can't-tell
- * should never take the permissive branch — but that reasoning was imported from the wrong set.
- * This one feeds the *blanket block*, where saying yes on no evidence makes an ordinary app
- * unusable; the loose [findBrowserPackages] is where can't-tell still errs towards blocking, and
- * it is the set that governs actual filtering.
- */
-private fun acceptsAnyWebAddress(info: ResolveInfo): Boolean {
-    val filter = info.filter ?: return false
-    if (filter.hasCategory(Intent.CATEGORY_APP_BROWSER)) return true
-    val web = filter.hasDataScheme("http") || filter.hasDataScheme("https")
-    return web && filter.countDataAuthorities() == 0
-}
 
 /**
  * Browsers named outright, as the backstop tier of [findBrowserPackages].
@@ -169,7 +147,7 @@ private fun acceptsAnyWebAddress(info: ResolveInfo): Boolean {
  * The `resolveActivity` above returns the default browser under whatever name it has, so a
  * browser missing from this list is still found whenever it is the user's default.
  */
-private val KNOWN_BROWSERS = listOf(
+internal val KNOWN_BROWSERS = listOf(
     "com.android.chrome", "com.chrome.beta", "com.chrome.dev", "com.chrome.canary",
     "com.brave.browser", "com.brave.browser_beta", "com.brave.browser_nightly",
     "org.mozilla.firefox", "org.mozilla.firefox_beta", "org.mozilla.fenix", "org.mozilla.focus",
@@ -181,6 +159,10 @@ private val KNOWN_BROWSERS = listOf(
     "com.ecosia.android", "acr.browser.lightning", "org.adblockplus.browser",
     "mark.via.gp", "com.qwant.liberty", "com.aloha.browser", "idm.internet.download.manager",
     "com.android.browser", "com.google.android.apps.chrome",
+    // OEM browsers. Both are on the owner's phone and neither was here, which mattered once
+    // this list started deciding what may be blanket-blocked as well as what gets scanned.
+    "com.mi.globalbrowser", "com.miui.browser", // Xiaomi
+    "com.tcl.browser", // TCL "BrowseHere"
 )
 
 /**

@@ -1,5 +1,6 @@
 package com.appblocker
 
+import com.appblocker.service.KNOWN_BROWSERS
 import com.appblocker.service.KNOWN_READABLE_BROWSERS
 import com.appblocker.service.WebContentFilter
 import com.appblocker.service.isOmniboxId
@@ -243,6 +244,21 @@ class WebContentFilterTest {
     @Test fun theReadableSeedStillHasChromeAndBrave() {
         assertTrue("com.android.chrome" in KNOWN_READABLE_BROWSERS)
         assertTrue("com.brave.browser" in KNOWN_READABLE_BROWSERS)
+    }
+
+    /**
+     * **A browser claimed readable must also be one the app can find.**
+     *
+     * `KNOWN_READABLE_BROWSERS` only ever *exempts* a package from the blanket block; it is
+     * `KNOWN_BROWSERS` that gets a package detected in the first place. A name in the first and
+     * not the second is a package the app has an opinion about and no way to notice — which is
+     * how `com.mi.globalbrowser` sat in one list and not the other. Harmless today only because
+     * the loose query happened to find it.
+     */
+    @Test fun everyReadableBrowserIsAlsoOneWeKnowToLookFor() {
+        for (pkg in KNOWN_READABLE_BROWSERS) {
+            assertTrue("$pkg is claimed readable but is not in KNOWN_BROWSERS", pkg in KNOWN_BROWSERS)
+        }
     }
 
     // ---- whole-word matching: the v1.70 false-positive class ----------------------------
