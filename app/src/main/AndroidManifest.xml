@@ -13,6 +13,13 @@
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="https" />
         </intent>
+        <!-- findBrowserPackages queries http as well as https: a browser only has to be found
+             once, and a filter declared for only one of the two schemes would otherwise be a
+             browser with no filtering at all. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="http" />
+        </intent>
         <!-- The keyword filter must know the home-screen apps so it never blocks the launcher. -->
         <intent>
             <action android:name="android.intent.action.MAIN" />

@@ -13,6 +13,15 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.124", "Aug 13, 2026", "The app can now show you why something isn't blocked", listOf(
+        "**Brave still didn't block after v1.123, and I'd guessed wrong about why.** So this version stops guessing. There's a new page — Profile ▸ \"What the blocker sees\" — that shows you what the blocker actually believes, in plain words.",
+        "**Why this was needed.** Four completely different faults all look identical from the outside, because all four look like nothing happening: the app doesn't count that browser as a browser; it does, but can't read its address bar; it reads it, but no blocked app contributed a website; or blocking is simply paused. There was no way to tell them apart without reading the source code and shipping a guess — which is exactly what happened, and it cost a release.",
+        "The page lists **every browser the app has found**. If Brave isn't on that list, that's the answer: a browser it doesn't recognise is exempt from all website filtering, and the \"block unsupported browsers\" switch can't catch it either, because that switch starts by asking the same question.",
+        "It also shows **the last app it looked at** — whether it was treated as a browser, whether the address bar could be read, and which websites were live at that moment.",
+        "**Browser detection is now much harder to get wrong.** It used to be a single question to Android — \"who can open an https link?\" — and whatever came back was the whole truth. It now asks four ways: https, http, the default browser, and a list of browsers by name. A browser only has to be found once. The launcher detection learned this same lesson years ago and browser detection never did.",
+        "One honest caveat about that switch, now stated on the page: **\"Block unsupported browsers\" only acts when there's something to filter for.** With no words of your own and the adult filters off, it does nothing at all — which looks exactly like it being broken.",
+        "Nothing on the new page leaves your phone, and only the *website name* of the last page is kept — never the full address, and never a history.",
+    )),
     VersionLog("1.123", "Aug 13, 2026", "Blocked sites are caught in Brave too, and the app is centred on a tablet", listOf(
         "**You asked why Instagram wasn't blocked in Brave. The honest answer is that it never could have been, in any browser except Chrome.**",
         "Here's the difference that caused it. Blocking a *word* works by reading the text on the page — that works everywhere. But blocking a *site* because you blocked its app — instagram.com because Instagram is on your list — is matched against the address bar only, and deliberately so: otherwise a news article that merely mentions Instagram would cover your screen. That makes reading the address bar the one thing the whole feature depends on. And it only knew how to read Chrome's.",

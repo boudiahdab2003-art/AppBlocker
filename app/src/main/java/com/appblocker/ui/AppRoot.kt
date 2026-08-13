@@ -71,6 +71,7 @@ private sealed interface Overlay {
     data object CoachChat : Overlay
     data object Changelog : Overlay
     data object Instructions : Overlay
+    data object Diagnostics : Overlay
     data object DetoxGuide : Overlay
     data object Scenarios : Overlay
     data object TwelveSteps : Overlay
@@ -182,6 +183,8 @@ fun AppRoot(openPermissionsOnStart: Boolean = false) {
                 ChangelogScreen(onBack = { overlay = null })
             is Overlay.Instructions ->
                 InstructionsScreen(onBack = { overlay = null })
+            is Overlay.Diagnostics ->
+                DiagnosticsScreen(onBack = { overlay = null })
             is Overlay.DetoxGuide ->
                 DopamineDetoxScreen(onBack = { overlay = null })
             is Overlay.Scenarios ->
@@ -218,6 +221,7 @@ fun AppRoot(openPermissionsOnStart: Boolean = false) {
                 onOpenCoach = { overlay = Overlay.CoachChat },
                 onOpenChangelog = { overlay = Overlay.Changelog },
                 onOpenInstructions = { overlay = Overlay.Instructions },
+                onOpenDiagnostics = { overlay = Overlay.Diagnostics },
                 onOpenDetox = { overlay = Overlay.DetoxGuide },
                 onOpenScenarios = { overlay = Overlay.Scenarios },
                 onOpenSteps = { overlay = Overlay.TwelveSteps },

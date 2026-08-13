@@ -120,6 +120,7 @@ fun ProfileScreen(
     onOpenAccount: () -> Unit = {},
     onOpenChangelog: () -> Unit = {},
     onOpenInstructions: () -> Unit = {},
+    onOpenDiagnostics: () -> Unit = {},
     onOpenDetox: () -> Unit = {},
     onOpenScenarios: () -> Unit = {},
     onOpenSteps: () -> Unit = {},
@@ -496,6 +497,16 @@ fun ProfileScreen(
                 chevron = true,
                 enabled = true,
                 onClick = onOpenInstructions,
+            )
+            Divider()
+            ProfileRow(
+                icon = Icons.Filled.BugReport,
+                title = "What the blocker sees",
+                subtitle = "Why something isn't being blocked — browsers found, what it last " +
+                    "looked at, and whether blocking is on.",
+                chevron = true,
+                enabled = true,
+                onClick = onOpenDiagnostics,
             )
             Divider()
             ProfileRow(

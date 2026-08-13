@@ -51,6 +51,7 @@ import com.appblocker.data.SessionClock
 import com.appblocker.data.SettingsStore
 import com.appblocker.data.UnlockCounter
 import com.appblocker.data.UpdatePause
+import com.appblocker.data.WatcherDiagnostics
 import com.appblocker.ui.BlockScreenActivity
 import java.util.Calendar
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -715,6 +716,17 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (pkg != null && recheckMatters(pkg)) handler.postDelayed(recheckRunnable, RECHECK_MS)
         lastWebText = null // new page/app: force a fresh re-check
         lastCheckedUrl = null
+        // Record what the watcher makes of this app BEFORE any scan runs, because the most
+        // important thing it can report is the case where no scan runs at all: a browser missing
+        // from browserPackages is exempt from every web-filtering layer there is, and from the
+        // outside that looks exactly like a browser whose address bar cannot be read. The scan
+        // overwrites this a moment later with the address, if it gets one.
+        pkg?.let {
+            WatcherDiagnostics.record(
+                this, it, isBrowser = it in browserPackages, host = null,
+                siteWords = autoSocialKeywords(), throttle = false,
+            )
+        }
         scheduleUrlScan()
         scheduleWebScan()
         scheduleShortsScan()
@@ -1554,6 +1566,13 @@ class BlockerAccessibilityService : AccessibilityService() {
         // The site the user is actually ON (browsers only) — keyword matching prefers it
         // over the page text so a page merely mentioning a blocked word doesn't block.
         val url = if (isBrowser) extractBrowserUrl(pkg) else null
+        // "Browser, but no address" is the shape this record exists to make visible — it is the
+        // whole difference between a Chrome that blocks a site and a Brave that says nothing.
+        // Only the host is kept; see WatcherDiagnostics.
+        WatcherDiagnostics.record(
+            applicationContext, pkg, isBrowser, WatcherDiagnostics.hostOf(url),
+            autoSocialKeywords(),
+        )
 
         // YouTube Shorts opened in a browser (youtube.com/shorts) — while Quick Block is active.
         if (isBrowser && SettingsStore.blockYoutubeShorts(applicationContext) && quickBlockActive() &&
