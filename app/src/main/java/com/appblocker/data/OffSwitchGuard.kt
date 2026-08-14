@@ -81,6 +81,53 @@ object OffSwitchGuard {
     /** True when the watcher should bounce the off-switch pages. Only [Phase.OPEN] stands down. */
     internal fun armed(enabled: Boolean, phase: Phase): Boolean = enabled && phase != Phase.OPEN
 
+    /** What tapping Profile's "Guard the off-switch" row does right now. */
+    enum class Tap {
+        /** Arm the guard. Instant, and allowed in every state including Strict. */
+        TURN_ON,
+
+        /** Nothing pending: send the user to the typed gate, which starts the wait. */
+        START_WAIT,
+
+        /** The wait was served and the window is open — the guard actually comes down. */
+        LOWER,
+
+        /** Strict Mode is running and this would weaken the guard. Refused. */
+        REFUSED_STRICT,
+
+        /** A wait is being served; the row shows a countdown and does nothing. */
+        NOTHING,
+    }
+
+    /**
+     * The row's whole decision, pure so it can be tested — `phase` and `armed` are here for the
+     * same reason, and this one now carries a rule about when blocking may be weakened.
+     *
+     * **Strict Mode may not lower this guard, and until now it could.** The row was deliberately
+     * left usable during a session, reasoned as safe because "Strict guards these pages by itself
+     * regardless of this row". That is true for exactly as long as the session lasts. Switching
+     * the guard off mid-session leaves it disarmed the instant Strict expires — so the session
+     * itself serves as the two-hour wait, and the off-switch is simply open the moment it ends.
+     * Nothing looks wrong while the session runs, because [handleSettingsGuard] short-circuits on
+     * `strict` and bounces the pages anyway. The escape was pre-arranged rather than prevented.
+     *
+     * **[TURN_ON] stays available during Strict**, which is why the row cannot just be disabled
+     * the way the other locked rows are: arming a protection is strengthening, and refusing it
+     * would be the same mistake as v1.127's guard ejecting people for switching protection *on*.
+     * Only the weakening directions are refused, and both of them are — starting a fresh wait and
+     * completing one that is already served.
+     *
+     * A wait started before the session keeps running and may lapse during it. That is correct:
+     * the window exists to be caught, and a Strict session is precisely when it should not be.
+     */
+    fun tap(guardOn: Boolean, phase: Phase, strictActive: Boolean): Tap = when {
+        !guardOn -> Tap.TURN_ON
+        strictActive -> Tap.REFUSED_STRICT
+        phase == Phase.OPEN -> Tap.LOWER
+        phase == Phase.GUARDED -> Tap.START_WAIT
+        else -> Tap.NOTHING
+    }
+
     /**
      * How long after the service starts the **Accessibility page alone** stops being bounced.
      *

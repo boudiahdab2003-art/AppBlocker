@@ -2142,25 +2142,29 @@ class BlockerAccessibilityService : AccessibilityService() {
         // System UI (shade, volume dialog, heads-up notifications, recents) and the system
         // dialog host. The current keyboard joins them at runtime; see isTransientSurface.
         // Settings and the dialer are deliberately absent: they are real destinations.
-        private val TRANSIENT_SURFACES = setOf("com.android.systemui", "android")
+        //
+        // The Samsung three are the same thing under OEM names: panels drawn over whatever is
+        // open, never somewhere you go. Without them, swiping out the Edge panel over a blocked
+        // app read as leaving it — a phantom open counted against that app's daily limit and the
+        // mid-use re-check cancelled, exactly what v1.98 fixed for the shade and the keyboard.
+        // If one of these ever turns out to be a real destination the cost is a cover that
+        // lingers when you open it: visible and reportable, not a silent hole.
+        private val TRANSIENT_SURFACES = setOf(
+            "com.android.systemui", "android",
+            "com.samsung.android.app.cocktailbarservice", // Edge panel
+            "com.samsung.android.game.gametools",         // Game Booster's in-game overlay
+            "com.samsung.android.app.smartcapture",       // screenshot / capture toolbar
+        )
 
         // Activity-name fragments that identify the Google Play purchase/billing sheet.
         private val PURCHASE_HINTS = listOf("acquire", "purchase", "billing")
 
         // Packages that host the Strict-Mode escape hatches (system Settings, MIUI's security
-        // center, and the package uninstaller flows).
-        /** The uninstall confirmation lives in one of these and nowhere else. */
-        private val INSTALLER_PACKAGES = setOf(
-            "com.miui.packageinstaller", "com.android.packageinstaller",
-            "com.google.android.packageinstaller",
-        )
-
-        private val GUARD_PACKAGES = setOf(
-            "com.android.settings",
-            "com.miui.securitycenter", "com.miui.securitycore",
-            "com.miui.packageinstaller", "com.android.packageinstaller",
-            "com.google.android.packageinstaller",
-        )
+        // center, and the package uninstaller flows). Both lists live in GuardPackages so they
+        // can be tested — they are vendor names inside a file that has no test coverage, and
+        // between them they gated the uninstall guard down to three OEMs' installers.
+        private val INSTALLER_PACKAGES = GuardPackages.INSTALLERS
+        private val GUARD_PACKAGES = GuardPackages.GUARD
 
         // Activity-name fragments for the dangerous Settings pages. The accessibility and
         // device-admin ones are AOSP aliased activities (verified on the emulator). The app-info

@@ -1,5 +1,6 @@
 package com.appblocker.ui
 
+import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -27,6 +28,7 @@ import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.QueryStats
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Visibility
@@ -54,6 +56,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.appblocker.Dist
 import com.appblocker.data.DisplayName
 import com.appblocker.data.SettingsStore
 import com.appblocker.ui.theme.AppGradients
@@ -77,7 +80,13 @@ fun OnboardingScreen(
 ) {
     val perms = rememberPermissions()
     val essentials = perms.filter { it.essential }
-    val recommended = perms.filter { it.key == "usage" || it.key == "battery" }
+    // "autostart" joins the recommended rows rather than adding a step: on Xiaomi, Samsung, Oppo
+    // and the rest, the OEM's own battery manager is what switches blocking off days later, and
+    // this wizard is the only time most people will read setup advice. It is one more row on a
+    // step that already scrolls, and on a stock-Android phone it reads as harmless belt-and-braces.
+    val recommended = perms.filter {
+        it.key == "usage" || it.key == "battery" || it.key == "autostart"
+    }
 
     // Layout: Welcome, Name, AI Coach intro, one step per essential permission, the recommended
     // ones, Done. Named rather than written out as arithmetic at each use — the offsets were
@@ -386,6 +395,19 @@ private fun EssentialStep(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
+        // The dead end this wizard walks new users straight into on Android 13+: Grant opens the
+        // Accessibility page, and the toggle is greyed out with no explanation. Shown under the
+        // description so it is on screen *before* they press Grant and conclude it's broken.
+        if (perm.key == ACCESSIBILITY_PERM &&
+            needsRestrictedSettingsNote(
+                Build.VERSION.SDK_INT,
+                sideloadedBuild = Dist.SELF_UPDATE,
+                accessibilityGranted = perm.granted,
+            )
+        ) {
+            Spacer(Modifier.height(20.dp))
+            RestrictedSettingsNote()
+        }
     }
 }
 
@@ -423,7 +445,13 @@ private fun RecommendedStep(
 
 @Composable
 private fun RecommendedRow(p: Perm, onRequestDisclosure: (() -> Unit) -> Unit) {
-    val icon = if (p.key == "usage") Icons.Filled.QueryStats else Icons.Filled.BatteryChargingFull
+    // Three rows now, so the icon has to distinguish them: battery optimisation and the OEM
+    // keep-alive setting are different chores and two identical icons read as a duplicate row.
+    val icon = when (p.key) {
+        "usage" -> Icons.Filled.QueryStats
+        "autostart" -> Icons.Filled.PowerSettingsNew
+        else -> Icons.Filled.BatteryChargingFull
+    }
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
             .background(MaterialTheme.colorScheme.surface).padding(16.dp),

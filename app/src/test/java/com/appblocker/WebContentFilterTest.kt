@@ -228,6 +228,7 @@ class WebContentFilterTest {
     @Test fun everyBrowserClaimedReadableHasAnOmniboxIdWeRecognise() {
         val exceptions = mapOf(
             "com.sec.android.app.sbrowser" to "location_bar_edit_text",
+            "com.sec.android.app.sbrowser.beta" to "location_bar_edit_text",
             "org.mozilla.firefox" to "mozac_browser_toolbar_url_view",
             "org.mozilla.firefox_beta" to "mozac_browser_toolbar_url_view",
             "org.mozilla.fenix" to "mozac_browser_toolbar_url_view",
@@ -244,6 +245,32 @@ class WebContentFilterTest {
     @Test fun theReadableSeedStillHasChromeAndBrave() {
         assertTrue("com.android.chrome" in KNOWN_READABLE_BROWSERS)
         assertTrue("com.brave.browser" in KNOWN_READABLE_BROWSERS)
+    }
+
+    /**
+     * **The OEM browsers, named one at a time on purpose.**
+     *
+     * On a Huawei, Oppo/OnePlus or Vivo the built-in browser is usually the phone's default, which
+     * puts it in the strict set with no list's help — and while it was in neither readable list it
+     * was blanket-blocked with no way out, because a blocked browser sits under our own cover and
+     * can never be read well enough to promote itself. The phone's own browser, permanently
+     * blocked, on every brand except the two the owner happens to own.
+     *
+     * The general pairing tests above would still pass if this whole group were deleted, since
+     * they only check the entries that *are* there. Naming them individually is what makes a
+     * tidy-up fail loudly instead of quietly re-blocking those phones.
+     */
+    @Test fun theReadableSeedCoversTheOemBrowsers() {
+        for (pkg in listOf(
+            "com.huawei.browser", "com.hihonor.browser",
+            "com.heytap.browser", "com.nearme.browser", "com.coloros.browser",
+            "com.vivo.browser",
+            "com.mi.globalbrowser", "com.miui.browser",
+            "com.sec.android.app.sbrowser",
+        )) {
+            assertTrue("$pkg must be seeded readable or that phone's browser is blocked outright",
+                pkg in KNOWN_READABLE_BROWSERS)
+        }
     }
 
     /**
