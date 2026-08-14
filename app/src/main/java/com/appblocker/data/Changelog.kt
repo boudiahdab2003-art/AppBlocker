@@ -13,6 +13,13 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.130", "Aug 14, 2026", "Your report about Claude — and why I couldn't answer it", listOf(
+        "**You reported that the app blocked Claude and you didn't know why. I couldn't tell you, and that's a flaw in the report, not in your description.**",
+        "Here's what your report did tell me: three of the blocks were the off-switch guard bouncing you out of Settings — that's you going to look into it afterwards, not the thing that happened. The block you actually hit was two minutes earlier, and it was an **app rule** firing. Not a blocked word, not a website.",
+        "But *which* rule? Your block list, a schedule, a daily limit, or the \"block unsupported browsers\" switch? The report doesn't say, and those need completely different fixes. So the app now records which one fired, in every block. Next time this happens the report answers that question by itself.",
+        "**And one of the clues I did have turned out to be lying.** Two blocks were flagged with a mark that's documented as meaning \"the block screen landed on the wrong app\" — a real bug. But that same mark also appears when the app simply couldn't read the screen, which happens constantly and is on purpose. One flag, two opposite meanings, and no way to tell which one your report was showing me. That's now three separate values, so \"it covered the wrong app\" can never again be confused with \"it couldn't see\".",
+        "None of this changes blocking. It changes what the app can tell us when blocking does something you didn't expect.",
+    )),
     VersionLog("1.129", "Aug 14, 2026", "The app can now tell you what it found on your phone", listOf(
         "**Everything I fixed last version for Samsung, Huawei, Oppo and Vivo was an educated guess.** I don't have those phones. The guesses are reasonable, but a wrong one is invisible — a guard that never fires looks exactly like a guard that works.",
         "So the app now asks your phone directly, and shows you the answers. **Profile ▸ What the blocker sees** has a new section at the top: which phone it thinks you have, whether it recognises the \"uninstall this app?\" screen your phone uses (if not, Strict Mode can't stop an uninstall — and now it says so), and whether the Auto-start button actually has a page to open.",

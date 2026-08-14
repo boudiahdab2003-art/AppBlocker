@@ -5,8 +5,42 @@ import com.appblocker.data.BlockMode
 import com.appblocker.data.Schedule
 import com.appblocker.data.ScheduleType
 
-/** Why an app is blocked right now — the block screen's title kicker + short human message. */
-internal data class BlockReason(val title: String, val message: String)
+/**
+ * Why a cover was raised, from a fixed vocabulary, so a bug report can say **which rule fired**
+ * without saying what it fired on.
+ *
+ * Report #5 is what this is for: *"the app blocked claude idk why"*. The log recorded that an app
+ * rule fired and nothing more, so the one question that mattered — was this your block list, a
+ * schedule, a daily limit, or the unsupported-browser switch? — could not be answered from here,
+ * and answering it wrong means shipping a fix for the wrong layer.
+ *
+ * These are codes, not sentences: [BlockReason.title] and `message` are shown to the user and get
+ * reworded, while these are matched by a maintainer reading a report and must stay stable. Same
+ * contract as `BlockLog.KINDS`, which is where they end up.
+ */
+internal object BlockWhy {
+    const val LOCKOUT = "lockout"          // a blocked word locked the whole app
+    const val ALLOWLIST = "allowlist"      // allowlist mode: not on the allowed list
+    const val STRICT = "strict"            // Strict session blocks every chosen app
+    const val QUICK = "quick"              // the app's own Quick Block rule
+    const val LIMIT = "limit"              // per-app daily minute limit
+    const val SCHED_TIME = "sched-time"
+    const val SCHED_USAGE = "sched-usage"
+    const val SCHED_LAUNCH = "sched-launch"
+    const val SCHED_WIFI = "sched-wifi"
+    const val SCHED_LOCATION = "sched-location"
+    const val BROWSER = "browser"          // "block unsupported browsers"
+    const val UNKNOWN = "?"                // decoded from a log entry written before this existed
+
+    val ALL = setOf(
+        LOCKOUT, ALLOWLIST, STRICT, QUICK, LIMIT, SCHED_TIME, SCHED_USAGE, SCHED_LAUNCH,
+        SCHED_WIFI, SCHED_LOCATION, BROWSER, UNKNOWN,
+    )
+}
+
+/** Why an app is blocked right now — the block screen's title kicker + short human message,
+ *  plus the stable [BlockWhy] code that goes in the diagnostic log. */
+internal data class BlockReason(val title: String, val message: String, val why: String)
 
 /**
  * Everything the decision needs, gathered by the service and handed over as plain values.
@@ -77,6 +111,7 @@ internal fun decideBlock(i: BlockInputs): BlockReason? {
             "Locked",
             if (w != null) "“$w” was found here. Locked for $mins more min."
             else "A blocked word was found here. Locked for $mins more min.",
+            why = BlockWhy.LOCKOUT,
         )
     }
 
@@ -88,16 +123,22 @@ internal fun decideBlock(i: BlockInputs): BlockReason? {
             return BlockReason(
                 if (i.strict) "Strict Mode" else "Blocked",
                 "Only your allowed apps work right now.",
+                why = BlockWhy.ALLOWLIST,
             )
         }
         // Per-app HARD/SCHEDULE/LIMIT modes don't apply in Allowlist mode.
     } else if (i.rule != null && i.rule.isBlocked) {
         if (i.strict) { // Strict Mode blocks every chosen app outright.
-            return BlockReason("Strict Mode", "Blocked until your Strict session ends.")
+            return BlockReason(
+                "Strict Mode", "Blocked until your Strict session ends.",
+                why = BlockWhy.STRICT,
+            )
         }
         if (i.quickEnforcing) when (i.rule.mode) {
             BlockMode.HARD, BlockMode.SCHEDULE ->
-                return BlockReason("Blocked", "Quick Block is on for this app.")
+                return BlockReason(
+                    "Blocked", "Quick Block is on for this app.", why = BlockWhy.QUICK,
+                )
             BlockMode.LIMIT ->
                 if (i.rule.dailyLimitMinutes >= 0 &&
                     i.usedMinutesToday(i.pkg) >= i.rule.dailyLimitMinutes
@@ -106,6 +147,7 @@ internal fun decideBlock(i: BlockInputs): BlockReason? {
                     if (i.rule.dailyLimitMinutes > 0)
                         "You've used your ${i.rule.dailyLimitMinutes} min for today."
                     else "This app is blocked for today.",
+                    why = BlockWhy.LIMIT,
                 )
         }
     }
@@ -117,27 +159,32 @@ internal fun decideBlock(i: BlockInputs): BlockReason? {
             ScheduleType.TIME -> if (i.scheduleConditionMet(s)) BlockReason(
                 "Blocked by schedule",
                 "${i.scheduleLabel(s)} is on until ${i.hourMinuteLabel(s.endMinutes)}.",
+                why = BlockWhy.SCHED_TIME,
             ) else null
             ScheduleType.USAGE_LIMIT -> if (
                 i.usedMinutesToday(i.pkg) >= s.limitMinutes
             ) BlockReason(
                 "Daily limit reached",
                 "${s.limitMinutes} min used today — the limit set by ${i.scheduleLabel(s)}.",
+                why = BlockWhy.SCHED_USAGE,
             ) else null
             ScheduleType.LAUNCH_COUNT -> if (
                 i.opensToday(i.pkg) >= s.limitCount
             ) BlockReason(
                 "Open limit reached",
                 "Opened ${s.limitCount} times today — the limit set by ${i.scheduleLabel(s)}.",
+                why = BlockWhy.SCHED_LAUNCH,
             ) else null
             ScheduleType.WIFI -> if (i.scheduleConditionMet(s)) BlockReason(
                 "Blocked on this Wi-Fi",
                 if (s.wifiSsid.isBlank()) "This app is blocked while you're on Wi-Fi."
                 else "This app is blocked on “${s.wifiSsid}”.",
+                why = BlockWhy.SCHED_WIFI,
             ) else null
             ScheduleType.LOCATION -> if (i.scheduleConditionMet(s)) BlockReason(
                 "Blocked at this location",
                 "This app is blocked here by ${i.scheduleLabel(s)}.",
+                why = BlockWhy.SCHED_LOCATION,
             ) else null
         }
         if (reason != null) return reason
@@ -149,6 +196,7 @@ internal fun decideBlock(i: BlockInputs): BlockReason? {
         return BlockReason(
             "Browser blocked",
             "This browser can't be filtered, so it's blocked while word blocking is on.",
+            why = BlockWhy.BROWSER,
         )
     }
 

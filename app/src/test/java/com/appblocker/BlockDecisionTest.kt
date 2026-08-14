@@ -5,10 +5,12 @@ import com.appblocker.data.BlockMode
 import com.appblocker.data.Schedule
 import com.appblocker.data.ScheduleType
 import com.appblocker.service.BlockInputs
+import com.appblocker.service.BlockWhy
 import com.appblocker.service.decideBlock
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -293,5 +295,81 @@ class BlockDecisionTest {
 
     @Test fun anAppWithNoRulesIsNotBlocked() {
         assertNull(decideBlock(inputs()))
+    }
+
+    // ---- the reason code that reaches the bug report -----------------------------------------
+
+    /**
+     * **Report #5 is why these exist.** "the app blocked claude idk why" arrived with a log saying
+     * only that an app rule had fired — so which layer did it, the block list or the
+     * unsupported-browser switch, could not be answered, and answering it wrong means fixing the
+     * wrong thing. Every decision now carries a stable code into `BlockLog`.
+     *
+     * Asserted per layer rather than in a loop: the value of a code is that it identifies **which**
+     * one, and a loop over "is it non-blank" would pass with every layer reporting the same word.
+     */
+    @Test fun everyBlockedLayerSaysWhichOneItWas() {
+        assertEquals(
+            BlockWhy.LOCKOUT,
+            decideBlock(inputs(lockoutRemainingMs = 60_000L, lockoutWord = "casino"))?.why,
+        )
+        assertEquals(BlockWhy.QUICK, decideBlock(inputs(rule = rule()))?.why)
+        assertEquals(BlockWhy.STRICT, decideBlock(inputs(strict = true, rule = rule()))?.why)
+        assertEquals(
+            BlockWhy.LIMIT,
+            decideBlock(inputs(rule = rule(mode = BlockMode.LIMIT, limit = 5), usedMinutes = 9))?.why,
+        )
+        assertEquals(BlockWhy.ALLOWLIST, decideBlock(inputs(allowlistMode = true))?.why)
+        assertEquals(
+            BlockWhy.SCHED_TIME,
+            decideBlock(
+                inputs(schedules = listOf(schedule(ScheduleType.TIME)), conditionMet = true),
+            )?.why,
+        )
+        assertEquals(
+            BlockWhy.SCHED_USAGE,
+            decideBlock(
+                inputs(
+                    schedules = listOf(schedule(ScheduleType.USAGE_LIMIT, limitMinutes = 30)),
+                    usedMinutes = 45,
+                ),
+            )?.why,
+        )
+    }
+
+    /**
+     * The one that matters most for report #5. If a cover over an ordinary app ever reports
+     * `why=browser`, the app decided that app was an unfilterable *browser* — which would point
+     * straight at the browser sets rather than at the block list, and is otherwise indisputable
+     * only by guessing.
+     */
+    @Test fun theUnsupportedBrowserBlockIsIdentifiableInAReport() {
+        assertEquals(
+            BlockWhy.BROWSER,
+            decideBlock(
+                inputs(isUnsupportedBrowser = true, unsupportedBrowserBlocking = true),
+            )?.why,
+        )
+    }
+
+    /** A code that isn't in the vocabulary would reach a report as a word nobody can look up. */
+    @Test fun everyCodeIsInTheVocabulary() {
+        val reasons = listOfNotNull(
+            decideBlock(inputs(lockoutRemainingMs = 1L)),
+            decideBlock(inputs(rule = rule())),
+            decideBlock(inputs(strict = true, rule = rule())),
+            decideBlock(inputs(allowlistMode = true)),
+            decideBlock(inputs(isUnsupportedBrowser = true, unsupportedBrowserBlocking = true)),
+            decideBlock(inputs(schedules = listOf(schedule(ScheduleType.WIFI)), conditionMet = true)),
+            decideBlock(
+                inputs(schedules = listOf(schedule(ScheduleType.LOCATION)), conditionMet = true),
+            ),
+            decideBlock(
+                inputs(schedules = listOf(schedule(ScheduleType.LAUNCH_COUNT, limitCount = 3)), opens = 5),
+            ),
+        )
+        for (r in reasons) {
+            assertTrue("${r.why} is not in BlockWhy.ALL", r.why in BlockWhy.ALL)
+        }
     }
 }

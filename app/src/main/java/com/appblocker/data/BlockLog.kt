@@ -42,16 +42,44 @@ object BlockLog {
      */
     val KINDS = setOf("app", "guard", "shorts", "purchase", "word", "other")
 
+    /**
+     * What the window on screen was, at the moment the cover went up.
+     *
+     * **This replaces a boolean that meant two opposite things.** `rootOk=false` was documented as
+     * "raised from a stale cache" — a bug — but it was computed as `root?.packageName == pkg`, so
+     * it was equally false when the tree simply could not be read, which the watcher treats as a
+     * legitimate reason to block (invariant 1) and which happens routinely mid-transition. Report
+     * #5 turned on exactly that distinction and the log could not answer it: two `rootOk=false`
+     * entries that might have been the bug, or might have been nothing at all.
+     */
+    object Window {
+        /** The window on screen was the app being blocked. Correct. */
+        const val MATCH = "match"
+
+        /** A *different* app was on screen — the cover landed on the wrong thing. The bug. */
+        const val OTHER = "other"
+
+        /** The tree could not be read. Blocking anyway is deliberate; this is not a fault. */
+        const val BLIND = "blind"
+
+        /** No package to compare against (a word/guard cover isn't about one app). */
+        const val NA = "n/a"
+
+        val ALL = setOf(MATCH, OTHER, BLIND, NA)
+    }
+
     data class Entry(
         val agoMs: Long,
         val kind: String,
         val ownUi: Boolean,
-        val rootOk: Boolean,
+        val window: String,
+        /** A `BlockWhy` code: which rule fired. "?" for entries written before this was recorded. */
+        val why: String,
         val counted: Boolean,
     ) {
         /** One line for the report body. Fixed tokens only — nothing here can carry content. */
         fun render(): String =
-            "${agoMs / 1000}s ago  $kind  ownUi=$ownUi  rootOk=$rootOk  counted=$counted"
+            "${agoMs / 1000}s ago  $kind  why=$why  window=$window  ownUi=$ownUi  counted=$counted"
     }
 
     private fun prefs(context: android.content.Context) =
@@ -65,13 +93,19 @@ object BlockLog {
         context: android.content.Context,
         kind: String,
         ownUi: Boolean,
-        rootOk: Boolean,
+        window: String,
+        why: String,
         counted: Boolean,
         now: Long = System.currentTimeMillis(),
     ) {
         runCatching {
             val safeKind = if (kind in KINDS) kind else "other"
-            val line = "$now|$safeKind|$ownUi|$rootOk|$counted"
+            val safeWindow = if (window in Window.ALL) window else Window.NA
+            // `why` arrives from BlockWhy, which lives in the service module; anything else is
+            // recorded as unknown rather than passed through, exactly as `kind` is. The delimiter
+            // is stripped for the same reason: a code that could carry a `|` could carry content.
+            val safeWhy = why.replace('|', '-').replace(';', '-').take(16).ifBlank { "?" }
+            val line = "$now|$safeKind|$ownUi|$safeWindow|$safeWhy|$counted"
             val existing = prefs(context).getString(KEY, "").orEmpty()
                 .split(';').filter { it.isNotBlank() }
             val trimmed = (existing + line).takeLast(MAX)
@@ -89,18 +123,34 @@ object BlockLog {
             .map { it.render() }
     }.getOrDefault(emptyList())
 
+    /**
+     * Reads both the 6-field format and the 5-field one that preceded it.
+     *
+     * **Old entries are not dropped.** The log survives an app update, so the report sent right
+     * after one contains entries from the version before — and those are the ones covering the
+     * minutes the user is usually reporting about. Discarding them would blank the log exactly
+     * when it is most likely to be read. The old boolean's `false` is decoded as [Window.BLIND]
+     * rather than [Window.OTHER], because it genuinely meant "either of those" and guessing the
+     * accusing one would invent a bug that may not have happened.
+     */
     internal fun decode(raw: String, now: Long): Entry? {
         val p = raw.split('|')
-        if (p.size != 5) return null
+        if (p.size != 6 && p.size != 5) return null
         val at = p[0].toLongOrNull() ?: return null
+        val legacy = p.size == 5
         return Entry(
             // Coerced: a clock change must not render "-4000s ago", and this is only ever read
             // by a human comparing entries to each other.
             agoMs = (now - at).coerceAtLeast(0L),
             kind = if (p[1] in KINDS) p[1] else "other",
             ownUi = p[2].toBoolean(),
-            rootOk = p[3].toBoolean(),
-            counted = p[4].toBoolean(),
+            window = if (legacy) {
+                if (p[3].toBoolean()) Window.MATCH else Window.BLIND
+            } else {
+                if (p[3] in Window.ALL) p[3] else Window.NA
+            },
+            why = if (legacy) "?" else p[4].ifBlank { "?" },
+            counted = p.last().toBoolean(),
         )
     }
 }

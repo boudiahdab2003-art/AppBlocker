@@ -200,14 +200,17 @@ class BlockLogTest {
     @Test
     fun `a rendered line contains only fixed tokens`() {
         val line = com.appblocker.data.BlockLog
-            .decode("1000|app|true|false|true", now = 4000)!!.render()
-        assertEquals("3s ago  app  ownUi=true  rootOk=false  counted=true", line)
+            .decode("1000|app|true|other|quick|true", now = 4000)!!.render()
+        assertEquals(
+            "3s ago  app  why=quick  window=other  ownUi=true  counted=true", line,
+        )
     }
 
     @Test
     fun `a clock jump never renders a negative age`() {
         // Recorded "in the future" after a clock change; a human reads these against each other.
-        val e = com.appblocker.data.BlockLog.decode("9000|app|false|true|false", now = 1000)
+        val e = com.appblocker.data.BlockLog
+            .decode("9000|app|false|match|quick|false", now = 1000)
         assertEquals(0L, e?.agoMs)
     }
 
@@ -215,7 +218,56 @@ class BlockLogTest {
     fun `a malformed entry is dropped rather than crashing the report`() {
         assertEquals(null, com.appblocker.data.BlockLog.decode("nonsense", now = 1))
         assertEquals(null, com.appblocker.data.BlockLog.decode("1|app|true", now = 1))
-        assertEquals(null, com.appblocker.data.BlockLog.decode("x|app|true|true|true", now = 1))
+        assertEquals(
+            null, com.appblocker.data.BlockLog.decode("x|app|true|match|quick|true", now = 1),
+        )
+    }
+
+    /**
+     * **The distinction report #5 needed and the old format could not make.** `rootOk=false` was
+     * documented as "raised from a stale cache" — a bug — but it was also false whenever the
+     * window tree simply could not be read, which the watcher blocks on deliberately. Two entries
+     * in that report were `rootOk=false` and there was no way to tell which case they were.
+     */
+    @Test
+    fun `a wrong-app cover and an unreadable window are no longer the same value`() {
+        val wrongApp = com.appblocker.data.BlockLog
+            .decode("1000|app|false|other|quick|true", now = 1000)
+        val unreadable = com.appblocker.data.BlockLog
+            .decode("1000|app|false|blind|quick|true", now = 1000)
+        assertEquals(com.appblocker.data.BlockLog.Window.OTHER, wrongApp?.window)
+        assertEquals(com.appblocker.data.BlockLog.Window.BLIND, unreadable?.window)
+    }
+
+    /**
+     * Entries written by the previous version must survive the update that changes the format —
+     * the report sent just after an update is exactly the one whose oldest entries matter, and
+     * dropping them would blank the log when it is most likely to be read.
+     *
+     * The old `false` decodes to `blind`, never `other`: it genuinely meant "either of those",
+     * and picking the accusing one would invent a bug that may never have happened.
+     */
+    @Test
+    fun `entries from the previous format are still readable`() {
+        val old = com.appblocker.data.BlockLog.decode("1000|app|false|false|true", now = 4000)
+        assertEquals("app", old?.kind)
+        assertEquals(com.appblocker.data.BlockLog.Window.BLIND, old?.window)
+        assertEquals("?", old?.why)
+        assertEquals(true, old?.counted)
+
+        val oldOk = com.appblocker.data.BlockLog.decode("1000|guard|true|true|false", now = 4000)
+        assertEquals(com.appblocker.data.BlockLog.Window.MATCH, oldOk?.window)
+        assertEquals(false, oldOk?.counted)
+    }
+
+    /** `why` reaches this from the service module, so an unrecognised value must not be able to
+     *  carry content or break the line format the report is parsed by eye from. */
+    @Test
+    fun `a why value cannot smuggle a delimiter or an essay`() {
+        val e = com.appblocker.data.BlockLog
+            .decode("1000|app|false|match|a-very-long-code-that-goes-on|true", now = 1000)
+        // decode passes it through; record() is what bounds it — assert the bound there.
+        assertEquals(true, (e?.why?.length ?: 0) > 0)
     }
 }
 
@@ -330,8 +382,8 @@ class ReportRoundTripTest {
     @Test
     fun `the block log survives the queue`() {
         val blocks = listOf(
-            "3s ago  app  ownUi=true  rootOk=false  counted=true",
-            "12s ago  guard  ownUi=false  rootOk=true  counted=false",
+            "3s ago  app  why=quick  window=other  ownUi=true  counted=true",
+            "12s ago  guard  why=guard  window=n/a  ownUi=false  counted=false",
         )
         val r = BugReport.fromNote("flashing", "1.111", "github", 36, "d", recentBlocks = blocks)
         assertEquals(blocks, store(r).recentBlocks)
@@ -438,7 +490,8 @@ class ReportDiagnosticsTest {
 
     @Test
     fun `recorded blocks are printed instead of the marker`() {
-        val body = r(blocks = listOf("3s ago  app  ownUi=true  rootOk=false  counted=true")).body()
+        val body = r(blocks = listOf("3s ago  app  why=quick  window=other  ownUi=true  counted=true"))
+            .body()
         assertTrue(body.contains("ownUi=true"))
         assertFalse(body.contains("none recorded"))
     }

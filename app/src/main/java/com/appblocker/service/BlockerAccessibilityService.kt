@@ -877,7 +877,10 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (pkg == lastBlockedPkg && now - lastBlockAt < 1500) return
         lastBlockedPkg = pkg
         lastBlockAt = now
-        showBlockScreen(title = reason.title, message = reason.message, packageName = pkg, counterKey = pkg)
+        showBlockScreen(
+            title = reason.title, message = reason.message, packageName = pkg,
+            counterKey = pkg, why = reason.why,
+        )
     }
 
     /**
@@ -981,6 +984,7 @@ class BlockerAccessibilityService : AccessibilityService() {
             },
             packageName = null,
             counterKey = "strict_guard",
+            why = "guard",
         )
         performGlobalAction(GLOBAL_ACTION_HOME)
         // Safety net: a null-package cover has no owner to auto-remove it, so if HOME is slow or
@@ -1158,6 +1162,7 @@ class BlockerAccessibilityService : AccessibilityService() {
             message = "In-app purchases are blocked.",
             packageName = null,
             counterKey = "purchase",
+            why = "purchase",
         )
         return true
     }
@@ -1585,7 +1590,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                 if (!hit.site) addKeywordLockout(pkg, hit.word)
                 showBlockScreen(
                     title = hit.title, message = hit.message, packageName = null,
-                    counterKey = "web", offenceKey = pkg,
+                    counterKey = "web", offenceKey = pkg, why = "web",
                 )
             } else lastCheckedUrl = null // left during the lookup — re-decide on the way back
         }
@@ -1689,7 +1694,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                 if (lastForegroundPkg == pkg && stillOnScreen(pkg)) {
                     showBlockScreen(title = "Shorts blocked",
                         message = "YouTube Shorts is blocked.", packageName = null,
-                        counterKey = CoverGate.SHORTS_KEY)
+                        counterKey = CoverGate.SHORTS_KEY, why = "shorts")
                 } else lastWebText = null // left during the scan — don't cover what's there now
             }
             return
@@ -1730,7 +1735,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                 // count as two attempts. A site hit adds no lockout, so nothing follows it.
                 showBlockScreen(
                     title = hit.title, message = hit.message, packageName = null,
-                    counterKey = "web", offenceKey = pkg,
+                    counterKey = "web", offenceKey = pkg, why = "web",
                 )
             } else lastWebText = null // left during the scan — don't cover what's there now
         }
@@ -1844,7 +1849,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                         title = "Shorts blocked",
                         message = "YouTube Shorts is blocked. The rest of YouTube still works.",
                         packageName = null,
-                        counterKey = CoverGate.SHORTS_KEY,
+                        counterKey = CoverGate.SHORTS_KEY, why = "shorts",
                     )
                 }
             }
@@ -1881,6 +1886,10 @@ class BlockerAccessibilityService : AccessibilityService() {
         packageName: String?,
         counterKey: String,
         offenceKey: String = counterKey,
+        /** Which rule raised this, for the diagnostic log — see [BlockWhy]. The covers that are
+         *  not a rule decision (the guard, a purchase sheet, a Shorts cover) pass their own
+         *  fixed code rather than borrowing one that would misdescribe them in a report. */
+        why: String = BlockWhy.UNKNOWN,
     ) {
         // One cover = one recorded entry. The page/app behind a cover keeps emitting events
         // (feeds churn, activities transition), and each used to re-record an "attempt" and
@@ -1917,8 +1926,19 @@ class BlockerAccessibilityService : AccessibilityService() {
                     else -> "word"
                 },
                 ownUi = OwnUi.visible,
-                rootOk = packageName == null ||
-                    rootInActiveWindow?.packageName?.toString() == packageName,
+                // Three-way, because the boolean this replaces meant two opposite things at once:
+                // "the cover landed on the wrong app" (a bug) and "the tree was unreadable, so we
+                // blocked anyway" (deliberate, invariant 1) both read as false. Report #5 turned
+                // on exactly that distinction and the log could not answer it.
+                window = when {
+                    packageName == null -> BlockLog.Window.NA
+                    else -> when (rootInActiveWindow?.packageName?.toString()) {
+                        null -> BlockLog.Window.BLIND
+                        packageName -> BlockLog.Window.MATCH
+                        else -> BlockLog.Window.OTHER
+                    }
+                },
+                why = why,
                 counted = fresh,
             )
         }

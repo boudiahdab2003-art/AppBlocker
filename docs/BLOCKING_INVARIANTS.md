@@ -145,6 +145,19 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     v1.127 mistake (invariant 14) in a new place. **The shape to grep for: a control judged safe by
     what it does while a session runs, rather than by what it leaves behind when the session ends.**
 
+17. **A diagnostic flag must mean exactly one thing.** `BlockLog`'s `rootOk` was documented as
+    "the cover was raised from a stale cache" — a bug — and computed as
+    `rootInActiveWindow?.packageName == packageName`, which is equally false when the tree cannot
+    be read at all. But an unreadable tree is a *deliberate* reason to block (invariant 1) and
+    happens routinely mid-transition. So the one flag meant both "this cover landed on the wrong
+    app" and "this cover was correct", and report #5 — *"the app blocked claude idk why"* — arrived
+    with two `rootOk=false` entries that could have been either. **An instrument that cannot
+    distinguish the bug from the intended behaviour is not evidence**, and worse than none, because
+    it invites a fix aimed at whichever meaning the reader assumed. Now three values
+    (`match`/`other`/`blind`), and every cover also records a `BlockWhy` code saying which layer
+    raised it — the second thing that report needed and could not say. The shape to watch for: a
+    boolean whose `false` branch is reached by two paths with opposite meanings.
+
 ## Device quirks these invariants exist for
 
 - Gesture-nav Home on HyperOS often emits **no accessibility event at all**, so the foreground
