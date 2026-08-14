@@ -145,6 +145,23 @@ object DeviceVendor {
             "different place — look for auto-start, sleeping apps, or background usage limits.",
     )
 
+    /** Every entry, so a caller can ask about the whole table rather than one phone's row. */
+    private val ALL = listOf(XIAOMI, SAMSUNG, HUAWEI, OPPO, VIVO, GENERIC)
+
+    /**
+     * Every package any [VendorAdvice.deepLinks] points at.
+     *
+     * **These must also be declared in `<queries>` in AndroidManifest.xml**, or the deep link is
+     * filtered on Android 11+ and the button silently opens the app-details page instead of the
+     * page its own label names. That was true of the MIUI link for this app's entire life.
+     *
+     * `DeviceVendorTest` pins that every deep link appears here. It cannot pin the manifest — a
+     * JVM test cannot read it — so this is a checklist with a test attached, not a proof. **Adding
+     * a brand means editing two files**, and the manifest is the one that is easy to forget.
+     */
+    val DECLARED_KEEP_ALIVE_PACKAGES: Set<String> =
+        ALL.flatMap { advice -> advice.deepLinks.map { it.first } }.toSet()
+
     /**
      * The advice for [manufacturer], defaulting to this phone's.
      *

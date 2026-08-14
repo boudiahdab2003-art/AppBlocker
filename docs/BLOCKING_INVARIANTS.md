@@ -188,6 +188,19 @@ than naming packages. What was not brand-neutral was everything written *around*
   on a Huawei with AppGallery. Adding `com.huawei.appmarket` would change nothing without knowing
   its purchase activity names — `PURCHASE_HINTS` are Google's class names — so the package name
   alone would only *look* like coverage.
+- **Package visibility filters an explicit component, not just a query.** `startActivity` on
+  `com.miui.securitycenter/…AutoStartManagementActivity` throws on Android 11+ unless that package
+  is declared in `<queries>`, so `openAutostart` fell through to the app-details page and the button
+  never went where its label said — for this app's whole life, on the owner's own phone. The
+  manifest already documented the identical trap beside its `ACTION_DIAL` entry; nobody connected
+  the two. Declared now, and `DeviceVendorTest` pins the Kotlin half. **A JVM test cannot read the
+  manifest, so adding a brand means editing two files** — the manifest is the one that gets
+  forgotten, and forgetting it fails silently.
+- **The phone can be asked.** Profile ▸ *What the blocker sees* ▸ "This phone" resolves
+  `ACTION_DELETE` to name the installer this phone actually uses and checks it against
+  `GuardPackages.INSTALLERS`, so an OEM we guessed wrong is *stated* rather than silently
+  unguarded. That is the cheap substitute for owning five phones, and the first place to look when
+  someone reports blocking not working on a brand nobody here has.
 - **Cloned apps cannot be blocked, on any brand.** Samsung Secure Folder / Dual Messenger, Xiaomi
   Second Space / Dual Apps, App Clone elsewhere: the clone runs as a **different Android user**, and
   an accessibility service receives no events from another user. This is not fixable from inside the

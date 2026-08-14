@@ -1,6 +1,11 @@
 package com.appblocker.ui
 
+import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,9 +35,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.appblocker.Dist
+import com.appblocker.data.DeviceVendor
+import com.appblocker.data.PhoneFacts
 import com.appblocker.data.QuickSession
 import com.appblocker.data.SettingsStore
+import com.appblocker.data.UninstallGuardVerdict
 import com.appblocker.data.WatcherDiagnostics
+import com.appblocker.data.uninstallGuardVerdict
+import com.appblocker.service.GuardPackages
 import com.appblocker.service.KNOWN_READABLE_BROWSERS
 import com.appblocker.service.findBrowserPackages
 import com.appblocker.service.findRealBrowserPackages
@@ -44,6 +55,7 @@ import com.appblocker.ui.theme.pageWidth
 /** Test tags for the rendering test. */
 const val DIAGNOSTICS_BROWSERS_TAG = "diagnostics_browsers"
 const val DIAGNOSTICS_LAST_LOOK_TAG = "diagnostics_last_look"
+const val DIAGNOSTICS_PHONE_TAG = "diagnostics_phone"
 
 /**
  * **Profile ▸ What the blocker sees.** The screen this app has needed since it was written.
@@ -97,6 +109,15 @@ fun DiagnosticsScreen(onBack: () -> Unit) {
             item {
                 AppCard {
                     for (line in snapshot.protection) FactRow(line)
+                }
+            }
+
+            // Above the browsers on purpose: this is the section a stranger on an unfamiliar
+            // phone is being asked to screenshot, and it should not be below a scroll.
+            item { SectionHeading("This phone") }
+            item {
+                AppCard(modifier = Modifier.testTag(DIAGNOSTICS_PHONE_TAG)) {
+                    for (line in snapshot.phone) FactRow(line)
                 }
             }
 
@@ -175,6 +196,8 @@ internal data class Fact(val title: String, val detail: String, val good: Boolea
 
 private data class Snapshot(
     val protection: List<Fact>,
+    /** What this phone turned out to be, versus what the app assumed — see [phoneFacts]. */
+    val phone: List<Fact>,
     val browsers: List<String>,
     /** Those whose address bar the app knows how to read, or has read. The rest can still
      *  catch blocked words from the page — it is site blocking that needs the address. */
@@ -309,11 +332,122 @@ private fun readSnapshot(context: Context): Snapshot {
 
     return Snapshot(
         protection = protection,
+        phone = phoneFacts(context),
         browsers = runCatching { findBrowserPackages(context).sorted() }.getOrDefault(emptyList()),
         readable = SettingsStore.readableBrowsers(context) + KNOWN_READABLE_BROWSERS,
         realBrowsers = runCatching { findRealBrowserPackages(context) }.getOrDefault(emptySet()),
         lastLook = lastLook,
     )
+}
+
+/**
+ * **The section that exists because five phones could not be bought.**
+ *
+ * Every non-Xiaomi thing this app believes was reasoned from evidence and never measured, and each
+ * belief fails silently — a guard that never fires and a button that opens the wrong page both look
+ * exactly like a working app. Android will answer three of those questions directly if asked, so
+ * this asks, and the answers are readable by anyone who can take a screenshot.
+ *
+ * Every lookup is wrapped: this is a diagnostic, and a diagnostic that crashes the screen it
+ * reports on is worse than one that says "couldn't check". Failures land as [PhoneFacts] nulls,
+ * which [uninstallGuardVerdict] is careful to report as *unknown* rather than as fine.
+ */
+private fun phoneFacts(context: Context): List<Fact> {
+    val advice = DeviceVendor.advice()
+    val pm = context.packageManager
+
+    // Which package would actually show "uninstall this app?" here. Needs the ACTION_DELETE
+    // <queries> entry or package visibility filters it to null on Android 11+.
+    val handler = runCatching {
+        val intent = Intent(Intent.ACTION_DELETE, Uri.parse("package:${context.packageName}"))
+        pm.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName
+    }.getOrNull()
+
+    // Whether the keep-alive button's destination exists. null = this phone's advice has no deep
+    // link to try, which is the generic entry and not a fault.
+    val keepAliveResolves = if (advice.deepLinks.isEmpty()) null else advice.deepLinks.any { (p, c) ->
+        runCatching {
+            pm.resolveActivity(Intent().setComponent(ComponentName(p, c)), 0) != null
+        }.getOrDefault(false)
+    }
+
+    val facts = PhoneFacts(
+        brand = advice.brand,
+        sdkInt = Build.VERSION.SDK_INT,
+        sideloaded = Dist.SELF_UPDATE,
+        uninstallHandler = handler,
+        keepAliveResolves = keepAliveResolves,
+    )
+
+    return buildList {
+        add(
+            if (facts.brand.isNotBlank()) Fact(
+                "${facts.brand} phone",
+                "Setup shows ${facts.brand}'s own steps for keeping the blocker alive.",
+                good = null,
+            ) else Fact(
+                "Phone brand not recognised",
+                "Setup shows general advice instead of steps for this exact phone. Not a fault — " +
+                    "blocking works the same either way; only the instructions are less specific.",
+                good = null,
+            ),
+        )
+        add(
+            when (uninstallGuardVerdict(facts.uninstallHandler, GuardPackages.INSTALLERS)) {
+                UninstallGuardVerdict.RECOGNISED -> Fact(
+                    "The uninstall screen is recognised",
+                    "${facts.uninstallHandler} — Strict Mode can catch an attempt to uninstall " +
+                        "AppBlocker while a session is running.",
+                    good = true,
+                )
+                // The one this whole section is for. On a phone whose installer we guessed wrong,
+                // this is the only place that failure is ever visible.
+                UninstallGuardVerdict.UNRECOGNISED -> Fact(
+                    "The uninstall screen is NOT recognised",
+                    "${facts.uninstallHandler} shows the \"uninstall this app?\" screen on this " +
+                        "phone, and AppBlocker doesn't know that screen — so Strict Mode can't " +
+                        "stop an uninstall mid-session. Please report this line; it's a one-word " +
+                        "fix once we know the name.",
+                    good = false,
+                )
+                UninstallGuardVerdict.UNKNOWN -> Fact(
+                    "Couldn't check the uninstall screen",
+                    "This phone didn't say which app shows it. Nothing is necessarily wrong — " +
+                        "it just can't be confirmed from here.",
+                    good = null,
+                )
+            },
+        )
+        when (facts.keepAliveResolves) {
+            true -> add(
+                Fact(
+                    "The \"${advice.keepAliveLabel}\" button has somewhere to go",
+                    "It opens this phone's own settings page for keeping apps running.",
+                    good = true,
+                ),
+            )
+            false -> add(
+                Fact(
+                    "The \"${advice.keepAliveLabel}\" button opens the app's settings page instead",
+                    "This phone doesn't have the page AppBlocker expected, so the button falls " +
+                        "back. Follow the written steps on the Setup screen — they're what " +
+                        "matters, and they still apply.",
+                    good = false,
+                ),
+            )
+            null -> Unit // generic advice: there is no button destination to check
+        }
+        if (facts.sideloaded && facts.sdkInt >= Build.VERSION_CODES.TIRAMISU) {
+            add(
+                Fact(
+                    "Android ${facts.sdkInt}, installed outside the Play Store",
+                    "On this combination Android greys out the Accessibility switch until you " +
+                        "allow restricted settings — Setup explains where.",
+                    good = null,
+                ),
+            )
+        }
+    }
 }
 
 /** The app's own name for a package, falling back to the package name itself. */

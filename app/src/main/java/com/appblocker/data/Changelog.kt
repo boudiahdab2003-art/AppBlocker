@@ -13,6 +13,12 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.129", "Aug 14, 2026", "The app can now tell you what it found on your phone", listOf(
+        "**Everything I fixed last version for Samsung, Huawei, Oppo and Vivo was an educated guess.** I don't have those phones. The guesses are reasonable, but a wrong one is invisible — a guard that never fires looks exactly like a guard that works.",
+        "So the app now asks your phone directly, and shows you the answers. **Profile ▸ What the blocker sees** has a new section at the top: which phone it thinks you have, whether it recognises the \"uninstall this app?\" screen your phone uses (if not, Strict Mode can't stop an uninstall — and now it says so), and whether the Auto-start button actually has a page to open.",
+        "Anyone on any phone can screenshot that one section and it answers every question I couldn't. Nothing on the page is sent anywhere — it's for you to look at, and to send me if you want to.",
+        "**And it caught a real one straight away.** The Auto-start button has, for the entire life of this app, probably never opened the page it names — modern Android hides other apps from us unless we declare them by name, and we never did, so the button quietly fell back to the plain app-settings page. Now declared, so it goes where it says. The written steps on the Setup screen were always the part that mattered, and they were right.",
+    )),
     VersionLog("1.128", "Aug 14, 2026", "It now works properly on phones that aren't yours", listOf(
         "**Everything the app told you about keeping it alive was written for a Xiaomi.** \"Allow auto-start\", a button that opened Xiaomi's security centre — on a Samsung that button went nowhere useful and the advice named a setting that doesn't exist there.",
         "That matters more than it sounds. **Samsung ships \"Put unused apps to sleep\" switched on**, and a sleeping AppBlocker blocks nothing. The app said nothing about it, so on a Samsung the blocker would quietly stop working after a few days and nobody would know why.",

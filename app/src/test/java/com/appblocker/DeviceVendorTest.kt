@@ -97,6 +97,31 @@ class DeviceVendorTest {
         }
     }
 
+    /**
+     * **Every deep link must be declared, or the button silently goes nowhere.**
+     *
+     * Android 11+ filters an explicit component exactly as it filters a query: a `startActivity`
+     * on a package the manifest has not declared throws, and `openAutostart` falls through to the
+     * app-details page — so the button opens somewhere other than what its own label says, with
+     * nothing to indicate it. That was true of the MIUI link for this app's entire life.
+     *
+     * This can only pin the Kotlin half; a JVM test cannot read AndroidManifest.xml. So it is a
+     * checklist, not a proof: **adding a brand means editing two files**, and if this test fails,
+     * the missing entry is almost certainly the manifest one.
+     */
+    @Test
+    fun `every deep link package is declared`() {
+        for (b in listOf("Xiaomi", "Samsung", "Huawei", "Oppo", "Vivo")) {
+            for ((pkg, _) in DeviceVendor.advice(b).deepLinks) {
+                assertTrue(
+                    "$b deep-links to $pkg, which is not in DECLARED_KEEP_ALIVE_PACKAGES — and " +
+                        "must also be a <package> entry in AndroidManifest.xml's <queries>",
+                    pkg in DeviceVendor.DECLARED_KEEP_ALIVE_PACKAGES,
+                )
+            }
+        }
+    }
+
     /** The setting Samsung ships switched on is the whole reason this file exists. */
     @Test
     fun `Samsung advice points at the sleeping-apps setting`() {

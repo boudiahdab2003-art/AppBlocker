@@ -7,8 +7,11 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.appblocker.data.DeviceVendor
+import com.appblocker.ui.DIAGNOSTICS_PHONE_TAG
+import com.appblocker.ui.DiagnosticsScreen
 import com.appblocker.ui.PermissionsScreen
 import com.appblocker.ui.RestrictedSettingsNote
 import com.appblocker.ui.theme.AppBlockerTheme
@@ -70,6 +73,24 @@ class SetupAdviceTest {
         setScreen(scale = 1f)
 
         compose.onNodeWithText("Send a test alert").performScrollTo().assertIsDisplayed()
+    }
+
+    /**
+     * The "This phone" section, which exists so a stranger on an unfamiliar phone can answer the
+     * questions we had to guess at. On the emulator this exercises the real `ACTION_DELETE`
+     * resolution and the unrecognised-brand path — the fallback the owner's own phone never takes.
+     *
+     * Asserting the heading rather than a row: which rows appear depends on what the device
+     * resolves, and a test that demanded a particular verdict would be asserting the emulator's
+     * configuration instead of our code.
+     */
+    @Test
+    fun theThisPhoneSectionRenders() {
+        compose.setContent {
+            AppBlockerTheme(darkTheme = true) { DiagnosticsScreen(onBack = {}) }
+        }
+
+        compose.onNodeWithTag(DIAGNOSTICS_PHONE_TAG).performScrollTo().assertIsDisplayed()
     }
 
     /**
