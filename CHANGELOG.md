@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.128
+- Works properly on phones that aren't yours. Setup advice now matches the phone it's running on (Samsung, Xiaomi, Huawei, Oppo/OnePlus, Vivo), the uninstall guard recognises those phones' screens, and Huawei/Oppo/Vivo phones stop having their own browser blocked outright. Strict Mode can no longer be used to turn the off-switch guard off, and the app now explains Android 13's greyed-out Accessibility switch.
+
 ## v1.127
 - The app no longer throws you out for turning it on.
 
