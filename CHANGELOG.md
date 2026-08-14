@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.129
+- The app can now tell you what it found on your phone. Profile > What the blocker sees has a new "This phone" section: which phone it detected, whether it recognises your phone's uninstall screen (if not, Strict Mode can't stop an uninstall - and it now says so), and whether the Auto-start button has a real page to open. It also fixes that button, which had probably never opened the page it names on any phone: Android hides other apps unless you declare them by name, and we never did.
+
 ## v1.128
 - Works properly on phones that aren't yours. Setup advice now matches the phone it's running on (Samsung, Xiaomi, Huawei, Oppo/OnePlus, Vivo), the uninstall guard recognises those phones' screens, and Huawei/Oppo/Vivo phones stop having their own browser blocked outright. Strict Mode can no longer be used to turn the off-switch guard off, and the app now explains Android 13's greyed-out Accessibility switch.
 
