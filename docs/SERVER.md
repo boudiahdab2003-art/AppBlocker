@@ -69,7 +69,13 @@ the record of how it was set up. To go live *was*:
 4. Fill `coachProxyUrl` / `coachProxySecret` in root `gradle.properties`, rebuild.
 5. Only the same aggregate `usageSummary` the coach already builds crosses the wire.
 
-### 2. Bug reporting → private GitHub issues — **app side built, VM side pending**
+### 2. Bug reporting → private GitHub issues — **DONE, and in use**
+
+> **Status, 14 Aug 2026:** live end to end. Reports arrive as issues in the private
+> **`boudiahdab2003-art/appblocker-reports`** repo — #5 was read and acted on in-session. This
+> heading said "VM side pending" long after it had been built, which cost a session real doubt
+> about whether a report the owner had just sent existed anywhere. The setup steps below are kept
+> as the record of how it was wired, not as work outstanding.
 
 Why it exists: the watcher already records every error it swallows
 (`ServiceHealth.recordError`) and the Profile screen already says "tap to clear once

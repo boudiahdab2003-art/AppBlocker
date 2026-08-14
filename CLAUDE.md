@@ -28,8 +28,34 @@ enforcement). Owner is non-technical; explain things in plain language.
   verified), updates CHANGELOG.md, tags, and publishes the GitHub release the
   in-app updater reads. **Only publish when the owner says "publish".**
 - CHANGELOG.md entries are written by the publish workflow — don't hand-edit
-  version sections.
+  version sections. **`data/Changelog.kt` is different**: it is the in-app "What's new" list,
+  hand-written, and `ChangelogTest` fails the publish if the version being released has no
+  entry. Write it for the *next* version — and if a release goes out mid-session, the entry you
+  were editing is now history: start a new one rather than editing a shipped version's text.
 - Develop on the session branch, merge to `master` after the Build check is green.
+- **Direct `curl` to `api.github.com` does not work in cloud sessions** — the proxy returns a
+  "GitHub access is not enabled" JSON body with HTTP 200-ish framing, which a shell watcher
+  happily reads as "not finished yet" and waits forever. Use the GitHub MCP tools
+  (`actions_list`, `actions_get`, `list_issues`, …) for every GitHub read. Their run listings are
+  large; save the tool result and parse it with `python3 -c` rather than reading it whole.
+
+## "Check my report" — the owner reports bugs from inside the app
+
+In-app bug reports become **GitHub issues in the private `boudiahdab2003-art/appblocker-reports`
+repo** — *not* this one. It is not attached to a session by default: call `add_repo` for it (no
+clone needed; the reports are issues, not code), then `list_issues`. `docs/SERVER.md` still
+describes the VM side as "pending"; it is not — reports have been arriving since #1.
+
+Read a report with `BlockLog`'s format in front of you (`data/BlockLog.kt`). Each line says which
+layer raised a cover (`why=`), what was really on screen (`window=match/other/blind/n-a`), whether
+it covered our own UI, and whether it counted. The entries *after* the complaint are usually the
+owner going to Settings to investigate — read the log backwards and find the block he means.
+
+**Then send him to Profile ▸ "What the blocker sees"** (`ui/DiagnosticsScreen.kt`). It is the first
+tool for any "it blocked X" / "it didn't block Y" report: it names this phone's brand, the uninstall
+screen, whether the keep-alive deep link resolves, which apps count as browsers, and — separately —
+which of those have *actually been read* versus merely *assumed* readable. One screenshot of it
+answers most of what would otherwise be a guess.
 
 ## "Play version" — selling this on Google Play
 
@@ -69,6 +95,13 @@ Telegram bot on first use) and ranked use-case plans live in **docs/SERVER.md**.
   guard's OEM package lists live in `service/GuardPackages.kt`. Both are unit-tested. Before
   hardcoding anything about a phone, check whether it belongs in one of those two files — and
   read invariant 15 in `docs/BLOCKING_INVARIANTS.md` first.
+- **Strict Mode locks *weakening* only.** Every control that makes blocking stronger stays usable
+  during a session — arming the off-switch guard, ticking an app on, adding a word, switching on
+  any Quick Block extra option. The pattern in the UI is `enabled = ed || !value` (`ed =
+  !strictActive`), so a toggle can go on and then locks itself. This has now been got wrong three
+  times (v1.127's guard ejecting people for switching protection *on*, the guard row lowerable
+  mid-session, the extra options frozen both ways); see invariant 16. Refusing to let someone arm
+  a protection is never the safe direction.
 - **Dialog windows report zero insets while drawing edge-to-edge** on this device —
   never rely on inset modifiers inside a `Dialog`; capture
   `WindowInsets.safeDrawing` in the activity window's scope and pass it in
