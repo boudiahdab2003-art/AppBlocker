@@ -2148,19 +2148,11 @@ class BlockerAccessibilityService : AccessibilityService() {
         private val PURCHASE_HINTS = listOf("acquire", "purchase", "billing")
 
         // Packages that host the Strict-Mode escape hatches (system Settings, MIUI's security
-        // center, and the package uninstaller flows).
-        /** The uninstall confirmation lives in one of these and nowhere else. */
-        private val INSTALLER_PACKAGES = setOf(
-            "com.miui.packageinstaller", "com.android.packageinstaller",
-            "com.google.android.packageinstaller",
-        )
-
-        private val GUARD_PACKAGES = setOf(
-            "com.android.settings",
-            "com.miui.securitycenter", "com.miui.securitycore",
-            "com.miui.packageinstaller", "com.android.packageinstaller",
-            "com.google.android.packageinstaller",
-        )
+        // center, and the package uninstaller flows). Both lists live in GuardPackages so they
+        // can be tested — they are vendor names inside a file that has no test coverage, and
+        // between them they gated the uninstall guard down to three OEMs' installers.
+        private val INSTALLER_PACKAGES = GuardPackages.INSTALLERS
+        private val GUARD_PACKAGES = GuardPackages.GUARD
 
         // Activity-name fragments for the dangerous Settings pages. The accessibility and
         // device-admin ones are AOSP aliased activities (verified on the emulator). The app-info

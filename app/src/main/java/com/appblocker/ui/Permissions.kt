@@ -25,6 +25,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import com.appblocker.Dist
 import com.appblocker.admin.AppBlockerAdminReceiver
 import com.appblocker.data.AdminPrompt
+import com.appblocker.data.DeviceVendor
 import com.appblocker.service.AccessibilityUtil
 import com.appblocker.service.NotificationCountListener
 
@@ -79,19 +80,46 @@ private fun open(ctx: Context, action: String, withPackage: Boolean = false) {
     runCatching { ctx.startActivity(intent) }
 }
 
-/** Opens MIUI auto-start manager, falling back to the app's details page. */
+/**
+ * Opens this phone brand's keep-alive page, falling back to the app's details page.
+ *
+ * Every candidate in [VendorAdvice.deepLinks] is tried in turn: OEMs rename these activities
+ * between versions, and Android 11+ package visibility can make an explicit component
+ * unreachable — so this is best-effort by design, and the card's written steps are what the user
+ * actually needs. The app details page is a real destination on every phone, which is why it is
+ * the last resort rather than a toast saying it didn't work.
+ */
 private fun openAutostart(ctx: Context) {
-    val miui = Intent().apply {
-        component = ComponentName(
-            "com.miui.securitycenter",
-            "com.miui.permcenter.autostart.AutoStartManagementActivity",
-        )
-        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    for ((pkg, cls) in DeviceVendor.advice().deepLinks) {
+        val intent = Intent().apply {
+            component = ComponentName(pkg, cls)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        if (runCatching { ctx.startActivity(intent) }.isSuccess) return
     }
-    if (runCatching { ctx.startActivity(miui) }.isFailure) {
-        open(ctx, Settings.ACTION_APPLICATION_DETAILS_SETTINGS, withPackage = true)
-    }
+    open(ctx, Settings.ACTION_APPLICATION_DETAILS_SETTINGS, withPackage = true)
 }
+
+/**
+ * Whether to show the "Allow restricted settings" note.
+ *
+ * Android 13 blocks Accessibility for any app installed from outside an app store until the user
+ * opens App info ▸ ⋮ ▸ *Allow restricted settings*. The toggle is simply greyed out with no
+ * explanation of what to do, on the one screen the whole app depends on — so a first-time user of
+ * the sideloaded build dead-ends there and concludes the app is broken.
+ *
+ * Three conditions, so it appears only while it can actually be true, and never nags: the build
+ * that sideloads ([Dist.SELF_UPDATE] — a Play install is not restricted), Android 13 or newer, and
+ * accessibility not yet granted. The last one is what makes it self-clearing: the note is gone the
+ * moment it stops being the user's problem.
+ *
+ * Separated from the Compose plumbing so it can be unit tested, like [needsDisclosure] beside it.
+ */
+fun needsRestrictedSettingsNote(
+    sdkInt: Int,
+    sideloadedBuild: Boolean,
+    accessibilityGranted: Boolean,
+): Boolean = sideloadedBuild && sdkInt >= Build.VERSION_CODES.TIRAMISU && !accessibilityGranted
 
 /** All setup steps with live granted-state; re-checked on resume. */
 @Composable
@@ -133,11 +161,16 @@ fun rememberPermissions(): List<Perm> {
                         )
                     }.isFailure) open(ctx, Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
             },
-            Perm(
-                "autostart", "Auto-start",
-                "On Xiaomi/MIUI, allow auto-start so blocking survives a reboot or cleanup.",
-                granted = false, essential = false,
-            ) { openAutostart(ctx) },
+            // Label and wording come from the phone's own brand: the destination differs per OEM,
+            // and this card used to address Xiaomi owners on every phone. `granted` stays false
+            // because there is no API to read any of these settings — the card is advice, not a
+            // permission, and always offers its button.
+            DeviceVendor.advice().let { vendor ->
+                Perm(
+                    "autostart", vendor.keepAliveLabel, vendor.keepAliveDesc,
+                    granted = false, essential = false,
+                ) { openAutostart(ctx) }
+            },
             Perm(
                 "location", "Location",
                 "Only for Wi-Fi and Location schedules. Not needed otherwise.",

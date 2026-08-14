@@ -1,5 +1,6 @@
 package com.appblocker.ui
 
+import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,6 +30,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.appblocker.Dist
+import com.appblocker.data.DeviceVendor
 import com.appblocker.service.ProtectionNotifier
 import com.appblocker.ui.theme.AppShapes
 
@@ -43,6 +46,7 @@ fun PermissionsScreen(
     val context = LocalContext.current
     val perms = rememberPermissions()
     val remaining = perms.count { !it.granted && it.essential }
+    val vendor = DeviceVendor.advice()
 
     Scaffold(
         containerColor = Color.Transparent,
@@ -58,17 +62,47 @@ fun PermissionsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.padding(top = 12.dp))
+            // The one screen where a blocked first run gets explained. Above the cards, because a
+            // greyed-out Accessibility toggle is what the user is looking at when they come here.
+            if (needsRestrictedSettingsNote(
+                    Build.VERSION.SDK_INT,
+                    sideloadedBuild = Dist.SELF_UPDATE,
+                    accessibilityGranted = perms.any { it.key == ACCESSIBILITY_PERM && it.granted },
+                )
+            ) {
+                RestrictedSettingsNote()
+                Spacer(Modifier.padding(top = 12.dp))
+            }
             perms.forEach { p ->
                 PermCard(p, onRequestDisclosure)
                 Spacer(Modifier.padding(top = 12.dp))
             }
             Text(
-                "On Xiaomi/MIUI: also lock AppBlocker in Recents and set Battery saver to " +
-                    "“No restrictions” so it isn't killed.",
+                vendor.extraTips,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp, bottom = 16.dp),
             )
+            // Named honestly rather than left to be discovered. A cloned app runs as a different
+            // Android user and an accessibility service gets no events from it, so this is a hole
+            // the app cannot close — and an unblocked app the user believes is blocked is worse
+            // than one they know about.
+            vendor.clonedAppsFeature?.let { feature ->
+                Text(
+                    "Note for ${vendor.brand} phones",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Spacer(Modifier.padding(top = 4.dp))
+                Text(
+                    "A copy of an app inside $feature is a separate app that AppBlocker cannot " +
+                        "see or block. Blocking the original doesn't cover the copy.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 16.dp),
+                )
+            }
             Text(
                 "Protection alert",
                 style = MaterialTheme.typography.titleMedium,
@@ -89,6 +123,41 @@ fun PermissionsScreen(
             )
             Spacer(Modifier.padding(top = 24.dp))
         }
+    }
+}
+
+/**
+ * The "Allow restricted settings" explainer, shown when [needsRestrictedSettingsNote] says so.
+ *
+ * Public and in this file rather than private to the screen, because the same dead end appears in
+ * two places — here and the onboarding wizard's accessibility step — and the wizard is where new
+ * users actually meet it. One copy, so the wording cannot drift into two half-right versions.
+ *
+ * Deliberately plain text rather than a button: the ⋮ menu it describes is inside Android's own
+ * App info page and there is no intent that opens it, so a button would be a promise the app
+ * cannot keep. The steps are short enough to follow.
+ */
+@Composable
+fun RestrictedSettingsNote() {
+    Column(
+        Modifier.fillMaxWidth().clip(AppShapes.card)
+            .background(MaterialTheme.colorScheme.surface).padding(18.dp),
+    ) {
+        Text(
+            "Accessibility toggle greyed out?",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.padding(top = 6.dp))
+        Text(
+            "Android 13 and newer block this setting for apps installed outside the Play Store, " +
+                "and says nothing about why. To unlock it: open Settings ▸ Apps ▸ AppBlocker, " +
+                "tap ⋮ in the top corner, and choose “Allow restricted settings”. Then come back " +
+                "and turn Accessibility on.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

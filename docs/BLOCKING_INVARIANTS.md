@@ -113,6 +113,24 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     throughout. The general shape to watch for: **a protection that fires on a location rather
     than on an action will eventually fire on the user doing the right thing.**
 
+15. **A protection gated on a package list protects only the phones on the list.** Invariant 12
+    again, one level up: not a lookup that knows one spelling, but a *guard* that never runs.
+    `handleSettingsGuard` returns early for any package outside `GUARD_PACKAGES`, and
+    `uninstallConfirmation` does the same for `INSTALLER_PACKAGES` — and both lists held exactly
+    three names: AOSP's, Google's and MIUI's. So on a Samsung, Oppo, Vivo or Huawei, Strict Mode's
+    uninstall guard saw a package it did not recognise, answered "not a threat", and the uninstall
+    went through mid-session. Nothing on screen said the guard had been skipped, and the owner's
+    own phone is the one brand that was covered, so no report could ever have surfaced it (14 Aug
+    2026). Both lists now live in `service/GuardPackages.kt` with the OEM installers added and
+    `GuardPackagesTest` pinning them — including the subset rule the extraction exposed: an
+    installer missing from `GUARD` is unreachable, so it is dead code that looks like protection.
+    **The direction that stayed narrow matters as much.** The OEM battery/security centres
+    (Samsung Device Care, ColorOS safecenter, Huawei systemmanager) were deliberately *not* added:
+    none of them hosts our accessibility page, our App-info page or a device-admin screen, so they
+    buy nothing — while exposing `deviceAdminRemoval`'s "deactivate" text fallback to pages that
+    are nothing but app names and toggles. Widening *what is read* is cheap; widening *what counts
+    as dangerous* is what made Strict "block the whole Settings" for seven releases.
+
 ## Device quirks these invariants exist for
 
 - Gesture-nav Home on HyperOS often emits **no accessibility event at all**, so the foreground
@@ -120,6 +138,29 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
 - `rootInActiveWindow` can report **our own non-focusable cover** as the active window.
 - The notification shade, volume dialog and heads-up notifications genuinely become the active
   window while the user has not left the app.
+
+### Quirks of phones that are *not* the owner's (14 Aug 2026)
+
+The engine is brand-neutral — foreground detection is standard accessibility events, the cover is a
+standard overlay window, and the launcher/dialer/keyboard/browser lookups all ask the system rather
+than naming packages. What was not brand-neutral was everything written *around* it:
+
+- **Samsung sleeps background apps by default** ("Put unused apps to sleep"), which switches
+  blocking off silently. Every other big OEM has an equivalent under a different name and in a
+  different place. The advice and the deep link now come from `data/DeviceVendor.kt`, keyed on
+  `Build.MANUFACTURER`, with a generic fallback that deep-links nowhere. Guessing wrong there costs
+  a paragraph, never a blocking decision — which is why matching a vendor string is acceptable in
+  that file and not in this one.
+- **Android 13+ blocks Accessibility for sideloaded apps** until the user picks "Allow restricted
+  settings" from the App-info ⋮ menu. Android greys the toggle out and explains nothing, and the
+  onboarding wizard walks every new user of the `github` build straight into it. Explained in
+  `RestrictedSettingsNote`, shown only while it can be true (sideloaded build, SDK ≥ 33,
+  accessibility still off).
+- **Cloned apps cannot be blocked, on any brand.** Samsung Secure Folder / Dual Messenger, Xiaomi
+  Second Space / Dual Apps, App Clone elsewhere: the clone runs as a **different Android user**, and
+  an accessibility service receives no events from another user. This is not fixable from inside the
+  app, so Setup names the feature and says so — an unblocked app the user believes is blocked is
+  the invisible under-block in its purest form.
 
 ## The audit method (this is what "bug hunt" means)
 

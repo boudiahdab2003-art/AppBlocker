@@ -13,6 +13,15 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.128", "Aug 14, 2026", "It now works properly on phones that aren't yours", listOf(
+        "**Everything the app told you about keeping it alive was written for a Xiaomi.** \"Allow auto-start\", a button that opened Xiaomi's security centre — on a Samsung that button went nowhere useful and the advice named a setting that doesn't exist there.",
+        "That matters more than it sounds. **Samsung ships \"Put unused apps to sleep\" switched on**, and a sleeping AppBlocker blocks nothing. The app said nothing about it, so on a Samsung the blocker would quietly stop working after a few days and nobody would know why.",
+        "Now the app looks at which phone it's on and gives that phone's steps — Samsung, Xiaomi, Huawei, Oppo/OnePlus, Vivo — with a button that goes to the right page. An unrecognised phone gets plain advice telling you what to look for, and no button that opens nothing.",
+        "**The uninstall guard only knew three phones' uninstall screens.** Strict Mode stops you uninstalling the app mid-session by recognising the \"uninstall this app?\" screen — but it only recognised Google's, Android's and Xiaomi's. On a Samsung, Oppo, Vivo or Huawei it saw a screen it didn't know, decided nothing was wrong, and let the uninstall through. Every one of those is now covered.",
+        "**New: the app explains the greyed-out switch.** On Android 13 and newer, an app installed outside the Play Store can't have Accessibility turned on until you allow it in a hidden menu — Android greys out the switch and explains nothing. Setup now tells you exactly where that menu is. Anyone installing this fresh was hitting a wall on the very first screen.",
+        "**And it owns up to a hole it can't close.** An app copied into Samsung's Secure Folder or Dual Messenger — or Xiaomi's Second Space, or App Clone elsewhere — is a *separate* app that AppBlocker genuinely cannot see. Setup now says so on the phones that have it, rather than letting you find out by accident.",
+        "The blocking itself was already phone-agnostic and is untouched: nothing about how apps get detected or covered has changed.",
+    )),
     VersionLog("1.127", "Aug 13, 2026", "The app no longer throws you out for turning it on", listOf(
         "**You reported this from your tablet: the app kicked you out of the accessibility page right after you switched it on.** It did, and it was doing it to everyone.",
         "The guard's job is to protect the page that can switch blocking off. It never asked whether blocking was currently *on*. So the moment you turned it on, the app started up, saw itself sitting on its own off-switch page, and sent you to the home screen — for doing the right thing.",

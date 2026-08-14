@@ -64,6 +64,11 @@ Telegram bot on first use) and ranked use-case plans live in **docs/SERVER.md**.
 ## Device quirks worth remembering
 
 - Owner's phone: HyperOS (Xiaomi), Android 15, gesture navigation.
+- **The app is no longer written for that phone alone.** Per-brand setup advice (Samsung, Xiaomi,
+  Huawei, Oppo/OnePlus, Vivo, plus a generic fallback) lives in `data/DeviceVendor.kt`; the
+  guard's OEM package lists live in `service/GuardPackages.kt`. Both are unit-tested. Before
+  hardcoding anything about a phone, check whether it belongs in one of those two files — and
+  read invariant 15 in `docs/BLOCKING_INVARIANTS.md` first.
 - **Dialog windows report zero insets while drawing edge-to-edge** on this device —
   never rely on inset modifiers inside a `Dialog`; capture
   `WindowInsets.safeDrawing` in the activity window's scope and pass it in
