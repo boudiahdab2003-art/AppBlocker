@@ -3,6 +3,7 @@ package com.appblocker
 import com.appblocker.data.GuardedDeadline
 import com.appblocker.data.OffSwitchGuard
 import com.appblocker.data.OffSwitchGuard.Phase
+import com.appblocker.data.OffSwitchGuard.Tap
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -175,6 +176,81 @@ class OffSwitchGuardTest {
     fun `the grace is seconds, not minutes`() {
         assertTrue(OffSwitchGuard.ENABLE_GRACE_MS >= 3_000L)
         assertTrue(OffSwitchGuard.ENABLE_GRACE_MS <= 30_000L)
+    }
+
+    // --- what the Profile row's tap does, and what Strict refuses ---
+
+    /**
+     * **The hole this closes.** The row was usable during a Strict session, reasoned as safe
+     * because Strict bounces the off-switch pages by itself "regardless of this row". True for
+     * the length of the session — and the session then *serves as the two-hour wait*. Lower the
+     * guard while Strict runs and the pages are still bounced (so nothing looks wrong), but the
+     * instant the session expires the off-switch is simply open. The escape was pre-arranged
+     * rather than prevented, which is worse than an escape you have to sit through.
+     *
+     * Both weakening doors are refused, not just the visible one: starting a fresh wait, and
+     * completing a wait that was already served before the session began.
+     */
+    @Test
+    fun `Strict Mode refuses to lower the guard, in either phase`() {
+        assertEquals(
+            Tap.REFUSED_STRICT,
+            OffSwitchGuard.tap(guardOn = true, phase = Phase.OPEN, strictActive = true),
+        )
+        assertEquals(
+            Tap.REFUSED_STRICT,
+            OffSwitchGuard.tap(guardOn = true, phase = Phase.GUARDED, strictActive = true),
+        )
+        assertEquals(
+            Tap.REFUSED_STRICT,
+            OffSwitchGuard.tap(guardOn = true, phase = Phase.WAITING, strictActive = true),
+        )
+    }
+
+    /**
+     * The direction Strict must never block. Arming a protection is strengthening, and refusing
+     * it would repeat v1.127 — a guard that punished the user for switching protection *on*.
+     */
+    @Test
+    fun `Strict Mode still lets the guard be turned on`() {
+        assertEquals(
+            Tap.TURN_ON,
+            OffSwitchGuard.tap(guardOn = false, phase = Phase.GUARDED, strictActive = true),
+        )
+    }
+
+    /** Outside a session nothing changes — this must not quietly become a blanket lock. */
+    @Test
+    fun `without Strict the row behaves exactly as before`() {
+        assertEquals(
+            Tap.TURN_ON,
+            OffSwitchGuard.tap(guardOn = false, phase = Phase.GUARDED, strictActive = false),
+        )
+        assertEquals(
+            Tap.START_WAIT,
+            OffSwitchGuard.tap(guardOn = true, phase = Phase.GUARDED, strictActive = false),
+        )
+        assertEquals(
+            Tap.NOTHING,
+            OffSwitchGuard.tap(guardOn = true, phase = Phase.WAITING, strictActive = false),
+        )
+        assertEquals(
+            Tap.LOWER,
+            OffSwitchGuard.tap(guardOn = true, phase = Phase.OPEN, strictActive = false),
+        )
+    }
+
+    /**
+     * A lapsed request reads as [Phase.GUARDED] (see `phase`), so it can only ever start a fresh
+     * wait — never lower the guard. Asserted through `tap` as well because this is the state that
+     * has already been got wrong once, in `KeywordsScreen`'s duplicate copy of the state machine.
+     */
+    @Test
+    fun `a lapsed request cannot lower the guard`() {
+        val lapsed = OffSwitchGuard.phase(hasRequest = true, untilUnlock = 0L, untilExpiry = 0L)
+        assertEquals(Phase.GUARDED, lapsed)
+        assertEquals(Tap.START_WAIT, OffSwitchGuard.tap(true, lapsed, strictActive = false))
+        assertEquals(Tap.REFUSED_STRICT, OffSwitchGuard.tap(true, lapsed, strictActive = true))
     }
 
     @Test

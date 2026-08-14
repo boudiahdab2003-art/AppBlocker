@@ -131,6 +131,20 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     are nothing but app names and toggles. Widening *what is read* is cheap; widening *what counts
     as dangerous* is what made Strict "block the whole Settings" for seven releases.
 
+16. **Strict Mode must lock every *weakening* control — including one whose effect only lands
+    after the session ends.** Profile's "Guard the off-switch" row was left usable during Strict on
+    the reasoning that "the guard can only be turned *on* or have a wait started, and Strict guards
+    these pages by itself regardless of this row". Both halves are true and the conclusion is still
+    wrong: a request served before the session, or during it, could be *completed* mid-session, and
+    lowering the guard then leaves it disarmed the instant Strict expires. Nothing looks wrong while
+    the session runs — `handleSettingsGuard` short-circuits on `strict` and keeps bouncing the pages
+    — so the session silently doubles as the two-hour wait and the off-switch is simply open when it
+    ends. The escape was *pre-arranged* rather than prevented, which is worse than one you have to
+    sit through. Now decided by `OffSwitchGuard.tap`, which refuses both weakening directions during
+    Strict and still allows `TURN_ON`, because refusing to let someone *arm* a protection is the
+    v1.127 mistake (invariant 14) in a new place. **The shape to grep for: a control judged safe by
+    what it does while a session runs, rather than by what it leaves behind when the session ends.**
+
 ## Device quirks these invariants exist for
 
 - Gesture-nav Home on HyperOS often emits **no accessibility event at all**, so the foreground
@@ -156,6 +170,24 @@ than naming packages. What was not brand-neutral was everything written *around*
   onboarding wizard walks every new user of the `github` build straight into it. Explained in
   `RestrictedSettingsNote`, shown only while it can be true (sideloaded build, SDK ≥ 33,
   accessibility still off).
+- **The phone's own browser was blanket-blocked on three brands.** On Huawei, Oppo/OnePlus and Vivo
+  the built-in browser is usually the default, which puts it in `findRealBrowserPackages` with no
+  list's help — and it was in neither readable list, so "block unsupported browsers" blocked it
+  outright *permanently*: a blocked browser sits under our own cover, its address bar is never read,
+  and `addReadableBrowser` never fires, so it can never earn its way out. Seeded in
+  `KNOWN_READABLE_BROWSERS` now, along with `com.miui.browser`, which had the same gap on the
+  owner's own phone while its global sibling did not.
+- **Samsung's floating panels** (Edge panel, Game Booster, capture toolbar) are drawn over an app
+  like the shade is, and were not in `TRANSIENT_SURFACES`. Added; see the note there.
+- **Split screen and DeX are not handled, deliberately.** The cover is full-screen, so blocking one
+  app in a split covers both halves (over-block), and a blocked app in the *unfocused* half may
+  never be identified at all (under-block). Fixing it means changing both how the cover is sized and
+  how the foreground app is decided — the two hottest pieces of the watcher — and it cannot be
+  measured without a device that does it. Recorded rather than patched blind (14 Aug 2026).
+- **`handlePurchaseBlock` requires `com.android.vending`,** so "block in-app purchases" does nothing
+  on a Huawei with AppGallery. Adding `com.huawei.appmarket` would change nothing without knowing
+  its purchase activity names — `PURCHASE_HINTS` are Google's class names — so the package name
+  alone would only *look* like coverage.
 - **Cloned apps cannot be blocked, on any brand.** Samsung Secure Folder / Dual Messenger, Xiaomi
   Second Space / Dual Apps, App Clone elsewhere: the clone runs as a **different Android user**, and
   an accessibility service receives no events from another user. This is not fixable from inside the

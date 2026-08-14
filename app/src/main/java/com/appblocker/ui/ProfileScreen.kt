@@ -202,6 +202,11 @@ fun ProfileScreen(
         untilUnlock = guardUntilUnlock,
         untilExpiry = guardUntilExpiry,
     )
+    // What the row's tap means right now, including Strict's refusal of the weakening ones. Read
+    // once and used by the subtitle, the enabled flag and the click handler, so the three cannot
+    // disagree about which state the row is in — two copies of one state machine is the first bug
+    // shape in docs/BLOCKING_INVARIANTS.md.
+    val guardTap = OffSwitchGuard.tap(guardOn, guardPhase, strictActive)
     LaunchedEffect(guardRequest, guardTick) {
         if (guardRequest == null) return@LaunchedEffect
         if (guardUntilExpiry <= 0L) {
@@ -367,6 +372,15 @@ fun ProfileScreen(
                 title = "Guard the off-switch",
                 subtitle = when {
                     !guardOn -> "Off. Blocking can be switched off in Settings at any moment."
+                    // A wait started before the session keeps running, so it keeps its countdown —
+                    // hiding it behind the Strict line would look like the request was dropped.
+                    guardTap == OffSwitchGuard.Tap.REFUSED_STRICT &&
+                        guardPhase == OffSwitchGuard.Phase.WAITING ->
+                        "Unlocking in ${fmtCountdown(guardUntilUnlock)}, but Strict Mode is " +
+                            "running — the guard can't come down until the session ends."
+                    guardTap == OffSwitchGuard.Tap.REFUSED_STRICT ->
+                        "On, and locked while Strict Mode is running. You can't lower it until " +
+                            "the session ends."
                     guardPhase == OffSwitchGuard.Phase.WAITING ->
                         "Unlocking in ${fmtCountdown(guardUntilUnlock)}. The guard is still on."
                     guardPhase == OffSwitchGuard.Phase.OPEN ->
@@ -377,27 +391,29 @@ fun ProfileScreen(
                         "${OffSwitchGuard.DELAY_LABEL}."
                 },
                 badge = guardOn,
-                // Deliberately usable during Strict: the guard can only be turned *on* or have a
-                // wait started, and Strict guards these pages by itself regardless of this row.
-                enabled = true,
+                // Strict refuses the two weakening taps and nothing else — arming the guard stays
+                // instant even mid-session, which is why this isn't simply `!locked`. See
+                // OffSwitchGuard.tap for why the old "deliberately usable during Strict" was wrong.
+                enabled = guardTap != OffSwitchGuard.Tap.REFUSED_STRICT,
                 onClick = {
-                    when {
+                    when (guardTap) {
                         // Turning protection on is always instant, and drops any pending request.
-                        !guardOn -> {
+                        OffSwitchGuard.Tap.TURN_ON -> {
                             guardOn = true
                             SettingsStore.setGuardOffSwitch(context, true)
                             guardRequest = null
                             SettingsStore.clearGuardUnlockRequest(context)
                         }
-                        // The wait is served — the off finally happens.
-                        guardPhase == OffSwitchGuard.Phase.OPEN -> {
+                        // The wait is served — the off finally happens. THE ONLY DOOR to lowering
+                        // this guard; a second one added anywhere else would bypass Strict.
+                        OffSwitchGuard.Tap.LOWER -> {
                             guardOn = false
                             SettingsStore.setGuardOffSwitch(context, false)
                             guardRequest = null
                             SettingsStore.clearGuardUnlockRequest(context)
                         }
                         // Nothing pending: turning it off starts at the type-and-wait gate.
-                        guardPhase == OffSwitchGuard.Phase.GUARDED ->
+                        OffSwitchGuard.Tap.START_WAIT ->
                             onRequestGate(guardOffGate()) {
                                 // Passing the gate does NOT lower the guard — it starts the wait.
                                 // The guard keeps standing until that is served and the owner acts
@@ -407,7 +423,9 @@ fun ProfileScreen(
                                 )
                                 guardRequest = SettingsStore.guardUnlockRequest(context)
                             }
-                        // else: waiting — the subtitle above shows the countdown.
+                        // Waiting — the subtitle shows the countdown. Strict — the row is disabled
+                        // above, so this is unreachable; both do nothing by design.
+                        OffSwitchGuard.Tap.NOTHING, OffSwitchGuard.Tap.REFUSED_STRICT -> Unit
                     }
                 },
             )

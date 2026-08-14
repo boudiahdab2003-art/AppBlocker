@@ -159,10 +159,21 @@ internal val KNOWN_BROWSERS = listOf(
     "com.ecosia.android", "acr.browser.lightning", "org.adblockplus.browser",
     "mark.via.gp", "com.qwant.liberty", "com.aloha.browser", "idm.internet.download.manager",
     "com.android.browser", "com.google.android.apps.chrome",
-    // OEM browsers. Both are on the owner's phone and neither was here, which mattered once
-    // this list started deciding what may be blanket-blocked as well as what gets scanned.
+    // OEM browsers. The Xiaomi pair are on the owner's phone and neither was here, which mattered
+    // once this list started deciding what may be blanket-blocked as well as what gets scanned.
+    //
+    // The rest were added for the phones nobody here owns, and they are the ones that mattered
+    // most: on a Huawei, Oppo or Vivo the OEM browser is usually the phone's *default*, which puts
+    // it in findRealBrowserPackages by itself — so with "block unsupported browsers" on, the built-
+    // in browser was blocked outright and, per KNOWN_READABLE_BROWSERS below, could never earn its
+    // way out. Being named here is what lets the readable seed name it too (WebContentFilterTest
+    // requires the pairing).
     "com.mi.globalbrowser", "com.miui.browser", // Xiaomi
     "com.tcl.browser", // TCL "BrowseHere"
+    "com.huawei.browser", "com.hihonor.browser", // Huawei / Honor
+    "com.heytap.browser", "com.nearme.browser", "com.coloros.browser", // Oppo/Realme/OnePlus
+    "com.vivo.browser", // Vivo
+    "com.sec.android.app.sbrowser.beta", // Samsung Internet Beta (stable is above)
 )
 
 /**
@@ -227,8 +238,29 @@ internal val KNOWN_READABLE_BROWSERS = setOf(
     "com.microsoft.emmx", "com.opera.browser", "com.opera.gx",
     "com.vivaldi.browser", "com.kiwibrowser.browser", "com.duckduckgo.mobile.android",
     "com.ecosia.android", "com.mi.globalbrowser", "com.android.browser",
+    // com.miui.browser was in KNOWN_BROWSERS and not here — so on the owner's own phone, MIUI
+    // Browser was eligible for the blanket block and had no way out of it, while its global
+    // sibling two names back was fine. Found by the OEM-browser test below; same Chromium toolbar.
+    "com.miui.browser",
+    // The OEM browsers, and **the reason this seed matters most.** On a Huawei, Oppo/OnePlus or
+    // Vivo the built-in browser is usually the default, so it lands in the strict set on its own
+    // and — being in neither readable list — was blanket-blocked with no way out: a blocked
+    // browser sits under our own cover, its address bar is never read, `addReadableBrowser` never
+    // fires, and it can never demonstrate that it is filterable. The phone's own browser, blocked
+    // forever, on every brand except the two the owner happens to have.
+    //
+    // All are Blink forks that keep Chromium's toolbar, so the claim is `url_bar` — the same basis
+    // on which Brave, Edge, Opera, Vivaldi, Kiwi and Xiaomi's browser are already seeded. **If one
+    // of them renames that id the claim is wrong in the silent direction** (not blocked, not
+    // filtered either). Three things bound that: the address-bar reader's third tier reads any
+    // *editable* host-shaped node and needs no id at all; the phone promotes the browser itself the
+    // first time it is genuinely read; and Profile ▸ "What the blocker sees" lists which browsers
+    // count as readable, so a wrong claim is inspectable rather than invisible.
+    "com.huawei.browser", "com.hihonor.browser",
+    "com.heytap.browser", "com.nearme.browser", "com.coloros.browser",
+    "com.vivo.browser",
     // <pkg>:id/location_bar_edit_text
-    "com.sec.android.app.sbrowser",
+    "com.sec.android.app.sbrowser", "com.sec.android.app.sbrowser.beta",
     // <pkg>:id/mozac_browser_toolbar_url_view
     "org.mozilla.firefox", "org.mozilla.firefox_beta", "org.mozilla.fenix",
     "org.mozilla.focus",
