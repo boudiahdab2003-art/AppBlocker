@@ -233,19 +233,30 @@ fun BlockEditorScreen(
                         Spacer(Modifier.padding(top = 20.dp))
                         SectionHeader(Icons.Filled.Block, "Extra options", null)
                         Spacer(Modifier.padding(top = 4.dp))
+                        // `ed || !value` — switching one ON is always allowed, including mid-Strict;
+                        // switching it OFF is what a session refuses. These four were the only
+                        // strengthening controls in the app still frozen in both directions during
+                        // Strict, which is the same mistake as v1.127's guard ejecting people for
+                        // turning protection on. The pattern is already used by the Shorts row and
+                        // the app checkboxes below, and by both toggles in KeywordsScreen.
+                        // Once switched on, `!value` is false and the row locks itself for the rest
+                        // of the session — which is the point.
                         ToggleRow(Icons.Filled.NoAdultContent, "Porn sites blocking",
-                            "Detects and blocks adult sites in your browsers.", adult, ed) { adult = it }
+                            "Detects and blocks adult sites in your browsers.",
+                            adult, ed || !adult) { adult = it }
                         // "Add newly installed apps" is a Blocklist concept — in Allowlist mode a new
                         // app is already blocked (it isn't allowed), so the toggle is hidden.
                         if (!allowlist) {
                             ToggleRow(Icons.Filled.GetApp, "Add newly installed apps",
-                                "Newly installed apps are automatically blocked.", addNew, ed) { addNew = it }
+                                "Newly installed apps are automatically blocked.",
+                                addNew, ed || !addNew) { addNew = it }
                         }
                         ToggleRow(Icons.Filled.ShoppingBasket, "In-app purchases blocking",
-                            "Blocks the Google Play purchase prompt in games and apps.", purchases, ed) { purchases = it }
+                            "Blocks the Google Play purchase prompt in games and apps.",
+                            purchases, ed || !purchases) { purchases = it }
                         ToggleRow(Icons.Filled.Web, "Block unsupported browsers",
                             "Blocks browsers we can't filter (e.g. Brave) so they can't bypass website blocking.",
-                            unsupported, ed) { unsupported = it }
+                            unsupported, ed || !unsupported) { unsupported = it }
                         Spacer(Modifier.padding(top = 16.dp))
                     }
                 }

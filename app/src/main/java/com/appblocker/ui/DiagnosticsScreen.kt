@@ -150,16 +150,31 @@ fun DiagnosticsScreen(onBack: () -> Unit) {
                                             "$b — not really a browser, just an app that opens " +
                                                 "web links. It's read for blocked words, and it " +
                                                 "is never blocked as an unsupported browser."
-                                        b in snapshot.readable ->
-                                            "$b — its address bar can be read, so blocked sites " +
-                                                "are caught here."
+                                        // Confirmed BEFORE assumed, so a browser that is both
+                                        // reads as the stronger of the two.
+                                        b in snapshot.confirmedReadable ->
+                                            "$b — its address bar HAS been read on this phone, " +
+                                                "so blocked sites are caught here."
+                                        // The distinction the Mi Browser hole hid behind: this
+                                        // browser is exempt from the unsupported-browser block on
+                                        // the strength of an assumption nothing has tested.
+                                        b in snapshot.assumedReadable ->
+                                            "$b — assumed readable, but its address bar has " +
+                                                "never actually been read on this phone. If " +
+                                                "blocked sites open here, this line is why. Visit " +
+                                                "a site in it and tap Refresh."
                                         else ->
                                             "$b — its address bar hasn't been read yet. Blocked " +
                                                 "words still work; blocked sites can't be caught " +
                                                 "until it has."
                                     },
-                                    good = if (b !in snapshot.realBrowsers) null
-                                    else b in snapshot.readable,
+                                    good = when {
+                                        b !in snapshot.realBrowsers -> null
+                                        b in snapshot.confirmedReadable -> true
+                                        // Not a fault and not health either: unproven.
+                                        b in snapshot.assumedReadable -> null
+                                        else -> false
+                                    },
                                 ),
                             )
                         }
@@ -201,7 +216,17 @@ private data class Snapshot(
     val browsers: List<String>,
     /** Those whose address bar the app knows how to read, or has read. The rest can still
      *  catch blocked words from the page — it is site blocking that needs the address. */
-    val readable: Set<String>,
+    /**
+     * Browsers whose address bar this phone has **actually read** — evidence, not a claim.
+     *
+     * Split from [assumedReadable] because merging them is what let the Mi Browser hole hide: the
+     * screen showed "its address bar can be read" for a browser nobody had ever read, purely
+     * because it was on the seed list. Same shape as the `rootOk` flag fixed a round earlier —
+     * one value covering a fact and an assumption, with the optimistic reading winning.
+     */
+    val confirmedReadable: Set<String>,
+    /** Seeded as readable ([KNOWN_READABLE_BROWSERS]) and never confirmed on this phone. */
+    val assumedReadable: Set<String>,
     /** Those that are really browsers rather than apps that open their own links. Only these
      *  can ever be blocked outright by the "block unsupported browsers" switch. */
     val realBrowsers: Set<String>,
@@ -334,7 +359,10 @@ private fun readSnapshot(context: Context): Snapshot {
         protection = protection,
         phone = phoneFacts(context),
         browsers = runCatching { findBrowserPackages(context).sorted() }.getOrDefault(emptyList()),
-        readable = SettingsStore.readableBrowsers(context) + KNOWN_READABLE_BROWSERS,
+        confirmedReadable = SettingsStore.readableBrowsers(context),
+        // Only the ones still unproven — a seeded browser that has since been read belongs in
+        // `confirmedReadable` alone, or the screen would hedge about something it has measured.
+        assumedReadable = KNOWN_READABLE_BROWSERS - SettingsStore.readableBrowsers(context),
         realBrowsers = runCatching { findRealBrowserPackages(context) }.getOrDefault(emptySet()),
         lastLook = lastLook,
     )

@@ -87,6 +87,18 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     behind it (an editable, host-shaped node). Same rule as 4, applied to a lookup instead of a
     window read: a failed identification is a failed measurement, never a confident "no".
 
+    **Update, 14 Aug 2026: the vendor-agnostic tier was itself vendor-shaped.** "Any *editable*
+    host-shaped node" assumes the address bar is a field you can type into — true of Chrome, and
+    false of Mi Browser, whose address is a **label** in a bottom bar that opens a separate editor
+    when tapped. So all three tiers missed it and every site block was silently off there, found
+    only because the owner screenshotted instagram.com open with Instagram blocked. The lesson is
+    not "add another id": it is that **each fallback tier inherits an assumption from the browser
+    it was written against**, and the assumption gets less visible as the tier gets more general.
+    Tier 4 drops editability and replaces its safety argument with two structural rules — the node
+    must not be inside a `WebView` (that is the page, not the chrome) and the candidates must agree
+    on exactly one host (a toolbar shows one address; a suggestion list shows several). When
+    writing tier 5, ask what tier 4 quietly assumed.
+
 13. **One set, two consumers, opposite failure costs — make it two sets.** `browserPackages` fed
     both the web scan and the "block unsupported browsers" switch, and those want opposite
     mistakes: scanning must over-include (a browser left out is silently unfiltered, invisible),

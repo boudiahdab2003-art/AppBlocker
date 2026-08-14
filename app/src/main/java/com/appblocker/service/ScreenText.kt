@@ -17,6 +17,9 @@ import android.view.accessibility.AccessibilityWindowInfo
 private const val MAX_NODES = 400
 private const val MAX_TEXT = 4000
 
+/** How far up tier 4 looks for a WebView ancestor before giving up — see [insidePage]. */
+private const val MAX_ANCESTORS = 12
+
 /** Packages we never scan for keywords: they list other apps' names (see the service). */
 private val TEXT_SCAN_EXCLUDED = setOf("com.android.systemui", "com.android.settings")
 
@@ -135,10 +138,23 @@ private val OMNIBOX_ID_SUFFIXES = listOf(
  *    links to a blocked site — which is the exact over-block the URL-only rule exists to
  *    prevent. A page's links are not editable; a browser's address bar is the only editable
  *    field in its chrome. So the mistake is unreachable rather than merely unlikely.
+ * 4. **A host-shaped label in the browser's chrome** — outside any WebView ("not the page", see
+ *    [insidePage]) and only when the candidates agree on one host (see [soleHost]).
  *
- * A browser none of the three can read behaves exactly as every non-Chrome browser did before:
- * page-text matching only. So this is purely additive — it can start blocking a site that used
- * to slip through, and it cannot start blocking anything that used to be allowed.
+ *    **Tier 3's safety argument turned out to be Chrome-shaped.** "The only editable field in its
+ *    chrome" assumes the address bar is a field at all, and Mi Browser's is a *label* in a bottom
+ *    bar that you tap to open a separate editor. So all three tiers missed it, website blocking
+ *    was silently off in that browser, and the owner found instagram.com opening freely with
+ *    Instagram blocked (14 Aug 2026). The two structural rules above are what replace
+ *    editability: a link lives inside the WebView, and a suggestion or history list shows several
+ *    addresses where a toolbar shows one.
+ *
+ * A browser none of the four can read behaves exactly as every non-Chrome browser did before:
+ * page-text matching only. So this is still purely additive in the *site* direction — it can start
+ * blocking a site that used to slip through. What tier 4 does add is a way to be wrong: a browser
+ * that renders its page outside a WebView-classed node and shows exactly one host-shaped label
+ * would be misread. That is bounded by both rules, and unlike the failure it fixes it is visible —
+ * the cover names the address, and Profile ▸ "What the blocker sees" prints what was read.
  */
 private fun AccessibilityService.omniboxText(pkg: String, settledOnly: Boolean): String? {
     val roots = ArrayList<AccessibilityNodeInfo>()
@@ -169,9 +185,11 @@ private fun AccessibilityService.omniboxText(pkg: String, settledOnly: Boolean):
         for (n in nodes) accept(n)?.let { return it }
     }
 
-    // 2 and 3, in one walk each: a known omnibox id wins outright, and a host-shaped editable
-    // field is held back as the answer only if no id matched anywhere.
+    // 2, 3 and 4, in one walk each: a known omnibox id wins outright, a host-shaped editable field
+    // is held back as the answer if no id matched anywhere, and the chrome labels collected for
+    // tier 4 are used only if there was no editable field either.
     var editableHost: String? = null
+    val chromeLabels = ArrayList<String>()
     for (root in mine) {
         val queue = ArrayDeque<AccessibilityNodeInfo>()
         queue.add(root)
@@ -181,13 +199,79 @@ private fun AccessibilityService.omniboxText(pkg: String, settledOnly: Boolean):
             visited++
             val id = runCatching { node.viewIdResourceName }.getOrNull()
             if (id != null && isOmniboxId(id)) accept(node)?.let { return it }
-            if (editableHost == null && runCatching { node.isEditable }.getOrDefault(false)) {
-                accept(node)?.takeIf { looksLikeHost(it) }?.let { editableHost = it }
+            val editable = runCatching { node.isEditable }.getOrDefault(false)
+            if (editable) {
+                if (editableHost == null) {
+                    accept(node)?.takeIf { looksLikeHost(it) }?.let { editableHost = it }
+                }
+            } else if (editableHost == null && !insidePage(node)) {
+                // Tier 4 candidate: a label in the browser's own chrome. Collected rather than
+                // returned — soleHost decides, and it refuses when they disagree.
+                accept(node)?.takeIf { looksLikeHost(it) }?.let { chromeLabels.add(it) }
             }
             for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
         }
     }
-    return editableHost
+    return editableHost ?: soleHost(chromeLabels)
+}
+
+/**
+ * Whether [node] is part of the rendered page rather than the browser's own chrome.
+ *
+ * Chromium exposes page content beneath an `android.webkit.WebView` node, so an ancestor of that
+ * class is what separates a link *on the page* from a label in the toolbar — structurally, without
+ * knowing any vendor's view ids. That is the substitute for tier 3's editability rule, and it is
+ * the part that stops the URL-shaped fallback from covering a page that merely links to a blocked
+ * site (the over-block the address-only rule exists to prevent).
+ *
+ * Bounded to [MAX_ANCESTORS] hops: a toolbar sits a handful of levels down, page content sits far
+ * deeper, and an unbounded walk up a churning tree is exactly the kind of per-node cost this file
+ * caps everywhere else. **Running out of hops answers "inside the page"** — the refusing
+ * direction, so a node too deep to classify is never treated as an address.
+ */
+private fun insidePage(node: AccessibilityNodeInfo): Boolean {
+    var current: AccessibilityNodeInfo? = node
+    var hops = 0
+    while (current != null) {
+        if (hops++ > MAX_ANCESTORS) return true
+        val cn = runCatching { current?.className?.toString() }.getOrNull().orEmpty()
+        if (cn.contains("WebView", ignoreCase = true)) return true
+        current = runCatching { current?.parent }.getOrNull()
+    }
+    return false
+}
+
+/**
+ * The address, when the non-editable candidates agree on exactly one host — otherwise nothing.
+ *
+ * **This is the safety rule for tier 4**, and it replaces the argument tier 3 relies on. Tier 3 is
+ * safe because it only accepts an *editable* node: "a page's links are not editable; a browser's
+ * address bar is the only editable field in its chrome". True of Chrome, and false of Mi Browser,
+ * which shows its address in a bottom bar that is a label — you tap it to open a separate editor.
+ * So the site layer was silently off there, and the owner found instagram.com opening freely with
+ * Instagram blocked.
+ *
+ * Dropping the editable requirement means the toolbar's label qualifies — and so would a
+ * suggestion list, a bookmarks panel or a "recently closed" row, any of which would raise a cover
+ * over a page the user is not on. That is the visible, painful failure this project keeps paying
+ * for, so it is bounded structurally rather than by hoping: a toolbar shows the current address
+ * **once**, while every one of those lists shows several. Disagreement answers null, which leaves
+ * exactly today's behaviour.
+ *
+ * Same shape as the rest of this file: a failed identification is a failed measurement, never a
+ * confident answer (docs/BLOCKING_INVARIANTS.md, invariant 4).
+ */
+internal fun soleHost(candidates: List<String>): String? {
+    val hostShaped = candidates.mapNotNull { c ->
+        c.trim().lowercase().takeIf { it.isNotBlank() && looksLikeHost(it) }
+    }
+    // Grouped by HOST, not by the raw string: a toolbar that shows "instagram.com" while a chip
+    // beside it shows "https://instagram.com/" is one address twice, not two candidates, and
+    // treating it as disagreement would throw away the reading we came for. The full text is
+    // what's returned — WebContentFilter does its own host extraction and the caller's
+    // `rememberedUrl` is compared as text.
+    val byHost = hostShaped.groupBy { it.substringAfter("://").substringBefore('/') }
+    return byHost.values.singleOrNull()?.first()
 }
 
 /**

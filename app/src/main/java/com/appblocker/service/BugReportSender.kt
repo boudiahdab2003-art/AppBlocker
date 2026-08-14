@@ -92,6 +92,7 @@ object BugReportSender {
         field("blocksToday") { AttemptCounter.summary(ctx).sumOf { it.today }.toString() }
         field("adultPack") { SettingsStore.adultWordsPack(ctx).toString() }
         field("scanEverywhere") { SettingsStore.keywordsEverywhere(ctx).toString() }
+        field("blockUnsupported") { SettingsStore.blockUnsupportedBrowsers(ctx).toString() }
         field("overlayPermission") { Settings.canDrawOverlays(ctx).toString() }
         field("usageAccess") { hasUsageAccess(ctx).toString() }
         field("batteryFree") { isIgnoringBattery(ctx).toString() }

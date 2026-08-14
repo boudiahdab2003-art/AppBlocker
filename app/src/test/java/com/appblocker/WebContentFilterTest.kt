@@ -5,6 +5,7 @@ import com.appblocker.service.KNOWN_READABLE_BROWSERS
 import com.appblocker.service.WebContentFilter
 import com.appblocker.service.isOmniboxId
 import com.appblocker.service.looksLikeHost
+import com.appblocker.service.soleHost
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -213,6 +214,52 @@ class WebContentFilterTest {
         assertFalse(isOmniboxId("com.brave.browser:id/url_bar_container"))
         assertFalse(isOmniboxId("com.android.chrome:id/search_box_text"))
         assertFalse(isOmniboxId(""))
+    }
+
+    // ---- tier 4: reading a toolbar that is a label rather than a field ------------------------
+
+    /**
+     * **The rule that replaces editability**, and the reason tier 4 is allowed to exist.
+     *
+     * Tier 3 only trusts an *editable* node, on the argument that a page's links are not editable
+     * and a browser's address bar is the only editable field in its chrome. Mi Browser's address
+     * is a label in a bottom bar, so nothing matched and website blocking was silently off there —
+     * the owner's screenshot of instagram.com open with Instagram blocked.
+     *
+     * Dropping editability lets a toolbar label through, and would equally let a suggestion list
+     * or a bookmarks panel through — which would raise a cover over a page the user is not on.
+     * A toolbar shows the current address once; those lists show several. So disagreement must
+     * answer nothing, and that is what these pin.
+     */
+    @Test fun oneAddressInTheChromeIsTheAddress() {
+        assertEquals("instagram.com", soleHost(listOf("instagram.com")))
+    }
+
+    @Test fun theSameAddressTwiceIsStillOneAddress() {
+        // A toolbar label plus a chip/tab title showing the same site is one reading, not a
+        // disagreement — grouping by host rather than by string is what keeps this readable.
+        assertEquals("instagram.com", soleHost(listOf("instagram.com", "https://instagram.com/")))
+    }
+
+    /** The suggestion-list case. Two different sites on screen means we do not know which one the
+     *  user is on, and guessing is the over-block this whole area exists to avoid. */
+    @Test fun twoDifferentAddressesAnswerNothing() {
+        assertNull(soleHost(listOf("instagram.com", "reddit.com")))
+        assertNull(soleHost(listOf("instagram.com", "reddit.com", "news.ycombinator.com")))
+    }
+
+    @Test fun nothingHostShapedAnswersNothing() {
+        assertNull(soleHost(emptyList()))
+        assertNull(soleHost(listOf("Search or type URL", "Bookmarks", "")))
+    }
+
+    /** Non-address chrome text alongside one real address must not count as disagreement — it is
+     *  filtered by shape first, or every browser with a "Home" button would answer null. */
+    @Test fun labelsThatArentAddressesAreIgnoredRatherThanCountedAgainstIt() {
+        assertEquals(
+            "instagram.com",
+            soleHost(listOf("Home", "instagram.com", "Tabs", "Search or type URL")),
+        )
     }
 
     /**

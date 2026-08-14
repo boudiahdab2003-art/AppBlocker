@@ -186,6 +186,11 @@ data class BugReport(
             "blocksToday",
             "adultPack",
             "scanEverywhere",
+            // Whether "block unsupported browsers" is on. A setting, not content — and the fact
+            // that decided a whole diagnosis: a screenshot of instagram.com unblocked in Mi
+            // Browser looked like a regression I had just shipped, and the answer to this one
+            // question reversed that. Asking the owner cost a round trip; the report should say.
+            "blockUnsupported",
             "overlayPermission",
             "usageAccess",
             // How many of the fields above failed to read. Present only when non-zero, so a
