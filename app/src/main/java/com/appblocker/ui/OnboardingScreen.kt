@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.QueryStats
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Visibility
@@ -444,7 +445,13 @@ private fun RecommendedStep(
 
 @Composable
 private fun RecommendedRow(p: Perm, onRequestDisclosure: (() -> Unit) -> Unit) {
-    val icon = if (p.key == "usage") Icons.Filled.QueryStats else Icons.Filled.BatteryChargingFull
+    // Three rows now, so the icon has to distinguish them: battery optimisation and the OEM
+    // keep-alive setting are different chores and two identical icons read as a duplicate row.
+    val icon = when (p.key) {
+        "usage" -> Icons.Filled.QueryStats
+        "autostart" -> Icons.Filled.PowerSettingsNew
+        else -> Icons.Filled.BatteryChargingFull
+    }
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
             .background(MaterialTheme.colorScheme.surface).padding(16.dp),
