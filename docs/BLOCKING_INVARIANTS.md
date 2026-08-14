@@ -99,6 +99,13 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     on exactly one host (a toolbar shows one address; a suggestion list shows several). When
     writing tier 5, ask what tier 4 quietly assumed.
 
+    **Tier 4 is verified, which almost nothing in this area is.** After v1.130 the owner's phone
+    reported Mi Browser as *read here* rather than *assumed* on the diagnostics screen — the same
+    screen that had been hiding the hole by merging the two. So the mechanism works on at least one
+    real label-style toolbar, and `com.miui.browser`'s seed entry is now backed by a measurement
+    instead of a family resemblance. The OEM browsers added beside it (Huawei, Oppo/OnePlus, Vivo)
+    are **not** verified and remain exactly the kind of claim this file keeps warning about.
+
 13. **One set, two consumers, opposite failure costs — make it two sets.** `browserPackages` fed
     both the web scan and the "block unsupported browsers" switch, and those want opposite
     mistakes: scanning must over-include (a browser left out is silently unfiltered, invisible),

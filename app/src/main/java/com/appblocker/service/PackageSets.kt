@@ -242,13 +242,16 @@ internal val KNOWN_READABLE_BROWSERS = setOf(
     // Browser was eligible for the blanket block and had no way out of it, while its global
     // sibling two names back was fine. Found by the OEM-browser test below; same Chromium toolbar.
     //
-    // **This entry is on probation.** The owner's screenshot (14 Aug 2026) shows instagram.com
-    // open and unfiltered in Mi Browser, which means its address bar was not being read at all —
-    // its toolbar is a label, not a field, so tiers 1-3 all missed it. Tier 4 in ScreenText.kt
-    // exists to fix that. If Profile ▸ "What the blocker sees" still reports this one as *assumed*
-    // rather than *read here* after tier 4 ships, the claim is false and the entry comes out —
-    // with evidence, rather than on a second guess. Nothing here is inert: while it sits in this
-    // list, Mi Browser is exempt from the unsupported-browser block.
+    // **This one is no longer a guess — it is the only entry in this list backed by a measurement.**
+    // On 14 Aug 2026 the owner's screenshot showed instagram.com open and unfiltered here: Mi
+    // Browser's address is a *label* in a bottom bar, not a field, so tiers 1-3 all missed it and
+    // every site block was silently off. The entry sat on probation until tier 4 (ScreenText.kt)
+    // shipped in v1.130, and Profile ▸ "What the blocker sees" then reported it as **read here**
+    // rather than *assumed* on that phone. That is what confirmed both the diagnosis and the fix.
+    //
+    // Do not remove it on the reasoning that "MIUI Browser is probably unreadable" — that was the
+    // pre-tier-4 state and it is measured false. Nothing here is inert either way: while it sits
+    // in this list, Mi Browser is exempt from the unsupported-browser block.
     "com.miui.browser",
     // The OEM browsers, and **the reason this seed matters most.** On a Huawei, Oppo/OnePlus or
     // Vivo the built-in browser is usually the default, so it lands in the strict set on its own
