@@ -70,6 +70,22 @@ internal class BlockOverlay(private val context: Context) {
         private set
 
     /**
+     * The app the visible cover was raised **over**, or null when nothing is up.
+     *
+     * Not the same thing as the package passed to [show]: that one is set only for whole-app
+     * blocks (it is what puts the app's icon and name on the cover), so every page, word, purchase
+     * and guard cover used to be owned by nobody. Something that answers a different question would
+     * then take it down — see [CoverGate.ownedByScan], which is the rule this field exists for.
+     *
+     * Written here rather than mirrored in the service for the usual reason: a flag tracking what
+     * the overlay already knows is a second source of truth, and every one of those in this file's
+     * history has drifted (docs/BLOCKING_INVARIANTS.md, invariant 8).
+     */
+    @Volatile
+    var ownerPkg: String? = null
+        private set
+
+    /**
      * Inflates the cover ahead of time (without attaching it) so the first block of a session
      * lands instantly instead of paying for inflation on the hot path.
      */
@@ -90,12 +106,14 @@ internal class BlockOverlay(private val context: Context) {
         message: String,
         counterKey: String,
         isAppBlock: Boolean,
+        ownerPkg: String?,
         onClose: () -> Unit,
         iconLoader: (String) -> Bitmap?,
         freshBlock: Boolean = true,
     ): Boolean = try {
         this.counterKey = counterKey
         this.isAppBlock = isAppBlock
+        this.ownerPkg = ownerPkg
         // The layout can be changed between blocks, and both `view` and `preInflated` outlive a
         // single block — so a cached view built from the previous choice has to go, or the new
         // one would not appear until the service restarted.
@@ -190,6 +208,7 @@ internal class BlockOverlay(private val context: Context) {
         }
         view = null
         counterKey = null
+        ownerPkg = null
         // Must be cleared too: the Strict-guard safety net checks isAppBlock on its own (no
         // isShowing beside it), so a value left over from the last app block made it a no-op
         // and could strand a "Locked during Strict Mode" cover.

@@ -125,4 +125,62 @@ internal object CoverGate {
         val window = if (offenceKey == resumingOffence) RESUME_GRACE_MS else COUNT_COOLDOWN_MS
         return sinceLastCountMs >= window
     }
+
+    /**
+     * Whether the cover currently up belongs to a **scan** rather than to the app-block path —
+     * i.e. [handleAppBlock][BlockerAccessibilityService] must leave it alone.
+     *
+     * The app-block path answers one question: *is this whole app blocked?* When the answer is no
+     * it takes the cover down — and it used to take down whatever was up, including a cover raised
+     * by a completely different question (*is this page blocked?*, *is this a purchase sheet?*).
+     * So a blocked page inside an unblocked browser was covered by the scan and uncovered again by
+     * the very next window event the browser emitted: the flicker the owner reported, and — because
+     * the scan's text dedup then read the page as "already handled" — a page left silently
+     * uncovered afterwards.
+     *
+     * A whole-app cover ([isAppBlock]) is always the app-block path's own, so it stays removable.
+     * A scan's cover is only protected while its owner is still the app in front: once the user is
+     * genuinely somewhere else the cover must come down, or it would strand over an innocent app.
+     *
+     * There used to be exactly one hardcoded instance of this rule — "keep a Shorts cover up even
+     * though the whole app isn't blocked" — which is what a general rule looks like when it is
+     * noticed for one caller only.
+     */
+    fun ownedByScan(
+        coverShowing: Boolean,
+        isAppBlock: Boolean,
+        coverOwner: String?,
+        pkg: String,
+    ): Boolean = coverShowing && !isAppBlock && coverOwner != null && coverOwner == pkg
+
+    /**
+     * Whether a window event naming [pkg] must be ignored because a cover is up and the window
+     * tree does not confirm that package is really in front.
+     *
+     * A blocked app runs behind the (non-focusable) cover and spits out stray windows — a splash,
+     * a floating popup, a sub-window under another package — and background apps emit window-state
+     * events routinely. Acting on one adopts it as the foreground app, and the app-block path then
+     * finds *that* package unblocked and tears the live cover down; the real app's next event puts
+     * it back. That is the "disappears ~2s then reblocks" flicker.
+     *
+     * This guard is deliberately **not** limited to whole-app covers. It was, and a page/word cover
+     * therefore had no protection at all — the one kind of cover with no rule of its own to put it
+     * back, since a blocked *site* arms no lockout. [currentPkg] is the app the service already
+     * believes is in front, [activeWindowPkg] what the window tree says right now.
+     *
+     * Launchers are always exempt: Home must be honoured or the user is trapped under a cover
+     * (docs/BLOCKING_INVARIANTS.md, invariant 7).
+     */
+    fun strayWindowEvent(
+        coverShowing: Boolean,
+        pkg: String?,
+        currentPkg: String?,
+        isLauncher: Boolean,
+        activeWindowPkg: String?,
+    ): Boolean {
+        if (!coverShowing || pkg == null) return false
+        if (pkg == currentPkg) return false
+        if (isLauncher) return false
+        return activeWindowPkg != pkg
+    }
 }

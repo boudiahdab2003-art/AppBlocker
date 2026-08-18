@@ -13,6 +13,15 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.131", "Aug 18, 2026", "The flashing Shorts block, and why website blocks were flimsier than app blocks", listOf(
+        "**You opened Shorts in a browser and the block screen flashed on and off without actually blocking anything.** Here's what was happening: the app has two separate things that block Shorts — one watches the YouTube app, the other watches browsers — and both were marking their block screen with the same label.",
+        "So the YouTube watcher kept seeing a Shorts block screen while you weren't in YouTube, decided it was a leftover, and pulled it down. The browser watcher put it straight back. Several times a second, with the page perfectly usable in between. Now the browser one is marked as what it is — a blocked *page* — so nothing else touches it. It covers the Shorts page and stays there, and the rest of the browser keeps working.",
+        "**You also said word blocking flashes where app blocking never does, and you were right — it was built weaker.** Three separate places treated a block screen over a *page* as belonging to nobody:",
+        "The part of the app that asks \"is this whole app blocked?\" was allowed to take down a block screen that had been put up to answer a completely different question (\"is this page blocked?\"). Your browser isn't blocked, so every time it stirred, the answer was \"no\" — and the page block came down with it.",
+        "A block screen over an app can also be knocked down by a *background* app quietly announcing a window. App blocks have been protected from that for a long time; page and word blocks never were.",
+        "**And the worst part was the bit you can't see.** Once a page had been blocked, the app remembered the text so it wouldn't keep re-checking it. But that memory outlived the block screen — so if the screen came down wrongly, the page read as \"already dealt with\" and was *never covered again*. The flash you noticed was one frame of a page that then sat there unblocked. That memory now only counts while the block screen is actually up.",
+        "The upshot: a blocked word or a blocked website now holds exactly like a blocked app does — it lands once, stays until you leave or tap Got it, and doesn't flicker.",
+    )),
     VersionLog("1.130", "Aug 14, 2026", "Your report about Claude — and why I couldn't answer it", listOf(
         "**You reported that the app blocked Claude and you didn't know why. I couldn't tell you, and that's a flaw in the report, not in your description.**",
         "Here's what your report did tell me: three of the blocks were the off-switch guard bouncing you out of Settings — that's you going to look into it afterwards, not the thing that happened. The block you actually hit was two minutes earlier, and it was an **app rule** firing. Not a blocked word, not a website.",

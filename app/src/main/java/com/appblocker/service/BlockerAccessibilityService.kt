@@ -459,6 +459,11 @@ class BlockerAccessibilityService : AccessibilityService() {
                 if (actual != null && actual != packageName && !isTransientSurface(actual)) {
                     handleAppBlock(pkg)
                 }
+                // Nothing is covered and this app is one we read: re-arm the page scan. A blocked
+                // page that has finished loading emits no events, so if its cover ever came down
+                // there would otherwise be nothing left to put it back until the user touched
+                // something. Debounced and gated by shouldScanPkg, so a neutral app costs nothing.
+                if (!overlay.isShowing && shouldScanPkg(pkg)) scheduleWebScan()
             } else if (overlay.isAppBlock && !shouldBlock(pkg)) {
                 // The condition ended while the cover was up → release without an app switch.
                 // (Acting only on this transition also avoids re-recording an "attempt" every
@@ -684,20 +689,51 @@ class BlockerAccessibilityService : AccessibilityService() {
         // None of that is a foreground change, so stop before any of it. Whatever is underneath
         // has not stopped being blocked, and the surface is drawn over our cover anyway.
         if (pkg != null && isTransientSurface(pkg)) return
-        // Keep a live app-block cover rock-solid. A blocked app runs behind the (non-focusable)
-        // cover and can spit out stray windows — a system/floating popup, a splash, a different-
-        // package sub-window — whose window-state event carries a package that isn't blocked.
-        // Acting on it would set lastForegroundPkg to that stray package and tear the cover down
-        // (handleAppBlock → blockReason null → removeBlockOverlay), then the blocked app's own
+        // Keep a live cover rock-solid — ANY cover, which is the part this used to get wrong. A
+        // covered app runs behind the (non-focusable) cover and can spit out stray windows — a
+        // system/floating popup, a splash, a different-package sub-window — whose window-state
+        // event carries a package that isn't blocked, and background apps emit them routinely.
+        // Acting on one would set lastForegroundPkg to that stray package and tear the cover down
+        // (handleAppBlock → blockReason null → removeBlockOverlay), then the covered app's own
         // window returns and re-blocks: the "disappears ~2s then reblocks" flicker. Ignore any
         // such new package unless it's the confirmed active window (a real switch — our overlay
         // is FLAG_NOT_FOCUSABLE so it never holds focus) or a launcher (Home is always honored,
         // so the user can't be trapped).
-        if (overlay.isShowing && overlay.isAppBlock &&
-            pkg != null && pkg != lastForegroundPkg &&
-            !isLauncherPkg(pkg) &&
-            rootInActiveWindow?.packageName?.toString() != pkg
-        ) return
+        //
+        // It used to stop at `overlay.isAppBlock`, so a page or word cover — the only kind with no
+        // rule of its own to put it back, since a blocked site arms no lockout — had no protection
+        // at all. See CoverGate.strayWindowEvent and invariant 18.
+        // (isLauncherPkg can cost a PackageManager query, so the cheap tests stay out here and
+        // the rule is only asked on a package change while a cover is up — exactly when the old
+        // inline version paid for it.)
+        if (overlay.isShowing && pkg != null && pkg != lastForegroundPkg &&
+            CoverGate.strayWindowEvent(
+                coverShowing = true,
+                pkg = pkg,
+                currentPkg = lastForegroundPkg,
+                isLauncher = isLauncherPkg(pkg),
+                activeWindowPkg = rootInActiveWindow?.packageName?.toString(),
+            )
+        ) {
+            // The escape-hatch guard still runs, exactly as on the unconfirmed-package path
+            // below: it is about a dangerous page *opening*, it reads the real screen rather than
+            // trusting this event's package, it has its own bounce throttle, and being early
+            // there is the safe direction.
+            handleSettingsGuard(pkg, className)
+            // A real switch can simply have lost the race with the window tree, so re-read it
+            // shortly rather than waiting for whatever event happens to come next — the same
+            // recovery the unconfirmed-package path below uses, class name carried with it.
+            //
+            // An app-block cover could afford to just return: the app underneath stays blocked
+            // whatever this event was. A page cover cannot, which is why this guard no longer
+            // stops at `overlay.isAppBlock` — nothing else would put it back if a stray event tore
+            // it down, and nothing else takes it down if the user really did leave.
+            pendingClassNamePkg = pkg
+            pendingClassName = className
+            handler.removeCallbacks(confirmForegroundRunnable)
+            handler.postDelayed(confirmForegroundRunnable, CONFIRM_MS)
+            return
+        }
         // A window-state event is NOT proof that its package is what the user is looking at.
         // Background apps emit them routinely — a message arriving, a service window, an
         // activity transitioning behind whatever is actually in front. The content-changed
@@ -866,10 +902,19 @@ class BlockerAccessibilityService : AccessibilityService() {
     private fun handleAppBlock(pkg: String) {
         val reason = blockReason(pkg)
         if (reason == null) {
-            // Keep a Shorts cover up even though the whole app isn't blocked — the shorts
-            // scan owns adding/removing it as the user moves in and out of Shorts.
-            if (pkg == YOUTUBE_PKG && shortsCovering) { lastBlockedPkg = null; return }
             lastBlockedPkg = null
+            // Not this path's cover to remove. It answers one question — is this whole app
+            // blocked? — and a "no" used to tear down whatever was up, including a cover raised by
+            // a different question entirely (is this PAGE blocked?). So a blocked page inside an
+            // unblocked browser was uncovered again by the browser's very next window event, which
+            // is the flicker the owner reported for Shorts in a browser. The rule used to exist
+            // here for the Shorts cover alone, by name; CoverGate.ownedByScan is the same rule for
+            // every scan's cover, and it still hands the cover back the moment the user is
+            // genuinely somewhere else (owner != pkg), so nothing is stranded.
+            if (CoverGate.ownedByScan(
+                    overlay.isShowing, overlay.isAppBlock, overlay.ownerPkg, pkg,
+                )
+            ) return
             overlay.remove() // left the blocked app — take the cover down
             return
         }
@@ -1673,7 +1718,15 @@ class BlockerAccessibilityService : AccessibilityService() {
         val text = extractVisibleText(::isLauncherPkg)
         if (DEBUG) Log.d(TAG, "scan[$pkg browser=$isBrowser]: ${text.length} chars: ${text.take(120)}")
         if (text.isBlank()) return
-        if (text == lastWebText) return
+        // Same text as the last thing we blocked on — skip only while that block is still ON
+        // SCREEN. lastWebText is only ever set for text that HIT (a miss nulls it below), so
+        // without the second half this dedup outlives the cover: any path that takes the cover
+        // down early leaves the page reading as "already handled" and it is never covered again.
+        // That is what turned a one-frame flicker into a page sitting there unblocked, and it is
+        // the invisible half of the bug — the owner sees the flash, never the silence after it.
+        // The cost of dropping it is one bounded walk over a page already known to be blocked;
+        // showBlockScreen dedups the cover and CoverGate dedups the count.
+        if (text == lastWebText && overlay.isShowing) return
         // The site the user is actually ON (browsers only) — keyword matching prefers it
         // over the page text so a page merely mentioning a blocked word doesn't block.
         val url = if (isBrowser) rememberedBrowserUrl(pkg) else null
@@ -1692,9 +1745,17 @@ class BlockerAccessibilityService : AccessibilityService() {
             lastWebText = text
             withContext(Dispatchers.Main) {
                 if (lastForegroundPkg == pkg && stillOnScreen(pkg)) {
+                    // Keyed as the page block it is, NOT with CoverGate.SHORTS_KEY. That key is
+                    // the YouTube-player scan's ownership marker: `shortsCovering` is derived from
+                    // it alone, so a browser cover wearing it was removed by scheduleShortsScan on
+                    // every content event ("a Shorts cover outside YouTube") and re-raised by the
+                    // next scan of the churning page — the flashing the owner reported, with the
+                    // page usable in between. As "web" it behaves like every other page block:
+                    // held while he is on the page, dismiss-suppressed after "Got it", counted in
+                    // Insights' Websites row. The log still says why=shorts.
                     showBlockScreen(title = "Shorts blocked",
                         message = "YouTube Shorts is blocked.", packageName = null,
-                        counterKey = CoverGate.SHORTS_KEY, why = "shorts")
+                        counterKey = "web", offenceKey = pkg, why = "shorts")
                 } else lastWebText = null // left during the scan — don't cover what's there now
             }
             return
@@ -1921,7 +1982,12 @@ class BlockerAccessibilityService : AccessibilityService() {
                 context = applicationContext,
                 kind = when {
                     counterKey == "strict_guard" -> "guard"
-                    counterKey == CoverGate.SHORTS_KEY -> "shorts"
+                    // `why` as well as the key: the browser Shorts cover is *counted* as a web
+                    // block (it is a page block, and must not wear the player scan's key — see
+                    // scanWebContent), but in a report it is still a Shorts block and reading it
+                    // as "word" would send the next reader looking for a keyword that never
+                    // existed. Invariant 17: an instrument must mean one thing.
+                    counterKey == CoverGate.SHORTS_KEY || why == "shorts" -> "shorts"
                     packageName != null -> "app"
                     else -> "word"
                 },
@@ -1952,6 +2018,10 @@ class BlockerAccessibilityService : AccessibilityService() {
             message = msg,
             counterKey = counterKey,
             isAppBlock = packageName != null,
+            // The app this cover is going up OVER, which for a page/word/purchase/guard cover is
+            // the only thing that says whose it is — `packageName` above is set for whole-app
+            // blocks alone. See BlockOverlay.ownerPkg and CoverGate.ownedByScan.
+            ownerPkg = lastForegroundPkg,
             onClose = ::onCoverDismissed,
             iconLoader = ::loadIcon,
             freshBlock = fresh,

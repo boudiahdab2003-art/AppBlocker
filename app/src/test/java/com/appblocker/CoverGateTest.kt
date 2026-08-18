@@ -216,4 +216,94 @@ class CoverGateTest {
         // Whereas keying on what each was recorded under would have counted both.
         assertTrue(CoverGate.shouldCount(app, lastCountedOffence = "web", sinceLastCountMs = 3_000L))
     }
+
+    // --- Whose cover is it (CoverGate.ownedByScan) ---
+
+    @Test
+    fun `a page cover over the app in front is not the app-block path's to remove`() {
+        // The browser is not blocked as an app, so blockReason answers null every time it emits a
+        // window event. Removing the cover there is what made a blocked page flicker.
+        assertTrue(
+            CoverGate.ownedByScan(
+                coverShowing = true, isAppBlock = false, coverOwner = app, pkg = app,
+            )
+        )
+    }
+
+    @Test
+    fun `a page cover is released once a different app is really in front`() {
+        // The other direction matters as much: protect it forever and it strands over an app that
+        // was never blocked.
+        assertFalse(
+            CoverGate.ownedByScan(
+                coverShowing = true, isAppBlock = false, coverOwner = app, pkg = other,
+            )
+        )
+    }
+
+    @Test
+    fun `a whole-app cover always belongs to the app-block path`() {
+        assertFalse(
+            CoverGate.ownedByScan(
+                coverShowing = true, isAppBlock = true, coverOwner = app, pkg = app,
+            )
+        )
+    }
+
+    @Test
+    fun `nothing is owned when no cover is up, or when the owner is unknown`() {
+        assertFalse(
+            CoverGate.ownedByScan(
+                coverShowing = false, isAppBlock = false, coverOwner = app, pkg = app,
+            )
+        )
+        assertFalse(
+            CoverGate.ownedByScan(
+                coverShowing = true, isAppBlock = false, coverOwner = null, pkg = app,
+            )
+        )
+    }
+
+    // --- Stray window events while a cover is up (CoverGate.strayWindowEvent) ---
+
+    private fun stray(
+        coverShowing: Boolean = true,
+        pkg: String? = other,
+        currentPkg: String? = app,
+        isLauncher: Boolean = false,
+        activeWindowPkg: String? = null,
+    ) = CoverGate.strayWindowEvent(coverShowing, pkg, currentPkg, isLauncher, activeWindowPkg)
+
+    @Test
+    fun `a package the window tree does not confirm is ignored while a cover is up`() {
+        // The classic case: our own non-focusable cover is what the tree reports, which says
+        // nothing about what is behind it.
+        assertTrue(stray(activeWindowPkg = "com.appblocker"))
+        assertTrue(stray(activeWindowPkg = null))
+    }
+
+    @Test
+    fun `this guard is not limited to whole-app covers`() {
+        // It used to be, and a page cover therefore had no protection at all — the one kind with
+        // no rule of its own to put it back, since a blocked site arms no lockout.
+        assertTrue(stray(activeWindowPkg = app))
+    }
+
+    @Test
+    fun `a confirmed app switch is acted on`() {
+        assertFalse(stray(activeWindowPkg = other))
+    }
+
+    @Test
+    fun `Home is always honoured`() {
+        // Invariant 7: the user must never be trapped under a cover.
+        assertFalse(stray(isLauncher = true, activeWindowPkg = app))
+    }
+
+    @Test
+    fun `nothing is stray when no cover is up, or when the package has not changed`() {
+        assertFalse(stray(coverShowing = false, activeWindowPkg = app))
+        assertFalse(stray(pkg = app, activeWindowPkg = null))
+        assertFalse(stray(pkg = null))
+    }
 }

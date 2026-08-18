@@ -177,6 +177,33 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     raised it — the second thing that report needed and could not say. The shape to watch for: a
     boolean whose `false` branch is reached by two paths with opposite meanings.
 
+18. **A cover belongs to the layer that raised it, and only that layer may take it down.** Three
+    different layers raise covers — the app-block path (*is this whole app blocked?*), the page
+    scans (*is this page blocked?*), the guard and the purchase check — and until 18 Aug 2026 only
+    the first one's covers had an owner. `overlay.isAppBlock` was the whole of it, so a page or word
+    cover was nobody's property and three separate places felt free to remove it:
+    `handleAppBlock` on `reason == null` (the browser is not a blocked *app*, so that fires on every
+    window event it emits), the stray-window guard in `onForegroundChanged` (which only protected
+    app covers, so a background package's event adopted the foreground and the cover went with it),
+    and — the invisible half — the web scan's `lastWebText` dedup, which **outlived the cover it was
+    taken for**: once a wrongly-removed page read as "already handled", it was never covered again.
+
+    The reported symptom was Shorts opened in a *browser*: that cover was keyed
+    `CoverGate.SHORTS_KEY`, which is the YouTube-player scan's ownership marker (`shortsCovering` is
+    derived from it alone), so `scheduleShortsScan` removed it as a stray on every content event
+    while the web scan re-raised it — flashing several times a second with the page usable in
+    between. Two owners, one key: the invariant-8 mistake wearing the recurring "two sources of
+    truth" shape. Fixed by giving every cover an owner (`BlockOverlay.ownerPkg`), by making the two
+    removal rules pure and tested (`CoverGate.ownedByScan`, `CoverGate.strayWindowEvent`), and by
+    keying the browser Shorts cover as the page block it is.
+
+    **The general shape: `isAppBlock` was doing double duty as "is this cover important".** Ask of
+    any protection whether the thing that can undo it is answering the same question that raised
+    it — and note which direction the asymmetry runs. A blocked *word* survived all three of these
+    because it also arms a 30-minute lockout, so the app-block path starts agreeing; a blocked
+    *site* arms nothing, which is exactly why the fragile layer was the one nobody could see
+    failing.
+
 ## Device quirks these invariants exist for
 
 - Gesture-nav Home on HyperOS often emits **no accessibility event at all**, so the foreground
@@ -260,6 +287,27 @@ Outside the watcher the same method transfers: enumerate the *primitives the fea
 from*, not the feature. For the updater (sweep 12) that was every `openConnection`, every write to
 a fixed path, every version comparison, and every platform call with a minSdk floor — four greps,
 six findings.
+
+### Swept in the "cover ownership" pass (18 Aug 2026) — every cover removal, again
+
+The first hunt swept cover *removals* and found three bugs with one cause. This pass asked a
+different question of the same sites — **not "is this removal correct?" but "whose cover is it?"**
+— and found the first sweep had implicitly answered it for app covers only.
+
+- browser Shorts borrowing `CoverGate.SHORTS_KEY` — **the owner's report**: raise/remove ping-pong
+  between the web scan and `scheduleShortsScan`, i.e. a cover flashing several times a second while
+  blocking nothing. Now keyed `"web"` (with `why="shorts"` still in the log).
+- `handleAppBlock`'s unconditional `overlay.remove()` on `reason == null` — took down page, word,
+  purchase and guard covers raised over the app that was still in front. The rule already existed
+  in this function for the Shorts cover alone, spelled out by name, which is what a general rule
+  looks like when it is noticed for one caller.
+- the stray-window guard stopping at `overlay.isAppBlock` — the one kind of cover with no rule of
+  its own to re-raise it was the one kind left unguarded.
+- `lastWebText` outliving the cover — a dedup that turns any spurious removal into a permanent
+  under-block. **This is the one that mattered**: the flash is what the owner reports, the silence
+  afterwards is what he cannot.
+- Not found, deliberately left: the purchase and guard covers now also survive until their owner
+  leaves the foreground. The guard keeps its own 1.5s safety-net removal, so nothing is stranded.
 
 ### Swept so far (25 Jul 2026)
 
