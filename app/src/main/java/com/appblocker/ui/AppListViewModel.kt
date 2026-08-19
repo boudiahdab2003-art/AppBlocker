@@ -9,12 +9,16 @@ import com.appblocker.data.AppCategory
 import com.appblocker.data.AppRule
 import com.appblocker.data.BlockMode
 import com.appblocker.data.BlockerDatabase
+import com.appblocker.data.DeviceBoot
 import com.appblocker.data.InstalledAppsRepository
 import com.appblocker.data.POPULAR_APPS
+import com.appblocker.data.SettingsStore
+import com.appblocker.data.StrictEdits
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -38,6 +42,7 @@ data class AppItem(
 class AppListViewModel(app: Application) : AndroidViewModel(app) {
 
     private val dao = BlockerDatabase.get(app).appRuleDao()
+    private val focusDao = BlockerDatabase.get(app).focusDao()
 
     val loading = MutableStateFlow(true)
 
@@ -101,14 +106,36 @@ class AppListViewModel(app: Application) : AndroidViewModel(app) {
         InstalledAppsRepository.refreshUsage(getApplication())
     }
 
-    /** Commit both Quick Block selections at once: an app is blocked iff it's in [blocked] and
-     *  allowed iff it's in [allowed]. Writing both fields in a single row per app keeps the two
-     *  selections independent and avoids a clobber when the same app is toggled in both lists. */
+    /**
+     * Commit both Quick Block selections at once: an app is blocked iff it's in [blocked] and
+     * allowed iff it's in [allowed]. Writing both fields in a single row per app keeps the two
+     * selections independent and avoids a clobber when the same app is toggled in both lists.
+     *
+     * **Strict Mode is enforced here, not only by the checkbox that refuses to un-tick.** The
+     * editor stages its selection and stops re-syncing once it has been touched, so an app blocked
+     * elsewhere after it was opened — by `NewAppWatcher`, by a template, by the other screen —
+     * reads to this function as "the user un-ticked this", and an upsert that clears `isBlocked`
+     * removes protection exactly as effectively as a delete. During a session the weakening
+     * direction of whichever list is enforcing is put back
+     * ([StrictEdits.allowedSelections]); tightening always goes through.
+     */
     fun commitQuickBlock(blocked: Set<String>, allowed: Set<String>) {
         viewModelScope.launch {
-            val changed = apps.value.mapNotNull { a ->
-                val shouldBlock = a.packageName in blocked
-                val shouldAllow = a.packageName in allowed
+            val live = apps.value
+            val remaining = StrictEdits.strictRemaining(
+                focusDao.get().first(), DeviceBoot.count(getApplication()),
+            )
+            val (safeBlocked, safeAllowed) = StrictEdits.allowedSelections(
+                currentBlocked = live.filter { it.isBlocked }.mapTo(mutableSetOf()) { it.packageName },
+                currentAllowed = live.filter { it.isAllowed }.mapTo(mutableSetOf()) { it.packageName },
+                targetBlocked = blocked,
+                targetAllowed = allowed,
+                strict = remaining > 0L,
+                allowlistMode = SettingsStore.quickBlockAllowlist(getApplication()),
+            )
+            val changed = live.mapNotNull { a ->
+                val shouldBlock = a.packageName in safeBlocked
+                val shouldAllow = a.packageName in safeAllowed
                 if (a.isBlocked == shouldBlock && a.isAllowed == shouldAllow) null
                 else AppRule(
                     packageName = a.packageName,

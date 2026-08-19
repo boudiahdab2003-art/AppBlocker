@@ -43,12 +43,12 @@ import com.appblocker.data.NewAppWatcher
 import com.appblocker.data.OffSwitchGuard
 import com.appblocker.data.OwnUi
 import com.appblocker.data.QuickSession
-import com.appblocker.data.SOCIAL_DOMAINS
 import com.appblocker.data.Schedule
 import com.appblocker.data.ScheduleType
 import com.appblocker.data.ServiceHealth
 import com.appblocker.data.SessionClock
 import com.appblocker.data.SettingsStore
+import com.appblocker.data.StrictEdits
 import com.appblocker.data.UnlockCounter
 import com.appblocker.data.UpdatePause
 import com.appblocker.data.WatcherDiagnostics
@@ -1029,7 +1029,7 @@ class BlockerAccessibilityService : AccessibilityService() {
             },
             packageName = null,
             counterKey = "strict_guard",
-            why = "guard",
+            why = BlockWhy.GUARD,
         )
         performGlobalAction(GLOBAL_ACTION_HOME)
         // Safety net: a null-package cover has no owner to auto-remove it, so if HOME is slow or
@@ -1207,7 +1207,7 @@ class BlockerAccessibilityService : AccessibilityService() {
             message = "In-app purchases are blocked.",
             packageName = null,
             counterKey = "purchase",
-            why = "purchase",
+            why = BlockWhy.PURCHASE,
         )
         return true
     }
@@ -1572,24 +1572,20 @@ class BlockerAccessibilityService : AccessibilityService() {
 
     /** True when Quick Block is currently enforcing (Strict on, a session says block now, or
      *  not paused) — mirrors the gating used for app blocking in [shouldBlock]. */
-    private fun quickBlockActive(): Boolean {
-        if (strictRemaining() > 0L) return true
-        if (updatePaused) return false // after-update pause (strict handled above)
-        val session = QuickSession.state(this)
-        return if (session.active) session.blockingNow else !SettingsStore.quickBlockPaused(this)
-    }
+    private fun quickBlockActive(): Boolean = QuickSession.enforcing(
+        strictRemaining(), updatePaused, QuickSession.state(this),
+        SettingsStore.quickBlockPaused(this),
+    )
 
     /** Website keywords for the social apps the user has blocked, so a blocked app's site is
-     *  blocked too. Empty while Quick Block is paused so pausing relieves the web block as well. */
-    private fun autoSocialKeywords(): List<String> {
-        // Auto-blocking a blocked app's website is a Blocklist concept; in Allowlist mode the
-        // allowed browser is allowed and the user's own keywords still apply.
-        if (allowlistMode || !quickBlockActive()) return emptyList()
-        return rules.values.asSequence()
-            .filter { it.isBlocked && it.mode != BlockMode.LIMIT }
-            .flatMap { (SOCIAL_DOMAINS[it.packageName] ?: emptyList()).asSequence() }
-            .toList()
-    }
+     *  blocked too. Empty while Quick Block is paused so pausing relieves the web block as well.
+     *
+     *  Auto-blocking a blocked app's website is a Blocklist concept; in Allowlist mode the allowed
+     *  browser is allowed and the user's own keywords still apply. The derivation itself lives in
+     *  [StrictEdits.liveSiteWords] because the Blocked-words screen needs the same answer — a word
+     *  this list already covers is one Strict Mode can afford to let go. */
+    private fun autoSocialKeywords(): List<String> =
+        StrictEdits.liveSiteWords(rules.values, allowlistMode, quickBlockActive()).map { it.word }
 
     /**
      * Covers a blocked site the moment the address bar says we're on one — the fast half of
@@ -1635,7 +1631,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                 if (!hit.site) addKeywordLockout(pkg, hit.word)
                 showBlockScreen(
                     title = hit.title, message = hit.message, packageName = null,
-                    counterKey = "web", offenceKey = pkg, why = "web",
+                    counterKey = "web", offenceKey = pkg, why = BlockWhy.ofWebHit(hit.site),
                 )
             } else lastCheckedUrl = null // left during the lookup — re-decide on the way back
         }
@@ -1755,7 +1751,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                     // Insights' Websites row. The log still says why=shorts.
                     showBlockScreen(title = "Shorts blocked",
                         message = "YouTube Shorts is blocked.", packageName = null,
-                        counterKey = "web", offenceKey = pkg, why = "shorts")
+                        counterKey = "web", offenceKey = pkg, why = BlockWhy.SHORTS)
                 } else lastWebText = null // left during the scan — don't cover what's there now
             }
             return
@@ -1796,7 +1792,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                 // count as two attempts. A site hit adds no lockout, so nothing follows it.
                 showBlockScreen(
                     title = hit.title, message = hit.message, packageName = null,
-                    counterKey = "web", offenceKey = pkg, why = "web",
+                    counterKey = "web", offenceKey = pkg, why = BlockWhy.ofWebHit(hit.site),
                 )
             } else lastWebText = null // left during the scan — don't cover what's there now
         }
@@ -1910,7 +1906,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                         title = "Shorts blocked",
                         message = "YouTube Shorts is blocked. The rest of YouTube still works.",
                         packageName = null,
-                        counterKey = CoverGate.SHORTS_KEY, why = "shorts",
+                        counterKey = CoverGate.SHORTS_KEY, why = BlockWhy.SHORTS,
                     )
                 }
             }
@@ -1987,7 +1983,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                     // scanWebContent), but in a report it is still a Shorts block and reading it
                     // as "word" would send the next reader looking for a keyword that never
                     // existed. Invariant 17: an instrument must mean one thing.
-                    counterKey == CoverGate.SHORTS_KEY || why == "shorts" -> "shorts"
+                    counterKey == CoverGate.SHORTS_KEY || why == BlockWhy.SHORTS -> "shorts"
                     packageName != null -> "app"
                     else -> "word"
                 },

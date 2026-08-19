@@ -93,4 +93,25 @@ object QuickSession {
     }
 
     private fun idle() = State(active = false, blockingNow = false, remainingMillis = 0L, label = "")
+
+    /**
+     * Whether Quick Block is enforcing right now — Strict beats every pause, then the
+     * after-update pause, then a running session's own work/break phase, then the manual pause.
+     *
+     * Pure, and lifted out of the watcher's `quickBlockActive()` that used to be its only home,
+     * because the UI now needs the same answer: which website words are live depends on it, and a
+     * paraphrase of this in a second place is the "two sources of truth that drift" shape
+     * docs/BLOCKING_INVARIANTS.md opens with.
+     */
+    fun enforcing(
+        strictRemainingMs: Long,
+        updatePaused: Boolean,
+        session: State,
+        quickBlockPaused: Boolean,
+    ): Boolean = when {
+        strictRemainingMs > 0L -> true
+        updatePaused -> false
+        session.active -> session.blockingNow
+        else -> !quickBlockPaused
+    }
 }
