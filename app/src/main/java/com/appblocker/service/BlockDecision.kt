@@ -36,6 +36,24 @@ internal object BlockWhy {
         LOCKOUT, ALLOWLIST, STRICT, QUICK, LIMIT, SCHED_TIME, SCHED_USAGE, SCHED_LAUNCH,
         SCHED_WIFI, SCHED_LOCATION, BROWSER, UNKNOWN,
     )
+
+    // The layers that raise a cover without going through decideBlock — a page scan, the Shorts
+    // scan, the settings guard, the purchase watcher. They used to be loose strings at the raise
+    // sites, which is how the first two came to share one.
+    const val WORD = "word"                // a blocked word was on screen
+    const val SITE = "site"                // the address bar was on a blocked site
+    const val SHORTS = "shorts"            // Shorts, in the app or on the web
+    const val GUARD = "guard"              // Strict/uninstall settings guard
+    const val PURCHASE = "purchase"        // the Play billing sheet
+
+    /**
+     * A page scan raises one cover for two quite different findings, and until now both were
+     * logged as "web": a blocked WORD found in the page's text, and a blocked WEBSITE found in the
+     * address bar. They fail differently and get fixed differently — over-blocking is nearly
+     * always the word layer, a site opening freely is nearly always the address-bar layer — so a
+     * report that cannot tell them apart sends the next fix to the wrong one. Invariant 17.
+     */
+    fun ofWebHit(site: Boolean): String = if (site) SITE else WORD
 }
 
 /** Why an app is blocked right now — the block screen's title kicker + short human message,

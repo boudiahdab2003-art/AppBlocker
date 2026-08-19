@@ -34,7 +34,6 @@ import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.GetApp
 import androidx.compose.material.icons.filled.NoAdultContent
@@ -75,6 +74,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.appblocker.data.SettingsStore
+import com.appblocker.data.StrictEdits
 import com.appblocker.service.AccessibilityUtil
 
 /** The editor's internal pages. The picker drill-ins stay local (not top-level Overlays) so the
@@ -102,6 +102,8 @@ fun BlockEditorScreen(
     val apps by appsVm.apps.collectAsState()
     val loading by appsVm.loading.collectAsState()
     val savedKeywords by webVm.keywords.collectAsState()
+    // Website words live because their app is blocked — what makes a word removable mid-Strict.
+    val siteWords by webVm.liveSiteWords.collectAsState()
 
     // --- staged state (seeded from current data, mirrors until the user edits) ---
     // Blocklist and allowlist selections are staged independently so flipping the mode chooser
@@ -382,15 +384,14 @@ fun BlockEditorScreen(
                         }
                     }
                     items(keywords, key = { it }) { word ->
-                        Row(Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically) {
-                            Text(word, Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurface,
-                                style = MaterialTheme.typography.bodyLarge)
-                            IconButton(enabled = ed, onClick = { editedKw = true; keywords.remove(word) }) {
-                                Icon(Icons.Filled.Delete, contentDescription = "Remove",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
+                        BlockedWordRow(
+                            word = word,
+                            covering = remember(word, siteWords) {
+                                StrictEdits.coveringSiteWord(word, siteWords)
+                            },
+                            strictActive = strictActive,
+                            onRemove = { editedKw = true; keywords.remove(word) },
+                        )
                     }
                 }
             }

@@ -16,7 +16,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Apps
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.NoAdultContent
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -42,6 +41,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.appblocker.data.DeviceBoot
 import com.appblocker.data.OffSwitchGuard
 import com.appblocker.data.SettingsStore
+import com.appblocker.data.StrictEdits
 import kotlinx.coroutines.delay
 
 /**
@@ -56,6 +56,9 @@ fun KeywordsScreen(
 ) {
     val context = LocalContext.current
     val saved by webVm.keywords.collectAsState()
+    // The website words live because their app is blocked. A word one of these already covers can
+    // be removed during Strict Mode — see StrictEdits and BlockedWordRow.
+    val siteWords by webVm.liveSiteWords.collectAsState()
     var newWord by remember { mutableStateOf("") }
     var everywhere by remember { mutableStateOf(SettingsStore.keywordsEverywhere(context)) }
     var adultPack by remember { mutableStateOf(SettingsStore.adultWordsPack(context)) }
@@ -155,18 +158,14 @@ fun KeywordsScreen(
                     }
                 } else {
                     items(saved, key = { it }) { word ->
-                        Row(
-                            Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(word, Modifier.weight(1f),
-                                color = MaterialTheme.colorScheme.onSurface,
-                                style = MaterialTheme.typography.bodyLarge)
-                            IconButton(enabled = ed, onClick = { webVm.setKeywords(saved - word) }) {
-                                Icon(Icons.Filled.Delete, contentDescription = "Remove",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
+                        BlockedWordRow(
+                            word = word,
+                            covering = remember(word, siteWords) {
+                                StrictEdits.coveringSiteWord(word, siteWords)
+                            },
+                            strictActive = strictActive,
+                            onRemove = { webVm.setKeywords(saved - word) },
+                        )
                     }
                 }
 

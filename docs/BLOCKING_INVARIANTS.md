@@ -204,6 +204,45 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     *site* arms nothing, which is exactly why the fragile layer was the one nobody could see
     failing.
 
+19. **A lock belongs on the write, not on the button — and "weakening" means what actually gets
+    weaker.** Two halves of one change (20 Aug 2026), and the second is only safe because of the
+    first.
+
+    *The owner's request:* let a blocked word be removed mid-Strict **when it is a website that is
+    already blocked** — `instagram` while the Instagram app is on the block list, whose
+    `SOCIAL_DOMAINS` entry blocks `instagram.com` regardless. Invariant 16 says lock every
+    weakening control; the question is whether this one weakens anything. It does not, and the
+    reason has to be checked in invariant 16's own terms — *what does it leave behind when the
+    session ends?* The coverage cannot be retracted during the session (an app can't be un-blocked
+    mid-Strict, the Blocklist/Allowlist chip is frozen, `enforcing` short-circuits on Strict so no
+    pause reaches it), and after the session the removal is a single tap anyway — so unlike the
+    off-switch guard, nothing is *pre-arranged*. `StrictEdits.coveredBy` decides it, and the
+    direction of the test is the whole rule: the **site** word must match whole-word inside the
+    **user** word, which is what proves the site block is the broader one. `instagram` covers
+    `instagram.com`; it does not cover `insta`, which matches addresses `instagram` never would.
+    Sound *and* complete — if the site word does not sit inside the user word, then the user word
+    is itself an address the removal would unblock — and pinned against `checkUrl` in
+    `StrictEditsTest`, so the rule and the matcher cannot drift.
+
+    *What made it safe:* until this change the **only** thing stopping a mid-Strict removal was a
+    disabled button, and both editors already walked around it. `BlockEditorScreen` stages its
+    lists and diffs them on Save, so a word added on the other screen after that editor was
+    opened-and-edited read as a deletion; `AppListViewModel.commitQuickBlock` diffs the staged
+    selection against live rules, so an app blocked by `NewAppWatcher` after the editor opened read
+    as an un-tick — and **an upsert that clears `isBlocked` removes protection exactly as
+    effectively as a delete**. Both guards now live in the writers (`setKeywords`,
+    `commitQuickBlock`), which read the Strict row fresh and refuse the weakening direction
+    whatever set they are handed. That is what makes a *conditional* exception trustworthy at all:
+    a guard a caller can bypass cannot express "except when".
+
+    **The shape to grep for: a rule enforced where the user taps rather than where the data
+    changes.** Every staged editor in this app is a place where those are not the same moment.
+
+    This corrects the twentieth sweep below, which enumerated the deletes and concluded the UI gate
+    held. It missed both staged-write paths, and `purgeTemplateWordsOnce` — a third ungated
+    `dao.delete` caller. That one is one-shot, flag-guarded and has already run, so it is left
+    alone; but "every caller is gated" was not true when it was written.
+
 ## Device quirks these invariants exist for
 
 - Gesture-nav Home on HyperOS often emits **no accessibility event at all**, so the foreground

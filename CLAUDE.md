@@ -102,6 +102,13 @@ Telegram bot on first use) and ranked use-case plans live in **docs/SERVER.md**.
   times (v1.127's guard ejecting people for switching protection *on*, the guard row lowerable
   mid-session, the extra options frozen both ways); see invariant 16. Refusing to let someone arm
   a protection is never the safe direction.
+  **And "weakening" means what actually gets weaker.** A blocked word whose site is already blocked
+  by its app (`SOCIAL_DOMAINS`) can be removed mid-session, because nothing it blocked stops being
+  blocked — `StrictEdits.coveredBy`, invariant 19. That exception is only trustworthy because the
+  Strict rules now live on the **writes** (`WebFilterViewModel.setKeywords`,
+  `AppListViewModel.commitQuickBlock`) rather than on the buttons: the editors stage their lists,
+  so a disabled bin never saw a Save that deleted a word added elsewhere. Put a new rule where the
+  data changes, not where the user taps.
 - **Dialog windows report zero insets while drawing edge-to-edge** on this device —
   never rely on inset modifiers inside a `Dialog`; capture
   `WindowInsets.safeDrawing` in the activity window's scope and pass it in
