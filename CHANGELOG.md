@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.131
+- Blocked words and websites now hold as steady as a blocked app - the block screen no longer flashes on and off in a browser.
+
 ## v1.130
 - Blocked sites now work in browsers whose address bar is a label rather than a box to type in - which is why instagram.com was opening freely in Mi Browser. The Extra options in Quick Block can now be switched ON during a Strict session (off still refuses). The diagnostics screen now separates browsers it has actually read from ones it merely assumed it could read, which is how that hole stayed hidden. And every block screen now records which rule raised it, so a report saying "it blocked X and I don't know why" answers itself.
 
