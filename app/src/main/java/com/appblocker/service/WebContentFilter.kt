@@ -4,13 +4,48 @@ import android.content.Context
 import com.appblocker.data.ServiceHealth
 
 /**
+ * What the browser's address bar says — three answers, not two.
+ *
+ * It used to be a `String?`, and the null meant two opposite things: *"the bar is hidden, I could
+ * not read it"* (fullscreen video, a browser whose toolbar we can't parse — keep matching the page
+ * text, or hiding the toolbar becomes a bypass) and *"the bar is right there and it is empty"* (a
+ * start page — there is no page at all). Only the first meaning existed, so a blank bar got the
+ * fullscreen treatment and everything on screen was matched. That blocked the owner for *opening
+ * Chrome* (20 Aug 2026): a porn word out of his own history, sitting in a most-visited tile or the
+ * suggestion list, read as "he is on an adult page" and locked the browser for half an hour.
+ *
+ * `docs/BLOCKING_INVARIANTS.md` had this function listed under "Not yet swept" — *"where else does
+ * a null answer mean 'no' instead of 'don't know'?"* — which is exactly the shape it turned out to
+ * have. [Blank] is the missing third answer, and note which direction it runs in: it is a
+ * **successful** measurement of "there is no page here", where [Unreadable] is a failed one.
+ */
+sealed interface BrowserAddress {
+    /** A real address — or the text being typed into the bar, which is the same question asked
+     *  earlier ("where is he going?"), and is why a typed search is still caught. */
+    data class At(val url: String) : BrowserAddress
+
+    /** The bar is on screen and empty: a start/new-tab page, or a bar waiting to be typed into.
+     *  Nothing on that screen is a page the user opened. */
+    data object Blank : BrowserAddress
+
+    /** No address bar could be read: fullscreen video, a browser none of the tiers recognise, or
+     *  an app that has no address bar at all. Invariant 4 — a failed measurement is never
+     *  evidence, so every layer keeps falling back to the page text exactly as it always has. */
+    data object Unreadable : BrowserAddress
+
+    /** The address when there is one, for the callers that only want the string. */
+    val urlOrNull: String? get() = (this as? At)?.url
+}
+
+/**
  * Decides whether some on-screen text (a web address or search query) should be
  * blocked: user keywords first, then the bundled adult word pack (if enabled),
  * then — if enabled — the bundled adult site lists. Lists are loaded once from assets.
  *
- * [check]'s optional `url` is the browser's omnibox text: when present, user keywords
- * match the site/search the user is ON rather than anything the page happens to
- * mention. The adult layers always match the full text — never weaker on purpose.
+ * [check]'s [BrowserAddress] is the browser's omnibox: when it holds an address, the layers that
+ * ask *"which site is this?"* match that address rather than anything the page happens to mention.
+ * The word pack is the one layer that reads the page itself, and it is curated and whole-word
+ * matched for exactly that job.
  */
 // The constructor is internal (not private) purely so unit tests can build a filter from three
 // plain word lists — no Context, no assets. Production code must still go through [get].
@@ -21,8 +56,19 @@ class WebContentFilter internal constructor(
 ) {
     /** [site] = matched because the user blocked an app and this is that app's WEBSITE (not a
      *  typed word). Callers treat site hits more gently (cover the page, but don't lock the
-     *  whole browser), and they never fire on a mere page mention. */
-    data class Hit(val title: String, val message: String, val word: String? = null, val site: Boolean = false)
+     *  whole browser), and they never fire on a mere page mention.
+     *
+     *  [adult] = one of the three built-in adult layers fired rather than a word the user typed
+     *  in themselves. It changes nothing about the cover; it is there so the diagnostic log can
+     *  tell the two apart. Both used to record `why=word`, so a report about over-blocking could
+     *  not say which layer did it — invariant 17, and the same split v1.132 made for word/site. */
+    data class Hit(
+        val title: String,
+        val message: String,
+        val word: String? = null,
+        val site: Boolean = false,
+        val adult: Boolean = false,
+    )
 
     /**
      * @param siteKeywords domain words for apps the user blocked (e.g. "facebook"). Matched
@@ -31,12 +77,24 @@ class WebContentFilter internal constructor(
      */
     fun check(
         text: String,
-        url: String?,
+        address: BrowserAddress,
         userKeywords: List<String>,
         siteKeywords: List<String>,
         adultPack: Boolean,
         blockAdult: Boolean,
     ): Hit? {
+        // **A blank address bar is a start page, and a start page is not a page.**
+        //
+        // Everything on it belongs to the phone rather than to anything the user opened: the
+        // most-visited tiles, the suggestion list that drops down the moment the bar is tapped,
+        // recently closed tabs, the news feed. All of it is built out of his own history, which
+        // is why matching it was worse than useless — it blocked him for *opening Chrome*, and
+        // then locked the browser for half an hour, over a word he had not gone anywhere near.
+        //
+        // Nothing is lost by declining: the instant he types, the bar carries that text, the
+        // caller hands it over as [BrowserAddress.At], and every layer below runs against it.
+        // What stops counting is only what the phone shows him about where he has already been.
+        if (address is BrowserAddress.Blank) return null
         if (text.isBlank()) return null
         val lower = text.lowercase()
 
@@ -44,12 +102,23 @@ class WebContentFilter internal constructor(
         // MENTIONING "instagram" doesn't block — only being on instagram.com or searching
         // for it does), and fall back to the whole visible text when it couldn't
         // (fullscreen video, non-browser app) so a hidden omnibox is never a bypass.
-        val host = url?.lowercase()?.takeIf { it.isNotBlank() }
+        val host = address.urlOrNull?.lowercase()?.takeIf { it.isNotBlank() }
         if (host != null) {
-            // Both URL layers, in order — the same two [checkUrl] runs on its own for the
-            // undebounced address-bar check, so the fast path and the full scan can never
-            // disagree about what a URL means.
+            // All three URL layers, in order — the same two calls the undebounced address-bar
+            // check makes on its own, so the fast path and the full scan can never disagree
+            // about what a URL means.
             checkUrl(host, userKeywords, siteKeywords)?.let { return it }
+            // **The adult site and search lists are address lists**, and this is where they
+            // belong. `adult_domains.txt` is nothing but hostnames; `adult_keywords.txt` says so
+            // in its own header ("if any appears in a URL or search text") and is matched as a
+            // plain substring precisely so glued forms like `freeporntube` still hit. Both answer
+            // *"which site is this?"* — and page text cannot answer that question, it answers
+            // "what does this screen mention?". Run against a page they blocked a news article
+            // about porn, a recovery video, a page that merely links to a listed site, and the
+            // owner's browser start page. Same lesson as v1.105's "mentions us was never the
+            // right signal", and the same one the word pack learnt from the other side when it
+            // dropped "pornography"/"porno" for being what people *say about* porn.
+            checkUrlAdult(host, adultPack, blockAdult)?.let { return it }
         } else {
             for (k in userKeywords) {
                 // Whole-word like the pack below: a bare keyword ("instagram") must not fire on
@@ -62,6 +131,9 @@ class WebContentFilter internal constructor(
             // Site keywords are deliberately skipped with no URL: "block the website, not the
             // word", so a page that merely mentions a blocked app's name never blocks.
         }
+        // The word pack is the one adult layer that reads the **page**, and the only one built
+        // for it: ~100%-porn vocabulary, curated against exactly this kind of over-block, matched
+        // whole-word. An adult page that never names itself in its address is still caught here.
         if (adultPack && packWords.isNotEmpty()) {
             // Pack words match whole-word only (a short entry like "anal" or Arabic "كس" must
             // not fire inside "analysis" or "كسر"), against Arabic-normalized text so spelling
@@ -69,24 +141,36 @@ class WebContentFilter internal constructor(
             val norm = normalizeArabic(lower)
             for (w in packWords) {
                 if (containsWord(norm, w)) {
-                    return Hit("Adult content blocked", "“$w” is a blocked adult word.", w)
+                    return Hit("Adult content blocked", "“$w” is a blocked adult word.", w, adult = true)
                 }
             }
         }
-        if (blockAdult) {
+        // No address could be read at all — the toolbar is hidden behind a fullscreen video, or
+        // this is a browser none of the tiers recognise. The address lists fall back to the page
+        // text exactly as they always have: a failed measurement is not permission (invariant 4),
+        // and scrolling a toolbar away must never become the way out.
+        if (host == null && blockAdult) {
             for (d in adultDomains) {
-                if (lower.contains(d)) {
-                    return Hit("Adult site blocked", "This site is on the adult-content list.")
-                }
+                if (lower.contains(d)) return adultSiteHit(d)
             }
             for (k in adultKeywords) {
-                if (lower.contains(k)) {
-                    return Hit("Adult content blocked", "That search or page looks like adult content.")
-                }
+                if (lower.contains(k)) return adultSearchHit(k)
             }
         }
         return null
     }
+
+    /** Both adult-list messages name what they found, the way the pack's already does.
+     *
+     *  "That search or page looks like adult content" named nothing, so when it fired on the
+     *  owner's start page neither of us could say *which* word had done it — the block screen
+     *  could not be argued with, and the report could not be acted on. The word stays on the
+     *  device: [com.appblocker.data.BlockLog] and the bug report still carry no subjects. */
+    private fun adultSiteHit(domain: String) =
+        Hit("Adult site blocked", "“$domain” is on the adult-content list.", domain, adult = true)
+
+    private fun adultSearchHit(word: String) =
+        Hit("Adult content blocked", "“$word” looks like adult content.", word, adult = true)
 
     /**
      * The two layers that need nothing but the address bar: the user's own words, then the
@@ -137,20 +221,16 @@ class WebContentFilter internal constructor(
             val norm = normalizeArabic(lower)
             for (w in packWords) {
                 if (containsWord(norm, w)) {
-                    return Hit("Adult content blocked", "“$w” is a blocked adult word.", w)
+                    return Hit("Adult content blocked", "“$w” is a blocked adult word.", w, adult = true)
                 }
             }
         }
         if (blockAdult) {
             for (d in adultDomains) {
-                if (lower.contains(d)) {
-                    return Hit("Adult site blocked", "This site is on the adult-content list.")
-                }
+                if (lower.contains(d)) return adultSiteHit(d)
             }
             for (k in adultKeywords) {
-                if (lower.contains(k)) {
-                    return Hit("Adult content blocked", "That search or page looks like adult content.")
-                }
+                if (lower.contains(k)) return adultSearchHit(k)
             }
         }
         return null

@@ -42,18 +42,28 @@ internal object BlockWhy {
     // sites, which is how the first two came to share one.
     const val WORD = "word"                // a blocked word was on screen
     const val SITE = "site"                // the address bar was on a blocked site
+    const val ADULT = "adult"              // one of the built-in adult layers, not the user's word
     const val SHORTS = "shorts"            // Shorts, in the app or on the web
     const val GUARD = "guard"              // Strict/uninstall settings guard
     const val PURCHASE = "purchase"        // the Play billing sheet
 
     /**
-     * A page scan raises one cover for two quite different findings, and until now both were
-     * logged as "web": a blocked WORD found in the page's text, and a blocked WEBSITE found in the
-     * address bar. They fail differently and get fixed differently — over-blocking is nearly
-     * always the word layer, a site opening freely is nearly always the address-bar layer — so a
-     * report that cannot tell them apart sends the next fix to the wrong one. Invariant 17.
+     * A page scan raises one cover for three quite different findings, and they were logged as
+     * one code and then as two: a blocked WORD the user typed in themselves, a blocked WEBSITE
+     * found in the address bar, and one of the three built-in ADULT layers. They fail differently
+     * and get fixed differently — over-blocking is nearly always a word or the adult lists, a
+     * site opening freely is nearly always the address-bar layer — so a report that cannot tell
+     * them apart sends the next fix to the wrong one. Invariant 17.
+     *
+     * The adult split is what the 20 Aug start-page report needed and could not say: the cover
+     * that came up for opening Chrome logged `why=word`, which reads as "he blocked that word
+     * himself" and points the investigation at a list he had never touched.
      */
-    fun ofWebHit(site: Boolean): String = if (site) SITE else WORD
+    fun ofWebHit(site: Boolean, adult: Boolean = false): String = when {
+        site -> SITE
+        adult -> ADULT
+        else -> WORD
+    }
 }
 
 /** Why an app is blocked right now — the block screen's title kicker + short human message,
