@@ -1681,38 +1681,51 @@ class BlockerAccessibilityService : AccessibilityService() {
                 if (!hit.site) addKeywordLockout(pkg, hit.word)
                 showBlockScreen(
                     title = hit.title, message = hit.message, packageName = null,
-                    counterKey = "web", offenceKey = pkg, why = BlockWhy.ofWebHit(hit.site),
+                    counterKey = "web", offenceKey = pkg, why = BlockWhy.ofWebHit(hit.site, hit.adult),
                 )
             } else lastCheckedUrl = null // left during the lookup — re-decide on the way back
         }
     }
 
     /**
-     * The address bar for [pkg], falling back to the last one read there while it is hidden.
+     * The address bar for [pkg], falling back to the last one read there while it is **hidden** —
+     * and never while it is merely empty.
      *
-     * See [rememberedUrl] for why. The order matters and is the whole safety argument: a live read
-     * always wins and always replaces the memory, so the remembered value is only ever consulted
-     * in the one case it is for — the toolbar is not on screen and there is nothing to read.
+     * See [rememberedUrl] for why the memory exists. The order matters and is the whole safety
+     * argument: a live read always wins and always replaces the memory, so the remembered value is
+     * only ever consulted in the one case it is for — the toolbar is not on screen and there is
+     * nothing to read.
      */
-    private fun rememberedBrowserUrl(pkg: String): String? {
-        val live = extractBrowserUrl(pkg)
+    private fun rememberedBrowserAddress(pkg: String): BrowserAddress {
+        val read = extractBrowserAddress(pkg)
         val now = stopwatchNow()
-        if (live != null) {
-            rememberedUrl = live
+        if (read is BrowserAddress.At) {
+            rememberedUrl = read.url
             rememberedUrlPkg = pkg
             rememberedUrlAt = now
             // This browser has now demonstrably been read, so it stops counting as one we
             // "can't filter" — see SettingsStore.readableBrowsers. Cheap: a set lookup unless
             // it is the first time.
             SettingsStore.addReadableBrowser(applicationContext, pkg)
-            return live
+            return read
         }
-        if (rememberedUrlPkg != pkg) return null
+        // **An empty address bar is an answer, and the memory must give way to it.** Invariant 4
+        // cuts both ways: a *hidden* toolbar is a failed measurement, so answering from memory is
+        // right; a *visible empty* one is a successful measurement of "he is not on a page", and
+        // answering from memory there is how a new tab inherited the site he had just left for
+        // the next ten minutes. The bar was still found by its id, so this browser is readable —
+        // that much is recorded exactly as a live address would be.
+        if (read is BrowserAddress.Blank) {
+            forgetBrowserUrl()
+            SettingsStore.addReadableBrowser(applicationContext, pkg)
+            return read
+        }
+        if (rememberedUrlPkg != pkg) return BrowserAddress.Unreadable
         if (now - rememberedUrlAt > URL_MEMORY_MS) {
             rememberedUrl = null
-            return null
+            return BrowserAddress.Unreadable
         }
-        return rememberedUrl
+        return rememberedUrl?.let { BrowserAddress.At(it) } ?: BrowserAddress.Unreadable
     }
 
     /** Forgets the remembered address. Called on every foreground change: a different app is a
@@ -1774,19 +1787,29 @@ class BlockerAccessibilityService : AccessibilityService() {
         // showBlockScreen dedups the cover and CoverGate dedups the count.
         if (text == lastWebText && overlay.isShowing) return
         // The site the user is actually ON (browsers only) — keyword matching prefers it
-        // over the page text so a page merely mentioning a blocked word doesn't block.
-        val url = if (isBrowser) rememberedBrowserUrl(pkg) else null
+        // over the page text so a page merely mentioning a blocked word doesn't block. A
+        // non-browser has no address bar at all, which is Unreadable: exactly the null it used
+        // to pass, so its own words and the pack still match its text.
+        val address = if (isBrowser) rememberedBrowserAddress(pkg) else BrowserAddress.Unreadable
         // "Browser, but no address" is the shape this record exists to make visible — it is the
         // whole difference between a Chrome that blocks a site and a Brave that says nothing.
         // Only the host is kept; see WatcherDiagnostics.
         WatcherDiagnostics.record(
-            applicationContext, pkg, isBrowser, WatcherDiagnostics.hostOf(url),
+            applicationContext, pkg, isBrowser, WatcherDiagnostics.hostOf(address.urlOrNull),
             autoSocialKeywords(),
         )
 
         // YouTube Shorts opened in a browser (youtube.com/shorts) — while Quick Block is active.
+        // Same rule as the filter's, applied to the one address test that lives out here: an
+        // address answers for itself, an unreadable one falls back to the page (no bypass), and a
+        // start page answers nothing — a shorts link sitting in his history is not a page he is on.
+        val shortsText = when (address) {
+            is BrowserAddress.At -> address.url
+            BrowserAddress.Blank -> ""
+            BrowserAddress.Unreadable -> text.lowercase()
+        }
         if (isBrowser && SettingsStore.blockYoutubeShorts(applicationContext) && quickBlockActive() &&
-            (url ?: text.lowercase()).contains("youtube.com/shorts")
+            shortsText.contains("youtube.com/shorts")
         ) {
             lastWebText = text
             withContext(Dispatchers.Main) {
@@ -1817,9 +1840,12 @@ class BlockerAccessibilityService : AccessibilityService() {
         // adult layer (pack + adult sites) keeps matching.
         val ownWords = if (updatePauseActive()) emptyList() else userKeywords
         val hit = if (isBrowser) {
-            filter.check(text, url, ownWords, autoSocialKeywords(), adultPackOn, SettingsStore.blockAdult(applicationContext))
+            filter.check(text, address, ownWords, autoSocialKeywords(), adultPackOn, SettingsStore.blockAdult(applicationContext))
         } else {
-            filter.check(text, url = null, ownWords, siteKeywords = emptyList(), adultPackOn, blockAdult = false)
+            filter.check(
+                text, BrowserAddress.Unreadable, ownWords, siteKeywords = emptyList(),
+                adultPackOn, blockAdult = false,
+            )
         }
         if (hit == null) {
             lastWebText = null
@@ -1842,7 +1868,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                 // count as two attempts. A site hit adds no lockout, so nothing follows it.
                 showBlockScreen(
                     title = hit.title, message = hit.message, packageName = null,
-                    counterKey = "web", offenceKey = pkg, why = BlockWhy.ofWebHit(hit.site),
+                    counterKey = "web", offenceKey = pkg, why = BlockWhy.ofWebHit(hit.site, hit.adult),
                 )
             } else lastWebText = null // left during the scan — don't cover what's there now
         }

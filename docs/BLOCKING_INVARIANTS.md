@@ -243,6 +243,50 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     `dao.delete` caller. That one is one-shot, flag-guarded and has already run, so it is left
     alone; but "every caller is gated" was not true when it was written.
 
+20. **An address list may only be matched against an address — and "no address" is two different
+    answers.** Reported 20 Aug 2026: *opening Chrome*, before a single letter was typed, raised
+    "That search or page looks like adult content" and locked the browser for thirty minutes.
+
+    *The first half.* `adult_domains.txt` is a list of hostnames and `adult_keywords.txt` says in
+    its own header that it matches "a URL or search text" — it is deliberately a plain substring so
+    glued forms like `freeporntube` hit. Both answer **which site is this?**, and `check` was
+    running them over the whole page text, which answers a different question: **what does this
+    screen mention?** A browser start page is built out of the user's own history — most-visited
+    tiles, the suggestion list, recently closed tabs, the Discover feed, and (measured) Google's
+    *trending searches*, which are not even his. One word anywhere in that lot read as a visit.
+    This is v1.105's "mentions us was never the right signal" in a third place, and the word pack
+    had already learnt it from the other side when it dropped "pornography"/"porno" as the
+    vocabulary of *talking about* porn. The pack keeps the page-text job, because it is curated and
+    whole-word matched for exactly that; the two address lists now match the address.
+
+    *The second half, which is the deeper one.* `check`'s `url: String?` had `null` meaning both
+    *"the toolbar is hidden, I could not read it"* (fullscreen video — must fall back to page text
+    or scrolling becomes a bypass) and *"the bar is right there and empty"* (a start page — there
+    is no page at all). Only the first meaning existed. This file listed that exact parameter under
+    "Not yet swept" — *where else does a null answer mean "no" instead of "don't know"?* — so it
+    was a predicted bug that arrived before anyone went looking. `BrowserAddress` is the third
+    answer: `At` / `Blank` / `Unreadable`, where **`Blank` is a successful measurement and
+    `Unreadable` is a failed one**, and only the failed one may fall back.
+
+    **Two things here were only findable by driving a real browser, and both would have shipped a
+    fix that changed nothing.** First, on Chrome's new tab page the toolbar can carry *no*
+    `url_bar` node at all — the address moves into the page as a fakebox (`isStartPageId`), which
+    reads as "no bar", i.e. the old behaviour. Second, and worse: when the bar *is* there and
+    empty, Chrome hands its placeholder out as the node's own `text` **and** `hintText`
+    ("Search or type web address"), and tier 1 accepted it before anything asked whether the bar
+    was empty. So the app had been treating the placeholder as the site the user was on — it was
+    sitting in `diag_host` on the diagnostics screen the whole time, which is the second time that
+    screen has been the thing that could have said so. Emptiness is now decided **before** the text
+    is accepted. The general shape: *ask whether the field is empty before asking what it says* —
+    a placeholder is text, and every "is there a value here" test that reads the value first will
+    eventually accept one.
+
+    Same tier discipline as invariant 12 governs who may answer `Blank`: only the id-matched tiers,
+    because tiers 3 and 4 identify the bar *by its text* and to them an empty bar and no bar are
+    the same observation. And the memory is bound by it too — `rememberedBrowserAddress` forgets on
+    `Blank` instead of answering from the last page, which is what used to make a new tab inherit
+    the site just left for ten minutes.
+
 ## Device quirks these invariants exist for
 
 - Gesture-nav Home on HyperOS often emits **no accessibility event at all**, so the foreground
@@ -983,10 +1027,13 @@ this entry existed because the app could not be asked. It can now.
 
 ### Not yet swept
 
-- **Where else does a null answer mean "no" instead of "don't know"?** Three bugs now share this
+- **Where else does a null answer mean "no" instead of "don't know"?** Four bugs now share this
   root and the enumeration has never been done. The shape to grep for is a nullable read feeding a
   decision where `null` takes the permissive branch — `?: return`, `if (x != null)`, `?.let` around
-  a block that blocks. `WebContentFilter.check`'s URL is one; there will be others.
+  a block that blocks. ~~`WebContentFilter.check`'s URL is one~~ — **that one landed** (20 Aug 2026,
+  invariant 20): it was written here as a prediction and arrived as a report before anybody swept
+  it, which is the best argument this list has for being worked through rather than admired. The
+  remaining ones have still never been enumerated.
 - **Where else does a lookup have exactly one spelling?** The 13 Aug report was a hardcoded
   vendor string that silently meant "off". `SHORTS_ID_MARKERS` is the same shape and admits it
   ("exact ids vary by YouTube version"); so are the launcher, IME and dialer detections, though

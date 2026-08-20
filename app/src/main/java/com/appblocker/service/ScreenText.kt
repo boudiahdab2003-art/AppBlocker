@@ -1,6 +1,7 @@
 package com.appblocker.service
 
 import android.accessibilityservice.AccessibilityService
+import android.os.Build
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 
@@ -69,15 +70,6 @@ internal fun AccessibilityService.isShortsOnScreen(): Boolean? {
 }
 
 /**
- * The browser's omnibox text (trimmed, lowercased), or null when no omnibox is on
- * screen (fullscreen video, a browser UI change) — callers must then fall back to
- * page-text matching so fullscreen can't become a bypass. How it is found across the
- * different browsers is [omniboxText] (flagReportViewIds is set in our service config).
- */
-internal fun AccessibilityService.extractBrowserUrl(pkg: String): String? =
-    omniboxText(pkg, settledOnly = false)
-
-/**
  * The omnibox, but only once it has **settled into an address the user actually went to** —
  * null while they are still typing into it.
  *
@@ -95,6 +87,57 @@ internal fun AccessibilityService.extractBrowserUrl(pkg: String): String? =
  */
 internal fun AccessibilityService.extractSettledBrowserUrl(pkg: String): String? =
     omniboxText(pkg, settledOnly = true)
+
+/**
+ * The address bar as one of three answers rather than a nullable string — see [BrowserAddress].
+ * The address itself is the omnibox text, trimmed and lowercased; how it is found across the
+ * different browsers is [omniboxRead] (flagReportViewIds is set in our service config).
+ *
+ * The distinction this adds is **empty bar** vs **no bar**, and it is the whole of the start-page
+ * fix: an empty bar is a browser sitting on its start page (or waiting to be typed into), where
+ * everything on screen is the phone's own furniture — most-visited tiles, the suggestion list,
+ * recently closed tabs, the feed. A missing bar is a failed reading and keeps its old, cautious
+ * treatment.
+ *
+ * **Only the tiers that identify the bar structurally may answer [BrowserAddress.Blank].** Tiers 1
+ * and 2 find it by view id, so they can see it is there and empty. Tiers 3 and 4 identify it *by
+ * its text* — an editable host-shaped field, a sole host-shaped label in the chrome — so to them an
+ * empty bar and no bar are literally the same observation, and they only ever produce
+ * [BrowserAddress.At]. That is invariant 12's rule applied to a new answer: each tier inherits an
+ * assumption from the browser it was written against, so a browser we can only read by its text
+ * keeps exactly today's behaviour instead of being quietly declared blank.
+ *
+ * **And "empty bar" was not enough, which is why this was measured instead of reasoned about.**
+ * On Chrome's new tab page there is no address bar in the tree *at all* — the toolbar is there,
+ * `url_bar` is not, and the address moves into the page as a "fakebox" ([isStartPageId]). Read as
+ * "no bar", that is a failed measurement and the start page would have gone on being scanned;
+ * the fix would have looked right, passed its unit tests, and changed nothing on the phone. So a
+ * start-page search box is the second thing that answers [BrowserAddress.Blank], and it says the
+ * same thing the empty bar does, more directly: *this browser is not showing a page*.
+ */
+internal fun AccessibilityService.extractBrowserAddress(pkg: String): BrowserAddress {
+    val read = omniboxRead(pkg, settledOnly = false)
+    return when {
+        read.text != null -> BrowserAddress.At(read.text)
+        read.blankBar || read.startPage -> BrowserAddress.Blank
+        else -> BrowserAddress.Unreadable
+    }
+}
+
+/**
+ * View-id suffixes that name a browser's **start-page search box** — the "fakebox" Chromium draws
+ * in the middle of the new tab page, which is where the address bar goes while there is no page.
+ *
+ * Same suffix rule and same reason as [isOmniboxId]: the id is prefixed with the browser's own
+ * package, so matching the tail covers Chrome, Brave, Edge, Opera and the rest of the fork family
+ * at once. Matching an id rather than any text is also what makes this safe to trust — a rendered
+ * web page exposes no Android view ids at all, so nothing a site can draw reaches this test.
+ */
+internal fun isStartPageId(id: String): Boolean = START_PAGE_ID_SUFFIXES.any { id.endsWith(it) }
+
+private val START_PAGE_ID_SUFFIXES = listOf(
+    ":id/search_box_text", // Chromium's new-tab fakebox: Chrome and every fork of it
+)
 
 /**
  * View-id suffixes that name a browser's address bar.
@@ -156,7 +199,36 @@ private val OMNIBOX_ID_SUFFIXES = listOf(
  * would be misread. That is bounded by both rules, and unlike the failure it fixes it is visible —
  * the cover names the address, and Profile ▸ "What the blocker sees" prints what was read.
  */
-private fun AccessibilityService.omniboxText(pkg: String, settledOnly: Boolean): String? {
+private fun AccessibilityService.omniboxText(pkg: String, settledOnly: Boolean): String? =
+    omniboxRead(pkg, settledOnly).text
+
+/**
+ * What the walk found: the address, and — separately — whether it saw an address bar it could
+ * name by view id that was **empty**. The two are independent answers to different questions
+ * ("where is he?" and "is there a bar at all?"), which is why they are not one nullable string.
+ */
+private class OmniboxRead(val text: String?, val blankBar: Boolean, val startPage: Boolean)
+
+/**
+ * Whether an id-matched address bar is empty rather than holding an address.
+ *
+ * **The hint check is not defensive, it is the case that actually happens.** Measured on Chrome
+ * 14 (20 Aug 2026): tapping the address bar gives a node whose `text` *and* `hintText` are both
+ * "Search or type web address". So an empty bar does not look empty — it looks like an address —
+ * and the app had been reading that placeholder as the site the user was on, which is what
+ * `diag_host` showed on the diagnostics screen. Text equal to its own hint is a placeholder in
+ * every build that shows one, so treating it as empty costs nothing and is what makes the blank
+ * case detectable at all. `hintText` is API 26; below that the plain empty test stands alone.
+ */
+private fun blankBar(node: AccessibilityNodeInfo): Boolean {
+    val t = node.text?.toString()?.trim().orEmpty()
+    if (t.isEmpty()) return true
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
+    val hint = runCatching { node.hintText?.toString()?.trim() }.getOrNull().orEmpty()
+    return hint.isNotEmpty() && t.equals(hint, ignoreCase = true)
+}
+
+private fun AccessibilityService.omniboxRead(pkg: String, settledOnly: Boolean): OmniboxRead {
     val roots = ArrayList<AccessibilityNodeInfo>()
     rootInActiveWindow?.let(roots::add) // the omnibox the user sees wins
     windows?.forEach { w ->
@@ -177,12 +249,25 @@ private fun AccessibilityService.omniboxText(pkg: String, settledOnly: Boolean):
         return t
     }
 
+    // An address bar we could name but which held nothing, and a start-page search box standing
+    // in for one. Both are only ever set from a view id — see [extractBrowserAddress] for why the
+    // text-based tiers are not allowed to answer "blank".
+    var blankBarSeen = false
+    var startPageSeen = false
+
     // 1. The exact id.
     for (root in mine) {
         // Nodes can be recycled under us mid page-churn — treat failures as "not found".
         val nodes = runCatching { root.findAccessibilityNodeInfosByViewId("$pkg:id/url_bar") }
             .getOrNull() ?: continue
-        for (n in nodes) accept(n)?.let { return it }
+        for (n in nodes) {
+            // Emptiness is decided BEFORE the text is accepted, and that order is the whole
+            // point: Chrome hands its placeholder out as the node's text, so accepting first
+            // read "search or type web address" as the site he was on. It was in the
+            // diagnostics screen as the host, and it is what made the blank case invisible.
+            if (blankBar(n)) blankBarSeen = true
+            else accept(n)?.let { return OmniboxRead(it, blankBar = false, startPage = false) }
+        }
     }
 
     // 2, 3 and 4, in one walk each: a known omnibox id wins outright, a host-shaped editable field
@@ -198,7 +283,11 @@ private fun AccessibilityService.omniboxText(pkg: String, settledOnly: Boolean):
             val node = queue.removeFirst()
             visited++
             val id = runCatching { node.viewIdResourceName }.getOrNull()
-            if (id != null && isOmniboxId(id)) accept(node)?.let { return it }
+            if (id != null && isOmniboxId(id)) {
+                if (blankBar(node)) blankBarSeen = true
+                else accept(node)?.let { return OmniboxRead(it, blankBar = false, startPage = false) }
+            }
+            if (id != null && isStartPageId(id)) startPageSeen = true
             val editable = runCatching { node.isEditable }.getOrDefault(false)
             if (editable) {
                 if (editableHost == null) {
@@ -212,7 +301,7 @@ private fun AccessibilityService.omniboxText(pkg: String, settledOnly: Boolean):
             for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
         }
     }
-    return editableHost ?: soleHost(chromeLabels)
+    return OmniboxRead(editableHost ?: soleHost(chromeLabels), blankBarSeen, startPageSeen)
 }
 
 /**

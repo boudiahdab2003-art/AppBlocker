@@ -1,9 +1,11 @@
 package com.appblocker
 
+import com.appblocker.service.BrowserAddress
 import com.appblocker.service.KNOWN_BROWSERS
 import com.appblocker.service.KNOWN_READABLE_BROWSERS
 import com.appblocker.service.WebContentFilter
 import com.appblocker.service.isOmniboxId
+import com.appblocker.service.isStartPageId
 import com.appblocker.service.looksLikeHost
 import com.appblocker.service.soleHost
 import org.junit.Assert.assertEquals
@@ -16,8 +18,9 @@ import java.io.File
 
 /**
  * The word/site matcher is the most-fixed code in the app — v1.70 (false-positive blocks:
- * "it blocks and really there is nothing"), v1.88 (a bare "porn" covering non-sexual apps) and
- * v1.89 (social sites blocking pages that merely mention the app) were all matching fixes, each
+ * "it blocks and really there is nothing"), v1.88 (a bare "porn" covering non-sexual apps),
+ * v1.89 (social sites blocking pages that merely mention the app) and v1.133 (a block screen for
+ * *opening Chrome*, off the owner's own history in the start page) were all matching fixes, each
  * found on the phone rather than in a test. These pin the resulting rules down.
  *
  * [WebContentFilter.check] is pure, so no Context or Robolectric is needed.
@@ -30,11 +33,16 @@ class WebContentFilterTest {
         pack: List<String> = emptyList(),
     ) = WebContentFilter(domains, adultKeywords, pack)
 
+    // The three answers the address bar can give, short enough to read at a glance in a call.
+    private fun at(url: String) = BrowserAddress.At(url)
+    private val blank = BrowserAddress.Blank
+    private val unreadable = BrowserAddress.Unreadable
+
     // ---- user keywords: the URL, not a passing mention (v1.89) --------------------------
 
     @Test fun userKeywordMatchesTheUrl() {
         val hit = filter().check(
-            text = "some page text", url = "instagram.com/reels",
+            text = "some page text", address = at("instagram.com/reels"),
             userKeywords = listOf("instagram"), siteKeywords = emptyList(),
             adultPack = false, blockAdult = false,
         )
@@ -43,7 +51,7 @@ class WebContentFilterTest {
 
     @Test fun userKeywordIgnoresAPageThatMerelyMentionsIt() {
         val hit = filter().check(
-            text = "an article about instagram and its effects", url = "bbc.com/news/tech",
+            text = "an article about instagram and its effects", address = at("bbc.com/news/tech"),
             userKeywords = listOf("instagram"), siteKeywords = emptyList(),
             adultPack = false, blockAdult = false,
         )
@@ -53,7 +61,7 @@ class WebContentFilterTest {
     /** No readable omnibox (fullscreen video, a non-browser app) must never become a bypass. */
     @Test fun withoutAUrlTheKeywordFallsBackToPageText() {
         val hit = filter().check(
-            text = "instagram", url = null,
+            text = "instagram", address = unreadable,
             userKeywords = listOf("instagram"), siteKeywords = emptyList(),
             adultPack = false, blockAdult = false,
         )
@@ -64,7 +72,7 @@ class WebContentFilterTest {
 
     @Test fun siteKeywordBlocksTheSiteItself() {
         val hit = filter().check(
-            text = "feed", url = "https://www.facebook.com/",
+            text = "feed", address = at("https://www.facebook.com/"),
             userKeywords = emptyList(), siteKeywords = listOf("facebook"),
             adultPack = false, blockAdult = false,
         )
@@ -73,7 +81,7 @@ class WebContentFilterTest {
 
     @Test fun siteKeywordIsSkippedEntirelyWithoutAUrl() {
         val hit = filter().check(
-            text = "i was reading about facebook today", url = null,
+            text = "i was reading about facebook today", address = unreadable,
             userKeywords = emptyList(), siteKeywords = listOf("facebook"),
             adultPack = false, blockAdult = false,
         )
@@ -82,7 +90,7 @@ class WebContentFilterTest {
 
     @Test fun siteKeywordDoesNotFireOnAPageMentioningTheName() {
         val hit = filter().check(
-            text = "facebook facebook facebook", url = "news.ycombinator.com",
+            text = "facebook facebook facebook", address = at("news.ycombinator.com"),
             userKeywords = emptyList(), siteKeywords = listOf("facebook"),
             adultPack = false, blockAdult = false,
         )
@@ -111,7 +119,7 @@ class WebContentFilterTest {
         )) {
             val fast = f.checkUrl(url, words, sites)
             val full = f.check(
-                text = url, url = url, userKeywords = words, siteKeywords = sites,
+                text = url, address = at(url), userKeywords = words, siteKeywords = sites,
                 adultPack = false, blockAdult = false,
             )
             assertEquals(url, full?.title, fast?.title)
@@ -339,20 +347,20 @@ class WebContentFilterTest {
 
     @Test fun packWordDoesNotFireInsideALongerInnocentWord() {
         val f = filter(pack = listOf("anal"))
-        assertNull(f.check("data analysis results", null, emptyList(), emptyList(), true, false))
-        assertNull(f.check("banal conversation", null, emptyList(), emptyList(), true, false))
+        assertNull(f.check("data analysis results", unreadable, emptyList(), emptyList(), true, false))
+        assertNull(f.check("banal conversation", unreadable, emptyList(), emptyList(), true, false))
     }
 
     @Test fun packWordFiresAsAWholeWord() {
         val hit = filter(pack = listOf("anal"))
-            .check("anal", null, emptyList(), emptyList(), true, false)
+            .check("anal", unreadable, emptyList(), emptyList(), true, false)
         assertEquals("anal", hit?.word)
     }
 
     /** '.' and '/' are boundaries, so a bare domain word still matches inside a URL. */
     @Test fun dotsAndSlashesCountAsWordBoundaries() {
         val hit = filter().check(
-            text = "reels feed", url = "m.instagram.com/reels/xyz",
+            text = "reels feed", address = at("m.instagram.com/reels/xyz"),
             userKeywords = listOf("instagram"), siteKeywords = emptyList(),
             adultPack = false, blockAdult = false,
         )
@@ -361,7 +369,7 @@ class WebContentFilterTest {
 
     @Test fun keywordDoesNotFireGluedToAnotherWord() {
         val hit = filter().check(
-            text = "a blog", url = "instagrammers.example.com",
+            text = "a blog", address = at("instagrammers.example.com"),
             userKeywords = listOf("instagram"), siteKeywords = emptyList(),
             adultPack = false, blockAdult = false,
         )
@@ -373,43 +381,181 @@ class WebContentFilterTest {
     @Test fun arabicAlefVariantsMatchTheStoredForm() {
         // stored "احلام"; the text uses the hamza form "أحلام"
         val hit = filter(pack = listOf("احلام"))
-            .check("أحلام", null, emptyList(), emptyList(), true, false)
+            .check("أحلام", unreadable, emptyList(), emptyList(), true, false)
         assertNotNull(hit)
     }
 
     @Test fun arabicDiacriticsAndTatweelAreIgnored() {
         val hit = filter(pack = listOf("كلمه"))
-            .check("كــلمة", null, emptyList(), emptyList(), true, false)
+            .check("كــلمة", unreadable, emptyList(), emptyList(), true, false)
         assertNotNull(hit)
     }
 
     // ---- layers and switches -------------------------------------------------------------
 
     @Test fun blankTextNeverBlocks() {
-        assertNull(filter(pack = listOf("anal")).check("   ", null, listOf("x"), listOf("y"), true, true))
+        assertNull(filter(pack = listOf("anal")).check("   ", unreadable, listOf("x"), listOf("y"), true, true))
     }
 
     @Test fun packOnlyAppliesWhenTheSwitchIsOn() {
         val f = filter(pack = listOf("anal"))
-        assertNull(f.check("anal", null, emptyList(), emptyList(), false, false))
-        assertNotNull(f.check("anal", null, emptyList(), emptyList(), true, false))
+        assertNull(f.check("anal", unreadable, emptyList(), emptyList(), false, false))
+        assertNotNull(f.check("anal", unreadable, emptyList(), emptyList(), true, false))
     }
 
     @Test fun adultListsOnlyApplyWhenTheSwitchIsOn() {
         val f = filter(domains = listOf("example-adult.com"), adultKeywords = listOf("xxxsearch"))
-        assertNull(f.check("example-adult.com", null, emptyList(), emptyList(), false, false))
-        assertNotNull(f.check("example-adult.com", null, emptyList(), emptyList(), false, true))
-        assertNotNull(f.check("xxxsearch", null, emptyList(), emptyList(), false, true))
+        assertNull(f.check("example-adult.com", unreadable, emptyList(), emptyList(), false, false))
+        assertNotNull(f.check("example-adult.com", unreadable, emptyList(), emptyList(), false, true))
+        assertNotNull(f.check("xxxsearch", unreadable, emptyList(), emptyList(), false, true))
     }
 
     /** A user keyword wins over the pack, so the message names the word the user chose. */
     @Test fun userKeywordTakesPriorityOverThePack() {
         val hit = filter(pack = listOf("anal")).check(
-            text = "anal reddit", url = null,
+            text = "anal reddit", address = unreadable,
             userKeywords = listOf("reddit"), siteKeywords = emptyList(),
             adultPack = true, blockAdult = false,
         )
         assertEquals("reddit", hit?.word)
+    }
+
+    // ---- the start-page search box, matched the way the address bar is ------------------
+
+    /**
+     * The second route to "there is no page here", for the moment Chrome's toolbar has no
+     * address bar in the tree at all and the address has moved into the page as a fakebox.
+     * Suffix-matched for the same reason [isOmniboxId] is: the id carries the browser's own
+     * package, so the tail is what covers the whole Chromium fork family at once.
+     */
+    @Test fun everyChromiumForkStartPageBoxIsRecognised() {
+        for (pkg in listOf("com.android.chrome", "com.brave.browser", "com.microsoft.emmx")) {
+            assertTrue(pkg, isStartPageId("$pkg:id/search_box_text"))
+        }
+    }
+
+    /** Same `endsWith` discipline as the omnibox ids — a neighbouring view must not qualify. */
+    @Test fun viewsMerelyNamedAroundTheStartPageBoxAreNotIt() {
+        assertFalse(isStartPageId("com.android.chrome:id/search_box_text_container"))
+        assertFalse(isStartPageId("com.android.chrome:id/url_bar"))
+        assertFalse(isStartPageId("com.android.chrome:id/tile_view_title"))
+    }
+
+    // ---- the start page is not a page (v1.133) -------------------------------------------
+    //
+    // Reported as: opened Chrome, had not typed anything, "it looks like a porn content". A blank
+    // address bar was indistinguishable from an unreadable one, so the whole screen was matched —
+    // and a browser start page is made of the user's own history: most-visited tiles, the
+    // suggestion list, recently closed tabs, the feed.
+
+    @Test fun aBlankAddressBarMeansTheAdultListsMatchNothing() {
+        val f = filter(domains = listOf("pornhub.com"), adultKeywords = listOf("porn"))
+        assertNull(f.check("pornhub.com free porn", blank, emptyList(), emptyList(), false, true))
+    }
+
+    @Test fun aBlankAddressBarMeansThePackMatchesNothingEither() {
+        val f = filter(pack = listOf("xnxx"))
+        assertNull(f.check("xnxx most visited", blank, emptyList(), emptyList(), true, false))
+    }
+
+    /** Same rule, same reason: a suggestion out of his history is not a site he is on. */
+    @Test fun aBlankAddressBarMeansTheUsersOwnWordsMatchNothingEither() {
+        val f = filter()
+        assertNull(f.check("instagram.com recently closed", blank, listOf("instagram"), emptyList(), false, false))
+    }
+
+    /**
+     * The safety argument for all three above, and the reason declining costs nothing: the moment
+     * he types, the bar carries that text and the caller hands it over as an address.
+     */
+    @Test fun typingIntoTheEmptyBarIsStillCaught() {
+        val f = filter(adultKeywords = listOf("porn"), pack = listOf("xnxx"))
+        assertNotNull(f.check("porn videos", at("porn videos"), emptyList(), emptyList(), false, true))
+        assertNotNull(f.check("xnxx", at("xnxx"), emptyList(), emptyList(), true, false))
+        assertNotNull(
+            f.check("instagram", at("instagram"), listOf("instagram"), emptyList(), false, false),
+        )
+    }
+
+    // ---- an address list may only be matched against an address --------------------------
+
+    @Test fun theAdultSearchListNoLongerFiresOnAPageThatMerelyMentionsIt() {
+        val f = filter(adultKeywords = listOf("porn"))
+        val hit = f.check(
+            text = "a news article about porn addiction and how to quit",
+            address = at("news.example.com/health"),
+            userKeywords = emptyList(), siteKeywords = emptyList(),
+            adultPack = false, blockAdult = true,
+        )
+        assertNull(hit)
+    }
+
+    @Test fun theAdultSiteListNoLongerFiresOnAPageThatOnlyLinksToOne() {
+        val f = filter(domains = listOf("pornhub.com"))
+        val hit = f.check(
+            text = "sites we block for you: pornhub.com, xvideos.com",
+            address = at("news.example.com/health"),
+            userKeywords = emptyList(), siteKeywords = emptyList(),
+            adultPack = false, blockAdult = true,
+        )
+        assertNull(hit)
+    }
+
+    @Test fun theAdultListsStillCatchTheAddressItself() {
+        val f = filter(domains = listOf("pornhub.com"), adultKeywords = listOf("porn"))
+        assertNotNull(f.check("whatever", at("pornhub.com/x"), emptyList(), emptyList(), false, true))
+        assertNotNull(f.check("whatever", at("freeporntube.example"), emptyList(), emptyList(), false, true))
+    }
+
+    /**
+     * **The no-bypass case.** No address bar could be read at all — a fullscreen video, a browser
+     * none of the tiers recognise — so the address lists fall back to the page text exactly as
+     * they always have. A failed measurement is not permission (invariant 4), and scrolling the
+     * toolbar away must never become the way out.
+     */
+    @Test fun withNoAddressBarTheAdultListsStillReadThePage() {
+        val f = filter(domains = listOf("pornhub.com"), adultKeywords = listOf("porn"))
+        assertNotNull(f.check("watch porn now", unreadable, emptyList(), emptyList(), false, true))
+        assertNotNull(f.check("pornhub.com player", unreadable, emptyList(), emptyList(), false, true))
+    }
+
+    /**
+     * The word pack keeps reading the page, which is what makes narrowing the other two safe: an
+     * adult page that never names itself in its address is still caught by its own vocabulary.
+     */
+    @Test fun theWordPackStillReadsThePageOfARealSite() {
+        val f = filter(pack = listOf("anal"))
+        val hit = f.check(
+            text = "anal", address = at("some-random-host.example/watch"),
+            userKeywords = emptyList(), siteKeywords = emptyList(),
+            adultPack = true, blockAdult = false,
+        )
+        assertEquals("anal", hit?.word)
+    }
+
+    // ---- a block the owner can read, and a report that can be acted on -------------------
+
+    /** "That search or page looks like adult content" named nothing, so when it fired on his
+     *  start page neither of us could say which word had done it. */
+    @Test fun theAdultListsNameWhatTheyFound() {
+        val f = filter(domains = listOf("pornhub.com"), adultKeywords = listOf("porn"))
+        val search = f.check("watch porn now", unreadable, emptyList(), emptyList(), false, true)
+        assertEquals("porn", search?.word)
+        assertTrue(search!!.message.contains("porn"))
+        val site = f.check("pornhub.com player", unreadable, emptyList(), emptyList(), false, true)
+        assertEquals("pornhub.com", site?.word)
+        assertTrue(site!!.message.contains("pornhub.com"))
+    }
+
+    /** The log has to tell a word the owner chose from a list he never touched — the cover for
+     *  opening Chrome recorded `why=word`, which points the next fix at the wrong layer. */
+    @Test fun onlyTheBuiltInAdultLayersAreMarkedAdult() {
+        val f = filter(domains = listOf("pornhub.com"), adultKeywords = listOf("porn"), pack = listOf("anal"))
+        assertTrue(f.check("watch porn", unreadable, emptyList(), emptyList(), false, true)!!.adult)
+        assertTrue(f.check("pornhub.com", unreadable, emptyList(), emptyList(), false, true)!!.adult)
+        assertTrue(f.check("anal", unreadable, emptyList(), emptyList(), true, false)!!.adult)
+        assertFalse(f.check("reddit", unreadable, listOf("reddit"), emptyList(), false, false)!!.adult)
+        assertFalse(f.checkUrl("facebook.com", emptyList(), listOf("facebook"))!!.adult)
     }
 
     // ---- the shipped word packs themselves -----------------------------------------------
