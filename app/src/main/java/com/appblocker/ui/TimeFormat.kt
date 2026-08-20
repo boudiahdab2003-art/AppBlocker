@@ -44,14 +44,27 @@ internal fun fmtDuration(minutes: Int): String {
 }
 
 /**
- * A running countdown: H:MM:SS once an hour or longer, else M:SS. [padMinutes] pads the
- * minutes to two digits (00:59), which is what the Strict Mode countdown uses so its
- * big timer doesn't change width as it ticks.
+ * A running countdown: **`24d 15h` from a day up**, `H:MM:SS` from an hour, else `M:SS`.
+ * [padMinutes] pads the minutes to two digits (00:59), which is what the Strict Mode countdown
+ * uses so its big timer doesn't change width as it ticks.
+ *
+ * **The day band is not a nicety — without it this had no upper bound.** The duration wheel offers
+ * up to 30 days, and the header pill spent a 24-day session reading `35507:29`: eight glyphs of
+ * minutes, wrapped onto two lines and spilling out of a rounded pill the owner then reported as
+ * "very ugly". The same string is the Strict screen's headline at **56sp**, where it would have
+ * read `591:47:29`. Both were the same missing branch.
+ *
+ * Seconds are dropped past a day deliberately. They are noise at that scale — nobody watches the
+ * last second of three weeks — and dropping them is what keeps the output to seven glyphs so it
+ * fits the pill and the 56sp number alike. The widest this can now return is eight characters
+ * (`23:59:59`, `30d 23h`), which is the property `TimeFormatTest` pins.
  */
 internal fun fmtCountdown(ms: Long, padMinutes: Boolean = false): String {
     val total = (ms / 1000).coerceAtLeast(0L)
+    val d = total / 86_400
     val h = total / 3600; val m = (total % 3600) / 60; val s = total % 60
     return when {
+        d > 0 -> "%dd %dh".format(d, h % 24)
         h > 0 -> "%d:%02d:%02d".format(h, m, s)
         padMinutes -> "%02d:%02d".format(m, s)
         else -> "%d:%02d".format(m, s)
