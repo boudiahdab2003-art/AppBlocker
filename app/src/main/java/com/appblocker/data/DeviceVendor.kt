@@ -48,6 +48,22 @@ data class VendorAdvice(
      * project keeps paying for.
      */
     val clonedAppsFeature: String? = null,
+    /**
+     * What to do about this brand's *space switching* killing the blocker — or null if the brand
+     * has no such feature worth warning about.
+     *
+     * **Not the same thing as [clonedAppsFeature], though both name Second Space.** That one is
+     * about an app *inside* the other space being invisible to us. This one is about the ordinary
+     * space switch stopping every app in *this* space, ours included, and HyperOS not always
+     * rebinding the accessibility service on the way back — which leaves Android's toggle reading
+     * "on" over a watcher that is gone. Two different failures of one feature; merging them would
+     * produce advice that is half wrong for whichever one the reader has.
+     *
+     * The text ends by admitting the steps only make it rarer. They cannot prevent it: a space
+     * switch stops the whole space, and no in-app setting outranks that. Promising otherwise
+     * would be the kind of claim this project has learnt costs a release to walk back.
+     */
+    val spacesWarning: String? = null,
 )
 
 object DeviceVendor {
@@ -64,6 +80,11 @@ object DeviceVendor {
                 "com.miui.permcenter.autostart.AutoStartManagementActivity",
         ),
         clonedAppsFeature = "Second Space or Dual Apps",
+        spacesWarning = "Switching to Second Space and back shuts AppBlocker down in this " +
+            "space, and Android's switch still says it's on. Lock AppBlocker in Recents (swipe " +
+            "down on its card), allow Auto-start, and set Battery saver to “No restrictions”. " +
+            "That makes it happen less often — it can't stop it completely, because switching " +
+            "space stops every app in this space. That's what the alert is for.",
     )
 
     private val SAMSUNG = VendorAdvice(
@@ -80,6 +101,9 @@ object DeviceVendor {
             "com.samsung.android.lool" to "com.samsung.android.sm.battery.ui.BatteryActivity",
         ),
         clonedAppsFeature = "Secure Folder or Dual Messenger",
+        spacesWarning = "Coming back from Secure Folder, or switching between users, can stop " +
+            "AppBlocker while Android's switch still says it's on. Add AppBlocker to “Never " +
+            "sleeping apps” and lock it in Recents to make that rarer.",
     )
 
     private val HUAWEI = VendorAdvice(

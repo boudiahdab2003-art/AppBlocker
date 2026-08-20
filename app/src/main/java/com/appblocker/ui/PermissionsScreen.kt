@@ -103,6 +103,25 @@ fun PermissionsScreen(
                     modifier = Modifier.padding(bottom = 16.dp),
                 )
             }
+            // The *other* Second Space failure, and deliberately separate from the cloned-apps
+            // note above: that one is "an app inside the other space is invisible to us", this
+            // one is "switching space kills us in THIS space and Android still says we're on".
+            // Same feature, opposite advice — merging them would leave each reader half wrong.
+            vendor.spacesWarning?.let { warning ->
+                Text(
+                    "Switching spaces or users",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Spacer(Modifier.padding(top = 4.dp))
+                Text(
+                    warning,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 16.dp),
+                )
+            }
             Text(
                 "Protection alert",
                 style = MaterialTheme.typography.titleMedium,
@@ -111,8 +130,9 @@ fun PermissionsScreen(
             )
             Spacer(Modifier.padding(top = 4.dp))
             Text(
-                "AppBlocker warns you with a notification if the Accessibility service ever gets " +
-                    "turned off. Tap below to check the alert reaches your phone.",
+                "AppBlocker warns you with a notification if blocking ever stops — whether you " +
+                    "switched it off or your phone shut it down while still showing it as on. " +
+                    "Tap below to check the alert reaches your phone.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

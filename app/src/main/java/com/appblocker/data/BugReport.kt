@@ -209,6 +209,13 @@ data class BugReport(
             // most recent — a literal chosen by our own code ("webScan", "watchdog"), never text
             // from the failure itself. ServiceHealth's stored string includes the exception's
             // message and must NEVER be reported; only the tag travels.
+            // Whether the watcher is bound and RUNNING, as opposed to merely switched on
+            // (`serviceOn`). The two disagree exactly when the phone has killed it while
+            // Android's toggle still says on — a Second Space switch, an OEM battery manager —
+            // and that disagreement is the whole diagnosis of "it says it's on and blocks
+            // nothing". `foundDead` counts how many times that has happened on this install.
+            "serviceRunning",
+            "foundDead",
             "healthErrors",
             "lastErrorWhere",
             // Minutes since the phone booted. Separates "the service never started after a

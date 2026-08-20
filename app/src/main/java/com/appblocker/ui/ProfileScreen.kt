@@ -130,6 +130,7 @@ fun ProfileScreen(
     onOpenChangelog: () -> Unit = {},
     onOpenInstructions: () -> Unit = {},
     onOpenDiagnostics: () -> Unit = {},
+    onOpenRepair: () -> Unit = {},
     onOpenDetox: () -> Unit = {},
     onOpenScenarios: () -> Unit = {},
     onOpenSteps: () -> Unit = {},
@@ -236,7 +237,12 @@ fun ProfileScreen(
             schedules = schedules.size,
             blocksToday = blocksToday,
             onEditName = onOpenAccount,
-            onFix = { if (protectionStatus.fixable) onOpenPermissions() },
+            onFix = {
+                when {
+                    protectionStatus.repair -> onOpenRepair()
+                    protectionStatus.fixable -> onOpenPermissions()
+                }
+            },
         )
 
         if (locked) {
@@ -802,7 +808,15 @@ private fun HeroStat(value: String, label: String, modifier: Modifier = Modifier
 }
 
 /** What the hero's status pill should say, and whether tapping it can help. */
-private data class ProtectionStatus(val ok: Boolean, val text: String, val fixable: Boolean)
+private data class ProtectionStatus(
+    val ok: Boolean,
+    val text: String,
+    val fixable: Boolean,
+    /** Send the tap to the repair screen instead of the permissions list. True only for a
+     *  watcher that is switched on and not running: every permission it needs is already
+     *  granted, so the permissions screen would show nothing wrong and read as "it's fine". */
+    val repair: Boolean = false,
+)
 
 /**
  * Whether blocking is genuinely working: the core permissions (accessibility + overlay) are
@@ -821,7 +835,9 @@ private fun protectionStatus(context: Context): ProtectionStatus {
         ProtectionState.OK -> ProtectionStatus(true, "Protection active", fixable = false)
         ProtectionState.OFF -> ProtectionStatus(false, "Action needed — tap to fix", fixable = true)
         ProtectionState.STALLED ->
-            ProtectionStatus(false, "Blocking stalled — tap to fix", fixable = true)
+            ProtectionStatus(
+                false, "Blocking has stopped — tap to fix", fixable = true, repair = true,
+            )
         // Reactivating lives on the Blocking tab, which this screen can't navigate to, so the
         // text carries the instruction instead of pretending a tap here would help.
         ProtectionState.PAUSED ->

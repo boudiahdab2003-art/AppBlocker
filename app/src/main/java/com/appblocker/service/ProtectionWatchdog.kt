@@ -1,6 +1,8 @@
 package com.appblocker.service
 
 import android.content.Context
+import android.os.Process
+import android.os.SystemClock
 import com.appblocker.data.ServiceHealth
 import com.appblocker.data.SettingsStore
 import com.appblocker.ui.hasUsageAccess
@@ -32,6 +34,12 @@ object ProtectionWatchdog {
         return protectionState(
             enabled, lastEventAt, now, usedMinutes,
             updatePaused = SettingsStore.updatePaused(context),
+            // The conclusive answer, available because the watcher shares this process — see
+            // BlockerAccessibilityService.isConnected.
+            serviceConnected = BlockerAccessibilityService.isConnected(),
+            // Monotonic, from the OS rather than a field of our own (invariant 9).
+            msSinceProcessStart =
+                SystemClock.elapsedRealtime() - Process.getStartElapsedRealtime(),
         )
     }
 
@@ -50,12 +58,23 @@ object ProtectionWatchdog {
             ProtectionState.OK -> {
                 SettingsStore.clearProtectionOffSince(context)
                 ProtectionNotifier.cancel(context)
+                SettingsStore.setFoundDeadPending(context, false)
             }
             ProtectionState.OFF -> ProtectionNotifier.notifyDisabled(context, force)
             // Switched on, but nothing has reached the watcher for hours of active use — the
             // signature of an OEM battery manager killing it. Toggling accessibility off/on
             // revives it, which is what the alert sends the user to do.
-            ProtectionState.STALLED -> ProtectionNotifier.notifyStalled(context, force)
+            ProtectionState.STALLED -> {
+                // Counted once per occasion, not once per check: this runs from a 15-minute
+                // worker, every app resume and every pull of the notification shade, so counting
+                // unconditionally would turn one death into dozens and make the number useless
+                // for the thing it exists for — telling whether a fix actually reduced them.
+                if (!SettingsStore.foundDeadPending(context)) {
+                    SettingsStore.setFoundDeadPending(context, true)
+                    ServiceHealth.recordFoundDead(context)
+                }
+                ProtectionNotifier.notifyStalled(context, force)
+            }
             // Off after an update, pending reactivation. Worth an alert precisely because it is
             // self-inflicted and easy to forget: the app was doing nothing at all, and saying it
             // was fine, until the user happened to open the Blocking tab.

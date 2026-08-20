@@ -33,6 +33,7 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private var openPermissions by mutableStateOf(false)
+    private var openRepair by mutableStateOf(false)
 
     private val notifPermLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
@@ -45,6 +46,7 @@ class MainActivity : ComponentActivity() {
         UpdatePause.checkVersionChange(applicationContext)
         requestNotificationPermissionIfNeeded()
         openPermissions = intent.getBooleanExtra(EXTRA_OPEN_PERMISSIONS, false)
+        openRepair = intent.getBooleanExtra(EXTRA_OPEN_REPAIR, false)
 
         // Warm the installed-apps cache early so the first editor open is fast too.
         lifecycleScope.launch { InstalledAppsRepository.ensureLoaded(applicationContext) }
@@ -68,7 +70,10 @@ class MainActivity : ComponentActivity() {
             LockGate {
                 CompositionLocalProvider(LocalThemeController provides controller) {
                     AppBlockerTheme(darkTheme = dark) {
-                        AppRoot(openPermissionsOnStart = openPermissions)
+                        AppRoot(
+                            openPermissionsOnStart = openPermissions,
+                            openRepairOnStart = openRepair,
+                        )
                     }
                 }
             }
@@ -115,6 +120,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         if (intent.getBooleanExtra(EXTRA_OPEN_PERMISSIONS, false)) openPermissions = true
+        if (intent.getBooleanExtra(EXTRA_OPEN_REPAIR, false)) openRepair = true
     }
 
     private fun requestNotificationPermissionIfNeeded() {
@@ -128,5 +134,10 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_OPEN_PERMISSIONS = "open_permissions"
+
+        /** Sends the user straight to [com.appblocker.ui.RepairScreen]. Its own extra rather than
+         *  reusing the permissions one: a stalled service is granted every permission it needs,
+         *  so the permissions page has nothing on it to fix and reads as "everything is fine". */
+        const val EXTRA_OPEN_REPAIR = "open_repair"
     }
 }

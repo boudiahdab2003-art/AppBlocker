@@ -105,6 +105,11 @@ object BugReportSender {
             val at = ServiceHealth.lastEventAt(ctx)
             if (at <= 0L) "never" else ((System.currentTimeMillis() - at) / 60_000L).toString()
         }
+        // The fact `serviceOn` cannot give: Android's toggle records the user's CHOICE, so it
+        // reads true over a watcher the phone has killed. These two together are the difference
+        // between "he switched it off" and "his phone shut it down and told him it was on".
+        field("serviceRunning") { BlockerAccessibilityService.isConnected().toString() }
+        field("foundDead") { ServiceHealth.foundDeadCount(ctx).toString() }
         field("healthErrors") { ServiceHealth.errorCount(ctx).toString() }
         // The tag only. ServiceHealth's full line contains the exception message, which is where
         // a blocked word gets quoted back — see BugReport's contract.

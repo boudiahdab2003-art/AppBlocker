@@ -34,7 +34,15 @@ class QuickBlockTileService : TileService() {
         val paused: Boolean,
     )
 
-    override fun onStartListening() = refresh()
+    override fun onStartListening() {
+        // Free health check, at the best possible moment: this fires every time the shade comes
+        // down, so a watcher the phone killed is usually caught within seconds of the owner next
+        // touching the phone, rather than waiting for the 15-minute worker. Unforced, so the
+        // notification throttle still applies and this can't become a source of nagging.
+        ProtectionWatchdog.checkAndNotify(applicationContext)
+        refresh()
+    }
+
     override fun onTileAdded() = refresh()
 
     override fun onClick() {

@@ -72,6 +72,7 @@ private sealed interface Overlay {
     data object Changelog : Overlay
     data object Instructions : Overlay
     data object Diagnostics : Overlay
+    data object Repair : Overlay
     data object DetoxGuide : Overlay
     data object Scenarios : Overlay
     data object TwelveSteps : Overlay
@@ -82,7 +83,12 @@ private sealed interface Overlay {
 }
 
 @Composable
-fun AppRoot(openPermissionsOnStart: Boolean = false) {
+fun AppRoot(
+    openPermissionsOnStart: Boolean = false,
+    /** Tapping the standing "Blocking has stopped" alert. Separate from the permissions route
+     *  because a stalled watcher has every permission it needs — see MainActivity.EXTRA_OPEN_REPAIR. */
+    openRepairOnStart: Boolean = false,
+) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var overlay by remember { mutableStateOf<Overlay?>(null) }
     // The typed-paragraph gate, requested from a tab and drawn over the window. See the layer
@@ -111,6 +117,11 @@ fun AppRoot(openPermissionsOnStart: Boolean = false) {
     // singleTask, a fresh onNewIntent while already running) routes straight here.
     LaunchedEffect(openPermissionsOnStart) {
         if (openPermissionsOnStart) overlay = Overlay.Permissions
+    }
+
+    // …and the "blocking has stopped" alert routes to the screen that can actually end it.
+    LaunchedEffect(openRepairOnStart) {
+        if (openRepairOnStart) overlay = Overlay.Repair
     }
 
     // Check whether the accessibility service got silently turned off on EVERY app open/resume,
@@ -185,6 +196,8 @@ fun AppRoot(openPermissionsOnStart: Boolean = false) {
                 InstructionsScreen(onBack = { overlay = null })
             is Overlay.Diagnostics ->
                 DiagnosticsScreen(onBack = { overlay = null })
+            is Overlay.Repair ->
+                RepairScreen(onBack = { overlay = null })
             is Overlay.DetoxGuide ->
                 DopamineDetoxScreen(onBack = { overlay = null })
             is Overlay.Scenarios ->
@@ -222,6 +235,7 @@ fun AppRoot(openPermissionsOnStart: Boolean = false) {
                 onOpenChangelog = { overlay = Overlay.Changelog },
                 onOpenInstructions = { overlay = Overlay.Instructions },
                 onOpenDiagnostics = { overlay = Overlay.Diagnostics },
+                onOpenRepair = { overlay = Overlay.Repair },
                 onOpenDetox = { overlay = Overlay.DetoxGuide },
                 onOpenScenarios = { overlay = Overlay.Scenarios },
                 onOpenSteps = { overlay = Overlay.TwelveSteps },
@@ -349,6 +363,7 @@ private fun MainScaffold(
     onOpenChangelog: () -> Unit,
     onOpenInstructions: () -> Unit,
     onOpenDiagnostics: () -> Unit,
+    onOpenRepair: () -> Unit,
     onOpenDetox: () -> Unit,
     onOpenScenarios: () -> Unit,
     onOpenSteps: () -> Unit,
@@ -410,6 +425,7 @@ private fun MainScaffold(
                     onNewSchedule = onNewSchedule,
                     onEditSchedule = onEditSchedule,
                     onOpenPermissions = onOpenPermissions,
+                    onOpenRepair = onOpenRepair,
                     updateVm = updateVm,
                 )
                 1 -> StrictModeScreen()
@@ -424,6 +440,7 @@ private fun MainScaffold(
                     onOpenChangelog = onOpenChangelog,
                     onOpenInstructions = onOpenInstructions,
                     onOpenDiagnostics = onOpenDiagnostics,
+                    onOpenRepair = onOpenRepair,
                     onOpenDetox = onOpenDetox,
                     onOpenScenarios = onOpenScenarios,
                     onOpenSteps = onOpenSteps,

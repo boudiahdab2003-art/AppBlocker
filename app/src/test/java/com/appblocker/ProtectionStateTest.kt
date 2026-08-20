@@ -1,6 +1,7 @@
 package com.appblocker
 
 import com.appblocker.service.ProtectionState
+import com.appblocker.service.SERVICE_BIND_GRACE_MS
 import com.appblocker.service.protectionState
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -106,6 +107,117 @@ class ProtectionStateTest {
             protectionState(
                 true, lastEventAt = now - 60_000L, now = now,
                 usedMinutesSinceLastEvent = 1, updatePaused = false,
+            ),
+        )
+
+    // ---- switched on but not running -----------------------------------------------------
+    // The Second Space failure: switching space stops every app in this space, HyperOS doesn't
+    // always rebind the watcher, and ENABLED_ACCESSIBILITY_SERVICES still lists us because it
+    // records a CHOICE. Every case above needed two hours plus fifteen measured minutes of use
+    // plus usage-stats permission to notice; this needs none of them.
+
+    private val upFor = SERVICE_BIND_GRACE_MS + 1
+
+    @Test fun switchedOnButNotRunningIsStalledAtOnce() =
+        assertEquals(
+            ProtectionState.STALLED,
+            protectionState(
+                true, lastEventAt = now - 60_000L, now = now, usedMinutesSinceLastEvent = 1,
+                serviceConnected = false, msSinceProcessStart = upFor,
+            ),
+        )
+
+    /** …and with no usage access either, which the old path required before it would speak. */
+    @Test fun notRunningIsStalledWithoutUsageAccess() =
+        assertEquals(
+            ProtectionState.STALLED,
+            protectionState(
+                true, lastEventAt = now - 60_000L, now = now, usedMinutesSinceLastEvent = null,
+                serviceConnected = false, msSinceProcessStart = upFor,
+            ),
+        )
+
+    /**
+     * The one false alarm this rule could produce: our process has just started and Android has
+     * not bound the service yet. Every cold start passes through that moment, so getting this
+     * wrong would mean an alert on every launch.
+     */
+    @Test fun notRunningInsideTheBindGraceIsHealthy() =
+        assertEquals(
+            ProtectionState.OK,
+            protectionState(
+                true, lastEventAt = now - 60_000L, now = now, usedMinutesSinceLastEvent = 1,
+                serviceConnected = false, msSinceProcessStart = SERVICE_BIND_GRACE_MS - 1,
+            ),
+        )
+
+    /** The boundary is deliberate: exactly at the grace, the answer is already death. */
+    @Test fun theBindGraceBoundaryCounts() =
+        assertEquals(
+            ProtectionState.STALLED,
+            protectionState(
+                true, lastEventAt = now - 60_000L, now = now, usedMinutesSinceLastEvent = 1,
+                serviceConnected = false, msSinceProcessStart = SERVICE_BIND_GRACE_MS,
+            ),
+        )
+
+    /** Running: the new rule must be silent and leave the old path to answer. */
+    @Test fun runningIsHealthy() =
+        assertEquals(
+            ProtectionState.OK,
+            protectionState(
+                true, lastEventAt = now - 60_000L, now = now, usedMinutesSinceLastEvent = 1,
+                serviceConnected = true, msSinceProcessStart = upFor,
+            ),
+        )
+
+    /**
+     * A running watcher that has still seen nothing for hours of use is stalled for the *other*
+     * reason — bound but deaf. The new rule must not shadow the old one.
+     */
+    @Test fun runningButSilentForHoursIsStillStalled() =
+        assertEquals(
+            ProtectionState.STALLED,
+            protectionState(
+                true, lastEventAt = now - 3 * hour, now = now, usedMinutesSinceLastEvent = 40,
+                serviceConnected = true, msSinceProcessStart = upFor,
+            ),
+        )
+
+    /**
+     * "Couldn't tell" must behave exactly as the function did before the parameter existed —
+     * the regression guard for every case above, which all omit it.
+     */
+    @Test fun unknownLivenessChangesNothing() =
+        assertEquals(
+            ProtectionState.OK,
+            protectionState(
+                true, lastEventAt = now - 8 * hour, now = now, usedMinutesSinceLastEvent = 0,
+                serviceConnected = null, msSinceProcessStart = upFor,
+            ),
+        )
+
+    /** Switched off outranks it: telling someone to revive what they switched off is nonsense. */
+    @Test fun disabledOutranksNotRunning() =
+        assertEquals(
+            ProtectionState.OFF,
+            protectionState(
+                enabled = false, lastEventAt = now, now = now, usedMinutesSinceLastEvent = 0,
+                serviceConnected = false, msSinceProcessStart = upFor,
+            ),
+        )
+
+    /**
+     * Paused outranks it too. After an update the watcher genuinely is unbound for a moment while
+     * it rebinds, and "Reactivate on the Blocking tab" is the answer to that — not "your phone
+     * killed the blocker".
+     */
+    @Test fun pausedOutranksNotRunning() =
+        assertEquals(
+            ProtectionState.PAUSED,
+            protectionState(
+                true, lastEventAt = now - 60_000L, now = now, usedMinutesSinceLastEvent = 1,
+                updatePaused = true, serviceConnected = false, msSinceProcessStart = upFor,
             ),
         )
 }

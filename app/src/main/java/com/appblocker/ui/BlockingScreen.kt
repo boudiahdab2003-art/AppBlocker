@@ -63,6 +63,8 @@ import com.appblocker.data.QuickSession
 import com.appblocker.data.Schedule
 import com.appblocker.data.ScheduleType
 import com.appblocker.data.SettingsStore
+import com.appblocker.service.ProtectionState
+import com.appblocker.service.ProtectionWatchdog
 import com.appblocker.ui.theme.AppGradients
 import com.appblocker.ui.theme.AppShapes
 import com.appblocker.ui.theme.pageWidth
@@ -77,6 +79,7 @@ fun BlockingScreen(
     onNewSchedule: (ScheduleType) -> Unit,
     onEditSchedule: (Schedule) -> Unit,
     onOpenPermissions: () -> Unit,
+    onOpenRepair: () -> Unit,
     vm: HomeViewModel = viewModel(),
     scheduleVm: ScheduleViewModel = viewModel(),
     focusVm: FocusViewModel = viewModel(),
@@ -121,6 +124,17 @@ fun BlockingScreen(
                 else if (session.active) TimerPill(session.remainingMillis)
             }
             Spacer(Modifier.padding(top = 16.dp))
+            // Above everything else on the tab: while this is up, nothing at all is being
+            // blocked, and every other banner here is about something less urgent than that.
+            // Re-read on resume (perms bumps with resumeTick) so it clears itself the moment
+            // the watcher is revived, rather than needing the tab to be left and re-entered.
+            val stopped = remember(perms) {
+                ProtectionWatchdog.state(context) == ProtectionState.STALLED
+            }
+            if (stopped) {
+                StoppedBanner(onOpenRepair)
+                Spacer(Modifier.padding(top = 16.dp))
+            }
             if (essentialMissing > 0) {
                 SetupBanner(essentialMissing, onOpenPermissions)
                 Spacer(Modifier.padding(top = 16.dp))

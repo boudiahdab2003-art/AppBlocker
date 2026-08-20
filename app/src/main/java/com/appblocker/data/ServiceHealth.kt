@@ -15,6 +15,8 @@ import android.content.Context
 object ServiceHealth {
     private const val PREFS = "appblocker_prefs"
     private const val KEY_LAST_EVENT = "health_last_event_at"
+    private const val KEY_LAST_ALIVE = "health_last_alive_at"
+    private const val KEY_FOUND_DEAD = "health_found_dead_count"
     private const val KEY_LAST_ERROR_AT = "health_last_error_at"
     private const val KEY_LAST_ERROR = "health_last_error"
     private const val KEY_LAST_ERROR_WHERE = "health_last_error_where"
@@ -41,6 +43,41 @@ object ServiceHealth {
 
     /** When the watcher last showed a sign of life (0 = never since install). */
     fun lastEventAt(context: Context): Long = prefs(context).getLong(KEY_LAST_EVENT, 0L)
+
+    /**
+     * "The watcher is still bound" — stamped on a timer rather than from the event path, so a
+     * phone nobody is touching still proves it.
+     *
+     * ⚠️ **A separate key from [recordEvent] on purpose.** The staleness check in `protectionState`
+     * asks "no events for hours while the phone was in use?"; a heartbeat written to the *event*
+     * key would answer that question "no" forever and silently retire the check. Two facts, two
+     * keys: `KEY_LAST_EVENT` is "the watcher saw something", this is "the watcher exists".
+     *
+     * Not itself a trigger for declaring blocking dead — a process the OS has frozen stops ticking
+     * while being perfectly healthy, and a false "blocking stopped" alert teaches the owner to
+     * ignore the true one. It is evidence, for the diagnostics screen and bug reports.
+     */
+    fun recordAlive(context: Context, now: Long = System.currentTimeMillis()) {
+        prefs(context).edit().putLong(KEY_LAST_ALIVE, now).apply()
+    }
+
+    /** When the watcher last ticked (0 = never since install). */
+    fun lastAliveAt(context: Context): Long = prefs(context).getLong(KEY_LAST_ALIVE, 0L)
+
+    /**
+     * Counts each time blocking was found switched-on-but-dead — once per occasion, not once per
+     * check, so the caller must only call it on the *transition* into that state.
+     *
+     * The number is the point. "Sometimes when I switch spaces" is a report nobody can act on;
+     * "it has happened 14 times" is a measurement, and it is the difference between knowing
+     * whether a fix worked and hoping it did.
+     */
+    fun recordFoundDead(context: Context) {
+        val p = prefs(context)
+        p.edit().putInt(KEY_FOUND_DEAD, p.getInt(KEY_FOUND_DEAD, 0) + 1).apply()
+    }
+
+    fun foundDeadCount(context: Context): Int = prefs(context).getInt(KEY_FOUND_DEAD, 0)
 
     /**
      * An error the service swallowed instead of dying on. Kept (with a count) so a recurring

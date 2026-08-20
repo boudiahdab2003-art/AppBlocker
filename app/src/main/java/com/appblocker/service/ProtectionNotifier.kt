@@ -28,6 +28,10 @@ object ProtectionNotifier {
     // Once shown, don't nag again until this much time has passed while still disabled.
     private val MIN_RENOTIFY_MS = TimeUnit.HOURS.toMillis(4)
 
+    /** Whether the standing "blocking has stopped" alert is already up, as far as this process
+     *  knows. Not persisted on purpose — see [notifyStalled]. */
+    @Volatile private var stalledPosted = false
+
     // The app's established "needs attention" amber (Permissions.kt's "Required" label,
     // BlockEditorScreen.kt's ProtectionBanner) — distinct from the blue/violet used for
     // positive/primary actions elsewhere, so this reads as urgent rather than routine.
@@ -85,36 +89,50 @@ object ProtectionNotifier {
     }
 
     /**
-     * Posts the "blocking stopped responding" alert: the service is still switched on, but hasn't
-     * seen an event in hours of active phone use — normally an OEM battery manager having killed
-     * it. Turning accessibility off and on again revives it, which is where the alert leads.
+     * Posts the "blocking has stopped" alert: the service is still switched on in Settings, but is
+     * not running — the phone killed it (an OEM battery manager, or a Second Space switch stopping
+     * every app in this space) and Android's toggle still says on, because that toggle records the
+     * user's choice rather than the service's state. Turning accessibility off and on again is the
+     * only revival Android permits an app, which is where the alert leads.
      *
-     * Shares the throttle and channel with [notifyDisabled] (they're the same concern to the user:
-     * blocking isn't working) but uses its own notification id so one can't silently replace the
-     * other.
+     * **Ongoing, and exempt from the re-notify throttle**, unlike every other alert here. The
+     * throttle exists to stop repeated nagging; this posts *one* notification that stays put until
+     * [cancel] takes it down on the next healthy check. Swiping the old, dismissible version away
+     * bought four hours of silence while nothing whatsoever was being blocked — the worst possible
+     * trade for an app whose only job is blocking.
+     *
+     * Shares the channel with [notifyDisabled] (the same concern to the user: blocking isn't
+     * working) but uses its own notification id so one can't silently replace the other.
      */
     @SuppressLint("MissingPermission") // guarded by the areNotificationsEnabled() check below.
-    fun notifyStalled(context: Context, force: Boolean = false) {
+    fun notifyStalled(context: Context, @Suppress("UNUSED_PARAMETER") force: Boolean = false) {
         val manager = NotificationManagerCompat.from(context)
         if (!manager.areNotificationsEnabled()) return
 
-        val now = System.currentTimeMillis()
-        if (!force) {
-            val last = SettingsStore.protectionLastNotifiedAt(context)
-            if (now - last < MIN_RENOTIFY_MS) return
-        }
+        // Re-posting an identical notification is harmless but not free — it rebuilds the banner
+        // bitmap — and this is now called from every shade pull and every app resume. The flag is
+        // in memory only: if the process was restarted the alert may genuinely be gone from the
+        // shade, so posting again is the right answer, not a duplicate.
+        if (stalledPosted) return
+        stalledPosted = true
 
         val notification = build(
             context,
-            title = "Blocking stopped responding",
-            collapsed = "Tap to switch it off and on again",
-            bannerHeadline = "BLOCKING STALLED",
-            bannerSubtitle = "Your phone may have stopped it",
+            title = "Blocking has stopped",
+            collapsed = "Your phone shut it down — tap to switch it back on",
+            bannerHeadline = "BLOCKING HAS STOPPED",
+            bannerSubtitle = "Nothing is being blocked",
             action = "Fix it",
             requestCode = NOTIF_ID_STALLED,
+            openRepair = true,
+            // The one alert that stands until it is true no longer. See [ongoing] on build().
+            ongoing = true,
         )
         manager.notify(NOTIF_ID_STALLED, notification)
-        SettingsStore.setProtectionLastNotifiedAt(context, now)
+        // Deliberately does NOT stamp the shared cooldown. This alert is not repeated — it is a
+        // single notification that sits there — so it neither needs the throttle nor may consume
+        // it: burning the window here would suppress a genuinely separate "protection off" alert
+        // for the next four hours.
     }
 
     /**
@@ -182,14 +200,23 @@ object ProtectionNotifier {
          *  would silently rewrite where the others' taps go. Passing the notification id keeps
          *  each one's destination its own. */
         requestCode: Int,
-        /** Where tapping should land. The permissions screen is right for a disabled or stalled
-         *  service, but wrong for the after-update pause: Reactivate lives on the Blocking tab,
-         *  which is where opening the app plainly already goes (tab 0). Sending someone to a
-         *  permissions screen with nothing to fix is worse than not linking at all. */
+        /** Where tapping should land. The permissions screen is right for a disabled service, but
+         *  wrong for the after-update pause: Reactivate lives on the Blocking tab, which is where
+         *  opening the app plainly already goes (tab 0). Sending someone to a permissions screen
+         *  with nothing to fix is worse than not linking at all — which is also why a *stalled*
+         *  service uses [openRepair] instead: every permission it needs is already granted. */
         openPermissions: Boolean = true,
+        /** Land on the repair screen, which explains the failure and opens the one switch that
+         *  fixes it. Wins over [openPermissions] when both are set. */
+        openRepair: Boolean = false,
+        /** Post as an ongoing notification the user cannot swipe away, and don't clear it on tap.
+         *  Only for a state that is still true after the tap and that they must not lose track of;
+         *  [cancel] is what ends it. */
+        ongoing: Boolean = false,
     ): android.app.Notification {
         val fixIntent = Intent(context, MainActivity::class.java).apply {
-            if (openPermissions) putExtra(MainActivity.EXTRA_OPEN_PERMISSIONS, true)
+            if (openRepair) putExtra(MainActivity.EXTRA_OPEN_REPAIR, true)
+            else if (openPermissions) putExtra(MainActivity.EXTRA_OPEN_PERMISSIONS, true)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
         val pendingIntent = PendingIntent.getActivity(
@@ -215,7 +242,12 @@ object ProtectionNotifier {
             .setColor(ACCENT_COLOR)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_ERROR)
-            .setAutoCancel(true)
+            .setAutoCancel(!ongoing)
+            .setOngoing(ongoing)
+            // An ongoing alert is re-posted on every health check, and a notification re-posted
+            // under the same id makes a sound each time by default. One buzz per occurrence; the
+            // notification staying put is what carries the message afterwards.
+            .setOnlyAlertOnce(ongoing)
             .setContentIntent(pendingIntent)
             .addAction(R.drawable.ic_notification, action, pendingIntent)
             .build()
@@ -224,6 +256,7 @@ object ProtectionNotifier {
     /** Clears every alert — blocking being healthy means none of them still applies. Missing an id
      *  here would leave a stale "blocking is off" notification sitting there after it was fixed. */
     fun cancel(context: Context) {
+        stalledPosted = false
         NotificationManagerCompat.from(context).apply {
             cancel(NOTIF_ID)
             cancel(NOTIF_ID_STALLED)

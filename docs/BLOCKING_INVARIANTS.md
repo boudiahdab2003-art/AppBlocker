@@ -299,6 +299,30 @@ than naming packages. What was not brand-neutral was everything written *around*
   `GuardPackages.INSTALLERS`, so an OEM we guessed wrong is *stated* rather than silently
   unguarded. That is the cheap substitute for owning five phones, and the first place to look when
   someone reports blocking not working on a brand nobody here has.
+- **A space switch kills the watcher, and Android's toggle keeps saying "on" (20 Aug 2026).**
+  Reported by the owner: after switching to Xiaomi's Second Space and back, blocking does nothing
+  while Settings ▸ Accessibility still shows AppBlocker enabled, and only toggling it off and on
+  revives it. The switch is not lying about itself — `ENABLED_ACCESSIBILITY_SERVICES` records the
+  user's **choice**, not whether the service is bound — but `AccessibilityUtil.isEnabled` reading
+  it as "protection is on" was. Switching space stops every app in the space you left; HyperOS
+  does not reliably rebind the service on the way back.
+  **The app now asks a second question.** `BlockerAccessibilityService.isConnected()` is a static
+  set in `onServiceConnected` and cleared in `onDestroy`, and it is conclusive because there is no
+  `android:process` in the manifest — watcher, activity, tile and worker are one process, so any
+  of them can read it. `protectionState` reports STALLED on `enabled && !connected` once the
+  process has been up past `SERVICE_BIND_GRACE_MS`, which is the only false-positive window (the
+  moment before Android binds us on a cold start).
+  Before this, the *only* detector was "no events for two hours **and** fifteen measured minutes
+  of use **and** usage-stats granted" — so the app reported "Protection active" for hours after
+  every occurrence. **Under-blocking that reports as healthy is the failure this document exists
+  for**, and it had been sitting in the one place nobody thought to distrust: the permission
+  check.
+  **It cannot be repaired from inside the app.** Writing that setting needs `WRITE_SECURE_SETTINGS`
+  (adb/system only) — the rule that stops a malicious app enabling its own accessibility service.
+  Self-*disabling* to force an honest toggle was considered and rejected by the owner: a false
+  positive would switch off his own protection and would hand Strict Mode an exit. So the response
+  is an ongoing notification and `ui/RepairScreen.kt`, which deep-links to our own accessibility
+  page and confirms on resume that the toggle took.
 - **Cloned apps cannot be blocked, on any brand.** Samsung Secure Folder / Dual Messenger, Xiaomi
   Second Space / Dual Apps, App Clone elsewhere: the clone runs as a **different Android user**, and
   an accessibility service receives no events from another user. This is not fixable from inside the
