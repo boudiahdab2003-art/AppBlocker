@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.133
+- Chrome's start page no longer counts as a page you opened — opening Chrome or tapping the address bar stops raising adult blocks, while anything you type is still checked. Plus the header countdown now reads 24d 15h instead of 35507:29.
+
 ## v1.132
 - When your phone shuts the blocker down - switching between spaces is the usual cause - the app now notices within seconds instead of hours, tells you with a notification that won't go away, and opens a page that takes you straight to the switch and turns green when blocking is running again. Plus: Strict Mode now lets you delete a blocked word when a blocked app already covers that website.
 
