@@ -13,7 +13,7 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
-    VersionLog("1.133", "Aug 20, 2026", "It says it's on, and it isn't blocking anything", listOf(
+    VersionLog("1.132", "Aug 20, 2026", "When your phone shuts the blocker down, you'll know within seconds", listOf(
         "**You told me that after switching between spaces, the blocker is dead — but the accessibility page still says it's on, so you have to turn it off and on again. You were right, and it was worse than you knew.**",
         "Switching to Second Space stops every app in the space you left, this one included. Coming back, your phone doesn't always start it again. And Android's switch keeps saying \"on\" the whole time, because that switch remembers **what you chose**, not whether the blocker is actually running. So it looks perfectly healthy and blocks nothing.",
         "**The part that was on me: the app believed the switch too.** It could already spot this — but only after two hours of you actively using the phone with nothing being blocked, and only if it had permission to see your usage. Every time this happened to you, the app spent hours telling you \"Protection active\" while you were wide open. That's the worst kind of failure this app can have, because you'd never notice it — you only ever notice a block screen that shouldn't be there, never one that never came.",
@@ -24,8 +24,8 @@ val changelog: List<VersionLog> = listOf(
         "**What I can't do, and I'd rather say it than pretend.** Android does not let an app switch its own blocking back on. That rule is exactly what stops a bad app from quietly switching itself on and watching your screen, and it's the same rule that stops this one from repairing itself. The tap has to be yours. What I can do is make sure you always know, and make the tap short.",
         "**It also counts them now.** Profile ▸ What the blocker sees says whether the watcher is running right now, and how many times it's been found stopped. \"Sometimes when I switch spaces\" is something I can only guess at; a number is something we can actually watch go down.",
         "**And the setup page now says what makes it rarer** on your phone — lock AppBlocker in Recents, allow Auto-start, battery on No restrictions. Honestly: that reduces it, it can't prevent it. Switching space stops everything in the space, and no setting inside an app outranks that.",
-    )),
-    VersionLog("1.132", "Aug 20, 2026", "Strict Mode lets go of a word your other rules already cover", listOf(
+        "———",
+        "**Also in this update — the thing you asked for before this one: Strict Mode lets go of a word your other rules already cover.**",
         "**You asked to be able to delete a blocked word during Strict Mode when it's a website that's already blocked. You can now — and only then.**",
         "Take the word \"instagram\". If the Instagram app is on your blocked list, instagram.com is already blocked in your browser because of that app — the word is doing nothing your app rule wasn't doing anyway. So deleting it can't unblock anything, and Strict Mode has no reason to stand in the way. The bin is tappable on those words, with a line underneath telling you which app is covering it. Every other word is still locked, exactly as before.",
         "**It only works because the thing covering the word can't be taken away either.** You can't un-block an app mid-session, and you can't switch the mode. So a word that's covered when you delete it stays covered until the session ends — nothing is being arranged in advance, which is the trap this kind of exception usually falls into.",
