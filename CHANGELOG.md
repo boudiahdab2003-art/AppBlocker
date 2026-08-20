@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.132
+- When your phone shuts the blocker down - switching between spaces is the usual cause - the app now notices within seconds instead of hours, tells you with a notification that won't go away, and opens a page that takes you straight to the switch and turns green when blocking is running again. Plus: Strict Mode now lets you delete a blocked word when a blocked app already covers that website.
+
 ## v1.131
 - Blocked words and websites now hold as steady as a blocked app - the block screen no longer flashes on and off in a browser.
 
