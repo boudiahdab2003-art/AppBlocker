@@ -110,19 +110,13 @@ fun BlockingScreen(
     LazyColumn(Modifier.fillMaxHeight().pageWidth().padding(horizontal = 20.dp)) {
         item {
             Spacer(Modifier.padding(top = 16.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                ShieldMark()
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    "AppBlocker",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground,
-                )
-                Spacer(Modifier.weight(1f))
-                if (focusActive) TimerPill(remaining)
-                else if (session.active) TimerPill(session.remainingMillis)
-            }
+            HomeHeader(
+                when {
+                    focusActive -> remaining
+                    session.active -> session.remainingMillis
+                    else -> null
+                },
+            )
             Spacer(Modifier.padding(top = 16.dp))
             // Above everything else on the tab: while this is up, nothing at all is being
             // blocked, and every other banner here is about something less urgent than that.

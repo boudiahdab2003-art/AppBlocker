@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.appblocker.ui.theme.AppGradients
 
@@ -125,6 +126,41 @@ internal fun UpdatePausedBanner(onReactivate: () -> Unit) {
     }
 }
 
+/**
+ * The Blocking tab's header: the mark, the name, and the running countdown when there is one
+ * ([remainingMillis] null when nothing is running).
+ *
+ * **It lives here, as one composable, so the rendering test can drive the real thing.** The row is
+ * where the countdown bug actually showed itself — the pill's own formatter was only half of it.
+ *
+ * The arrangement is the fix and it is worth stating: a `Row` measures its **unweighted** children
+ * first, so the title used to take its full intrinsic width and the pill was measured with
+ * whatever was left. On a long session that squeeze wrapped the countdown onto two lines and
+ * pushed it out of its own rounded shape. Now the title carries the weight and the pill does not,
+ * which inverts who gives way — the volatile element keeps its intrinsic width, and the fixed
+ * label truncates instead, which at ordinary font sizes it never has to.
+ */
+@Composable
+internal fun HomeHeader(remainingMillis: Long?) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        ShieldMark()
+        Spacer(Modifier.width(10.dp))
+        Text(
+            "AppBlocker",
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (remainingMillis != null) {
+            Spacer(Modifier.width(8.dp))
+            TimerPill(remainingMillis)
+        }
+    }
+}
+
 @Composable
 internal fun ShieldMark() {
     Box(
@@ -138,9 +174,6 @@ internal fun ShieldMark() {
 
 @Composable
 internal fun TimerPill(remainingMillis: Long) {
-    val totalSeconds = remainingMillis / 1000
-    val mm = totalSeconds / 60
-    val ss = totalSeconds % 60
     Row(
         Modifier.clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.primaryContainer)
             .padding(horizontal = 14.dp, vertical = 8.dp),
@@ -148,7 +181,16 @@ internal fun TimerPill(remainingMillis: Long) {
     ) {
         Box(Modifier.size(10.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
         Spacer(Modifier.width(8.dp))
-        Text("%02d:%02d".format(mm, ss), style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+        // Through the shared formatter, like every other countdown in the app. This one had its
+        // own `"%02d:%02d"` and so never learnt about days: a 24-day session put 35507 minutes in
+        // a pill the width of a word. maxLines is the belt to that braces — a countdown that
+        // wraps does not just look wrong, it grows the pill and shoves the header out of shape.
+        Text(
+            fmtCountdown(remainingMillis, padMinutes = true),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
+            maxLines = 1,
+        )
     }
 }
