@@ -39,10 +39,13 @@ import com.appblocker.Dist
 import com.appblocker.data.DeviceVendor
 import com.appblocker.data.PhoneFacts
 import com.appblocker.data.QuickSession
+import com.appblocker.data.ServiceHealth
 import com.appblocker.data.SettingsStore
 import com.appblocker.data.UninstallGuardVerdict
 import com.appblocker.data.WatcherDiagnostics
 import com.appblocker.data.uninstallGuardVerdict
+import com.appblocker.service.AccessibilityUtil
+import com.appblocker.service.BlockerAccessibilityService
 import com.appblocker.service.GuardPackages
 import com.appblocker.service.KNOWN_READABLE_BROWSERS
 import com.appblocker.service.findBrowserPackages
@@ -240,6 +243,7 @@ private data class Snapshot(
  * explain, not to nag about a configuration the owner picked deliberately.
  */
 private fun readSnapshot(context: Context): Snapshot {
+    val now = System.currentTimeMillis()
     val updatePaused = SettingsStore.updatePaused(context)
     val quickPaused = SettingsStore.quickBlockPaused(context)
     val session = QuickSession.state(context)
@@ -249,6 +253,47 @@ private fun readSnapshot(context: Context): Snapshot {
     val unsupported = SettingsStore.blockUnsupportedBrowsers(context)
 
     val protection = buildList {
+        // FIRST, because it outranks everything below it: a watcher that isn't running makes
+        // every other line on this card irrelevant. It is also the one fact the app was blind to
+        // until now — Android's toggle says "on" over a watcher the phone killed, which is what
+        // a Second Space switch leaves behind.
+        val running = BlockerAccessibilityService.isConnected()
+        val enabled = AccessibilityUtil.isEnabled(context)
+        add(
+            when {
+                !enabled -> Fact(
+                    "The blocker is switched off",
+                    "Accessibility is off for AppBlocker, so nothing is being blocked.",
+                    good = false,
+                )
+                running -> Fact(
+                    "The blocker is running right now",
+                    "It's switched on AND actually watching. Last thing it saw: " +
+                        sinceLabel(now, ServiceHealth.lastEventAt(context)) +
+                        ". Last heartbeat: " +
+                        sinceLabel(now, ServiceHealth.lastAliveAt(context)) + ".",
+                    good = true,
+                )
+                else -> Fact(
+                    "Switched on, but NOT running",
+                    "Android says it's on, but the watcher isn't there — your phone shut it " +
+                        "down. Nothing is being blocked. Turning accessibility off and on again " +
+                        "brings it back.",
+                    good = false,
+                )
+            },
+        )
+        ServiceHealth.foundDeadCount(context).takeIf { it > 0 }?.let { dead ->
+            add(
+                Fact(
+                    "Times blocking has been found stopped: $dead",
+                    "Each time, your phone had shut the blocker down while Android still said " +
+                        "it was on. If this number keeps climbing, tell me — it's the " +
+                        "measurement that says whether a fix worked.",
+                    good = null,
+                ),
+            )
+        }
         add(
             if (updatePaused) Fact(
                 "Blocking is paused after the update",
@@ -483,6 +528,14 @@ private fun appLabel(context: Context, pkg: String): String = runCatching {
     val pm = context.packageManager
     pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
 }.getOrDefault(pkg)
+
+/**
+ * [agoLabel] for a stored timestamp, where **0 means "never since install"** rather than 1970.
+ * Feeding the raw difference in would print "20000 days ago" for a watcher that has simply never
+ * had anything to report yet — a scary number for a healthy phone.
+ */
+private fun sinceLabel(now: Long, at: Long): String =
+    if (at <= 0L) "not yet" else agoLabel(now - at)
 
 /** "just now" / "4 min ago" / "2 h ago" — enough to tell a live reading from a stale one. */
 internal fun agoLabel(millis: Long): String = when {

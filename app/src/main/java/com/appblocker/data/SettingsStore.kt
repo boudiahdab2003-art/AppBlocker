@@ -412,4 +412,20 @@ object SettingsStore {
 
     /** Reset the moment the service is confirmed back on, so the next disable notifies at once. */
     fun clearProtectionOffSince(context: Context) = setProtectionLastNotifiedAt(context, 0L)
+
+    private const val KEY_FOUND_DEAD_PENDING = "protection_found_dead_pending"
+
+    /**
+     * Whether the current "switched on but not running" episode has already been counted.
+     *
+     * The watchdog runs from a 15-minute worker, every app resume and every pull of the
+     * notification shade, so without this the same single death would be counted dozens of times
+     * and [com.appblocker.data.ServiceHealth.foundDeadCount] would measure how often the owner
+     * opens the app rather than how often blocking dies. Cleared only on a return to health.
+     */
+    fun foundDeadPending(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_FOUND_DEAD_PENDING, false)
+
+    fun setFoundDeadPending(context: Context, value: Boolean) =
+        prefs(context).edit().putBoolean(KEY_FOUND_DEAD_PENDING, value).apply()
 }

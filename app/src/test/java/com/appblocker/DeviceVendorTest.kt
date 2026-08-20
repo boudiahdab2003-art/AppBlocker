@@ -128,4 +128,43 @@ class DeviceVendorTest {
         val desc = DeviceVendor.advice("samsung").keepAliveDesc.lowercase()
         assertTrue("Samsung advice must mention sleep", desc.contains("sleep"))
     }
+
+    /**
+     * The reported failure: switching to Second Space and back leaves the watcher dead with
+     * Android's toggle still reading "on". Xiaomi must name it — that is the owner's own phone.
+     */
+    @Test
+    fun `Xiaomi warns about switching spaces`() {
+        val warning = DeviceVendor.advice("xiaomi").spacesWarning
+        assertNotNull("Xiaomi must warn about Second Space", warning)
+        assertTrue(
+            "the warning must name the feature the owner uses",
+            warning!!.contains("Second Space"),
+        )
+    }
+
+    /**
+     * **And it must admit it is not a cure.** Locking the app in Recents makes a space switch
+     * kill it less often; nothing an app can set survives the whole space being stopped. Advice
+     * that implies otherwise is the kind of promise this project has had to walk back before,
+     * and it would leave the owner trusting a blocker that isn't running.
+     */
+    @Test
+    fun `the spaces warning does not promise a cure`() {
+        for (b in listOf("Xiaomi", "Samsung")) {
+            val warning = DeviceVendor.advice(b).spacesWarning!!.lowercase()
+            assertTrue(
+                "$b's warning must say it only reduces the problem",
+                warning.contains("less often") || warning.contains("rarer"),
+            )
+        }
+    }
+
+    /** The generic fallback promises nothing, here as everywhere else: naming a feature a phone
+     *  may not have reads as a bug. */
+    @Test
+    fun `the generic fallback has no spaces warning`() {
+        assertNull(DeviceVendor.advice("Pixel").spacesWarning)
+        assertNull(DeviceVendor.advice(null).spacesWarning)
+    }
 }

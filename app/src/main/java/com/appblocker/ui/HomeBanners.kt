@@ -50,6 +50,37 @@ internal fun SetupBanner(missing: Int, onClick: () -> Unit) {
     }
 }
 
+/**
+ * **"It's switched on and it isn't running."** Shown on the Blocking tab whenever the watchdog
+ * reports [com.appblocker.service.ProtectionState.STALLED].
+ *
+ * Distinct from [SetupBanner], which is about a permission that was never granted. This one is
+ * about a permission that *is* granted over a watcher the phone has killed — the Second Space
+ * failure — and the two need opposite advice, so they must never share a banner. Red rather than
+ * the setup amber: nothing is being blocked while this is up.
+ */
+@Composable
+internal fun StoppedBanner(onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+            .background(Color(0xFF3A1520)).clickable(onClick = onClick).padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Filled.Warning, contentDescription = null, tint = Color(0xFFFF5A6E),
+            modifier = Modifier.size(26.dp))
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text("Blocking has stopped", style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+            Text("Your phone shut it down — tap to switch it back on",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
 @Composable
 internal fun UpdateBanner(version: String, onClick: () -> Unit) {
     Row(

@@ -406,6 +406,49 @@ class BlockerAccessibilityService : AccessibilityService() {
         }
     }
 
+    /**
+     * Proof that the watcher is still alive **when nothing is happening on screen**.
+     *
+     * [ServiceHealth.recordEvent] only stamps from the event path, so a phone left alone for an
+     * hour is indistinguishable from a watcher the phone killed an hour ago — which is why the
+     * event-staleness check needs usage-stats and a two-hour wait before it dares say anything.
+     * This ticks regardless.
+     *
+     * ⚠️ It writes its **own** key ([ServiceHealth.recordAlive]), never the event key. Stamping
+     * the event key here would keep it permanently fresh and permanently disable the staleness
+     * check in [protectionState] — a heartbeat that hides the very failure it was added to expose.
+     *
+     * It also re-posts our [AccessibilityServiceInfo] after a long silence. That is the one
+     * recovery an app can attempt for a service that is still bound but has stopped receiving
+     * events: it re-registers the event mask with the system. It cannot help when the service is
+     * gone (this Runnable is gone with it) — that case is what [isConnected] is for.
+     */
+    private val heartbeatRunnable = object : Runnable {
+        override fun run() {
+            guarded(applicationContext, "heartbeat") {
+                ServiceHealth.recordAlive(applicationContext)
+                val silence = stopwatchNow() - lastEventReceivedAt
+                if (silence >= REVIVE_AFTER_SILENCE_MS &&
+                    stopwatchNow() - lastReviveAttemptAt >= REVIVE_AFTER_SILENCE_MS
+                ) {
+                    lastReviveAttemptAt = stopwatchNow()
+                    // Re-posting the info we already hold is a no-op on a healthy service, so
+                    // this is safe to do blind; runCatching because an OEM throwing here must
+                    // not take the heartbeat down with it.
+                    runCatching { serviceInfo = serviceInfo }
+                }
+            }
+            handler.postDelayed(this, HEARTBEAT_MS)
+        }
+    }
+
+    /** When an accessibility event last reached us, monotonically (invariant 9). */
+    @Volatile private var lastEventReceivedAt = Long.MIN_VALUE / 2
+
+    /** When the heartbeat last re-posted [serviceInfo], so a deaf service is nudged at a pace
+     *  rather than on every single tick. */
+    @Volatile private var lastReviveAttemptAt = Long.MIN_VALUE / 2
+
     // Periodic re-check of the app the user is sitting in, so time-based conditions take
     // effect mid-use instead of only on the next app switch: a daily limit crossing, a time
     // schedule starting (or ending — the same tick releases a stale block overlay), a
@@ -532,6 +575,10 @@ class BlockerAccessibilityService : AccessibilityService() {
         // guard to tell "the user is switching me ON" from "the user is switching me off" — see
         // OffSwitchGuard.justEnabled. Set first, before anything below can take time.
         serviceConnectedAt = stopwatchNow()
+        // The same fact, readable from outside this object: "switched on" and "actually running"
+        // are different questions, and until now nothing could ask the second one. See [isConnected].
+        connected = true
+        handler.postDelayed(heartbeatRunnable, HEARTBEAT_MS)
         // The service is rebound right after an update installs, so detect it here too —
         // the pause arms even if the app itself isn't opened.
         UpdatePause.checkVersionChange(this)
@@ -639,6 +686,9 @@ class BlockerAccessibilityService : AccessibilityService() {
         // Proof of life for the watchdog: "switched on" is not the same as "still working".
         // Self-throttled to one write a minute (ServiceHealth), so this costs a comparison.
         ServiceHealth.recordEvent(applicationContext)
+        // The same fact monotonically, for the heartbeat's "have I gone deaf?" question. Not a
+        // disk write, and never the wall clock (invariant 9).
+        lastEventReceivedAt = stopwatchNow()
 
         when (event.eventType) {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ->
@@ -2148,6 +2198,10 @@ class BlockerAccessibilityService : AccessibilityService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        // Cleared FIRST: everything below can throw, and a watcher that has begun tearing itself
+        // down is not running whether or not the rest of this method completes.
+        connected = false
+        handler.removeCallbacks(heartbeatRunnable)
         handler.removeCallbacks(webScanRunnable)
         handler.removeCallbacks(shortsScanRunnable)
         handler.removeCallbacks(recheckRunnable)
@@ -2175,6 +2229,34 @@ class BlockerAccessibilityService : AccessibilityService() {
     companion object {
         private const val TAG = "AppBlocker"
         private const val DEBUG = false // flip to true to log scans/blocks for debugging
+
+        /**
+         * Whether the watcher is bound and running **right now**.
+         *
+         * Android's accessibility setting records the user's *choice*, not the service's state,
+         * so [AccessibilityUtil.isEnabled] keeps saying "on" after the phone has killed us — the
+         * failure the owner hits by switching to Xiaomi's Second Space and back. Nothing outside
+         * this service could tell the difference, so the app agreed with the lie for two hours at
+         * a time (see [protectionState]).
+         *
+         * It is a plain static because there is **no `android:process` in the manifest**: the
+         * watcher, the activity, the tile and the WorkManager worker are all one process, so this
+         * flag is a conclusive answer wherever it is read — no usage-stats permission, no waiting,
+         * no guessing whether an idle phone means a dead watcher. Its one blind spot is the moment
+         * after the process starts and before Android has bound us, which the caller covers with a
+         * grace window rather than a longer timeout here (see `SERVICE_BIND_GRACE_MS`).
+         */
+        @Volatile private var connected = false
+
+        fun isConnected(): Boolean = connected
+
+        /** How often the watcher stamps "still alive" while nothing is happening on screen. */
+        private const val HEARTBEAT_MS = 60_000L
+
+        /** Silence this long means the service may be bound but deaf, and is worth a nudge.
+         *  Generous: a phone genuinely left alone produces no events either, and the nudge is
+         *  only ever a re-post of state we already hold. */
+        private const val REVIVE_AFTER_SILENCE_MS = 3 * 60_000L
 
         // How often to re-check the app the user is currently inside (mid-use enforcement).
         private const val RECHECK_MS = 30_000L
