@@ -80,7 +80,7 @@ class InstallResultReceiver : BroadcastReceiver() {
         NotificationManagerCompat.from(context).cancel(NOTIF_ID)
         @Suppress("DEPRECATION")
         val confirm = intent.getParcelableExtra<Intent>(EXTRA_CONFIRM) ?: return
-        InstallPrompt.requested()
+        InstallPrompt.requested(context)
         runCatching {
             context.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }

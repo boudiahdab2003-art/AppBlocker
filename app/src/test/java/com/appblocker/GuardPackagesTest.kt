@@ -1,7 +1,9 @@
 package com.appblocker
 
 import com.appblocker.service.GuardPackages
+import com.appblocker.service.namesAnActivity
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -85,5 +87,43 @@ class GuardPackagesTest {
                 !GuardPackages.GUARD.contains(pkg),
             )
         }
+    }
+
+    // ---- the other half of report #6: which class names mean anything ------------------
+
+    /**
+     * `uninstallConfirmation` tells an install from an uninstall by the activity's name, because
+     * that name is the one thing on the screen no OEM translates. But only a window-state event
+     * carries an activity — a content or scroll event carries the *view* that changed, and three
+     * of the guard's four call sites are those. `android.widget.FrameLayout` is not evidence that
+     * this is not an install; it is not evidence of anything.
+     */
+    @Test
+    fun `an installer activity names itself`() {
+        assertTrue(namesAnActivity("com.miui.packageInstaller.ui.InstallProgressActivity"))
+        assertTrue(namesAnActivity("com.android.packageinstaller.UninstallerActivity"))
+        assertTrue(namesAnActivity("com.android.settings.SubSettings"))
+    }
+
+    /** The classes a content or scroll event actually carries. Silence, not a "no". */
+    @Test
+    fun `a view class names nothing we can reason about`() {
+        assertFalse(namesAnActivity("android.widget.FrameLayout"))
+        assertFalse(namesAnActivity("android.widget.TextView"))
+        assertFalse(namesAnActivity("android.view.ViewGroup"))
+        assertFalse(namesAnActivity("androidx.recyclerview.widget.RecyclerView"))
+        assertFalse(namesAnActivity("androidx.viewpager.widget.ViewPager"))
+        assertFalse(namesAnActivity("com.google.android.material.appbar.AppBarLayout"))
+        assertFalse(namesAnActivity("android.webkit.WebView"))
+        assertFalse(namesAnActivity(""))
+        assertFalse(namesAnActivity("   "))
+    }
+
+    /** Prefix, not substring: an app whose own package merely contains one of these still names
+     *  an activity, or a vendor's spelling could switch the check off. */
+    @Test
+    fun `only the framework prefixes are discounted`() {
+        assertTrue(namesAnActivity("com.example.android.widget.SomethingActivity"))
+        assertTrue(namesAnActivity("com.vivo.packageinstaller.PackageInstallerActivity"))
     }
 }

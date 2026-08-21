@@ -321,6 +321,81 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     the same parameter, with the same two meanings crushed into it, one call away from the file
     that had just been corrected.
 
+21. **State that must outlive the process may not live in the process.** Reported 21 Aug 2026
+    (report #6): *"after the update I got a blocking screen idk why"* — one `why=guard` line, 26
+    seconds before he wrote it, with `protection: PAUSED` proving v1.133 had just landed.
+
+    The off-switch guard reads an installer screen naming AppBlocker as *"do you want to uninstall
+    this app?"*, matched by **package** rather than wording so it holds in any language. Installing
+    an update opens the same installer and shows the same name, so `InstallPrompt` stands the guard
+    down while we know we asked for it — five minutes, chosen (its KDoc says so) to cover the *"app
+    installed / Open"* screen that follows the install.
+
+    It never reached that screen. The stamp was a `@Volatile private var`, and **installing our own
+    APK is Android killing our process.** The service came back with the field at 0, read the
+    post-install screen as a removal, covered it and fired HOME. The exemption for an install was
+    destroyed by that install: the one event it was written to survive.
+
+    The shape to grep for is *knowledge with a lifetime shorter than the thing it describes*. Two
+    places in this app already carry the lesson and say so — `SettingsStore.setAutoInstalled` uses
+    `commit()` rather than `apply()` because "the process is about to be killed", and `UpdatePause`
+    writes its "durable intent, written BEFORE anything is attempted" for the same reason. This was
+    the same situation with neither. It is now prefs + `DeviceBoot.count`, read through the
+    `SessionClock` rule (monotonic within a boot; a boot change means expired), with the decision
+    split into a pure `openAt` so it can be tested at all.
+
+    **And the asymmetry is deliberate: `AdminPrompt` stays in memory.** Activating device admin does
+    not replace our APK, so the process that stamped the request is still the one being asked.
+    These two read as twins, so that difference is written at the join or it gets tidied away.
+
+    *The second half, which is invariant 4 wearing different clothes.* Even with the stamp gone, one
+    more thing had to fail: `uninstallConfirmation` separates install from uninstall by the
+    **activity's** class name, and `AccessibilityEvent.getClassName()` means two different things —
+    a window-state event carries the activity, a content or scroll event carries the *view* that
+    changed. Three of the guard's four call sites are the latter, so the class it was handed read
+    `android.widget.FrameLayout`, the install test found nothing saying "install", and the decision
+    fell through to "an installer screen naming us" — which a post-install screen satisfies exactly
+    as well as a removal dialog. **A reading that says nothing was resolved in the bouncing
+    direction.** `namesAnActivity` names that difference and the watcher now remembers the last
+    activity class per package, which is what `pendingClassName` had already been doing one path
+    over — *"the re-read can confirm the package but can never recover the class"* — for the purchase
+    check and nothing else.
+
+22. **The gate and the evidence must describe the same window.** Reported 21 Aug 2026 (report #7):
+    *"i dont know why it blocked"* — `26s ago guard why=guard`, raised over a **Claude
+    conversation** while the owner was reading this app's own `strings.xml` in it.
+
+    `handleSettingsGuard` builds one decision out of two different windows. The gate — `if (pkg !in
+    GUARD_PACKAGES) return false` — is the **event's** package. Everything after it is read from
+    `guardScreenText()`, which is `rootInActiveWindow`: **whatever is really on screen**. Nothing
+    tied them together, and the stray-event call sites said so as though it were a safety
+    property: *"it reads the real screen rather than trusting this event's package."* It does both.
+    The real screen supplies the evidence; the event still supplies the gate.
+
+    So a background Settings window announcing itself (it lives in Recents, and MIUI is generous
+    with these) opened the gate, and the text came from the app actually in front. The
+    accessibility-page test is `text.contains("appblocker uses this to detect")`, chosen because
+    Android renders our own service description *"there and nowhere else"* — true of Settings, and
+    not true of a chat window in which that sentence is being quoted. **This is v1.105's "mentions
+    us was never the right signal" a fourth time**, and the first time it has bitten the guard.
+
+    The fix is invariant 1, which every other cover path already honours and this one never did: a
+    window tree that positively names a *different* package is a contradiction, so decline.
+    Unreadable stays "can't tell" and changes nothing — `guardScreenText` already answers `""`
+    there, and the content-event re-check follows with a populated tree.
+
+    Report #5 — *"the app blocked claude idk why i was in claude code"* — is very probably this,
+    from before the log could name the rule. It was filed as unexplained and stayed that way.
+
+    *And the log could not say which screen.* `why=guard` was one code for four: our accessibility
+    page (v1.127's shape), an uninstall confirmation (report #6), a device-admin removal (v1.107's),
+    and App-info during Strict (force-stop protection). Four failure modes, four opposite fixes, one
+    label — so report #7 could not point at any of them. That is the ambiguity `BlockWhy` was
+    invented to remove for report #5, applied one level too shallow, and it is invariant 17 again.
+    Now `guard-service` / `guard-uninstall` / `guard-admin` / `guard-appinfo`, with `guard` kept for
+    entries written before the split. **`BlockLog` truncates `why` to 16 characters**, which is a
+    quiet way to rebuild the same ambiguity, so the vocabulary is length-checked in a test.
+
 ## Device quirks these invariants exist for
 
 - Gesture-nav Home on HyperOS often emits **no accessibility event at all**, so the foreground
@@ -1058,6 +1133,26 @@ foreground change, replaced the instant a different address is read, and expired
 not a browser, unreadable toolbar, no live site words, blocking paused — all present as *nothing
 happening*, and there was no way to tell them apart on the phone. Every guess-and-ship round in
 this entry existed because the app could not be asked. It can now.
+
+### Reported, not swept (21 Aug 2026) — two reports, one shape
+
+Both were *knowledge that did not survive the moment it was needed*, and both were already written
+down as the intent somewhere in the file that failed.
+
+- **The browser one** (invariant 20's continuation): Chrome inline-autocompletes the omnibox out of
+  the user's own history, and the site layer read the completed address as a page he was on. The
+  v1.133 fix had taken the tiles, the suggestion list and the feed away from the matcher and left
+  the address bar itself trusted whole — the same history, one node further in.
+- **The guard, on his tablet** (invariant 21): the exemption saying "we opened this installer" was
+  erased by the install it was written to cover.
+- **The guard, on his phone** (invariant 22): the package came from the event and the text from the
+  screen, so a background Settings window let the guard read a Claude conversation and bounce it for
+  quoting our own service description. Almost certainly report #5 as well, a week earlier.
+
+Three of the four are the same sentence: *the thing that knew was not the thing that was asked.*
+
+Neither came out of a sweep. Both were predicted in spirit by entries already in this file, which is
+the argument for working the list below rather than admiring it.
 
 ### Not yet swept
 
