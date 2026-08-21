@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.134
+- Three blocks that shouldn't have happened. Chrome finishes the address for you as you type — out of your own history — and the app was reading that finished word as a site you'd gone to. Updating the app made its own anti-uninstall guard mistake the "installed" screen for someone removing it, because installing the update wiped the note saying "we asked for this". And the guard could read a chat that merely mentions AppBlocker and bounce you out of it — which is why Claude kept getting blocked.
+
 ## v1.133
 - Chrome's start page no longer counts as a page you opened — opening Chrome or tapping the address bar stops raising adult blocks, while anything you type is still checked. Plus the header countdown now reads 24d 15h instead of 35507:29.
 
