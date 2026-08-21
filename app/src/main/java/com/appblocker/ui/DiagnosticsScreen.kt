@@ -36,6 +36,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.appblocker.Dist
+import com.appblocker.data.DeviceProfile
 import com.appblocker.data.DeviceVendor
 import com.appblocker.data.PhoneFacts
 import com.appblocker.data.QuickSession
@@ -427,29 +428,15 @@ private fun readSnapshot(context: Context): Snapshot {
  */
 private fun phoneFacts(context: Context): List<Fact> {
     val advice = DeviceVendor.advice()
-    val pm = context.packageManager
 
-    // Which package would actually show "uninstall this app?" here. Needs the ACTION_DELETE
-    // <queries> entry or package visibility filters it to null on Android 11+.
-    val handler = runCatching {
-        val intent = Intent(Intent.ACTION_DELETE, Uri.parse("package:${context.packageName}"))
-        pm.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName
-    }.getOrNull()
-
-    // Whether the keep-alive button's destination exists. null = this phone's advice has no deep
-    // link to try, which is the generic entry and not a fault.
-    val keepAliveResolves = if (advice.deepLinks.isEmpty()) null else advice.deepLinks.any { (p, c) ->
-        runCatching {
-            pm.resolveActivity(Intent().setComponent(ComponentName(p, c)), 0) != null
-        }.getOrDefault(false)
-    }
-
-    val facts = PhoneFacts(
-        brand = advice.brand,
-        sdkInt = Build.VERSION.SDK_INT,
+    // The lookups themselves live in DeviceProfile, because this screen is no longer the only
+    // thing that asks: DeviceProbeTest asserts on them and BugReportSender.reportDeviceProfile
+    // sends them. Sharing one implementation is what stops a screenshot and an auto-report of the
+    // same phone disagreeing — which would be worse than either of them being absent.
+    val facts = DeviceProfile.facts(
+        context,
         sideloaded = Dist.SELF_UPDATE,
-        uninstallHandler = handler,
-        keepAliveResolves = keepAliveResolves,
+        sdkInt = Build.VERSION.SDK_INT,
     )
 
     return buildList {

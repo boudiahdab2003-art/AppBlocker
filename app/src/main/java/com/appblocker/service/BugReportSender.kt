@@ -13,6 +13,7 @@ import com.appblocker.data.BlockLayouts
 import com.appblocker.data.BlockLog
 import com.appblocker.data.BlockThemes
 import com.appblocker.data.BugReportQueue
+import com.appblocker.data.DeviceProfile
 import com.appblocker.data.ServiceHealth
 import com.appblocker.data.SettingsStore
 import com.appblocker.ui.hasUsageAccess
@@ -145,6 +146,39 @@ object BugReportSender {
                     device = describeDevice(),
                     context = appContext(context),
                     recentBlocks = BlockLog.recent(context),
+                ),
+            )
+        }
+    }
+
+    /**
+     * Sends what this phone says about the app's guesses — **including when they were all right.**
+     *
+     * This is the one report that is not about a failure, and it exists because the failures it
+     * covers cannot produce one. A Samsung whose uninstall screen we mis-guessed does not throw:
+     * Strict Mode simply stops protecting, and [report] never fires because nothing went wrong in
+     * a way Android can see. Waiting for a crash meant never hearing from the phones the app has
+     * never run on, which is every phone except the owner's two.
+     *
+     * **Sending on success is the other half.** Without it, no report means either "this brand is
+     * fine" or "reporting is broken on this brand", and nothing tells those apart — so a clean
+     * profile is filed too, and `docs/DEVICE_MATRIX.md` gets a row it can trust.
+     *
+     * Safe to call on every resume: [BugReportQueue] drops anything whose dedupe key has already
+     * been sent, and a profile's key is this phone plus this build. No flush here — the caller
+     * flushes straight after, and a profile has never been urgent enough to warrant its own post.
+     */
+    fun reportDeviceProfile(context: Context) {
+        if (!enabled()) return
+        runCatching {
+            BugReportQueue.enqueue(
+                context,
+                BugReport.fromProfile(
+                    appVersion = BuildConfig.VERSION_NAME,
+                    flavor = BuildConfig.FLAVOR,
+                    androidSdk = Build.VERSION.SDK_INT,
+                    device = describeDevice(),
+                    context = DeviceProfile.reportContext(context),
                 ),
             )
         }

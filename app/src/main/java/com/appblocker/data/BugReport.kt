@@ -75,9 +75,21 @@ data class BugReport(
      * bothered to type it, he means it.
      */
     fun dedupeKey(): String = when {
+        // One profile per phone per build. Not per launch: the point is one report per *thing we
+        // might have got wrong*, and that only changes when the phone or our guesses do.
+        isProfile -> "profile:$device|$appVersion"
         note != null -> "note:${note.hashCode()}"
         else -> "$where|$errorClass|${frames.firstOrNull().orEmpty()}"
     }
+
+    /**
+     * A report about the phone rather than about a fault — see [DeviceProfile].
+     *
+     * Detected from [where] rather than carried as a field so the queue's stored format is
+     * unchanged: a profile written by this version and read back by the next decodes as itself,
+     * with no migration and no nullable flag to get wrong.
+     */
+    val isProfile: Boolean get() = where == PROFILE_WHERE && errorClass == null && note == null
 
     /**
      * The issue title, carrying the version — the first question about any report is "which build
@@ -85,9 +97,24 @@ data class BugReport(
      * one by one to read.
      */
     fun title(): String = when {
+        // The verdict goes in the title because most profiles are healthy and the issue list has
+        // to make the one that isn't findable without opening twenty that are.
+        isProfile -> "[$appVersion] $device — " +
+            if (profileIsClean) "profile OK" else "PROFILE: something is wrong here"
         note != null -> "[$appVersion] " + note.lineSequence().first().take(60).trim()
         else -> "[$appVersion] $errorClass in $where"
     }
+
+    /**
+     * Whether this phone answered every question the way the app assumed it would.
+     *
+     * Only the two that break blocking count. A missing browser or an unproven readability claim
+     * is a fact about the device, not a fault — marking those as wrong would make every honest
+     * profile look broken and the flag would stop meaning anything within a week.
+     */
+    private val profileIsClean: Boolean
+        get() = context["uninstallGuard"] != UninstallGuardVerdict.UNRECOGNISED.name &&
+            context["keepAlive"] != "NONE RESOLVED"
 
     /**
      * The issue body, in GitHub markdown.
@@ -97,7 +124,56 @@ data class BugReport(
      * sections are always present — an absent section and an empty one look identical in an issue
      * and mean opposite things, which has already cost one round trip.
      */
-    fun body(): String = buildString {
+    fun body(): String = if (isProfile) profileBody() else faultBody()
+
+    /**
+     * A profile's body, which answers a different question from a fault's.
+     *
+     * A crash report asks "what went wrong"; this one asks "is what we assumed about this phone
+     * true". So it leads with the verdict and the fix, and it does **not** carry the recent-blocks
+     * or stack-frame sections — on a healthy phone those are empty, and an issue whose two biggest
+     * sections say "(none)" reads as a broken report rather than a clean one.
+     */
+    private fun profileBody(): String = buildString {
+        if (profileIsClean) {
+            appendLine("Nothing is wrong here. This is a **healthy phone reporting in** — it is")
+            appendLine("worth an issue because it is evidence: a brand nobody owns, confirming")
+            appendLine("that what the app assumed about it is actually true. Close it once")
+            appendLine("`docs/DEVICE_MATRIX.md` has the row.")
+        } else {
+            appendLine("**A guess about this phone is wrong, and blocking is weaker here because")
+            appendLine("of it.** Nothing crashed and the owner of this phone cannot see it — that")
+            appendLine("is what this report is for. The failing row is marked below.")
+        }
+        appendLine()
+        appendLine("### This phone")
+        appendLine()
+        appendLine("| | |")
+        appendLine("|---|---|")
+        appendLine("| Device | $device |")
+        appendLine("| Android | SDK $androidSdk |")
+        appendLine("| Version | $appVersion ($flavor) |")
+        context.toSortedMap().forEach { (k, v) ->
+            val bad = (k == "uninstallGuard" && v == UninstallGuardVerdict.UNRECOGNISED.name) ||
+                (k == "keepAlive" && v == "NONE RESOLVED")
+            appendLine("| $k | " + (if (bad) "❌ `$v`" else "`$v`") + " |")
+        }
+        appendLine()
+        appendLine("### What to do about each row")
+        appendLine()
+        appendLine("- `uninstallGuard` **UNRECOGNISED** — Strict Mode cannot stop an uninstall on")
+        appendLine("  this phone. Add the `uninstallHandler` value to `GuardPackages.INSTALLERS`.")
+        appendLine("- `keepAlive` **NONE RESOLVED** — the keep-alive button opens the app's own")
+        appendLine("  settings page while its label promises this brand's battery screen. Add the")
+        appendLine("  real activity to this brand's `DeviceVendor` entry, and its package to")
+        appendLine("  `<queries>` in AndroidManifest.xml.")
+        appendLine("- `browsersClaimUnproven` — browsers we *claim* we can read the address bar in")
+        appendLine("  and never have on this phone. Not a fault by itself; it is where the Mi")
+        appendLine("  Browser bug lived for months, so it is where to look when a site block on")
+        appendLine("  this brand does nothing.")
+    }
+
+    private fun faultBody(): String = buildString {
         if (note != null) {
             appendLine("> $note".replace("\n", "\n> "))
             appendLine()
@@ -233,17 +309,54 @@ data class BugReport(
             "allowlist",
         )
 
+        /**
+         * The device-profile keys, allowed the same way but measured with a longer ruler.
+         *
+         * **Why these get their own set instead of joining the one above.** Everything in
+         * [ALLOWED_CONTEXT_KEYS] is a setting or a count, so 24 characters is generous and a long
+         * value there is genuine evidence that something unintended got in. These are package
+         * names and joined lists — `com.sec.android.app.sbrowser` is 28 characters on its own — so
+         * the same cap would silently shred the exact field the report was sent for.
+         *
+         * The longer cap is safe **for these keys specifically**, and the argument is about where
+         * the values come from rather than how they look: every one is assembled in
+         * [DeviceProfile] by joining this app's *own constants* — `KNOWN_BROWSERS`, `DeviceVendor`
+         * components, enum names — or by resolving an intent built from our own package name.
+         * None of them reads a keyword, a URL, an app the owner chose, or anything on screen. A
+         * value here cannot be long *because of something the user did*, which is the property
+         * the 24-character cap was standing in for.
+         */
+        /** The [where] tag that marks a report as a device profile rather than a fault. */
+        const val PROFILE_WHERE = "device-profile"
+
+        val PROFILE_CONTEXT_KEYS = setOf(
+            "brand",
+            "uninstallHandler",
+            "uninstallGuard",
+            "keepAlive",
+            "browsersKnown",
+            "browsersClaimedReadable",
+            "browsersClaimUnproven",
+        )
+
         /** Values are short by nature (an id, a boolean, a count); anything long is a sign
          *  something unintended got in, so it is truncated as well as key-filtered. */
         private const val MAX_CONTEXT_VALUE = 24
 
+        /** Long enough for a joined list of package names, and still a ceiling. */
+        private const val MAX_PROFILE_VALUE = 240
+
         /**
-         * Drops every key not on [ALLOWED_CONTEXT_KEYS] and truncates what remains. The one
-         * function standing between "a helpful diagnostic" and "an accidental leak".
+         * Drops every key not on [ALLOWED_CONTEXT_KEYS] or [PROFILE_CONTEXT_KEYS] and truncates
+         * what remains. The one function standing between "a helpful diagnostic" and "an
+         * accidental leak".
          */
         fun sanitizeContext(raw: Map<String, String>): Map<String, String> = raw
-            .filterKeys { it in ALLOWED_CONTEXT_KEYS }
-            .mapValues { (_, v) -> v.replace('\n', ' ').trim().take(MAX_CONTEXT_VALUE) }
+            .filterKeys { it in ALLOWED_CONTEXT_KEYS || it in PROFILE_CONTEXT_KEYS }
+            .mapValues { (k, v) ->
+                val cap = if (k in PROFILE_CONTEXT_KEYS) MAX_PROFILE_VALUE else MAX_CONTEXT_VALUE
+                v.replace('\n', ' ').trim().take(cap)
+            }
 
         /**
          * Builds a report from a throwable, taking **only** the class name and our own frames.
@@ -291,6 +404,32 @@ data class BugReport(
             device = device,
             context = sanitizeContext(context),
             recentBlocks = recentBlocks,
+        )
+
+        /**
+         * A report about the phone itself, sent **whether or not anything is wrong**.
+         *
+         * No frames and no recent blocks by construction: there is no failure to locate, and a
+         * profile is about the hardware rather than about anything the owner did. That also keeps
+         * this the one report shape that carries nothing the user generated at all.
+         */
+        fun fromProfile(
+            appVersion: String,
+            flavor: String,
+            androidSdk: Int,
+            device: String,
+            context: Map<String, String>,
+        ) = BugReport(
+            where = PROFILE_WHERE,
+            errorClass = null,
+            frames = emptyList(),
+            note = null,
+            appVersion = appVersion,
+            flavor = flavor,
+            androidSdk = androidSdk,
+            device = device,
+            context = sanitizeContext(context),
+            recentBlocks = emptyList(),
         )
 
         /**

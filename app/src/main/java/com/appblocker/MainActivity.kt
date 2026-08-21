@@ -87,6 +87,13 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         OwnUi.visible = true
+        // What this phone says about the guesses the app makes about it — sent once per phone per
+        // build, and sent **even when every answer is the one we hoped for**. A phone we got wrong
+        // does not crash; it quietly stops protecting, so a healthy report is the only signal
+        // there is. The queue dedupes on the report's own key, so calling this every resume costs
+        // one lookup after the first send. Before the flush, or the first profile would sit in the
+        // queue until the next launch.
+        BugReportSender.reportDeviceProfile(applicationContext)
         // Anything recorded while offline (or while crashing) goes out now. Resume is the moment
         // a network is most likely, and the send is off the main thread and best-effort.
         BugReportSender.flush(applicationContext)

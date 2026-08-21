@@ -583,3 +583,180 @@ class ModelFallbackTest {
         assertFalse(walks("HTTP 400 invalid argument"))
     }
 }
+
+/**
+ * **The report that is sent when nothing is wrong.**
+ *
+ * Every other report in this file exists because something failed. This one exists because of the
+ * failures that *cannot* fail loudly: a Samsung whose uninstall screen the app mis-guessed does
+ * not crash — Strict Mode silently stops protecting, and the person holding the phone sees an app
+ * that looks exactly like a working one. `docs/BLOCKING_INVARIANTS.md` opens with that shape:
+ * under-blocking is invisible.
+ *
+ * So the profile is filed on **success as well as failure**, and that is the property most at risk
+ * from a later tidy-up — "why file an issue when everything is fine?" is a very reasonable-sounding
+ * question with an expensive answer. Without the healthy report, silence from a brand means either
+ * *it works there* or *reporting is broken there*, and nothing distinguishes them.
+ */
+class DeviceProfileReportTest {
+
+    private val clean = mapOf(
+        "brand" to "Samsung",
+        "uninstallHandler" to "com.samsung.android.packageinstaller",
+        "uninstallGuard" to "RECOGNISED",
+        "keepAlive" to "com.samsung.android.lool/BatteryActivity",
+        "browsersKnown" to "com.android.chrome, com.sec.android.app.sbrowser",
+        "browsersClaimedReadable" to "com.android.chrome, com.sec.android.app.sbrowser",
+        "browsersClaimUnproven" to "com.sec.android.app.sbrowser",
+    )
+
+    private fun profile(context: Map<String, String>) = BugReport.fromProfile(
+        appVersion = "1.136",
+        flavor = "github",
+        androidSdk = 35,
+        device = "samsung SM-S911B",
+        context = context,
+    )
+
+    // --- the point of the whole thing ---
+
+    @Test
+    fun `a phone where every guess was right still files a report`() {
+        val r = profile(clean)
+
+        assertTrue(r.isProfile)
+        assertTrue(r.title().contains("profile OK"))
+        // It must read as evidence rather than as an error, or it gets closed unread.
+        assertTrue(r.body().contains("healthy phone reporting in"))
+        assertTrue(r.body().contains("samsung SM-S911B"))
+    }
+
+    @Test
+    fun `an uninstall screen the guard does not watch is announced in the title`() {
+        val r = profile(clean + ("uninstallGuard" to "UNRECOGNISED"))
+
+        // The title, specifically: an issue list of healthy profiles must make this one findable
+        // without opening the other twenty.
+        assertTrue(r.title().contains("PROFILE: something is wrong here"))
+        assertTrue(r.body().contains("❌"))
+        assertTrue(r.body().contains("GuardPackages.INSTALLERS"))
+    }
+
+    @Test
+    fun `a keep-alive button with nowhere to go is announced in the title`() {
+        val r = profile(clean + ("keepAlive" to "NONE RESOLVED"))
+
+        assertTrue(r.title().contains("PROFILE: something is wrong here"))
+        assertTrue(r.body().contains("❌"))
+    }
+
+    /**
+     * An unproven readability claim is a fact about the phone, not a fault. Marking it as one
+     * would make every honest profile look broken, and a flag that is always on is not a flag.
+     */
+    @Test
+    fun `an unproven browser claim does not make the profile look broken`() {
+        assertTrue(profile(clean).title().contains("profile OK"))
+    }
+
+    // --- the traps ---
+
+    /**
+     * **The 24-character cap would have shredded exactly the field this report was sent for.**
+     *
+     * `com.sec.android.app.sbrowser` is 28 characters on its own, and the general context cap is
+     * there to catch values that are long *because something unintended got in*. Profile values
+     * are long because package names are long, so they get their own cap — and this is the test
+     * that fails if a later change folds them back into the general allow-list.
+     */
+    @Test
+    fun `browser package lists are not truncated to nothing`() {
+        val r = profile(clean)
+
+        assertEquals(
+            "com.android.chrome, com.sec.android.app.sbrowser",
+            r.context["browsersKnown"],
+        )
+        assertTrue(r.body().contains("com.sec.android.app.sbrowser"))
+    }
+
+    /** The longer cap is a longer cap, not the removal of one. */
+    @Test
+    fun `the profile cap is still a cap`() {
+        val huge = "com.example.browser, ".repeat(60)
+        val r = profile(clean + ("browsersKnown" to huge))
+
+        assertTrue(r.context["browsersKnown"]!!.length <= 240)
+    }
+
+    /**
+     * The allow-list is the reason the reporter is allowed to exist, and a new report *shape* is
+     * exactly the kind of change that quietly routes around it.
+     */
+    @Test
+    fun `the privacy allow-list still applies to a profile`() {
+        val r = profile(clean + ("keyword" to "someveryprivateblockedword"))
+
+        assertFalse(r.context.containsKey("keyword"))
+        assertFalse(r.body().contains("someveryprivateblockedword"))
+    }
+
+    /** Nothing the user generated is in a profile at all — there is no failure to locate. */
+    @Test
+    fun `a profile carries no stack frames, no note and no block log`() {
+        val r = profile(clean)
+
+        assertTrue(r.frames.isEmpty())
+        assertTrue(r.recentBlocks.isEmpty())
+        assertEquals(null, r.note)
+        assertEquals(null, r.errorClass)
+    }
+
+    // --- how often it is sent ---
+
+    /**
+     * One per phone per build. `MainActivity` calls this on every resume and relies entirely on
+     * the dedupe key to make that free — if the key ever varies per launch, a daily user opens
+     * twelve issues a day until the cap stops them.
+     */
+    @Test
+    fun `the same phone on the same build reports once`() {
+        assertEquals(profile(clean).dedupeKey(), profile(clean).dedupeKey())
+        // Different answers, same phone and build: still the same report. What we are deduping is
+        // the phone, not the reading.
+        assertEquals(
+            profile(clean).dedupeKey(),
+            profile(clean + ("uninstallGuard" to "UNRECOGNISED")).dedupeKey(),
+        )
+    }
+
+    @Test
+    fun `a new build asks the same phone again`() {
+        val next = BugReport.fromProfile("1.137", "github", 35, "samsung SM-S911B", clean)
+
+        assertNotEquals(profile(clean).dedupeKey(), next.dedupeKey())
+    }
+
+    @Test
+    fun `a different phone is a different report`() {
+        val other = BugReport.fromProfile("1.136", "github", 35, "Xiaomi 25080RABDG", clean)
+
+        assertNotEquals(profile(clean).dedupeKey(), other.dedupeKey())
+    }
+
+    /**
+     * A profile is queued when offline like anything else, and the queue is where a report has
+     * silently lost its contents before — see [ReportRoundTripTest]. `isProfile` is derived from
+     * `where` rather than stored, so this is what proves that derivation survives storage.
+     */
+    @Test
+    fun `a profile comes back out of the queue as a profile`() {
+        val stored = com.appblocker.data.BugReportQueue.decode(
+            com.appblocker.data.BugReportQueue.encode(listOf(profile(clean))),
+        ).single()
+
+        assertTrue(stored.isProfile)
+        assertEquals(profile(clean).context, stored.context)
+        assertTrue(stored.title().contains("profile OK"))
+    }
+}
