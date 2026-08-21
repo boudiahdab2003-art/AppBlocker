@@ -284,11 +284,58 @@ class BlockLogTest {
  */
 class InstallPromptTest {
 
+    private val boot = 42
+
     @Test
     fun `nothing is exempt before we ask`() {
         // The window only opens because the updater opened the installer. A removal the owner
         // started himself must never fall inside it.
-        assertFalse(com.appblocker.data.InstallPrompt.recentlyRequested())
+        assertFalse(com.appblocker.data.InstallPrompt.openAt(0L, boot, boot, 5_000L))
+    }
+
+    /**
+     * **Report #6, and the reason the stamp had to reach the disk.** It lived in a `@Volatile`
+     * field, and installing our own APK is Android killing our process — so the service came back
+     * with it at 0, read the "app installed / Open" screen still in front as a removal, covered it
+     * and fired HOME. *"After the update I got a blocking screen idk why."*
+     *
+     * A reinstall is not a reboot, so the boot count matches and the exemption must still be open
+     * on the other side of it.
+     */
+    @Test
+    fun `the exemption survives the process death the install causes`() {
+        val stampedBeforeInstall = 120_000L
+        val serviceAsksAfterRestart = stampedBeforeInstall + 25_000L
+        assertTrue(
+            "the guard must still know this installer is ours after the update replaced us",
+            com.appblocker.data.InstallPrompt
+                .openAt(stampedBeforeInstall, boot, boot, serviceAsksAfterRestart),
+        )
+    }
+
+    /** A reboot restarts the monotonic clock, so a stamp from before one cannot be compared with
+     *  it — said directly, where it used to be inferred from a negative elapsed time. */
+    @Test
+    fun `a stamp from before a reboot is expired`() {
+        assertFalse(com.appblocker.data.InstallPrompt.openAt(1_000L, boot, boot + 1, 2_000L))
+    }
+
+    /** Every way of not knowing answers closed, because closed is the guarding direction. */
+    @Test
+    fun `not knowing answers closed`() {
+        val p = com.appblocker.data.InstallPrompt
+        assertFalse(p.openAt(-1L, boot, boot, 5_000L))     // junk stamp
+        assertFalse(p.openAt(1_000L, -1, boot, 2_000L))    // boot unreadable when stamped
+        assertFalse(p.openAt(1_000L, boot, -1, 2_000L))    // boot unreadable now
+        assertFalse(p.openAt(5_000L, boot, boot, 1_000L))  // clock went backwards
+    }
+
+    @Test
+    fun `the window is open inside it and shut after it`() {
+        val p = com.appblocker.data.InstallPrompt
+        assertTrue(p.openAt(1_000L, boot, boot, 1_000L))
+        assertTrue(p.openAt(1_000L, boot, boot, 1_000L + p.WINDOW_MS))
+        assertFalse(p.openAt(1_000L, boot, boot, 1_000L + p.WINDOW_MS + 1))
     }
 
     @Test
