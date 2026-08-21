@@ -1662,7 +1662,16 @@ class BlockerAccessibilityService : AccessibilityService() {
         // Settled addresses only: acting on half-typed omnibox text would cover the screen
         // mid-word, and the owner asked for the block to wait until he has actually gone to the
         // site. Typing a blocked word is still caught by the page scan, at its usual speed.
-        val url = extractSettledBrowserUrl(pkg) ?: return
+        // No settled address: a start page, an empty bar, a toolbar behind a fullscreen video.
+        // Forget what was last checked here — the dedup below is keyed on the address alone, so
+        // leaving it set means coming back to the same blocked site without leaving the browser
+        // reads as "already handled" and this path skips it. The debounced scan still catches
+        // that, a beat later; an under-block is the half he never sees.
+        val url = extractSettledBrowserUrl(pkg)
+        if (url == null) {
+            lastCheckedUrl = null
+            return
+        }
         if (url == lastCheckedUrl) return
         lastCheckedUrl = url
         if (DEBUG) Log.d(TAG, "urlScan[$pkg]: $url")
