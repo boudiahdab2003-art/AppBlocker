@@ -300,6 +300,34 @@ class BlockerAccessibilityService : AccessibilityService() {
     @Volatile private var pendingClassName: String? = null
     @Volatile private var pendingClassNamePkg: String? = null
 
+    /**
+     * The last ACTIVITY class seen for a package, and which package it was.
+     *
+     * Only a window-state event carries an activity name; a content or scroll event carries the
+     * *view* that changed. Three of the four guard call sites are the latter, so the class the
+     * guard was handed there said nothing — and `uninstallConfirmation` reads it to tell an
+     * install from an uninstall. Nothing said "install", so the bounce went ahead on the only
+     * evidence left: an installer screen naming us, which is what the "app installed" screen after
+     * an update is (report #6, 21 Aug 2026).
+     *
+     * Remembered rather than re-derived, exactly as [pendingClassName] already is one path over:
+     * a later event can confirm the package but can never recover the class.
+     */
+    @Volatile private var lastActivityClass: String? = null
+    @Volatile private var lastActivityClassPkg: String? = null
+
+    /** The activity class to reason about for [pkg]: this event's, when it named one, and the last
+     *  one seen in the same package otherwise. See [namesAnActivity]. */
+    private fun activityClassFor(pkg: String, className: String?): String? {
+        val cn = className?.takeIf { namesAnActivity(it) }
+        if (cn != null) {
+            lastActivityClass = cn
+            lastActivityClassPkg = pkg
+            return cn
+        }
+        return lastActivityClass.takeIf { lastActivityClassPkg == pkg }
+    }
+
     // The offence most recently recorded as an attempt, and when — so one open is one attempt
     // however many times the cover has to be redrawn to keep the user out. Keyed by offence
     // rather than by counter key, so a blocked word and the app lockout it creates count once
@@ -849,6 +877,13 @@ class BlockerAccessibilityService : AccessibilityService() {
         lastWebText = null // new page/app: force a fresh re-check
         lastCheckedUrl = null
         forgetBrowserUrl()
+        // A different app is a different question here too: the remembered activity class is only
+        // ever consulted for the package it was seen in, and holding one across apps would let a
+        // stale name answer for a screen it was never on.
+        if (lastActivityClassPkg != pkg) {
+            lastActivityClass = null
+            lastActivityClassPkg = null
+        }
         // Record what the watcher makes of this app BEFORE any scan runs, because the most
         // important thing it can report is the case where no scan runs at all: a browser missing
         // from browserPackages is exempt from every web-filtering layer there is, and from the
@@ -1012,7 +1047,10 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (pkg !in GUARD_PACKAGES) return false
         if (!strict && !OffSwitchGuard.armed(applicationContext)) return false
 
-        val cn = className?.lowercase().orEmpty()
+        // The event's own class when it named an activity, the last one seen in this package
+        // otherwise — a view class from a content event is not evidence, and reading it as though
+        // it were is what bounced the owner's own update (see [activityClassFor]).
+        val cn = activityClassFor(pkg, className)?.lowercase().orEmpty()
         // Read the window ONCE and pass it down. Each of the three checks below used to walk the
         // node tree for itself, so a single decision could walk it three times — on a screen the
         // budget deliberately lets run to 800 nodes, on every foreground change inside Settings.
@@ -1203,7 +1241,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         // same package showing the same app name as the one for a removal, so without this the
         // guard bounced its own updates — and a guard that blocks its own updates blocks the fix
         // for itself. Knowing we opened it beats reading it, in any language. See InstallPrompt.
-        if (InstallPrompt.recentlyRequested()) return false
+        if (InstallPrompt.recentlyRequested(applicationContext)) return false
         // Second, independent signal for an install we did NOT open — sideloading the APK from a
         // browser or a file manager. Activity CLASS names are not translated, so unlike the screen
         // text they mean the same thing on every phone and in every language. Only a name that

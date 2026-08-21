@@ -1,5 +1,6 @@
 package com.appblocker.data
 
+import android.content.Context
 import android.os.SystemClock
 
 /**
@@ -51,6 +52,15 @@ object AdminPrompt {
     }
 }
 
+/*
+ * **[AdminPrompt] stays in memory on purpose, and [InstallPrompt] does not.** They read as twins,
+ * so the asymmetry has to be written down or it gets tidied away: activating device admin does not
+ * replace our APK, so our process is still the one that stamped the request when the guard asks.
+ * An install *is* the process ending — that is the whole difference, and it is why only one of
+ * these two needed to reach the disk. Making both persistent would widen a standing exemption to
+ * no purpose.
+ */
+
 /**
  * "We just asked Android to install our own update."
  *
@@ -77,20 +87,74 @@ object InstallPrompt {
 
     const val WINDOW_MS = 5 * 60_000L
 
+    private const val PREFS = "appblocker_prefs"
+    private const val KEY_AT = "install_prompt_at"
+    private const val KEY_BOOT = "install_prompt_boot"
+
+    /** A fast path only. The answer of record is on disk — see [requested]. */
     @Volatile private var requestedAtRt: Long = 0L
 
-    /** Called immediately before launching the package-installer intent. */
-    fun requested() {
-        requestedAtRt = SystemClock.elapsedRealtime()
+    /**
+     * Called immediately before launching the package-installer intent.
+     *
+     * **Written to disk, because the process holding it is about to be killed.** This lived in the
+     * `@Volatile` above and nowhere else, and that is precisely the screen it fails on: installing
+     * our own APK makes Android kill our process, the accessibility service comes back a moment
+     * later with the field reset to 0, and the "app installed / Open" screen still in front is
+     * read as an uninstall confirmation. Reported 21 Aug 2026 — *"after the update I got a
+     * blocking screen idk why"* — and the KDoc above had already named that screen as the one the
+     * five-minute window exists to cover. A window is worth nothing when the clock holding it is
+     * reset at minute zero.
+     *
+     * **`commit()`, not `apply()`**, for the reason `SettingsStore.setAutoInstalled` spells out:
+     * `apply()` writes to memory now and to disk on a background thread, and here the process is
+     * about to die by design. This is the one place in the app where that argument is not
+     * theoretical — the thing being defended against is the process ending.
+     *
+     * The boot count goes with it so the window stays monotonic across the restart without
+     * becoming a standing exemption: a stamp from before a reboot is expired, exactly as the
+     * negative-elapsed check used to say. Same rule as [SessionClock], and it is deliberately the
+     * same rule rather than a second opinion.
+     */
+    fun requested(context: Context) {
+        val now = SystemClock.elapsedRealtime()
+        requestedAtRt = now
+        runCatching {
+            context.applicationContext
+                .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .putLong(KEY_AT, now)
+                .putInt(KEY_BOOT, DeviceBoot.count(context))
+                .commit()
+        }
     }
 
-    /** True while the installer we asked for may still be in front. */
-    fun recentlyRequested(): Boolean {
-        val at = requestedAtRt
-        if (at == 0L) return false
-        val elapsed = SystemClock.elapsedRealtime() - at
-        // Negative means the monotonic clock restarted (a reboot): treat as expired, never open.
-        return elapsed in 0..WINDOW_MS
+    /** True while the installer we asked for may still be in front — across the process death the
+     *  install itself causes. */
+    fun recentlyRequested(context: Context): Boolean {
+        val prefs = runCatching {
+            context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        }.getOrNull()
+        // An unreadable prefs file falls back to this process's own memory rather than answering
+        // "not ours": within one process that is the same answer it always gave.
+        val savedAt = prefs?.getLong(KEY_AT, 0L) ?: requestedAtRt
+        val savedBoot = prefs?.getInt(KEY_BOOT, -1) ?: DeviceBoot.count(context)
+        return openAt(savedAt, savedBoot, DeviceBoot.count(context), SystemClock.elapsedRealtime())
+    }
+
+    /**
+     * Whether the exemption is open, given what was stored and what the clock says now.
+     *
+     * Split out with the clock and the boot count as parameters for the same reason
+     * [SessionClock.remainingAt] is: this app has no Robolectric, so the only decisions that can be
+     * tested are the ones that take their world as arguments. Every way of not knowing answers
+     * false — an unset stamp, an unknown boot count on either side, a different boot, a clock that
+     * has gone backwards. Closed is the guarding direction.
+     */
+    internal fun openAt(savedAtRt: Long, savedBoot: Int, currentBoot: Int, nowRt: Long): Boolean {
+        if (savedAtRt <= 0L) return false
+        if (savedBoot < 0 || currentBoot < 0 || savedBoot != currentBoot) return false
+        return (nowRt - savedAtRt) in 0..WINDOW_MS
     }
 }
 

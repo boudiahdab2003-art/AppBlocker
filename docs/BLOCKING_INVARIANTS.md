@@ -321,6 +321,46 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     the same parameter, with the same two meanings crushed into it, one call away from the file
     that had just been corrected.
 
+21. **State that must outlive the process may not live in the process.** Reported 21 Aug 2026
+    (report #6): *"after the update I got a blocking screen idk why"* — one `why=guard` line, 26
+    seconds before he wrote it, with `protection: PAUSED` proving v1.133 had just landed.
+
+    The off-switch guard reads an installer screen naming AppBlocker as *"do you want to uninstall
+    this app?"*, matched by **package** rather than wording so it holds in any language. Installing
+    an update opens the same installer and shows the same name, so `InstallPrompt` stands the guard
+    down while we know we asked for it — five minutes, chosen (its KDoc says so) to cover the *"app
+    installed / Open"* screen that follows the install.
+
+    It never reached that screen. The stamp was a `@Volatile private var`, and **installing our own
+    APK is Android killing our process.** The service came back with the field at 0, read the
+    post-install screen as a removal, covered it and fired HOME. The exemption for an install was
+    destroyed by that install: the one event it was written to survive.
+
+    The shape to grep for is *knowledge with a lifetime shorter than the thing it describes*. Two
+    places in this app already carry the lesson and say so — `SettingsStore.setAutoInstalled` uses
+    `commit()` rather than `apply()` because "the process is about to be killed", and `UpdatePause`
+    writes its "durable intent, written BEFORE anything is attempted" for the same reason. This was
+    the same situation with neither. It is now prefs + `DeviceBoot.count`, read through the
+    `SessionClock` rule (monotonic within a boot; a boot change means expired), with the decision
+    split into a pure `openAt` so it can be tested at all.
+
+    **And the asymmetry is deliberate: `AdminPrompt` stays in memory.** Activating device admin does
+    not replace our APK, so the process that stamped the request is still the one being asked.
+    These two read as twins, so that difference is written at the join or it gets tidied away.
+
+    *The second half, which is invariant 4 wearing different clothes.* Even with the stamp gone, one
+    more thing had to fail: `uninstallConfirmation` separates install from uninstall by the
+    **activity's** class name, and `AccessibilityEvent.getClassName()` means two different things —
+    a window-state event carries the activity, a content or scroll event carries the *view* that
+    changed. Three of the guard's four call sites are the latter, so the class it was handed read
+    `android.widget.FrameLayout`, the install test found nothing saying "install", and the decision
+    fell through to "an installer screen naming us" — which a post-install screen satisfies exactly
+    as well as a removal dialog. **A reading that says nothing was resolved in the bouncing
+    direction.** `namesAnActivity` names that difference and the watcher now remembers the last
+    activity class per package, which is what `pendingClassName` had already been doing one path
+    over — *"the re-read can confirm the package but can never recover the class"* — for the purchase
+    check and nothing else.
+
 ## Device quirks these invariants exist for
 
 - Gesture-nav Home on HyperOS often emits **no accessibility event at all**, so the foreground
@@ -1058,6 +1098,21 @@ foreground change, replaced the instant a different address is read, and expired
 not a browser, unreadable toolbar, no live site words, blocking paused — all present as *nothing
 happening*, and there was no way to tell them apart on the phone. Every guess-and-ship round in
 this entry existed because the app could not be asked. It can now.
+
+### Reported, not swept (21 Aug 2026) — two reports, one shape
+
+Both were *knowledge that did not survive the moment it was needed*, and both were already written
+down as the intent somewhere in the file that failed.
+
+- **The browser one** (invariant 20's continuation): Chrome inline-autocompletes the omnibox out of
+  the user's own history, and the site layer read the completed address as a page he was on. The
+  v1.133 fix had taken the tiles, the suggestion list and the feed away from the matcher and left
+  the address bar itself trusted whole — the same history, one node further in.
+- **The guard one** (invariant 21): the exemption saying "we opened this installer" was erased by
+  the install it was written to cover.
+
+Neither came out of a sweep. Both were predicted in spirit by entries already in this file, which is
+the argument for working the list below rather than admiring it.
 
 ### Not yet swept
 

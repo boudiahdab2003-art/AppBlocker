@@ -201,7 +201,7 @@ object Updater {
         // guard bounced our own updates, which meant the guard blocked the update that would fix
         // the guard. See InstallPrompt; the same trick as the device-admin prompt, and for the
         // same reason: reading the screen cannot tell install from uninstall in any language.
-        InstallPrompt.requested()
+        InstallPrompt.requested(context)
         context.startActivity(installIntent(context, file))
     }
 

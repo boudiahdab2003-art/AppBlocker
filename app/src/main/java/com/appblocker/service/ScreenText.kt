@@ -427,6 +427,46 @@ internal fun looksLikeHost(text: String): Boolean {
  * a failed measurement is never permission (invariant 4), so the worst case here is today's
  * behaviour, never a bypass.
  */
+/**
+ * Whether a class name names an **activity** we can reason about, or a view we cannot.
+ *
+ * `AccessibilityEvent.getClassName()` means two different things depending on the event: a
+ * window-state event carries the *activity* that opened, and a content or scroll event carries the
+ * *view* that changed. The watcher hands both to the same callers, and two of them are load-bearing
+ * — `handlePurchaseBlock` matches the billing activity, and `uninstallConfirmation` separates
+ * "installing" from "uninstalling" by the activity's name, because that name is the one thing on
+ * the screen no OEM translates.
+ *
+ * When a content event arrives, `android.widget.FrameLayout` is not evidence that this is not an
+ * install. It is not evidence of anything. Read as though it were, it is what let the guard bounce
+ * the owner's own update on 21 Aug 2026: the installer's "app installed" screen raised a content
+ * event, the install/uninstall test found nothing that said "install", and the decision fell
+ * through to "an installer screen naming AppBlocker" — which a post-install screen satisfies just
+ * as fully as a removal dialog does.
+ *
+ * So the guard asks this first and falls back to the last activity it saw for that package, rather
+ * than treating silence as a "no" (invariant 4). The watcher already carries the class forward for
+ * exactly this reason on one path — `pendingClassName`, kept *"because the re-read can confirm the
+ * package but can never recover the class, and losing it disables the purchase check entirely"*.
+ * This is that lesson applied to the guard.
+ *
+ * `handlePurchaseBlock` has the same exposure and is deliberately left alone here: it is reached
+ * for `com.android.vending` rather than a guarded package, so it needs its own remembered class
+ * rather than a share of the guard's, and over-blocking a billing sheet is not what was reported.
+ */
+internal fun namesAnActivity(cn: String): Boolean {
+    val c = cn.trim().lowercase()
+    if (c.isEmpty()) return false
+    return VIEW_CLASS_PREFIXES.none { c.startsWith(it) }
+}
+
+/** The framework packages a *view* class comes from. An activity's class lives in the app's own
+ *  package, so anything outside these is treated as a name worth reasoning about. */
+private val VIEW_CLASS_PREFIXES = listOf(
+    "android.widget.", "android.view.", "android.webkit.", "android.inputmethodservice.",
+    "androidx.", "com.google.android.material.",
+)
+
 internal fun typedPortion(text: String, selStart: Int, selEnd: Int): String {
     if (selStart <= 0 || selEnd <= selStart || selEnd > text.length) return text
     return text.substring(0, selStart)
