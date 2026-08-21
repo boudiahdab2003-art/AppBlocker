@@ -44,7 +44,20 @@ internal object BlockWhy {
     const val SITE = "site"                // the address bar was on a blocked site
     const val ADULT = "adult"              // one of the built-in adult layers, not the user's word
     const val SHORTS = "shorts"            // Shorts, in the app or on the web
-    const val GUARD = "guard"              // Strict/uninstall settings guard
+    /** The off-switch guard, split by **which** off-switch — four screens, four failure modes.
+     *
+     *  One `guard` code could not answer report #7 (*"i dont know why it blocked"*): the
+     *  accessibility page relapsing is v1.127's shape, an uninstall confirmation is report #6's,
+     *  a device-admin screen is v1.107's, and App-info-during-Strict is force-stop protection.
+     *  They get opposite fixes, so a report that cannot tell them apart sends the next one to the
+     *  wrong screen — the same argument [ofWebHit] makes, and invariant 17.
+     *
+     *  [GUARD] itself stays, because the log survives an update and older entries carry it. */
+    const val GUARD = "guard"              // pre-v1.134 entries: one of the four, unknown which
+    const val GUARD_SERVICE = "guard-service"      // our own accessibility page
+    const val GUARD_UNINSTALL = "guard-uninstall"  // the "uninstall this app?" dialog
+    const val GUARD_ADMIN = "guard-admin"          // deactivating device admin
+    const val GUARD_APPINFO = "guard-appinfo"      // our App-info page during Strict (Force stop)
     const val PURCHASE = "purchase"        // the Play billing sheet
 
     /**

@@ -372,4 +372,38 @@ class BlockDecisionTest {
             assertTrue("${r.why} is not in BlockWhy.ALL", r.why in BlockWhy.ALL)
         }
     }
+
+    /**
+     * **`BlockLog.record` truncates `why` to 16 characters**, so a longer code reaches a report cut
+     * in half — and two codes sharing a 16-character prefix arrive as one. That is precisely the
+     * ambiguity the guard split exists to remove, so it would be a quiet way to rebuild it: the
+     * next `guard-` screen someone adds is exactly the name most likely to run long.
+     */
+    @Test fun everyCodeSurvivesTheLogsTruncation() {
+        val codes = listOf(
+            BlockWhy.LOCKOUT, BlockWhy.ALLOWLIST, BlockWhy.STRICT, BlockWhy.QUICK, BlockWhy.LIMIT,
+            BlockWhy.SCHED_TIME, BlockWhy.SCHED_USAGE, BlockWhy.SCHED_LAUNCH, BlockWhy.SCHED_WIFI,
+            BlockWhy.SCHED_LOCATION, BlockWhy.BROWSER, BlockWhy.UNKNOWN,
+            BlockWhy.WORD, BlockWhy.SITE, BlockWhy.ADULT, BlockWhy.SHORTS, BlockWhy.PURCHASE,
+            BlockWhy.GUARD, BlockWhy.GUARD_SERVICE, BlockWhy.GUARD_UNINSTALL,
+            BlockWhy.GUARD_ADMIN, BlockWhy.GUARD_APPINFO,
+        )
+        for (c in codes) {
+            assertTrue("'$c' is ${c.length} chars — BlockLog truncates why to 16", c.length <= 16)
+            // The delimiters BlockLog strips would also silently reshape a code.
+            assertTrue("'$c' contains a log delimiter", !c.contains('|') && !c.contains(';'))
+        }
+        assertEquals("two BlockWhy codes are the same string", codes.size, codes.toSet().size)
+    }
+
+    /** The four guard screens must stay four. They fail differently and get fixed differently —
+     *  one code for all of them is what left report #7 unanswerable. */
+    @Test fun theFourGuardScreensAreDistinguishable() {
+        val guards = setOf(
+            BlockWhy.GUARD_SERVICE, BlockWhy.GUARD_UNINSTALL,
+            BlockWhy.GUARD_ADMIN, BlockWhy.GUARD_APPINFO,
+        )
+        assertEquals(4, guards.size)
+        assertTrue("the pre-split code must stay readable", BlockWhy.GUARD !in guards)
+    }
 }

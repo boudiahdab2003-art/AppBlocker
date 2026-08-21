@@ -1051,6 +1051,29 @@ class BlockerAccessibilityService : AccessibilityService() {
         // otherwise — a view class from a content event is not evidence, and reading it as though
         // it were is what bounced the owner's own update (see [activityClassFor]).
         val cn = activityClassFor(pkg, className)?.lowercase().orEmpty()
+        // **The gate and the evidence have to describe the same window.**
+        //
+        // The check above is the *event's* package; everything below is read from
+        // `rootInActiveWindow`, which is whatever is really on screen. Nothing tied the two
+        // together, and the comments at the stray-event call sites said so approvingly — "it reads
+        // the real screen rather than trusting this event's package". It does both: the real screen
+        // for the evidence, the event for the gate, and they are not always the same window.
+        //
+        // So a background Settings window announcing itself (it sits in Recents, and MIUI is
+        // generous with these) opened the gate, while the text came from the app actually in front.
+        // The accessibility-page test is `text.contains("appblocker uses this to detect")`, chosen
+        // because Android renders our own service description "there and nowhere else" — true of
+        // Settings, and not true of a chat window in which that sentence is being discussed. The
+        // owner was reading this app's own strings.xml in a Claude conversation when his phone
+        // covered it and threw him home (report #7, 21 Aug 2026; report #5 in Claude Code is very
+        // likely the same thing, from before the log could name the rule).
+        //
+        // Invariant 1, which every other cover path already honours and this one never did: a
+        // window tree that positively names a DIFFERENT package is a contradiction, so decline.
+        // Unreadable is not a contradiction and changes nothing — `guardScreenText` already
+        // answers "" there, and the content-event re-check follows with a populated tree.
+        val activePkg = runCatching { rootInActiveWindow?.packageName?.toString() }.getOrNull()
+        if (activePkg != null && activePkg != pkg) return false
         // Read the window ONCE and pass it down. Each of the three checks below used to walk the
         // node tree for itself, so a single decision could walk it three times — on a screen the
         // budget deliberately lets run to 800 nodes, on every foreground change inside Settings.
@@ -1091,11 +1114,22 @@ class BlockerAccessibilityService : AccessibilityService() {
         // from the first millisecond — a blanket "guard off after connect" would weaken three
         // screens to fix one.
         val justEnabled = OffSwitchGuard.justEnabled(stopwatchNow() - serviceConnectedAt)
-        val danger = (ourOwnServicePage(text) && !justEnabled) || // our accessibility page
-            uninstallConfirmation(pkg, cn, text) || // the "uninstall this app?" dialog
-            deviceAdminRemoval(cn, text) ||         // deactivating device admin
-            (strict && ourOwnAppInfoPage(cn, text)) // our App info page: Force stop lives there
-        if (!danger) return false
+        // Which of the four, not merely whether. Same order and same short-circuiting as the `||`
+        // chain this replaces — the only thing added is that the answer survives into the log.
+        //
+        // `why=guard` was one code for four screens that fail differently and get fixed
+        // differently, so report #7 ("i dont know why it blocked") could not say which one had
+        // fired: the accessibility page is the v1.127 shape, an uninstall confirmation is report
+        // #6's, device-admin is v1.107's, App-info-during-Strict is force-stop protection. That is
+        // exactly the ambiguity `BlockWhy` was created to remove for report #5, left one level too
+        // shallow. Invariant 17, and the same split v1.132/v1.133 made for word/site/adult.
+        val why = when {
+            ourOwnServicePage(text) && !justEnabled -> BlockWhy.GUARD_SERVICE
+            uninstallConfirmation(pkg, cn, text) -> BlockWhy.GUARD_UNINSTALL
+            deviceAdminRemoval(cn, text) -> BlockWhy.GUARD_ADMIN
+            strict && ourOwnAppInfoPage(cn, text) -> BlockWhy.GUARD_APPINFO
+            else -> return false
+        }
 
         // Monotonic, not the wall clock: this throttle claims "already bouncing" WITHOUT
         // bouncing, so a backward clock change used to turn it into a permanent "yes" — and
@@ -1117,7 +1151,7 @@ class BlockerAccessibilityService : AccessibilityService() {
             },
             packageName = null,
             counterKey = "strict_guard",
-            why = BlockWhy.GUARD,
+            why = why,
         )
         performGlobalAction(GLOBAL_ACTION_HOME)
         // Safety net: a null-package cover has no owner to auto-remove it, so if HOME is slow or
