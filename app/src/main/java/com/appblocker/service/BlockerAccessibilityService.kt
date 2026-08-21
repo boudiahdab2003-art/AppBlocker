@@ -219,6 +219,11 @@ class BlockerAccessibilityService : AccessibilityService() {
     // The app that was BEHIND the dismissed cover, so its lockout re-show (keyed by package,
     // not by the dismissed counterKey) is suppressed for the same transition window.
     @Volatile private var dismissedPkg: String? = null
+
+    /** The app a page cover's BACK exit was last fired in, and when — so a second "Got it" there
+     *  leaves instead of pressing back again. See [CoverGate.backExitFailed]. */
+    @Volatile private var lastBackExitPkg: String? = null
+    @Volatile private var lastBackExitAt: Long = 0L
     @Volatile private var dismissedAt = 0L
 
     // The app the user is being taken out of after "Got it", or null when we're not mid-exit.
@@ -883,6 +888,12 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (lastActivityClassPkg != pkg) {
             lastActivityClass = null
             lastActivityClassPkg = null
+        }
+        // Same reasoning for the back-exit memory: it exists to notice BACK not moving him
+        // *within one app*, so leaving that app ends the question.
+        if (lastBackExitPkg != null && lastBackExitPkg != pkg) {
+            lastBackExitPkg = null
+            lastBackExitAt = 0L
         }
         // Record what the watcher makes of this app BEFORE any scan runs, because the most
         // important thing it can report is the case where no scan runs at all: a browser missing
@@ -1762,7 +1773,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                 if (!hit.site) addKeywordLockout(pkg, hit.word)
                 showBlockScreen(
                     title = hit.title, message = hit.message, packageName = null,
-                    counterKey = "web", offenceKey = pkg, why = BlockWhy.ofWebHit(hit.site, hit.adult),
+                    counterKey = CoverGate.WEB_KEY, offenceKey = pkg, why = BlockWhy.ofWebHit(hit.site, hit.adult),
                 )
             } else lastCheckedUrl = null // left during the lookup — re-decide on the way back
         }
@@ -1905,7 +1916,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                     // Insights' Websites row. The log still says why=shorts.
                     showBlockScreen(title = "Shorts blocked",
                         message = "YouTube Shorts is blocked.", packageName = null,
-                        counterKey = "web", offenceKey = pkg, why = BlockWhy.SHORTS)
+                        counterKey = CoverGate.WEB_KEY, offenceKey = pkg, why = BlockWhy.SHORTS)
                 } else lastWebText = null // left during the scan — don't cover what's there now
             }
             return
@@ -1935,8 +1946,11 @@ class BlockerAccessibilityService : AccessibilityService() {
         lastWebText = text
         if (DEBUG) Log.d(TAG, "BLOCK: ${hit.title} / ${hit.message}")
         // Cover the offending page with the block screen. The overlay/Activity must be shown on
-        // the main thread. (No GLOBAL_ACTION_BACK — it races with the just-launched activity and
-        // dismisses it, same as the GLOBAL_ACTION_HOME race removed in M2. Close goes home.)
+        // the main thread. (No GLOBAL_ACTION_BACK *here* — at block time it races with the
+        // just-launched activity and dismisses it, same as the GLOBAL_ACTION_HOME race removed in
+        // M2. That objection is about this moment and not about the exit: "Got it" on a page cover
+        // does fire BACK, seconds later, on a deliberate tap with nothing launching — see
+        // onCoverDismissed and CoverGate.exitFor. Keep the two apart.)
         withContext(Dispatchers.Main) {
             if (lastForegroundPkg == pkg && stillOnScreen(pkg)) {
                 // A blocked WORD (or adult content) locks the whole app for a while — "Got it"
@@ -1949,7 +1963,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                 // count as two attempts. A site hit adds no lockout, so nothing follows it.
                 showBlockScreen(
                     title = hit.title, message = hit.message, packageName = null,
-                    counterKey = "web", offenceKey = pkg, why = BlockWhy.ofWebHit(hit.site, hit.adult),
+                    counterKey = CoverGate.WEB_KEY, offenceKey = pkg, why = BlockWhy.ofWebHit(hit.site, hit.adult),
                 )
             } else lastWebText = null // left during the scan — don't cover what's there now
         }
@@ -2223,10 +2237,35 @@ class BlockerAccessibilityService : AccessibilityService() {
             // now, so there is no flag to clear here: removing it IS the state change.)
             overlay.remove()
             performGlobalAction(GLOBAL_ACTION_HOME)
+        } else if (
+            CoverGate.exitFor(dismissedKey) == CoverGate.Exit.BACK &&
+            !CoverGate.backExitFailed(
+                dismissedPkg, lastBackExitPkg, stopwatchNow() - lastBackExitAt,
+            )
+        ) {
+            // **A page cover covers a page, so its exit is off the page — not out of the app.**
+            // The app underneath is not blocked (a site hit adds no lockout), and firing HOME left
+            // him in a loop he reported: the blocked site is still the open tab, so coming back to
+            // the browser lands on it and covers again, with no way from the cover to a different
+            // page. See CoverGate.exitFor.
+            //
+            // The old objection to BACK is at the raise site — "it races with the just-launched
+            // activity and dismisses it" — and it is about firing BACK *automatically at block
+            // time*, against an activity that is still opening. This is a deliberate tap seconds
+            // later with nothing launching. Different moment, different race.
+            //
+            // Not a bypass: the scan re-runs on whatever page BACK lands on, and another blocked
+            // page covers again. The dismiss grace set above absorbs only the page being left,
+            // exactly as it already does for the trip Home.
+            lastBackExitPkg = dismissedPkg
+            lastBackExitAt = stopwatchNow()
+            overlay.remove()
+            performGlobalAction(GLOBAL_ACTION_BACK)
         } else {
-            // Everything else — a whole app, a page, the purchase sheet, a Settings page we
-            // bounced out of — is held until the user is really off the app it covered, so a
-            // swallowed HOME can't leave the thing we were covering exposed.
+            // Everything else — a whole app, the purchase sheet, a Settings page we bounced out
+            // of, and a page whose BACK has already been tried — is held until the user is really
+            // off the app it covered, so a swallowed HOME can't leave the thing we were covering
+            // exposed.
             startExit(dismissedPkg)
         }
     }

@@ -396,6 +396,36 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     entries written before the split. **`BlockLog` truncates `why` to 16 characters**, which is a
     quiet way to rebuild the same ambiguity, so the vocabulary is length-checked in a test.
 
+23. **The way out of a cover must match the scope of what it covered.** Asked by the owner as a
+    how-do-I, which is usually how a design fault arrives: *"when i get blocked from chrome for
+    opening insta how can i correct it if i keep getting blocked and change the page"*.
+
+    A page cover covers **one page** inside an app that is not blocked. `scanWebContent` says so
+    where it decides the lockout — *"A blocked WEBSITE is gentler: cover the page so the site stays
+    blocked every visit, but don't lock the whole browser"* — and a site hit adds no lockout, so
+    the browser really is not locked. Then "Got it" fired `GLOBAL_ACTION_HOME` and threw him out of
+    it anyway, onto a home screen from which the only way back was the tab still showing the
+    blocked site. The loop is the app's, not his.
+
+    So the enforcement was scoped and the exit was not, and the exit is what the user actually
+    experiences. It gave away at dismissal exactly the distinction v1.132 split `word` from `site`
+    to preserve. `CoverGate.exitFor` decides it now: a page cover goes BACK, an app cover goes
+    HOME, and the Shorts cover keeps its own path.
+
+    Two things worth keeping straight for whoever edits this next:
+
+    - **The old "no BACK" note is about a different moment.** `scanWebContent` records that BACK
+      *"races with the just-launched activity and dismisses it"*. True at **block** time, against an
+      activity still opening. The exit fires on a deliberate tap seconds later with nothing
+      launching. Both comments now say which moment they mean.
+    - **Failure is detected, not predicted.** Android will not report whether BACK went anywhere,
+      and a page opened straight into a fresh tab has no history. So a second "Got it" in the same
+      app within `BACK_RETRY_MS` leaves instead — one extra tap in the worst case, against a loop
+      with no exit at all.
+
+    Not a bypass in either direction: the scan re-runs on whatever page BACK lands on, and another
+    blocked page covers again.
+
 ## Device quirks these invariants exist for
 
 - Gesture-nav Home on HyperOS often emits **no accessibility event at all**, so the foreground
