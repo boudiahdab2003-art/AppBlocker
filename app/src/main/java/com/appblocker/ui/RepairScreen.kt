@@ -45,6 +45,7 @@ import com.appblocker.ui.theme.pageWidth
 const val REPAIR_BUTTON_TAG = "repair_open_switch"
 const val REPAIR_STEPS_TAG = "repair_steps"
 const val REPAIR_STATUS_TAG = "repair_status"
+const val REPAIR_NOTIFS_TAG = "repair_notification_settings"
 const val REPAIR_LIST_TAG = "repair_list"
 
 /**
@@ -138,6 +139,34 @@ fun RepairScreen(onBack: () -> Unit) {
                             text = "Open the switch",
                             onClick = { openOurAccessibilityPage(context) },
                             modifier = Modifier.testTag(REPAIR_BUTTON_TAG),
+                        )
+                    }
+                }
+
+                item {
+                    AppCard {
+                        Text(
+                            "So you actually see this next time",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Spacer(Modifier.height(Space.sm))
+                        Text(
+                            "The alert that brought you here pops up over whatever you're doing " +
+                                "and comes back every few minutes until blocking is running " +
+                                "again. But your phone keeps “Floating notifications” as its own " +
+                                "switch, and it's off by default for most apps — while it's off, " +
+                                "the alert can only sit silently in the shade. This is the one " +
+                                "thing AppBlocker can't switch on for you.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(Space.md))
+                        GradientButton(
+                            text = "Notification settings",
+                            onClick = { openOurNotificationSettings(context) },
+                            modifier = Modifier.testTag(REPAIR_NOTIFS_TAG),
                         )
                     }
                 }
@@ -290,6 +319,34 @@ private fun openOurAccessibilityPage(context: Context) {
         context.startActivity(
             Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+    }
+}
+
+/**
+ * Opens AppBlocker's notification settings — the one switch the app cannot flip for itself.
+ *
+ * **HyperOS/MIUI keeps "Floating notifications" as a separate per-app permission, off by default
+ * for most apps.** While it is off, nothing the app does makes the "blocking has stopped" alert
+ * pop up: not `IMPORTANCE_HIGH`, not its own channel, not re-posting. So the honest thing is to
+ * say so and put him one tap from it, rather than quietly failing to be seen.
+ *
+ * `ACTION_APP_NOTIFICATION_SETTINGS` is public API and every OEM honours it; the vendor's own
+ * floating switch lives on that page (or one level into the channel) on the builds that have one.
+ * Falls back to the app details page — same rule as [openOurAccessibilityPage]: a missing screen
+ * costs a scroll, never a dead button.
+ */
+internal fun openOurNotificationSettings(context: Context) {
+    val direct = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+    if (runCatching { context.startActivity(direct) }.isSuccess) return
+    runCatching {
+        context.startActivity(
+            Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                android.net.Uri.fromParts("package", context.packageName, null),
+            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
         )
     }
 }

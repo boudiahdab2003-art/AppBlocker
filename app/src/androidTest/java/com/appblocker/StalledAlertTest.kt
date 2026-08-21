@@ -3,6 +3,7 @@ package com.appblocker
 import android.app.Notification
 import android.app.NotificationManager
 import android.content.Context
+import android.os.Build
 import android.os.SystemClock
 import androidx.core.app.NotificationManagerCompat
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -13,6 +14,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -143,6 +145,59 @@ class StalledAlertTest {
         assertNull(
             "cancel() must clear the stalled alert's own id",
             awaitAlert { it == null },
+        )
+    }
+
+    /**
+     * **The three things that decide whether he ever sees it**, which is what he asked for:
+     * *"make the notifications much more persisting and floating so i see them"*.
+     *
+     * All three are one builder call or one constant each — exactly the kind of thing this file
+     * exists to pin, and exactly the kind that had been quietly wrong. `setOnlyAlertOnce(true)`
+     * told Android never to peek for this id again; the channel it shared could not be made louder
+     * once it existed; and both were invisible from anywhere but the posted notification itself.
+     */
+    @Test
+    fun theAlertIsAllowedToFloatAgain() {
+        ProtectionNotifier.createChannel(context)
+        ProtectionNotifier.notifyStalled(context)
+
+        val alert = awaitAlert { it != null }
+        assertNotNull("the stalled alert was not posted at all", alert)
+        assertEquals(
+            "onlyAlertOnce would let it float exactly once and then go silent for ever — which " +
+                "is the bug this assertion exists for",
+            0,
+            alert!!.flags and Notification.FLAG_ONLY_ALERT_ONCE,
+        )
+    }
+
+    /**
+     * Its own channel, at HIGH — and both halves matter. Android ignores an importance *raise* on
+     * a channel that already exists, so sharing one with the routine alerts meant a single
+     * downgrade (his, or an OEM's) would have silenced this permanently with nothing to show for
+     * it. A separate id is also what lets him quieten the routine ones without losing this.
+     */
+    @Test
+    fun theAlertHasItsOwnLoudChannel() {
+        // Channels are API 26; below that there is nothing to assert and the alert's loudness
+        // comes from setPriority, which build() already sets to PRIORITY_HIGH.
+        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+        ProtectionNotifier.createChannel(context)
+        ProtectionNotifier.notifyStalled(context)
+
+        val alert = awaitAlert { it != null }
+        assertNotNull("the stalled alert was not posted at all", alert)
+        val channelId = alert!!.channelId
+        assertEquals(
+            "the stalled alert must not share a channel with the routine protection alerts",
+            "protection_stalled",
+            channelId,
+        )
+        assertEquals(
+            "a channel below IMPORTANCE_HIGH cannot produce a floating notification",
+            NotificationManager.IMPORTANCE_HIGH,
+            manager.getNotificationChannel(channelId).importance,
         )
     }
 

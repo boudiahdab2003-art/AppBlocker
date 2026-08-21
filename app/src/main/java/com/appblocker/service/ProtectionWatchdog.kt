@@ -58,6 +58,7 @@ object ProtectionWatchdog {
             ProtectionState.OK -> {
                 SettingsStore.clearProtectionOffSince(context)
                 ProtectionNotifier.cancel(context)
+                ProtectionScheduler.cancelStalledRepeat(context)
                 SettingsStore.setFoundDeadPending(context, false)
             }
             ProtectionState.OFF -> ProtectionNotifier.notifyDisabled(context, force)
@@ -74,6 +75,11 @@ object ProtectionWatchdog {
                     ServiceHealth.recordFoundDead(context)
                 }
                 ProtectionNotifier.notifyStalled(context, force)
+                // Come back in five minutes and float it again. The 15-minute periodic check is
+                // still the backstop; this is what makes the alert insistent rather than a thing
+                // he has to happen to look at. Re-armed on every check that still sees STALLED,
+                // and cancelled in the OK branch above.
+                ProtectionScheduler.scheduleStalledRepeat(context)
             }
             // Off after an update, pending reactivation. Worth an alert precisely because it is
             // self-inflicted and easy to forget: the app was doing nothing at all, and saying it

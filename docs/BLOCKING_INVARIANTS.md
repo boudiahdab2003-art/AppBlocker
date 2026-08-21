@@ -426,6 +426,38 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     Not a bypass in either direction: the scan re-runs on whatever page BACK lands on, and another
     blocked page covers again.
 
+24. **An alert whose whole job is to be noticed may not inherit the habits of routine ones.** Asked
+    for as *"when the accessibility is turned on and not working can you make the notifications
+    much more persisting and floating so i see them"* — the STALLED state, the worst failure this
+    app has, and one he has actually hit (`foundDead: 1` in report #7).
+
+    v1.132 built the alert. Three things then stopped him seeing it, and every one was a sensible
+    default borrowed from a message that means something far less serious:
+
+    - `setOnlyAlertOnce(ongoing)` — for this alert that is `true`, i.e. *never sound or peek for
+      this id again*. Right for a routine ongoing notification, and it capped this one at **one
+      float, ever**.
+    - `stalledPosted`, an in-memory *have I posted this* boolean, which stopped it re-posting at
+      all within a process. The question that matters is *when did he last see it*.
+    - `force`, passed by `AppRoot` on every app open precisely to defeat throttling, was declared
+      `@Suppress("UNUSED_PARAMETER")` and read by nothing.
+
+    Two platform facts belong with it. **A channel cannot be made louder once it exists** —
+    `createNotificationChannel` ignores an importance raise — so sharing one channel across all
+    three protection alerts meant a single downgrade, by him or an OEM, would silence this one
+    permanently with nothing on screen to say so; a new id is the only repair. And **re-posting an
+    id that is already showing updates it silently**, so floating again means cancel-then-post.
+
+    The shape to carry forward: *when an alert's purpose is different in kind, not degree, it needs
+    its own channel, its own throttle and its own alert-once rule.* Sharing them is how the loud
+    one inherits the quiet one's manners.
+
+    **And one thing the app cannot do, which is stated in the app rather than worked around.** MIUI
+    keeps "Floating notifications" as a separate per-app permission, off by default. While it is
+    off, none of the above floats. `DeviceVendor`'s Xiaomi advice says so and `RepairScreen` links
+    to the page — the same honesty as *"Android doesn't let an app switch its own blocking back
+    on"*, which is already on that screen.
+
 ## Device quirks these invariants exist for
 
 - Gesture-nav Home on HyperOS often emits **no accessibility event at all**, so the foreground

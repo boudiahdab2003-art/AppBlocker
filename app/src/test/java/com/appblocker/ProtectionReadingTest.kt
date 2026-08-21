@@ -1,6 +1,7 @@
 package com.appblocker
 
 import com.appblocker.service.AccessibilityUtil
+import com.appblocker.service.ProtectionNotifier
 import com.appblocker.service.UsageTracker
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -75,5 +76,51 @@ class ProtectionReadingTest {
     fun `with nothing known yet, zero is still zero`() {
         // A phone that has never had usage access must not start inventing minutes.
         assertEquals(0, UsageTracker.mergeUsedToday(previous = null, fresh = 0))
+    }
+
+    // ---- how often the "blocking has stopped" alert floats again (v1.135) ---------------
+
+    /**
+     * **Asked for as "make the notifications much more persisting and floating so i see them".**
+     *
+     * He wasn't seeing them because the alert could float exactly once, ever: the notification
+     * carried `setOnlyAlertOnce(true)`, and an in-memory "already posted" flag stopped it being
+     * re-posted at all. The flag asked *have I posted this*; the question that matters is *when
+     * did he last see it*.
+     */
+    @Test fun theFirstSightingAlwaysFloats() {
+        assertTrue(ProtectionNotifier.shouldRefloat(lastAtRt = 0L, nowRt = 90_000L, force = false))
+    }
+
+    @Test fun itStaysQuietInsideTheGap() {
+        assertFalse(
+            ProtectionNotifier.shouldRefloat(
+                lastAtRt = 10_000L,
+                nowRt = 10_000L + ProtectionNotifier.REFLOAT_MS - 1,
+                force = false,
+            ),
+        )
+    }
+
+    @Test fun itFloatsAgainOnceTheGapHasPassed() {
+        assertTrue(
+            ProtectionNotifier.shouldRefloat(
+                lastAtRt = 10_000L,
+                nowRt = 10_000L + ProtectionNotifier.REFLOAT_MS,
+                force = false,
+            ),
+        )
+    }
+
+    /** Opening the app is the best moment there is to say blocking is dead — he is holding the
+     *  phone. `AppRoot` has always passed this; the notifier was ignoring it. */
+    @Test fun openingTheAppAlwaysFloatsItAgain() {
+        assertTrue(ProtectionNotifier.shouldRefloat(lastAtRt = 10_000L, nowRt = 10_001L, force = true))
+    }
+
+    /** Every uncertainty resolves towards him seeing it — a clock that has gone backwards must not
+     *  be able to silence the one alert that means nothing is being blocked (invariant 9). */
+    @Test fun aBackwardsClockFloatsRatherThanSilences() {
+        assertTrue(ProtectionNotifier.shouldRefloat(lastAtRt = 90_000L, nowRt = 1_000L, force = false))
     }
 }

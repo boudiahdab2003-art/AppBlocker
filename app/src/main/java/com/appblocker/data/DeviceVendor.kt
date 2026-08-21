@@ -74,7 +74,10 @@ object DeviceVendor {
         keepAliveDesc = "Xiaomi phones stop background apps after a while. Allow auto-start for " +
             "AppBlocker so blocking survives a reboot or a memory cleanup.",
         extraTips = "On Xiaomi/MIUI: also lock AppBlocker in Recents (swipe down on the card) and " +
-            "set Battery saver to “No restrictions” so it isn't killed.",
+            "set Battery saver to “No restrictions” so it isn't killed. And switch on " +
+            "“Floating notifications” for AppBlocker — MIUI keeps that as its own permission, " +
+            "off by default, and while it's off the “blocking has stopped” alert can't pop up " +
+            "no matter what the app does.",
         deepLinks = listOf(
             "com.miui.securitycenter" to
                 "com.miui.permcenter.autostart.AutoStartManagementActivity",
