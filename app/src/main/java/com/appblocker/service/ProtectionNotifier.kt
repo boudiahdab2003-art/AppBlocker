@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -20,6 +21,28 @@ import java.util.concurrent.TimeUnit
  *  responding while still switched on. */
 object ProtectionNotifier {
     private const val CHANNEL_ID = "protection_off"
+
+    /**
+     * The stalled alert's own channel, and it has to be its own for two separate reasons.
+     *
+     * **Android will not let a channel be made louder once it exists.** `createNotificationChannel`
+     * silently ignores an importance *raise* on a channel that is already there, so if
+     * [CHANNEL_ID] was ever turned down — by the owner, or by an OEM's notification manager — the
+     * app could never restore it and this alert would be permanently quiet with nothing on screen
+     * to say so. A new id is the only way to guarantee HIGH, and the only way to repair it later
+     * is another new id.
+     *
+     * **And they are not the same kind of message.** "Paused after an update" is routine and
+     * self-inflicted; "blocking has stopped" means the phone is claiming to protect him and is
+     * doing nothing. Sharing a channel meant he could not quieten the first without silencing the
+     * second. Reported as *"can you make the notifications much more persisting and floating so i
+     * see them"*.
+     */
+    private const val CHANNEL_ID_STALLED = "protection_stalled"
+
+    /** How long before the standing alert floats again while blocking is still dead. Short on
+     *  purpose: this is the one state where being annoying is the correct behaviour. */
+    internal val REFLOAT_MS = TimeUnit.MINUTES.toMillis(5)
     private const val NOTIF_ID = 1001
     // Its own id so the "stalled" alert can't silently replace (or be replaced by) the "off" one.
     private const val NOTIF_ID_STALLED = 1002
@@ -28,9 +51,25 @@ object ProtectionNotifier {
     // Once shown, don't nag again until this much time has passed while still disabled.
     private val MIN_RENOTIFY_MS = TimeUnit.HOURS.toMillis(4)
 
-    /** Whether the standing "blocking has stopped" alert is already up, as far as this process
-     *  knows. Not persisted on purpose — see [notifyStalled]. */
-    @Volatile private var stalledPosted = false
+    /**
+     * When the standing "blocking has stopped" alert last *floated*, monotonically.
+     *
+     * **It used to be a boolean — "have I posted this?" — and that was the wrong question.** Once
+     * true it stopped the alert being posted again for the life of the process, and the
+     * notification itself carried `setOnlyAlertOnce(true)`, which tells Android never to sound or
+     * peek for that id again. Between them the alert could float exactly once, ever, and then sat
+     * silently in the shade while nothing was being blocked. The right question is *when did he
+     * last see it*, so it can be shown again.
+     *
+     * Still in memory, and still deliberately: a restarted process may have lost the notification
+     * from the shade, so a fresh process floating immediately is correct. Note this is the
+     * opposite call from `InstallPrompt`, which had to *survive* a process death — the difference
+     * is that this one wants to notice one.
+     *
+     * `elapsedRealtime`, never the wall clock (invariant 9): a clock change must not be able to
+     * silence the one alert that means nothing is being blocked.
+     */
+    @Volatile private var lastStalledFloatRt = 0L
 
     // The app's established "needs attention" amber (Permissions.kt's "Required" label,
     // BlockEditorScreen.kt's ProtectionBanner) — distinct from the blue/violet used for
@@ -49,7 +88,21 @@ object ProtectionNotifier {
             lightColor = ACCENT_COLOR
             enableVibration(true)
         }
-        context.getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+        val stalled = NotificationChannel(
+            CHANNEL_ID_STALLED,
+            "Blocking has stopped",
+            NotificationManager.IMPORTANCE_HIGH,
+        ).apply {
+            description = "The alert that says blocking is switched on but not actually running. " +
+                "Keep this one loud."
+            enableLights(true)
+            lightColor = ACCENT_COLOR
+            enableVibration(true)
+        }
+        context.getSystemService(NotificationManager::class.java).apply {
+            createNotificationChannel(channel)
+            createNotificationChannel(stalled)
+        }
     }
 
     /**
@@ -105,16 +158,15 @@ object ProtectionNotifier {
      * working) but uses its own notification id so one can't silently replace the other.
      */
     @SuppressLint("MissingPermission") // guarded by the areNotificationsEnabled() check below.
-    fun notifyStalled(context: Context, @Suppress("UNUSED_PARAMETER") force: Boolean = false) {
+    fun notifyStalled(context: Context, force: Boolean = false) {
         val manager = NotificationManagerCompat.from(context)
         if (!manager.areNotificationsEnabled()) return
 
-        // Re-posting an identical notification is harmless but not free — it rebuilds the banner
-        // bitmap — and this is now called from every shade pull and every app resume. The flag is
-        // in memory only: if the process was restarted the alert may genuinely be gone from the
-        // shade, so posting again is the right answer, not a duplicate.
-        if (stalledPosted) return
-        stalledPosted = true
+        // Called from every shade pull, every app resume and the repeat worker, so most calls do
+        // nothing but re-check the clock. Rebuilding the banner bitmap is the expensive part and
+        // only happens when it is actually going to be shown again.
+        if (!shouldRefloat(lastStalledFloatRt, SystemClock.elapsedRealtime(), force)) return
+        lastStalledFloatRt = SystemClock.elapsedRealtime()
 
         val notification = build(
             context,
@@ -127,12 +179,42 @@ object ProtectionNotifier {
             openRepair = true,
             // The one alert that stands until it is true no longer. See [ongoing] on build().
             ongoing = true,
+            channelId = CHANNEL_ID_STALLED,
+            // **The whole point.** Every other alert here keeps onlyAlertOnce, for the good reason
+            // spelt out on [build]; this one must be allowed to peek again or it is a line of text
+            // in a shade he is not looking at.
+            alertEveryTime = true,
         )
+        // **Cancel, then post.** Re-posting under an id that is already showing UPDATES the
+        // notification, silently — Android does not peek again for a notification it is already
+        // displaying. Taking it down first makes the next post a new arrival, which is what
+        // floats. The gap is a few milliseconds and the alert is ongoing either side of it.
+        manager.cancel(NOTIF_ID_STALLED)
         manager.notify(NOTIF_ID_STALLED, notification)
         // Deliberately does NOT stamp the shared cooldown. This alert is not repeated — it is a
         // single notification that sits there — so it neither needs the throttle nor may consume
         // it: burning the window here would suppress a genuinely separate "protection off" alert
         // for the next four hours.
+    }
+
+    /**
+     * Whether the standing alert should be shown again now.
+     *
+     * Pure, and taking its clock as an argument, for the reason `SessionClock.remainingAt` is the
+     * same shape: this app has no Robolectric, so a rule is only testable if it does not go
+     * looking for the world itself.
+     *
+     * [force] is the app-open path (`AppRoot` already passes it, and it was being *ignored* — the
+     * parameter was marked unused). Someone who has just opened AppBlocker is looking at the
+     * phone, which is the best moment there is to tell them blocking is dead.
+     *
+     * A clock that has gone backwards answers *float* rather than *stay quiet*: every uncertainty
+     * here resolves towards him seeing it.
+     */
+    internal fun shouldRefloat(lastAtRt: Long, nowRt: Long, force: Boolean): Boolean {
+        if (force || lastAtRt <= 0L) return true
+        val since = nowRt - lastAtRt
+        return since < 0L || since >= REFLOAT_MS
     }
 
     /**
@@ -213,6 +295,12 @@ object ProtectionNotifier {
          *  Only for a state that is still true after the tap and that they must not lose track of;
          *  [cancel] is what ends it. */
         ongoing: Boolean = false,
+        /** Which channel to post on. Only the stalled alert overrides it — see
+         *  [CHANNEL_ID_STALLED] for why that one cannot share. */
+        channelId: String = CHANNEL_ID,
+        /** Let this notification sound and float on every post, not just the first. Off for
+         *  everything routine; see the note on `setOnlyAlertOnce` below. */
+        alertEveryTime: Boolean = false,
     ): android.app.Notification {
         val fixIntent = Intent(context, MainActivity::class.java).apply {
             if (openRepair) putExtra(MainActivity.EXTRA_OPEN_REPAIR, true)
@@ -229,7 +317,7 @@ object ProtectionNotifier {
             ?.toBitmap()
         val banner = NotificationBanner.build(context, bannerHeadline, bannerSubtitle)
 
-        return NotificationCompat.Builder(context, CHANNEL_ID)
+        return NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_notification)
             .setLargeIcon(largeIcon)
             .setContentTitle(title)
@@ -247,7 +335,13 @@ object ProtectionNotifier {
             // An ongoing alert is re-posted on every health check, and a notification re-posted
             // under the same id makes a sound each time by default. One buzz per occurrence; the
             // notification staying put is what carries the message afterwards.
-            .setOnlyAlertOnce(ongoing)
+            //
+            // **Except for the one whose job is to be noticed.** That reasoning is right for a
+            // state the user already knows about, and wrong for "nothing is being blocked" — there
+            // the notification staying put is exactly what does NOT carry the message, because he
+            // never looks. [alertEveryTime] is that exception, and its rate limit lives in
+            // [shouldRefloat] rather than here, where it can be read and tested.
+            .setOnlyAlertOnce(ongoing && !alertEveryTime)
             .setContentIntent(pendingIntent)
             .addAction(R.drawable.ic_notification, action, pendingIntent)
             .build()
@@ -256,7 +350,7 @@ object ProtectionNotifier {
     /** Clears every alert — blocking being healthy means none of them still applies. Missing an id
      *  here would leave a stale "blocking is off" notification sitting there after it was fixed. */
     fun cancel(context: Context) {
-        stalledPosted = false
+        lastStalledFloatRt = 0L
         NotificationManagerCompat.from(context).apply {
             cancel(NOTIF_ID)
             cancel(NOTIF_ID_STALLED)
