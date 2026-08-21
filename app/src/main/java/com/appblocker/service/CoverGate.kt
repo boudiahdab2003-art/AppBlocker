@@ -38,6 +38,72 @@ internal object CoverGate {
      *  grace. Deliberately separate so this padding doesn't apply to ordinary blocks. */
     const val RESUME_GRACE_MS = 15_000L
 
+    /** Where "Got it" should send the user — which depends on what the cover was over. */
+    enum class Exit {
+        /** Out of the app entirely. The app itself is blocked, so there is nowhere in it to go. */
+        HOME,
+
+        /** Off the page, staying in the app. */
+        BACK,
+    }
+
+    /**
+     * The exit a dismissal earns, from what the cover was keyed to.
+     *
+     * **The exit has to match the scope of what was covered**, and it did not. A page cover
+     * (`counterKey == "web"`) covers ONE page inside an app that is not blocked — `scanWebContent`
+     * says so where it decides the lockout: *"A blocked WEBSITE is gentler: cover the page so the
+     * site stays blocked every visit, but don't lock the whole browser."* No lockout is added for a
+     * site hit, so the browser genuinely is not locked. Then "Got it" fired HOME and threw him out
+     * of it anyway.
+     *
+     * Which put him in a loop, and he reported it as one: the blocked site is still the open tab,
+     * so re-opening the browser lands straight back on it and covers again. Gentle enforcement,
+     * ungentle exit — the distinction v1.132 split `word` from `site` to preserve, given away at
+     * the moment of dismissal.
+     *
+     * An app cover keeps HOME: there the whole app IS blocked, and going back a page inside it
+     * would land on another part of the same blocked app.
+     *
+     * [SHORTS_KEY] is not decided here — that cover is scoped to the player and its dismissal has
+     * its own path, which takes the cover down and hands ownership back to its scan.
+     *
+     * Null is HOME. It is the answer that always works, and an unkeyed cover has nothing to say
+     * about what it was over.
+     */
+    fun exitFor(counterKey: String?): Exit =
+        if (counterKey == WEB_KEY) Exit.BACK else Exit.HOME
+
+    /**
+     * How long a page cover's BACK exit is remembered, so a second "Got it" in the same app falls
+     * back to HOME.
+     *
+     * Android will not say whether BACK actually went anywhere — `performGlobalAction` reports that
+     * the action was *dispatched*, not that the page moved — and a blocked page opened straight
+     * into a fresh tab has no history to step back through. So the failure is detected by it
+     * happening twice rather than predicted: one tap goes back, and if the same app is raising
+     * another page cover moments later, the next tap leaves.
+     *
+     * The same order as [DISMISS_GRACE_STUCK_MS] and [RESUME_GRACE_MS], and for the same reason:
+     * long enough to cover one sitting, short enough that a genuine block later is a fresh start.
+     */
+    const val BACK_RETRY_MS = 10_000L
+
+    /**
+     * Whether a BACK exit has just been tried in this app and left the user somewhere still worth
+     * covering — in which case this dismissal leaves instead.
+     *
+     * Deliberately bounded to the *same package*: going back out of one app and being blocked in
+     * another is two separate situations, and the second deserves its own back.
+     */
+    fun backExitFailed(pkg: String?, lastBackPkg: String?, sinceLastBackMs: Long): Boolean =
+        pkg != null && pkg == lastBackPkg && sinceLastBackMs in 0 until BACK_RETRY_MS
+
+    /** The synthetic key every page cover is raised under — a blocked word, site, or adult page.
+     *  Insights renders it as one "Websites" row; here it is what says "this cover was over a page,
+     *  not an app". Was a bare string at four call sites in the watcher. */
+    const val WEB_KEY = "web"
+
     /**
      * Whether raising a cover for [counterKey] should be suppressed because a cover was just
      * dismissed. [sinceDismissMs] is the age of that dismissal; [dismissedKey] and

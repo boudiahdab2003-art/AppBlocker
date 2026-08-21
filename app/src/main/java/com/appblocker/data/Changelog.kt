@@ -13,6 +13,15 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.135", "Aug 21, 2026", "Getting blocked on a site no longer throws you out of the browser", listOf(
+        "**You asked: when Chrome blocks you for opening Instagram, how do you actually get off that page? You couldn't, and that was the app's fault, not yours.**",
+        "**Here's the loop you were in.** You open instagram.com. It gets blocked — correctly, Instagram is on your list. You tap **Got it**, and the app sends you to the home screen. But Instagram is still the open tab, so the moment you go back into Chrome you land on it again and get blocked again. There was no way from that screen to a different page.",
+        "**And the app was already trying not to do that.** Blocking a *website* is meant to be the gentle one: cover the page, leave the browser alone. It doesn't lock your browser, and that's deliberate — a blocked *word* locks the app for half an hour, a blocked *site* just covers the page. But then the only button on the screen threw you out of the browser anyway. Gentle about the blocking, not gentle about the way out.",
+        "**Now Got it takes you back a page instead**, so you stay in Chrome and land wherever you were before. The site stays blocked — go to it again and it's covered again — you're just no longer stuck bouncing between the home screen and the same page.",
+        "**If there's nothing to go back to** — you opened the site from a link, or in a brand new tab — the next tap sends you home the way it used to. Android won't tell an app whether going back actually moved anywhere, so instead of guessing, it tries once and leaves on the second tap.",
+        "**Blocked apps are unchanged.** If the whole app is blocked, Got it still takes you out of it, because there's nowhere inside it to go.",
+        "**And something you can already do, on any version:** the block screen doesn't capture your back gesture. Swiping back has always gone through to the browser underneath. Nothing in the app said so, which is half the reason this needed fixing.",
+    )),
     VersionLog("1.134", "Aug 21, 2026", "Chrome finishes the address for you — that isn't somewhere you went", listOf(
         "**You were typing a search in Chrome. You hadn't opened anything. The block screen came up and told you the link was blocked because the app is blocked.**",
         "**Here's what it was reading.** Chrome doesn't wait for you to finish. Type `yo` in the address bar and Chrome fills in the rest — `youtube.com` — with the part it added shown highlighted, because it's a guess, not something you typed. It guesses out of *your own history*. The app looked at that box, saw a full address sitting in it, and decided you were on YouTube. You weren't. You'd typed two letters.",

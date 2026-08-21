@@ -1,6 +1,7 @@
 package com.appblocker
 
 import com.appblocker.service.CoverGate
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -305,5 +306,63 @@ class CoverGateTest {
         assertFalse(stray(coverShowing = false, activeWindowPkg = app))
         assertFalse(stray(pkg = app, activeWindowPkg = null))
         assertFalse(stray(pkg = null))
+    }
+
+    // ---- which way out a dismissal earns (v1.135) ---------------------------------------
+
+    /**
+     * **Reported as a loop.** He opened instagram.com in Chrome, was covered — correctly, Instagram
+     * is on his blocked list — tapped "Got it", and was sent Home. The site was still the open tab,
+     * so re-opening Chrome landed on it and covered again, with no route from the cover to a
+     * different page. *"how can i correct it if i keep getting blocked and change the page"*.
+     *
+     * The app already treats a site hit as the gentle one: no lockout is added, so the browser is
+     * not locked. The exit was the part that did not agree.
+     */
+    @Test fun aPageCoverGoesBackOffThePage() {
+        assertEquals(CoverGate.Exit.BACK, CoverGate.exitFor(CoverGate.WEB_KEY))
+    }
+
+    /** A blocked app is blocked all the way through, so back would land on more of it. */
+    @Test fun anAppCoverStillLeavesTheApp() {
+        assertEquals(CoverGate.Exit.HOME, CoverGate.exitFor("com.instagram.android"))
+        assertEquals(CoverGate.Exit.HOME, CoverGate.exitFor("strict_guard"))
+    }
+
+    /** Home is the answer that always works, so it is what an unkeyed cover gets. */
+    @Test fun anUnkeyedCoverGetsTheExitThatAlwaysWorks() {
+        assertEquals(CoverGate.Exit.HOME, CoverGate.exitFor(null))
+    }
+
+    /**
+     * Android will not say whether BACK went anywhere, and a page opened straight into a fresh tab
+     * has no history to step through. So a second "Got it" in the same app leaves instead — one
+     * more tap, rather than the loop this whole change is about.
+     */
+    @Test fun aSecondGotItInTheSameAppLeavesInstead() {
+        assertTrue(CoverGate.backExitFailed("com.android.chrome", "com.android.chrome", 500L))
+        assertTrue(
+            CoverGate.backExitFailed(
+                "com.android.chrome", "com.android.chrome", CoverGate.BACK_RETRY_MS - 1,
+            ),
+        )
+    }
+
+    /** Bounded, so a genuine block later is a fresh start and still gets its back. */
+    @Test fun theBackMemoryExpires() {
+        assertFalse(
+            CoverGate.backExitFailed(
+                "com.android.chrome", "com.android.chrome", CoverGate.BACK_RETRY_MS,
+            ),
+        )
+        // A clock that has gone backwards must not read as "just now" (invariant 9's habit).
+        assertFalse(CoverGate.backExitFailed("com.android.chrome", "com.android.chrome", -1L))
+    }
+
+    /** Being blocked in a different app is a different situation, and deserves its own back. */
+    @Test fun anotherAppGetsItsOwnBack() {
+        assertFalse(CoverGate.backExitFailed("org.mozilla.firefox", "com.android.chrome", 500L))
+        assertFalse(CoverGate.backExitFailed("com.android.chrome", null, 500L))
+        assertFalse(CoverGate.backExitFailed(null, "com.android.chrome", 500L))
     }
 }
