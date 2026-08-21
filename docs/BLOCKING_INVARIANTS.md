@@ -287,6 +287,40 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     `Blank` instead of answering from the last page, which is what used to make a new tab inherit
     the site just left for ten minutes.
 
+    **Reported again 21 Aug 2026, from the other end of the same node — *"blocking my browsers
+    without opening any blocked link"*, while typing a search in Chrome.** The fix above took the
+    tiles, the suggestion list and the feed away from the matcher. It left the address bar itself
+    trusted whole, and Chrome does **inline autocomplete**: type `yo` and the node's text is
+    already `youtube.com`, with `utube.com` selected. The completion comes out of his own history
+    — it is the same "where you have already been" the start-page fix was about, moved inside the
+    one node that fix still believed. Read whole, the site layer answered *"which site is this?"*
+    with a site he had never opened, and the cover came up mid-search.
+
+    So, two rules, and they are the same rule pointing in two directions:
+
+    - **A field being edited reports the phone's guess as well as the user's input — match the
+      part the user typed.** `typedPortion` slices at the selection, and only on the shape a
+      completion actually has: a selection that *starts after something typed*. A selection
+      starting at 0 is a select-all (what Chrome does when you tap the bar on a loaded page) and
+      is the real address. No selection, a collapsed cursor, indices that don't parse, a browser
+      that reports none of it — all keep the full text, because that is the blocking direction.
+      The general shape, next to invariant 20's own: *ask whether the field is empty before
+      asking what it says* — and then ask **how much of what it says is the user's**.
+    - **A tier that can name the address bar outranks one that only recognises it by shape — in
+      both directions.** The rule above settled who may *answer* `Blank`; nothing stopped tiers 3
+      and 4 from **overriding** one. The walk carried on after `blankBarSeen` was set, and
+      `extractBrowserAddress` tests `read.text` first, so a single host-shaped label in the chrome
+      — a bookmark row, a "recently closed" entry, a most-visited tile — put the start page back
+      in front of the site layer through a different door. `looseAddress` is where that is now
+      decided, and deciding it *there* rather than in `extractBrowserAddress` is what carries it
+      into the undebounced path: `extractSettledBrowserUrl` reads only the text and had never
+      learnt about `Blank` at all.
+
+    A fix landing in one half of a two-path design is the third thing to take from this. `check`
+    got `BrowserAddress` and `scanBrowserUrl` did not, because the fast path takes a `String?` —
+    the same parameter, with the same two meanings crushed into it, one call away from the file
+    that had just been corrected.
+
 ## Device quirks these invariants exist for
 
 - Gesture-nav Home on HyperOS often emits **no accessibility event at all**, so the foreground

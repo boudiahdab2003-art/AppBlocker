@@ -7,7 +7,9 @@ import com.appblocker.service.WebContentFilter
 import com.appblocker.service.isOmniboxId
 import com.appblocker.service.isStartPageId
 import com.appblocker.service.looksLikeHost
+import com.appblocker.service.looseAddress
 import com.appblocker.service.soleHost
+import com.appblocker.service.typedPortion
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -268,6 +270,88 @@ class WebContentFilterTest {
             "instagram.com",
             soleHost(listOf("Home", "instagram.com", "Tabs", "Search or type URL")),
         )
+    }
+
+    // ---- Chrome finishes the address for you (21 Aug 2026) ------------------------------
+
+    /**
+     * Reported as: *"the app is blocking my browsers even without opening any blocked link, and
+     * saying the link is blocked because the app is blocked"* — while typing a search, in Chrome.
+     *
+     * Chrome inline-autocompletes the omnibox out of his own history: two letters in, the node's
+     * text is the whole address with the completed half selected. The site layer read that as
+     * where he was, and covered the screen for a page he never opened.
+     */
+    @Test fun chromesInlineAutocompleteIsNotSomethingTheUserTyped() {
+        // "yo" typed, "utube.com" completed and selected.
+        assertEquals("yo", typedPortion("youtube.com", 2, 11))
+    }
+
+    /** Tapping the bar on a loaded page selects the WHOLE address. That is the real address and
+     *  must keep matching — a completion always has something typed in front of it. */
+    @Test fun selectAllIsTheRealAddressNotACompletion() {
+        assertEquals("youtube.com", typedPortion("youtube.com", 0, 11))
+    }
+
+    /** Every way of failing to read the selection keeps today's behaviour, which is the blocking
+     *  direction: a failed measurement is never permission (invariant 4). */
+    @Test fun anUnreadableSelectionChangesNothing() {
+        assertEquals("youtube.com", typedPortion("youtube.com", -1, -1))   // not reported
+        assertEquals("youtube.com", typedPortion("youtube.com", 5, 5))     // collapsed cursor
+        assertEquals("youtube.com", typedPortion("youtube.com", 4, 2))     // backwards
+        assertEquals("youtube.com", typedPortion("youtube.com", 2, 99))    // past the end
+        assertEquals("youtube.com", typedPortion("youtube.com", -3, 7))    // negative start
+    }
+
+    /** He typed the site himself — the completion adds nothing, and it still blocks. */
+    @Test fun typingTheWholeSiteIsStillHisOwnText() {
+        assertEquals("instagram.com", typedPortion("instagram.com", 13, 13))
+        assertEquals("instagram", typedPortion("instagram.com", 9, 13))
+    }
+
+    /**
+     * The whole report, at the layer that raised the cover: the completed address is not a site
+     * he is on, and the address he really goes to still is.
+     */
+    @Test fun aHalfTypedSearchDoesNotBlockButTheSiteStillDoes() {
+        val f = filter()
+        val words = listOf("youtube")
+        assertNull(f.check("start page", at("yo"), emptyList(), words, false, false))
+        assertTrue(f.check("feed", at("youtube.com"), emptyList(), words, false, false)?.site == true)
+    }
+
+    // ---- a bar we could NAME outranks one we only recognised by its shape ----------------
+
+    /**
+     * Invariant 20 said only the id-matched tiers may *answer* `Blank`. It did not say they
+     * outrank the others, so the text tiers kept walking after tier 1 had found the bar empty and
+     * a lone bookmark row was returned as the address — the start page back in front of the site
+     * layer through a different door.
+     */
+    @Test fun aBlankBarRefusesTheTextShapedTiers() {
+        assertNull(looseAddress(blankBar = true, startPage = false, editableHost = "youtube.com",
+            chromeLabels = listOf("reddit.com")))
+    }
+
+    /** Chrome's new tab page carries no `url_bar` at all — the fakebox is the same statement. */
+    @Test fun aStartPageSearchBoxRefusesThemToo() {
+        assertNull(looseAddress(blankBar = false, startPage = true, editableHost = null,
+            chromeLabels = listOf("youtube.com")))
+    }
+
+    /** With no bar found either way, the tiers answer exactly as they did before, in order. */
+    @Test fun withNoBarFoundTheTextTiersStillAnswerInOrder() {
+        assertEquals(
+            "instagram.com",
+            looseAddress(false, false, editableHost = "instagram.com",
+                chromeLabels = listOf("reddit.com")),
+        )
+        assertEquals(
+            "reddit.com",
+            looseAddress(false, false, editableHost = null, chromeLabels = listOf("reddit.com")),
+        )
+        assertNull(looseAddress(false, false, null, listOf("a.com", "b.com")))
+        assertNull(looseAddress(false, false, null, emptyList()))
     }
 
     /**

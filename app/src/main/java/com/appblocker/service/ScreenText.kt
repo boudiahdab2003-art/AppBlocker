@@ -84,6 +84,10 @@ internal fun AccessibilityService.isShortsOnScreen(): Boolean? {
  * into the address bar is still caught — at the speed it was always caught at. This function
  * failing to recognise some future Chrome layout therefore degrades to the old behaviour rather
  * than to no blocking.
+ *
+ * It reads only the text, so it never sees [BrowserAddress.Blank] — which is why [looseAddress]
+ * refuses on a blank bar rather than [extractBrowserAddress] filtering afterwards. Answering
+ * null here is how the start page reaches the fast path at all.
  */
 internal fun AccessibilityService.extractSettledBrowserUrl(pkg: String): String? =
     omniboxText(pkg, settledOnly = true)
@@ -106,6 +110,12 @@ internal fun AccessibilityService.extractSettledBrowserUrl(pkg: String): String?
  * [BrowserAddress.At]. That is invariant 12's rule applied to a new answer: each tier inherits an
  * assumption from the browser it was written against, so a browser we can only read by its text
  * keeps exactly today's behaviour instead of being quietly declared blank.
+ *
+ * **They may not override one either**, which is the half that was missing and is now
+ * [looseAddress]: the text tiers went on walking after tier 1 had seen the bar and found it
+ * empty, and a lone host-shaped label in the chrome outranked that measurement here, because
+ * `read.text` is tested first. A bookmark row was enough to put the start page back in front of
+ * the site layer.
  *
  * **And "empty bar" was not enough, which is why this was measured instead of reasoned about.**
  * On Chrome's new tab page there is no address bar in the tree *at all* — the toolbar is there,
@@ -241,11 +251,22 @@ private fun AccessibilityService.omniboxRead(pkg: String, settledOnly: Boolean):
     // into, and takes it away once a page is showing. The host shape is the backstop for
     // anything that reports focus differently.
     fun accept(n: AccessibilityNodeInfo): String? {
-        val t = n.text?.toString()?.trim()?.lowercase()
-        if (t.isNullOrBlank()) return null
-        if (settledOnly && (runCatching { n.isFocused }.getOrDefault(true) || !looksLikeHost(t))) {
-            return null
-        }
+        val full = n.text?.toString() ?: return null
+        val focused = runCatching { n.isFocused }.getOrDefault(true)
+        // **A field being edited holds the phone's guess as well as the user's input.** Chrome
+        // inline-autocompletes the omnibox out of his own history, so only the part before the
+        // selection is his — see [typedPortion]. Sliced BEFORE the trim, because the indices
+        // the node reports are into the text the node reports.
+        val own = if (focused) {
+            typedPortion(
+                full,
+                runCatching { n.textSelectionStart }.getOrDefault(-1),
+                runCatching { n.textSelectionEnd }.getOrDefault(-1),
+            )
+        } else full
+        val t = own.trim().lowercase()
+        if (t.isBlank()) return null
+        if (settledOnly && (focused || !looksLikeHost(t))) return null
         return t
     }
 
@@ -301,7 +322,10 @@ private fun AccessibilityService.omniboxRead(pkg: String, settledOnly: Boolean):
             for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
         }
     }
-    return OmniboxRead(editableHost ?: soleHost(chromeLabels), blankBarSeen, startPageSeen)
+    return OmniboxRead(
+        looseAddress(blankBarSeen, startPageSeen, editableHost, chromeLabels),
+        blankBarSeen, startPageSeen,
+    )
 }
 
 /**
@@ -375,6 +399,68 @@ internal fun looksLikeHost(text: String): Boolean {
     if (t.isEmpty() || t.contains(' ')) return false // a search query, not an address
     val host = t.substringAfter("://").substringBefore('/')
     return host.contains('.') && !host.startsWith('.') && !host.endsWith('.')
+}
+
+/**
+ * What the user actually typed into a field, given its full [text] and the selection the node
+ * reports.
+ *
+ * **Chrome finishes the address for you, out of your own history.** Type `yo` into the omnibox
+ * and the node's text is already `youtube.com`, with `utube.com` selected. That completed half
+ * is the phone's guess about where he *might* be going — not a page he opened. Read whole, it
+ * made the site layer answer *"which site is this?"* with a site he had never visited, and the
+ * cover came up mid-search over a link he never followed (reported 21 Aug 2026).
+ *
+ * That is invariant 20 one step further in. The start-page fix took away the tiles, the
+ * suggestion list and the feed — all of it *what the phone shows him about where he has already
+ * been* — and this is the same history, sitting inside the one node that fix still trusted
+ * completely.
+ *
+ * **The autocomplete shape is specific, and everything else is left exactly alone:**
+ *  - [selStart] `> 0` — a completion requires something typed in front of it. A selection
+ *    starting at 0 is a *select-all*, which is what Chrome does when you tap the bar on a loaded
+ *    page: that text is the real address and must go on matching.
+ *  - a non-empty selection ending no later than the end of [text].
+ *
+ * Anything else — no selection (`-1`), a collapsed cursor, indices that don't make sense, a
+ * browser that reports none of this — returns [text] unchanged. That is the blocking direction:
+ * a failed measurement is never permission (invariant 4), so the worst case here is today's
+ * behaviour, never a bypass.
+ */
+internal fun typedPortion(text: String, selStart: Int, selEnd: Int): String {
+    if (selStart <= 0 || selEnd <= selStart || selEnd > text.length) return text
+    return text.substring(0, selStart)
+}
+
+/**
+ * The text-shaped tiers' answer — or nothing, when a tier that could *name* the address bar has
+ * already established that there is no page.
+ *
+ * Invariant 20 settled who may **answer** [BrowserAddress.Blank]: only tiers 1 and 2, which find
+ * the bar by view id and can therefore see that it is there and empty. It left the other half of
+ * the question open, and the gap survived the fix — nothing stopped tiers 3 and 4 from
+ * **overriding** a blank one. The walk carried on after `blankBarSeen` was set, and one
+ * host-shaped label anywhere in the browser's chrome — a bookmark row, a "recently closed"
+ * entry, a most-visited tile showing a host — came back as the address. The start page went
+ * straight back in front of the site layer through a different door.
+ *
+ * So the rule runs both ways now: **a bar we could name outranks one we merely recognised by its
+ * shape** — when it holds an address (tiers 1-2 return early on that) and equally when it holds
+ * nothing. Same tier discipline as invariant 12. What it costs when it refuses is the
+ * pre-tier-3 behaviour on a start page, which is nothing at all, and a start page is not a page.
+ *
+ * This is also what carries the fix into the undebounced path: [extractSettledBrowserUrl] reads
+ * only the text and throws the blank/start-page answers away, so returning null here is what
+ * makes its `?: return` correct — without the fast path having to learn about [BrowserAddress].
+ */
+internal fun looseAddress(
+    blankBar: Boolean,
+    startPage: Boolean,
+    editableHost: String?,
+    chromeLabels: List<String>,
+): String? {
+    if (blankBar || startPage) return null
+    return editableHost ?: soleHost(chromeLabels)
 }
 
 /**
