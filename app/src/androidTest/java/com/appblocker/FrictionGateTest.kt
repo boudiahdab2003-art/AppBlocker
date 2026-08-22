@@ -17,11 +17,13 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.appblocker.ui.FrictionGate
 import com.appblocker.ui.GATE_PARAGRAPH_TAG
 import com.appblocker.ui.theme.AppBlockerTheme
 import org.junit.Before
+import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -91,7 +93,24 @@ class FrictionGateTest {
      * several viewports. [height] of null means "the whole window", which is the gate's actual
      * contract: AppRoot composes it over everything.
      */
+    /**
+     * The window this run actually got, in dp. A fixed-height `Box` is clipped by it, so a case
+     * that asks for a viewport taller than the window measures the window instead while its name
+     * still claims the height — see the same note in `AccountScreenTest`.
+     */
+    private val windowHeightDp: Int
+        get() = InstrumentationRegistry.getInstrumentation()
+            .targetContext.resources.configuration.screenHeightDp
+
+    /** Skip rather than measure the wrong viewport; the squeezed cases cover the short window. */
+    private fun assumeWindowFits(height: Dp) = assumeTrue(
+        "this window is ${windowHeightDp}dp tall, too short to host the " +
+            "${height.value.toInt()}dp viewport this case is about; the squeezed cases cover it",
+        windowHeightDp >= height.value,
+    )
+
     private fun setGate(height: Dp?, fontScale: Float = 1f) {
+        if (height != null) assumeWindowFits(height)
         compose.setContent {
             val base = LocalDensity.current
             CompositionLocalProvider(
@@ -122,6 +141,11 @@ class FrictionGateTest {
      */
     @Test
     fun givenTheWindow_paragraphFieldAndButtonAreAllVisibleAtOnce() {
+        // The gate's no-scrolling contract is a phone-portrait contract. Turn the phone on its
+        // side and 384dp cannot hold a paragraph, a field and a button at once — which is not a
+        // broken screen: it scrolls, with the button pinned, asserted by
+        // fieldAndButtonStayReachableWhenSqueezed. Measured on a Galaxy S24 FE lying down.
+        assumeWindowFits(600.dp)
         setGate(height = null)
 
         compose.onNodeWithTag(GATE_PARAGRAPH_TAG).assertIsDisplayed()

@@ -3,13 +3,16 @@ package com.appblocker
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.appblocker.data.DeviceVendor
+import com.appblocker.ui.DIAGNOSTICS_LIST_TAG
 import com.appblocker.ui.DIAGNOSTICS_PHONE_TAG
 import com.appblocker.ui.DiagnosticsScreen
 import com.appblocker.ui.PermissionsScreen
@@ -90,7 +93,14 @@ class SetupAdviceTest {
             AppBlockerTheme(darkTheme = true) { DiagnosticsScreen(onBack = {}) }
         }
 
-        compose.onNodeWithTag(DIAGNOSTICS_PHONE_TAG).performScrollTo().assertIsDisplayed()
+        // Scroll the LIST, not the card: this page is a LazyColumn, so a card below the fold has
+        // never been composed and `performScrollTo` fails with "could not find any node". It only
+        // passed here because the release-gate emulator is tall enough to compose it on open — on
+        // a Galaxy S24 FE, which is shorter, the card does not exist yet and the test fell over
+        // with the page working perfectly.
+        compose.onNodeWithTag(DIAGNOSTICS_LIST_TAG)
+            .performScrollToNode(hasTestTag(DIAGNOSTICS_PHONE_TAG))
+        compose.onNodeWithTag(DIAGNOSTICS_PHONE_TAG).assertIsDisplayed()
     }
 
     /**

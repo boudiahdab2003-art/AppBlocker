@@ -57,6 +57,13 @@ import com.appblocker.ui.theme.appBackground
 import com.appblocker.ui.theme.pageWidth
 
 /** Test tags for the rendering test. */
+/**
+ * The scrolling list itself. A `LazyColumn` does not compose what is off screen, so a test must
+ * scroll *the list* to reach a card — `performScrollTo` on a card that was never composed fails
+ * with "could not find any node", which is what happened the first time this page was measured on
+ * a phone shorter than the release-gate emulator.
+ */
+const val DIAGNOSTICS_LIST_TAG = "diagnostics_list"
 const val DIAGNOSTICS_BROWSERS_TAG = "diagnostics_browsers"
 const val DIAGNOSTICS_LAST_LOOK_TAG = "diagnostics_last_look"
 const val DIAGNOSTICS_PHONE_TAG = "diagnostics_phone"
@@ -96,7 +103,8 @@ fun DiagnosticsScreen(onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().background(appBackground()).safeDrawingPadding()) {
         EditorTopBar(title = "What the blocker sees", onBack = onBack)
         LazyColumn(
-            Modifier.fillMaxHeight().pageWidth().padding(horizontal = 20.dp),
+            Modifier.fillMaxHeight().pageWidth().padding(horizontal = 20.dp)
+                .testTag(DIAGNOSTICS_LIST_TAG),
             verticalArrangement = Arrangement.spacedBy(Space.md),
         ) {
             item {

@@ -19,7 +19,8 @@ have stopped being guesses.
 |---|---|---|---|---|---|---|
 | Xiaomi (owner's, HyperOS) | 15 | ✅ `com.miui.packageinstaller` | ✅ MIUI security centre | ✅ | ✅ Mi Browser, read 14 Aug 2026 | in use daily |
 | Emulator `appblocker_test` | 14 | ✅ AOSP installer | — generic advice, no link | ✅ | Chrome only | every release |
-| **Samsung** | — | ❓ guessed | ❓ guessed | ❓ | ❓ Samsung Internet claim unproven | **never** |
+| Emulator `appblocker_a15` | 15 | ✅ `com.google.android.packageinstaller` | — generic advice, no link | ✅ all 7 | Chrome only | 22 Aug 2026 |
+| **Samsung** Galaxy S24 FE (SM-S721B, EEA) | 15 / One UI 7.0 | ✅ but **`com.google.android.packageinstaller`** — Samsung's own installer is *not installed here* | ✅ `com.samsung.android.lool/…sm.battery.ui.BatteryActivity` (the **second** of the two guesses) | ✅ all 7 | ❌ **Samsung Internet not installed on the lab unit** — claim still unproven | 22 Aug 2026, Remote Test Lab |
 | **Huawei / Honor** | — | ❓ guessed | ❓ guessed | ❓ | ❓ claim unproven | **never** |
 | **Oppo / Realme / OnePlus** | — | ❓ guessed | ❓ guessed | ❓ | ❓ claim unproven | **never** |
 | **Vivo / iQOO** | — | ❓ guessed | ❓ guessed | ❓ | ❓ claim unproven | **never** |
