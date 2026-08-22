@@ -23,6 +23,33 @@ and every trap in it was found during that rehearsal rather than on the clock. T
 of rehearsing: the first four attempts at a block test all produced "no block", and not one of
 them was the app's fault.
 
+## Booking one, in practice
+
+Measured on the first real session (2026-08-22), because none of this is on the sign-up page:
+
+- **The owner has to sign in himself** (Samsung account). Being signed in on `developer.samsung.com`
+  is **not** enough — Remote Test Lab gates separately and says so in a modal that also swallows
+  clicks. Go straight to `/remotetestlab/devices` afterwards.
+- **20 credits a day; an hour costs 4.** Sessions run up to **two hours**, and unused time is
+  refunded if you end early. There is far more time than the "20 minutes" folklore suggests — but
+  the device is still wiped afterwards, so the run sheet still applies.
+- The viewer opens as a **popup**. Only **one client instance per device**, so an automated session
+  needs that popup closed first; closing it ends the session, the device does a ~2 minute "Getting
+  ready to restart", and the reservation survives it.
+- **ADB is real**: side menu ▸ *Remote Debug Bridge* ▸ Connect, after running Samsung's **RDB**
+  client (a 30MB zip containing a Node-packaged `rdb.exe`). ⚠️ **Run it with no arguments** —
+  `--help` makes it sit there silently. A healthy start prints `RDB server listening on port: NNNNN`,
+  and Connect then puts `localhost:<port>` in `adb devices`.
+
+⚠️ **RTL will not install an app that declares a `DeviceAdminReceiver`** — *"This admin app
+installation is not allowed"*, over **ADB as well** as through their installer. This app declares one
+for Prevent-uninstall, so a session needs a throwaway build with that `<receiver>` removed from the
+manifest, and Prevent-uninstall itself cannot be exercised there.
+
+⚠️ **The device screen dozes**, and then nothing is in the foreground and every block test measures
+nothing at all. `settings put system screen_off_timeout 1800000` and `input keyevent KEYCODE_WAKEUP`
+before anything else; confirm with `dumpsys power | grep mWakefulness`.
+
 ## Before booking the device
 
 1. `git pull`, then build both APKs — the app and the instrumentation:
