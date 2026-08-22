@@ -57,6 +57,37 @@ screen, whether the keep-alive deep link resolves, which apps count as browsers,
 which of those have *actually been read* versus merely *assumed* readable. One screenshot of it
 answers most of what would otherwise be a guess.
 
+## Phones nobody here owns — the device probe and the profile report
+
+The app claims to support Samsung, Huawei, Oppo/OnePlus and Vivo, and **every one of those claims
+was reasoned rather than measured** (`PhoneReport.kt` says so itself). Two things now answer that
+without owning the hardware, and they share one implementation in **`data/DeviceProfile.kt`** —
+the diagnostics screen, the probe and the reporter must never be able to disagree about a phone.
+
+- **`DeviceProbeTest`** (androidTest) — point it at any device and the guesses that are wrong *for
+  that device* fail with the one-line fix in the message. Three can fail: an uninstall screen
+  `GuardPackages.INSTALLERS` does not watch, a keep-alive deep link that resolves nowhere, and an
+  OEM package installed but invisible to our `<queries>`. That last one compares the **shell's**
+  package list against the **app's**, which is the only way to tell "not installed" from "filtered
+  out" — a JVM test structurally cannot. Most of it skips on the release-gate emulator by design.
+- **`BugReportSender.reportDeviceProfile`** — called from `MainActivity.onResume`, sent **once per
+  phone per build, and sent even when every answer is right.** A phone we got wrong does not crash;
+  it quietly stops protecting. Filing the healthy ones too is what makes silence meaningful, and
+  the issue title says `profile OK` or `PROFILE: something is wrong here` so the list stays
+  scannable. Deduped by the queue's own key — no extra bookkeeping.
+- The profile context keys have their **own longer cap** (`PROFILE_CONTEXT_KEYS`, 240 chars): the
+  general 24-char cap exists to catch values long *because something unintended got in*, and it
+  would shred `com.sec.android.app.sbrowser`. Safe only because every profile value is built from
+  our own constants. Do not fold them back into `ALLOWED_CONTEXT_KEYS`.
+- **`docs/REMOTE_TEST_LAB.md`** is the run sheet for actually getting onto that hardware —
+  Samsung Remote Test Lab, a ~20-minute clock on a device that is wiped afterwards. It holds
+  the three traps that silently disarm blocking on a freshly flashed phone (the after-update
+  pause, `pm clear` pruning the accessibility setting, and `am force-stop` rebinding the
+  service so it reopens the database before a seed is written over it), and what actually
+  proves a block — `BlockLog`, never `mCurrentFocus`.
+- Results accumulate in **`docs/DEVICE_MATRIX.md`**. Keep it updated; a "claim unproven" row is
+  not a passing row.
+
 ## "Play version" — selling this on Google Play
 
 When the owner says **"play version"**, he means the whole effort of turning this

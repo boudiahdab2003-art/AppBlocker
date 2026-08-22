@@ -41,6 +41,7 @@ import com.appblocker.ui.theme.PageWidth
 import org.junit.After
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -93,12 +94,38 @@ class AccountScreenTest {
      * Hosts a screen at a caller-controlled height, so one screen can be measured at several
      * viewports. [height] of null means "the whole window" — what the screen normally gets.
      */
+    /**
+     * The window this run actually got, in dp.
+     *
+     * A fixed-height `Box` is **clipped** by it: ask for 560dp inside a 384dp window and the case
+     * measures 384dp while its name still claims 560. That is how the cases below passed for
+     * months and then failed on a Galaxy S24 FE that happened to be lying on its side — nothing
+     * wrong with the screen, the phone, or the assertion, only with the viewport the test believed
+     * it had. Silence about that is the failure mode this whole layer exists to prevent.
+     */
+    private val windowHeightDp: Int
+        get() = InstrumentationRegistry.getInstrumentation()
+            .targetContext.resources.configuration.screenHeightDp
+
+    /**
+     * Skip rather than measure the wrong thing. Skipped is honest — a green run never claims to
+     * have measured a viewport it never had — and the short-window contract is asserted separately
+     * by the squeezed cases, which is where "everything still reachable, buttons still pinned"
+     * belongs.
+     */
+    private fun assumeWindowFits(height: Dp) = assumeTrue(
+        "this window is ${windowHeightDp}dp tall, too short to host the " +
+            "${height.value.toInt()}dp viewport this case is about; the squeezed cases cover it",
+        windowHeightDp >= height.value,
+    )
+
     private fun setScreen(
         height: Dp?,
         fontScale: Float = 1f,
         width: Dp? = null,
         content: @Composable () -> Unit,
     ) {
+        if (height != null) assumeWindowFits(height)
         compose.setContent {
             val base = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(base.density, fontScale)) {
@@ -273,6 +300,10 @@ class AccountScreenTest {
      */
     @Test
     fun disclosureShowsWhatItReadsGivenTheWindow() {
+        // "No scrolling at all" is a phone-portrait contract. In a 384dp-tall window it is not
+        // merely unmet, it is unmeetable — and the screen is not broken there: it scrolls, with
+        // both answers pinned (disclosureKeepsBothAnswersOnScreenAtALargeSystemFont).
+        assumeWindowFits(600.dp)
         setScreen(height = null) {
             AccessibilityDisclosureScreen(onAgree = {}, onDecline = {})
         }

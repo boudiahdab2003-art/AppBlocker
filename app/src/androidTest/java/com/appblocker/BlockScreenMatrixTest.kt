@@ -61,13 +61,24 @@ class BlockScreenMatrixTest {
     }
 
     /**
-     * A tall phone and a short one, in pixels rather than dp so the case does not quietly change
-     * with the density of whatever device runs the suite. The short one is the case the layouts
-     * were never designed against — a small phone, or a large one in a split-screen window.
+     * A tall phone, a short one, and the phone **on its side** — in pixels rather than dp so the
+     * case does not quietly change with the density of whatever device runs the suite. The short
+     * one is the case the layouts were never designed against: a small phone, or a large one in a
+     * split-screen window.
+     *
+     * **The landscape pair is not optional and cannot be designed away.** Every other screen in
+     * this app belongs to our own activity, which could be pinned upright; the cover does not. It
+     * is drawn by the watcher over whatever app is in front (`WindowManager.addView`,
+     * MATCH_PARENT), so blocking a game or a video *while the phone is sideways* renders it in a
+     * window barely a thousand pixels tall — the exact shape that pushed "Got it" off the bottom
+     * in v1.118, and the one place where that failure means a cover the owner cannot dismiss.
+     * Until now every size here was taller than it was wide.
      */
     private val screens = listOf(
         "tall 1080x2340" to (1080 to 2340),
         "short 1080x1600" to (1080 to 1600),
+        "landscape 2340x1080" to (2340 to 1080),
+        "landscape short 1600x1080" to (1600 to 1080),
     )
 
     /**

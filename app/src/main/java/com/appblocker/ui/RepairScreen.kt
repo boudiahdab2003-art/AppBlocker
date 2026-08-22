@@ -74,12 +74,29 @@ const val REPAIR_LIST_TAG = "repair_list"
  *    of it is a cure.
  */
 @Composable
-fun RepairScreen(onBack: () -> Unit) {
+fun RepairScreen(
+    onBack: () -> Unit,
+    /**
+     * Which branch to draw, or null to ask the device — which is what production always does.
+     *
+     * A test seam, and it exists because the alternative was invisible. Everything this screen is
+     * *for* — the four steps and the one button that ends the problem — lives in the unhealthy
+     * branch, so a rendering test that merely composes the screen asserts whatever state the
+     * device happens to be in. `RepairScreenTest` said so out loud ("the emulator's accessibility
+     * service is not running during the test"), which made the tests pass on the release-gate
+     * emulator **because the app was broken there**, and fail on the first real phone where
+     * blocking actually worked. Nothing was wrong with either the screen or the phone.
+     */
+    healthyOverride: Boolean? = null,
+) {
     val context = LocalContext.current
     // Re-read on every return from Settings — this screen's job is to notice the moment the
     // toggle takes, and a snapshot frozen at open would report the broken state forever.
     val tick = resumeTick()
-    val healthy = remember(tick) { ProtectionWatchdog.state(context) == ProtectionState.OK }
+    // Read unconditionally, override after: skipping the remember when the seam is set would make
+    // the composition structure depend on the parameter.
+    val deviceHealthy = remember(tick) { ProtectionWatchdog.state(context) == ProtectionState.OK }
+    val healthy = healthyOverride ?: deviceHealthy
     val vendor = remember { DeviceVendor.advice() }
 
     Column(Modifier.fillMaxSize().background(appBackground()).safeDrawingPadding()) {

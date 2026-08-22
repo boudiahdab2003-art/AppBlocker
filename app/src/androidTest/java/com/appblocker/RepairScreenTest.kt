@@ -2,6 +2,7 @@ package com.appblocker
 
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
@@ -9,7 +10,10 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Density
+import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.appblocker.ui.REPAIR_BUTTON_TAG
 import com.appblocker.ui.REPAIR_LIST_TAG
@@ -17,6 +21,7 @@ import com.appblocker.ui.REPAIR_STATUS_TAG
 import com.appblocker.ui.REPAIR_STEPS_TAG
 import com.appblocker.ui.RepairScreen
 import com.appblocker.ui.theme.AppBlockerTheme
+import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -36,8 +41,12 @@ import org.junit.runner.RunWith
  * scrolled to — which is how the first run of this test failed, and is worth keeping written down
  * because `SetupAdviceTest` next door uses the other form correctly on a `verticalScroll` column.
  *
- * The emulator's accessibility service is not running during the test, so the screen renders its
- * unhealthy branch — which is the branch that matters.
+ * **Every test here states the branch it means.** The unhealthy branch is the one that matters —
+ * it holds the steps and the button — and this class used to reach it by accident, relying on the
+ * emulator's accessibility service not running. That is a test that passes *because the app is
+ * broken on the machine running it*: on the first real Galaxy, where blocking genuinely worked,
+ * the screen drew its healthy branch and three tests failed with nothing wrong anywhere. The
+ * branch is now passed in through `healthyOverride`.
  */
 @RunWith(AndroidJUnit4::class)
 class RepairScreenTest {
@@ -45,12 +54,28 @@ class RepairScreenTest {
     @get:Rule
     val compose = createComposeRule()
 
-    private fun setScreen(scale: Float) {
+    /**
+     * The window this run actually got, in dp — see the fuller note in `AccountScreenTest`. A case
+     * that needs more height than the window has measures the window instead, silently.
+     */
+    private val windowHeightDp: Int
+        get() = InstrumentationRegistry.getInstrumentation()
+            .targetContext.resources.configuration.screenHeightDp
+
+    /** Skip rather than measure the wrong viewport. */
+    private fun assumeWindowFits(height: Dp) = assumeTrue(
+        "this window is ${windowHeightDp}dp tall, too short to host the " +
+            "${height.value.toInt()}dp viewport this case is about",
+        windowHeightDp >= height.value,
+    )
+
+    /** [healthy] false = the branch with the steps and the fix button, which is why this screen exists. */
+    private fun setScreen(scale: Float, healthy: Boolean = false) {
         compose.setContent {
             val base = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(base.density, scale)) {
                 AppBlockerTheme(darkTheme = true) {
-                    RepairScreen(onBack = {})
+                    RepairScreen(onBack = {}, healthyOverride = healthy)
                 }
             }
         }
@@ -62,11 +87,32 @@ class RepairScreenTest {
      */
     @Test
     fun theFixButtonIsReachableAtTheLargestFont() {
+        // Being *on screen* at 2x font is a phone-portrait contract: 384dp of height — a phone on
+        // its side — cannot show a button below a status card and four numbered steps at double
+        // size, and that is the window refusing rather than the screen failing. The part that must
+        // hold in every window is asserted by the case below, which never skips.
+        assumeWindowFits(600.dp)
         setScreen(scale = 2f)
 
         compose.onNodeWithTag(REPAIR_LIST_TAG)
             .performScrollToNode(hasTestTag(REPAIR_BUTTON_TAG))
         compose.onNodeWithTag(REPAIR_BUTTON_TAG).assertIsDisplayed()
+    }
+
+    /**
+     * **Whatever the window, the button must never become unreachable.** Short windows are allowed
+     * to cost scrolling — the same trade the friction gate and the onboarding wizard make — but the
+     * one control that ends the problem must still be there, still a real tap target, and still
+     * something the list will scroll to. This one has no viewport assumption, so it runs on the
+     * sideways phone that started all this.
+     */
+    @Test
+    fun theFixButtonStaysReachableInAnyWindow() {
+        setScreen(scale = 2f)
+
+        compose.onNodeWithTag(REPAIR_LIST_TAG)
+            .performScrollToNode(hasTestTag(REPAIR_BUTTON_TAG))
+        compose.onNodeWithTag(REPAIR_BUTTON_TAG).assertExists().assertHeightIsAtLeast(40.dp)
     }
 
     /** The steps are the fallback for when the deep link lands on the plain list instead of our
