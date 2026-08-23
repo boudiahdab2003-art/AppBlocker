@@ -54,6 +54,8 @@ import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.appblocker.data.AppCategory
+import androidx.compose.ui.res.stringResource
+import com.appblocker.R
 
 /** A selectable app row (icon + label + checkbox) shared by the Quick Block & schedule editors.
  *  [subtitle], when set, shows a small line under the label (e.g. "Not installed yet"). */
@@ -132,7 +134,7 @@ fun CollapsibleHeader(
         }
         Icon(
             if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-            contentDescription = if (expanded) "Collapse" else "Expand",
+            contentDescription = stringResource(if (expanded) R.string.collapse else R.string.expand),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
@@ -192,7 +194,7 @@ fun CategoryHeaderRow(
         TriStateCheckbox(state = state, onClick = onToggleAll, enabled = enabled)
         Icon(
             if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-            contentDescription = if (expanded) "Collapse" else "Expand",
+            contentDescription = stringResource(if (expanded) R.string.collapse else R.string.expand),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
@@ -273,7 +275,10 @@ fun EditorTopBar(
         title = { Text(title, fontWeight = FontWeight.SemiBold) },
         navigationIcon = {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = stringResource(R.string.back),
+                )
             }
         },
         actions = actions,

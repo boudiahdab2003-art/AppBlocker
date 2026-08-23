@@ -727,4 +727,47 @@
         <item>Your coach</item>
         <item>Your coach</item>
     </string-array>
+
+    <!-- ===================== Your profile / PIN / words ===================== -->
+    <string name="account_name_placeholder">First name is fine</string>
+    <string name="account_name_note">Only used to greet you. Leave it empty and the app just says \"You\".</string>
+    <string name="account_where_shows">Where your name shows up</string>
+    <string name="account_profile_page">The Profile page</string>
+    <string name="account_profile_page_body">The greeting and the circle of initials at the top.</string>
+    <string name="account_coach">The AI Coach</string>
+    <string name="account_coach_body">It uses your first name when it talks to you.</string>
+    <string name="account_on_this_phone">On this phone</string>
+    <string name="account_no_account">No account, no sign-in</string>
+    <string name="account_no_account_body">AppBlocker has no login and no online account. Your name, your blocks and your statistics are stored on this phone only, and uninstalling the app removes them.</string>
+    <string name="account_run_setup">Run setup again</string>
+    <string name="account_run_setup_body">Walk through the welcome and permission steps once more. Your blocks, schedules, words and PIN are left exactly as they are.</string>
+    <string name="account_clear_name">Clear my name</string>
+    <string name="account_greeted">This is how you\'ll be greeted</string>
+    <string name="account_add_name">Add your name and the app will greet you by it</string>
+
+    <string name="pin_locked_title">AppBlocker is locked</string>
+    <string name="pin_locked_subtitle">Enter your PIN to make changes.</string>
+    <string name="pin_incorrect">Incorrect PIN</string>
+    <string name="pin_unlock">Unlock</string>
+    <string name="pin_save">Save PIN</string>
+    <string name="pin_new">New PIN</string>
+    <string name="pin_confirm">Confirm PIN</string>
+
+    <string name="words_intro">Add words you never want to see. In your browser they block matching sites and searches; in any other app, the moment one shows up on screen it\'s blocked.</string>
+    <string name="words_add_placeholder">Add a word</string>
+    <string name="words_empty">No blocked words yet — add a word like “casino” or “betting”.</string>
+    <string name="words_adult_pack">Adult content pack</string>
+    <string name="words_adult_pack_desc">Hundreds of pornographic words — English and Arabic — blocked automatically, on top of your own list.</string>
+    <string name="words_pack_unlocked">You can turn the pack off now — tap the switch. This unlock expires in %1$s.</string>
+    <string name="words_pack_waiting">Turn-off requested. The pack keeps protecting you for another %1$s.</string>
+    <string name="words_everywhere">Block these words in every app</string>
+    <string name="words_everywhere_desc">Recommended. When off, words are only blocked in your browser.</string>
+    <string name="gate_adult_title">Turn off adult protection</string>
+    <string name="gate_adult_blurb">This lowers your guard. Type the paragraph below — you can\'t paste it — before the clock runs out.</string>
+    <string name="gate_adult_detail">Miss the clock and you get a fresh paragraph and a fresh clock, as many times as it takes. Even once you\'ve typed it, the pack stays on for another 24 hours; only after that can you flip the switch off.</string>
+    <string name="gate_adult_confirm">Start the 24-hour wait</string>
+
+    <string name="expand">Expand</string>
+    <string name="collapse">Collapse</string>
+    <string name="back">Back</string>
 </resources>

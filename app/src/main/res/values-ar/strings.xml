@@ -786,4 +786,47 @@
         <item>مدرّبك</item>
         <item>مدرّبك</item>
     </string-array>
+
+    <!-- ===================== ملفك / الرمز / الكلمات ===================== -->
+    <string name="account_name_placeholder">الاسم الأول يكفي</string>
+    <string name="account_name_note">يُستخدم فقط لتحيّتك. اتركه فارغًا وسيقول التطبيق «أنت» ببساطة.</string>
+    <string name="account_where_shows">أين يظهر اسمك</string>
+    <string name="account_profile_page">صفحة الملف الشخصي</string>
+    <string name="account_profile_page_body">التحية ودائرة الأحرف الأولى في الأعلى.</string>
+    <string name="account_coach">المدرّب الذكي</string>
+    <string name="account_coach_body">يستخدم اسمك الأول حين يخاطبك.</string>
+    <string name="account_on_this_phone">على هذا الهاتف</string>
+    <string name="account_no_account">لا حساب ولا تسجيل دخول</string>
+    <string name="account_no_account_body">لا يوجد في AppBlocker تسجيل دخول ولا حساب على الإنترنت. اسمك وقوائم حظرك وإحصاءاتك محفوظة على هذا الهاتف وحده، وإلغاء تثبيت التطبيق يمحوها.</string>
+    <string name="account_run_setup">أعِد تشغيل الإعداد</string>
+    <string name="account_run_setup_body">امشِ في خطوات الترحيب والأذونات مرة أخرى. أما قوائم حظرك وجداولك وكلماتك ورمزك فتبقى كما هي تمامًا.</string>
+    <string name="account_clear_name">امسح اسمي</string>
+    <string name="account_greeted">هكذا ستُحيّا</string>
+    <string name="account_add_name">أضِف اسمك وسيحيّيك التطبيق به</string>
+
+    <string name="pin_locked_title">AppBlocker مُقفل</string>
+    <string name="pin_locked_subtitle">أدخل رمزك لإجراء التغييرات.</string>
+    <string name="pin_incorrect">رمز غير صحيح</string>
+    <string name="pin_unlock">افتح</string>
+    <string name="pin_save">احفظ الرمز</string>
+    <string name="pin_new">رمز جديد</string>
+    <string name="pin_confirm">أكّد الرمز</string>
+
+    <string name="words_intro">أضِف كلمات لا تريد أن تراها أبدًا. في متصفحك تحظر المواقع وعمليات البحث المطابقة؛ وفي أي تطبيق آخر، تُحظر لحظة ظهورها على الشاشة.</string>
+    <string name="words_add_placeholder">أضِف كلمة</string>
+    <string name="words_empty">لا كلمات محظورة بعد — أضِف كلمة مثل «كازينو» أو «مراهنات».</string>
+    <string name="words_adult_pack">حزمة محتوى البالغين</string>
+    <string name="words_adult_pack_desc">مئات الكلمات الإباحية — بالعربية والإنجليزية — تُحظر تلقائيًا، فوق قائمتك الخاصة.</string>
+    <string name="words_pack_unlocked">تستطيع إيقاف الحزمة الآن — اضغط المفتاح. ينتهي هذا الفتح خلال %1$s.</string>
+    <string name="words_pack_waiting">طُلب الإيقاف. وتبقى الحزمة تحميك %1$s أخرى.</string>
+    <string name="words_everywhere">احظر هذه الكلمات في كل تطبيق</string>
+    <string name="words_everywhere_desc">موصى به. عند إيقافه تُحظر الكلمات في متصفحك فقط.</string>
+    <string name="gate_adult_title">إيقاف حماية البالغين</string>
+    <string name="gate_adult_blurb">هذا يخفض حارسك. اكتب الفقرة أدناه — لا يمكنك لصقها — قبل أن ينفد الوقت.</string>
+    <string name="gate_adult_detail">إن فاتك الوقت حصلت على فقرة جديدة ومؤقّت جديد، مهما تكرّر ذلك. وحتى بعد أن تكتبها، تبقى الحزمة مُفعَّلة 24 ساعة أخرى؛ وبعدها فقط تستطيع إيقاف المفتاح.</string>
+    <string name="gate_adult_confirm">ابدأ انتظار الـ24 ساعة</string>
+
+    <string name="expand">توسيع</string>
+    <string name="collapse">طيّ</string>
+    <string name="back">رجوع</string>
 </resources>

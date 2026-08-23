@@ -38,6 +38,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.appblocker.data.PinStore
 import com.appblocker.ui.theme.AppBlockerTheme
+import androidx.compose.ui.res.stringResource
+import com.appblocker.R
 
 /**
  * Wraps the app: if a PIN is set, the user must enter it before getting in — and again after the
@@ -75,8 +77,8 @@ fun LockGate(content: @Composable () -> Unit) {
     } else {
         AppBlockerTheme {
             PinEntry(
-                title = "AppBlocker is locked",
-                subtitle = "Enter your PIN to make changes.",
+                title = stringResource(R.string.pin_locked_title),
+                subtitle = stringResource(R.string.pin_locked_subtitle),
                 onSubmit = { pin ->
                     PinStore.check(context, pin).also { if (it) unlocked = true }
                 }
@@ -125,7 +127,7 @@ private fun PinEntry(title: String, subtitle: String, onSubmit: (String) -> Bool
             )
             if (error) {
                 Text(
-                    "Incorrect PIN",
+                    stringResource(R.string.pin_incorrect),
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(top = 8.dp),
@@ -136,7 +138,7 @@ private fun PinEntry(title: String, subtitle: String, onSubmit: (String) -> Bool
                 onClick = { if (!onSubmit(pin)) { error = true; pin = "" } },
                 enabled = pin.length >= 4,
                 modifier = Modifier.fillMaxWidth().height(50.dp),
-            ) { Text("Unlock", fontWeight = FontWeight.SemiBold) }
+            ) { Text(stringResource(R.string.pin_unlock), fontWeight = FontWeight.SemiBold) }
         }
     }
 }
@@ -150,9 +152,15 @@ fun SetPinDialog(onSet: (String) -> Unit, onDismiss: () -> Unit) {
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        confirmButton = { TextButton(enabled = valid, onClick = { onSet(pin) }) { Text("Save PIN") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-        title = { Text("Set a PIN") },
+        confirmButton = {
+            TextButton(enabled = valid, onClick = { onSet(pin) }) {
+                Text(stringResource(R.string.pin_save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) }
+        },
+        title = { Text(stringResource(R.string.profile_pin_set)) },
         text = {
             Column {
                 Text(
@@ -164,7 +172,7 @@ fun SetPinDialog(onSet: (String) -> Unit, onDismiss: () -> Unit) {
                 OutlinedTextField(
                     value = pin,
                     onValueChange = { if (it.length <= 8 && it.all(Char::isDigit)) pin = it },
-                    label = { Text("New PIN") },
+                    label = { Text(stringResource(R.string.pin_new)) },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
@@ -173,7 +181,7 @@ fun SetPinDialog(onSet: (String) -> Unit, onDismiss: () -> Unit) {
                 OutlinedTextField(
                     value = confirm,
                     onValueChange = { if (it.length <= 8 && it.all(Char::isDigit)) confirm = it },
-                    label = { Text("Confirm PIN") },
+                    label = { Text(stringResource(R.string.pin_confirm)) },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
