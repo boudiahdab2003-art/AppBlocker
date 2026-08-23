@@ -39,6 +39,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -62,6 +63,7 @@ import com.appblocker.data.DeviceVendor
 import com.appblocker.data.DisplayName
 import com.appblocker.data.SettingsStore
 import com.appblocker.data.SetupGuides
+import com.appblocker.service.SetupStepsNotifier
 import com.appblocker.ui.theme.AppShapes
 import com.appblocker.ui.theme.AppGradients
 import com.appblocker.ui.theme.appBackground
@@ -395,8 +397,23 @@ internal fun EssentialStep(
     val stuck = attempt == SetupAttempt.STUCK
     val justSucceeded = attempt == SetupAttempt.SUCCEEDED
 
+    val context = LocalContext.current
     val grant = gatedFix(perm, onRequestDisclosure)
-    val grantAndRemember = { attemptTick = tick; grant() }
+    // **The steps go with them.** Once Settings opens, this screen is behind them and every
+    // picture on it is out of reach; a notification is the only channel that still carries the
+    // instructions there (see SetupStepsNotifier for why an overlay is not).
+    val grantAndRemember = {
+        attemptTick = tick
+        guide?.let { SetupStepsNotifier.show(context, it, stepHeadline(perm)) }
+        grant()
+    }
+
+    // Down again the moment they are back, whether it worked or not — and when the step is
+    // left by any route at all, so a half-finished setup cannot leave litter in the shade.
+    DisposableEffect(tick, perm.granted) {
+        if (attempt != SetupAttempt.NONE || perm.granted) SetupStepsNotifier.clear(context)
+        onDispose { SetupStepsNotifier.clear(context) }
+    }
 
     StepScaffold(footer = {
         if (perm.granted) {
@@ -484,7 +501,9 @@ internal fun EssentialStep(
             Spacer(Modifier.height(6.dp))
             Text(
                 "The button below leaves AppBlocker and opens your phone's own Settings. Do these, " +
-                    "then come straight back here — this screen will tell you if it worked.",
+                    "then come straight back here — this screen will tell you if it worked. " +
+                    "The steps go with you: swipe down from the top of the screen to see them " +
+                    "again while you're in Settings.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth(),
