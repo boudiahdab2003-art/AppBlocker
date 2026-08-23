@@ -20,6 +20,19 @@ enforcement). Owner is non-technical; explain things in plain language.
   **Add one whenever a fix is a layout fix**; the five releases it took to make the typed
   gate usable are what this layer is for. In CI they run on `master`, on demand, and as
   the gate in front of every release.
+- **Database migrations are tested now**, not reasoned about: `MigrationTest` (androidTest) takes a
+  real v10 database with a blocked app and a blocked word in it up to v11 and validates the result
+  against the exported schema. Room validates the **parsed** schema, not the SQL text — columns,
+  types, nullability, primary-key columns — so an equivalent spelling passes and a missing column
+  fails; both were run to find that out rather than assumed. Getting a migration wrong does not
+  crash into a report: Room refuses to open the database, and the app that will not open is the one
+  holding every block plus a journal with no copy anywhere else.
+- **Profile ▸ Recovery** is the one part of the app that is about the owner rather than his phone:
+  a clean counter (`data/CleanStreak.kt`, prefs) and a per-day journal (`journal_entries`, Room).
+  Two rules live on it. **Nothing in it ever leaves the phone** — not the coach, not a bug report,
+  not the profile report — and **the day of a reset must not read as a scoreboard**
+  (`CleanCounterTest.theDayOfAResetDoesNotShowTheRecord` pins that). Neither is locked by Strict
+  Mode: an honest record is not a weakening.
 - **Releases are cloud-published**: merge to `master`, then trigger the
   **"Publish release"** workflow (`publish.yml`) with a plain-language release note —
   it now runs the rendering tests on an emulator FIRST and refuses to build if they fail

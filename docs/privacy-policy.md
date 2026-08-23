@@ -1,6 +1,6 @@
 # AppBlocker Privacy Policy
 
-**Last updated: August 11, 2026**
+**Last updated: August 23, 2026**
 
 AppBlocker is a screen-time and app-blocking app. It is built around one principle: **your data belongs on your device.**
 
@@ -13,10 +13,24 @@ Everything AppBlocker needs to work is stored **only on your phone**:
 - The display name you choose (optional — the app asks once during setup and you can skip it or clear it later; it is only used to greet you in the app)
 - Your goals, coach chat history and the personal facts the coach remembers
 - Your PIN (stored as a one-way hash, never as plain text)
+- Your recovery counter and your journal entries — see the section below
 
 AppBlocker has **no accounts, no sign-up, no sign-in, no analytics, no ads, and no tracking**. There is no user account of any kind: nothing you enter is transmitted to us, because there is nowhere for it to go. We never see your data.
 
 Uninstalling the app permanently deletes all of this data. That is also how you request deletion — there is no server-side copy to ask us to remove.
+
+## Your counter and your journal
+
+AppBlocker can count how long it has been since your last relapse, and it holds a journal with one entry per calendar day.
+
+This is the most personal information the app will ever contain, and it is treated accordingly:
+
+- Both are stored **only on this phone**, in the app's own database and preferences.
+- **The AI Coach is never given either of them** — not the journal text, and not the day count.
+- **They are never included in a bug report.** A report can only carry a fixed list of named settings values; there is no field in it that could hold your writing or your count.
+- They are not in the one-off device report the direct-download build sends about the phone model.
+- Journal entries are **kept until you delete them**. Emptying an entry removes that day; uninstalling the app removes all of it. There is no copy anywhere else, and no way to recover one.
+- If you set a PIN, both are behind it, because the PIN covers the whole app.
 
 ## Which version of AppBlocker you have
 

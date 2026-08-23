@@ -24,8 +24,8 @@ class Converters {
 
 @Database(
     entities = [AppRule::class, FocusState::class, BlockedKeyword::class, Schedule::class,
-        SavedPlace::class],
-    version = 10,
+        SavedPlace::class, JournalEntry::class],
+    version = 11,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -35,6 +35,7 @@ abstract class BlockerDatabase : RoomDatabase() {
     abstract fun blockedKeywordDao(): BlockedKeywordDao
     abstract fun scheduleDao(): ScheduleDao
     abstract fun savedPlaceDao(): SavedPlaceDao
+    abstract fun journalDao(): JournalDao
 
     companion object {
         @Volatile private var INSTANCE: BlockerDatabase? = null
@@ -91,6 +92,30 @@ abstract class BlockerDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v10 -> v11: the journal — one row per calendar day, kept forever.
+         *
+         * Written to match `app/schemas/…/11.json` character for character, which is the least
+         * surprising thing to read next to it — **but that is a convention, not the rule.** Room
+         * validates the *parsed* schema, so what actually has to be right is the set of columns,
+         * their types, their nullability and which ones form the primary key. Spelling the key
+         * inline as `INTEGER PRIMARY KEY NOT NULL` passes; dropping a column does not, and
+         * `MigrationTest` was run against both to find out rather than assuming.
+         *
+         * Getting it wrong is not a crash report. Room refuses to open the database, and the app
+         * that will not open is the one holding every block plus a journal with no copy anywhere.
+         */
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `journal_entries` (" +
+                        "`day` INTEGER NOT NULL, `text` TEXT NOT NULL, " +
+                        "`createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`day`))"
+                )
+            }
+        }
+
         fun get(context: Context): BlockerDatabase =
             INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -100,7 +125,7 @@ abstract class BlockerDatabase : RoomDatabase() {
                 )
                     .addMigrations(
                         MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
-                        MIGRATION_9_10,
+                        MIGRATION_9_10, MIGRATION_10_11,
                     )
                     // Only wipe on a downgrade (installing an older APK) — never on upgrade.
                     .fallbackToDestructiveMigrationOnDowngrade()

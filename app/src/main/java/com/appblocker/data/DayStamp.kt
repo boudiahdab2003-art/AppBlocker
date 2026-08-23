@@ -53,3 +53,16 @@ internal fun prevDayStamp(day: Int): Int {
     c.set(Calendar.DAY_OF_MONTH, 31)
     return (year - 1) * 1000 + c.get(Calendar.DAY_OF_YEAR)
 }
+
+/**
+ * The day-stamp an absolute time falls on — for anything recorded with a wall-clock timestamp
+ * rather than on the day it happened, which is what the journal and [CleanStreak] both need.
+ */
+internal fun dayStampOf(millis: Long): Int {
+    val c = Calendar.getInstance()
+    c.timeInMillis = millis
+    return c.get(Calendar.YEAR) * 1000 + c.get(Calendar.DAY_OF_YEAR)
+}
+
+/** Local midnight of the day a stamp names, as epoch millis — what a date formatter wants. */
+internal fun dayStartMillis(day: Int): Long = dayCalendar(day).timeInMillis

@@ -32,7 +32,10 @@ import org.json.JSONObject
  *    the owner made or a number, never something he read, typed, visited or blocked.
  *
  * Forbidden, always: blocked keywords, quote text, URLs, on-screen text, blocked app names or
- * package names, the owner's name, location, anything from the coach conversation.
+ * package names, the owner's name, location, anything from the coach conversation, **and
+ * anything from Recovery** — no journal entry, and not the clean counter either. The counter
+ * is only a number, but it is the number a report would be most tempting to attach and the
+ * one the privacy policy promises never leaves the phone.
  *
  * **The exception message is deliberately dropped**, not sanitised. `Throwable.message` is
  * precisely where a value that caused a failure gets quoted — a regex error names the pattern, an

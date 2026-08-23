@@ -113,6 +113,12 @@ android {
     testOptions {
         unitTests.isReturnDefaultValues = true
     }
+    // MigrationTestHelper reads the exported schemas from the test APK's assets at runtime, so
+    // schemas/ has to be shipped onto the device. Without this, MigrationTest fails with "Cannot
+    // find the schema file in the assets folder" rather than with anything about the migration.
+    sourceSets.getByName("androidTest") {
+        assets.srcDir("$projectDir/schemas")
+    }
 }
 
 // Export Room schemas so future DB migrations can be authored and tested.
@@ -156,6 +162,9 @@ dependencies {
     // GrantPermissionRule. Without it the notification tests assume-away in CI, where the app
     // is installed with no runtime permissions — green, and testing nothing.
     androidTestImplementation("androidx.test:rules:1.5.0")
+    // Room's MigrationTestHelper. It reads the exported schemas off the device, which is
+    // why the androidTest source set carries schemas/ as an asset directory above.
+    androidTestImplementation("androidx.room:room-testing:$roomVersion")
     // Supplies the bare ComponentActivity that createComposeRule() hosts the composable in.
     // debugImplementation, not androidTestImplementation: it contributes a manifest entry, which
     // has to be merged into the app under test rather than into the test APK.

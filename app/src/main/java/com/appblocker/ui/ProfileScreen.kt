@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.filled.Diversity3
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
@@ -42,6 +43,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Timelapse
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PrivacyTip
 import androidx.compose.material.icons.filled.SelfImprovement
@@ -136,6 +138,8 @@ fun ProfileScreen(
     onOpenSteps: () -> Unit = {},
     onOpenIconPicker: () -> Unit = {},
     onOpenBlockThemePicker: () -> Unit = {},
+    onOpenCounter: () -> Unit = {},
+    onOpenJournal: () -> Unit = {},
     /** Ask AppRoot for the typed gate. This screen must not draw it itself: it is a tab inside the
      *  scaffold, and [FrictionGate] sizes itself from the space it is handed. */
     onRequestGate: (GateCopy, () -> Unit) -> Unit = { _, _ -> },
@@ -273,6 +277,34 @@ fun ProfileScreen(
                 // A name is not a protection setting, so Strict Mode has no reason to freeze it.
                 enabled = true,
                 onClick = onOpenAccount,
+            )
+        }
+
+        SectionTitle("Recovery")
+        SettingCard {
+            ProfileRow(
+                icon = Icons.Filled.Timelapse,
+                title = "Your counter",
+                // Deliberately does NOT print the number. The owner asked for it to live on its
+                // own screen and nowhere else — he goes and looks at it, it does not come and
+                // find him on a bad day.
+                subtitle = "How long it has been since your last relapse — days, hours, " +
+                    "minutes and seconds, counting.",
+                chevron = true,
+                // Not locked during Strict. Nothing here makes blocking weaker: the count is an
+                // honest record, and refusing to let someone keep it honest protects nothing.
+                enabled = true,
+                onClick = onOpenCounter,
+            )
+            Divider()
+            ProfileRow(
+                icon = Icons.Filled.Create,
+                title = "Journal",
+                subtitle = "Write about any day — how it felt, what set it off, what helped. " +
+                    "Stored on this phone only.",
+                chevron = true,
+                enabled = true,
+                onClick = onOpenJournal,
             )
         }
 
