@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Timelapse
 import androidx.compose.material.icons.filled.Password
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Schedule
@@ -433,6 +434,55 @@ private val TOPICS = listOf(
                 "with it. It runs on Google's Gemini and works right out of the box — nothing " +
                 "to set up. \"New tips\" fetches a fresh take; when you're offline the coach " +
                 "pauses and everything else in the app works normally.",
+        ),
+    ),
+    Topic(
+        icon = Icons.Filled.Timelapse,
+        title = "Your counter & journal",
+        summary = "How long it has been, and a page for every day.",
+        paragraphs = listOf(
+            "Both live in Profile under Recovery. The counter is the only number in the app " +
+                "that is about you rather than about your phone, and the journal is the only " +
+                "place in it you write in your own words.",
+            "Neither ever leaves this phone — not in a bug report, not in the report your " +
+                "phone sends about itself, and not to the AI Coach, which is told nothing about " +
+                "either of them. If a PIN is set, both are already behind it.",
+        ),
+        points = listOf(
+            "Your counter" to
+                "How long since your last relapse, in days, hours, minutes and seconds, " +
+                "counting live while the screen is open. It appears here and nowhere else — " +
+                "no badge, no home-screen card.",
+            "Starting it" to
+                "“Start the count” begins from this moment. If you had already been " +
+                "going a while, “I started earlier than now” lets you say when. You can " +
+                "correct the start at any time from “Change the start time”; it records " +
+                "nothing, it just fixes the date being counted from.",
+            "When it happens" to
+                "“It happened — start again” asks first, then records the day and " +
+                "restarts from zero. “It happened earlier — pick when” dates it to " +
+                "when it really was, which is usually the night before you admit it.",
+            "Undo" to
+                "For 24 hours after a reset there is an Undo button that puts everything back " +
+                "exactly — the old start, the old record, and the date removed from the " +
+                "history. It is there so one mis-tap can never cost you a long run.",
+            "Your longest run" to
+                "Shown quietly under the count once you are past a day, and only while it is " +
+                "longer than the run you are on. On the day of a reset it is not shown at all.",
+            "The journal" to
+                "One page per calendar day. Today is the card at the top; every day you have " +
+                "written on is listed underneath, newest first, with a small red dot on the " +
+                "days a reset was recorded. The calendar button opens any date, so a day you " +
+                "missed can still be written about later.",
+            "The four headings" to
+                "What happened · What set it off · What helped · Tomorrow. Tapping " +
+                "one drops that heading into the page without touching what you have already " +
+                "written. They are optional — the page is yours to use however you like.",
+            "Saving and deleting" to
+                "It saves as you type and again when you leave the page, so nothing is lost if " +
+                "the phone dies mid-sentence. Empty a day completely and the day is removed " +
+                "instead of sitting in the list as a date with nothing on it. Entries are kept " +
+                "forever — unlike the mood check-in, nothing here is ever pruned.",
         ),
     ),
     Topic(

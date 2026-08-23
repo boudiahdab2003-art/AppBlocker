@@ -77,6 +77,9 @@ private sealed interface Overlay {
     data object Scenarios : Overlay
     data object TwelveSteps : Overlay
     data object IconPicker : Overlay
+    data object CleanCounter : Overlay
+    /** [startDay] opens straight onto one day — the counter's "write about today". */
+    data class Journal(val startDay: Int? = null) : Overlay
     data object BlockThemePicker : Overlay
     data class NewSchedule(val type: ScheduleType) : Overlay
     data class EditSchedule(val schedule: Schedule) : Overlay
@@ -206,6 +209,13 @@ fun AppRoot(
                 TwelveStepsScreen(onBack = { overlay = null })
             is Overlay.IconPicker ->
                 IconPickerScreen(onBack = { overlay = null })
+            is Overlay.CleanCounter ->
+                CleanCounterScreen(
+                    onBack = { overlay = null },
+                    onOpenJournal = { day -> overlay = Overlay.Journal(day) },
+                )
+            is Overlay.Journal ->
+                JournalScreen(onBack = { overlay = null }, startDay = o.startDay)
             is Overlay.BlockThemePicker ->
                 BlockThemePickerScreen(
                     strictActive = strictActive, onBack = { overlay = null })
@@ -241,6 +251,8 @@ fun AppRoot(
                 onOpenSteps = { overlay = Overlay.TwelveSteps },
                 onOpenIconPicker = { overlay = Overlay.IconPicker },
                 onOpenBlockThemePicker = { overlay = Overlay.BlockThemePicker },
+                onOpenCounter = { overlay = Overlay.CleanCounter },
+                onOpenJournal = { overlay = Overlay.Journal() },
                 onRequestGate = { copy, confirm -> gate = copy to confirm },
             )
         }
@@ -369,6 +381,8 @@ private fun MainScaffold(
     onOpenSteps: () -> Unit,
     onOpenIconPicker: () -> Unit,
     onOpenBlockThemePicker: () -> Unit,
+    onOpenCounter: () -> Unit,
+    onOpenJournal: () -> Unit,
     /** Ask for the typed gate. It is drawn by AppRoot, over the window — not here; see the layer
      *  in [AppRoot] and the window note in [FrictionGate]. */
     onRequestGate: (GateCopy, () -> Unit) -> Unit,
@@ -446,6 +460,8 @@ private fun MainScaffold(
                     onOpenSteps = onOpenSteps,
                     onOpenIconPicker = onOpenIconPicker,
                     onOpenBlockThemePicker = onOpenBlockThemePicker,
+                    onOpenCounter = onOpenCounter,
+                    onOpenJournal = onOpenJournal,
                     onRequestGate = onRequestGate,
                     updateVm = updateVm,
                 )
