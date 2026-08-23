@@ -11,11 +11,11 @@ The same sheet works on any brand's cloud device, and on a friend's phone plugge
 
 A session is **~15–20 minutes on a clock**, on a device that is **wiped afterwards**, out of a
 daily credit budget. There is no exploring, no reading code mid-session, no "let me just try".
-Every step is a rehearsed subcommand of a driver script (`rtl.sh`, kept outside the repo because
-it holds local APK paths):
+Every step is a rehearsed subcommand of a driver script, **`tools/rtl.sh`, in the repo** — it lived
+in a scratchpad for the first session, which is exactly how a session's tooling gets lost:
 
 ```
-S=<serial> ./rtl.sh  facts | setup | alive | seed | probe | suite | who | watch | blocklog | shot
+S=<serial> tools/rtl.sh  facts|setup|seed|alive|browsers|go|prove|ids|probe|suite|who|watch|blocklog|shot
 ```
 
 **Everything below was rehearsed against an Android 15 emulator before any device was booked**,
@@ -52,19 +52,38 @@ before anything else; confirm with `dumpsys power | grep mWakefulness`.
 
 ## Before booking the device
 
-1. `git pull`, then build both APKs — the app and the instrumentation:
-   `gradle -p . :app:assembleGithubDebug :app:assembleGithubDebugAndroidTest`.
-   Debug flavour deliberately: `run-as`, the shell, and the test APK only exist there.
-2. Build a **second app APK with `DEBUG = true`** in `BlockerAccessibilityService` and install
-   *that* one. Then `git checkout` the flag back to `false` immediately, before it can reach a
-   release — it logs every URL visited.
-3. **Check the two APKs differ (`md5sum`).** Gradle has handed back a stale APK before, and a
-   result from the wrong binary is worse than no result.
+**Two committed scripts do all of it — `tools/lab_apk.sh` builds, `tools/rtl.sh` drives.** Both
+were hand-typed the first time; both are in the repo now because a rented clock is the worst place
+to retype anything.
+
+```
+git pull
+tools/lab_apk.sh --verbose --with-tests
+```
+
+That one line: strips the device-admin `<receiver>` (Samsung refuses any build that declares one —
+see the constraint at the top), flips `DEBUG = true` in `BlockerAccessibilityService` so the
+watcher narrates every scan, block and URL it reads, builds the app and instrumentation APKs into
+`build/lab/`, **restores both source files through a `trap`** so an interrupted run cannot leave
+the tree mutilated, and then asserts against the *built* APK with `aapt` that no device-admin
+declaration survived. `git status` must be clean afterwards; the script says so itself if it isn't.
+
+Then **rehearse the whole session on the emulator**, which costs nothing:
+
+```
+S=emulator-5554 tools/rtl.sh setup
+S=emulator-5554 tools/rtl.sh seed
+S=emulator-5554 tools/rtl.sh alive
+S=emulator-5554 tools/rtl.sh prove com.android.chrome
+```
+
+Chrome stands in for whatever OEM browser the phone will have. If that sequence is not green here,
+it will not be green there — the difference being that here it is free.
 
 ## Arming the device — the three traps that make a block test lie
 
 A block test on a freshly flashed device fails for reasons that have nothing to do with blocking.
-`rtl.sh seed` does these in this order because **any other order silently disarms the app**:
+`tools/rtl.sh seed` does these in this order because **any other order silently disarms the app**:
 
 1. **The after-update pause.** A *re-install* sets `update_paused=true` and **all blocking stops**
    until someone taps "Reactivate blocking" — by design (`UpdatePause`). A *fresh* install does
@@ -92,7 +111,7 @@ storage — let the *shell* open the file and pipe the bytes into `run-as` on st
   it still cost four wrong conclusions during the rehearsal.
 - **An app block writes no logcat line.** `DEBUG` logs `blockReason …` *before* the decision, so
   a silent log looks identical to a refusal to block.
-- **`rtl.sh blocklog` is the instrument.** It prints the app's own record —
+- **`tools/rtl.sh blocklog` is the instrument.** It prints the app's own record —
   `time|kind|ownUi|rootOk|why|counted` — which is the same format the owner's bug reports arrive
   in (`data/BlockLog.kt`). A working app block reads `app false match quick true`; a word block
   reads `word false n/a word true`.
@@ -101,6 +120,92 @@ storage — let the *shell* open the file and pipe the bytes into `run-as` on st
 - **Grep both `BLOCK:` and `URL BLOCK`** for web blocks. Different punctuation, different layers;
   filtering for one silently drops the other.
 
+## Proving a browser's address bar — and the order that decides the answer
+
+This is the most valuable thing a lab session can do, because it is the one claim that fails
+**silently**: `KNOWN_READABLE_BROWSERS` and `OMNIBOX_ID_SUFFIXES` assert how each browser spells
+its address bar, and a wrong spelling means website blocking does nothing at all in it — nothing
+blocked, nothing warned, nothing on screen to say so. It has been wrong twice (Brave, then Mi
+Browser) and both times the owner found it by accident.
+
+**The evidence is `readable_browsers` in the app's own prefs.** `SettingsStore.addReadableBrowser`
+writes a package there the first time its bar is genuinely read, and only ever from a bar found
+**by view id** — never from page text. So it is testimony, not inference, and it is a text file we
+can read off the phone rather than a screenshot to interpret.
+
+**Two facts make the naive test give the wrong answer** (both measured on the emulator, 23 Aug 2026):
+
+1. **A blocked *word* locks the whole browser.** `scanBrowserUrl` calls `addKeywordLockout` for any
+   non-site hit, so after one word block every later visit is covered by the lockout fast path,
+   which returns long before anything reads an address bar.
+2. **The fast path records nothing.** `addReadableBrowser` is reached only from the *full* scan,
+   and the full scan returns immediately while a cover is up.
+
+Together: **the evidence is only ever written by browsing that does not block.** Visit the blocked
+site first and a perfectly readable browser looks unreadable for the rest of the session.
+
+So the order is: an **unblocked** site first, then a blocked one. `tools/rtl.sh prove <browser-pkg>`
+does exactly that and prints `PROVEN` or `NOT READ`. On `NOT READ`, run **`tools/rtl.sh ids`** while
+the browser is in front — it dumps the real view ids on screen, which is what tells you what that
+phone actually calls its address bar, and the fix goes in `OMNIBOX_ID_SUFFIXES`
+(`service/ScreenText.kt`) with a matching case in `WebContentFilterTest`.
+
+The blocked site to use is **a site blocked because its app is** (`instagram.com` with Instagram on
+the blocked list). That path matches the **address only** and never page text, so a cover there
+cannot have come from anywhere else. A blocked *word* is a weaker instrument: the word may equally
+have been found in the page.
+
+### Samsung Internet is not on Remote Test Lab devices — settled, stop looking
+
+**Two units, two firmwares, neither has it:** the Galaxy S24 FE (EEA, One UI 7, 22 Aug 2026) and
+the Galaxy A36 5G (**SM-A366N, Korea**, One UI 8, 23 Aug 2026). On the Korean unit it is not merely
+disabled or removed-for-user — `pm list packages -u` finds nothing and
+`cmd package install-existing` answers *"Package com.sec.android.app.sbrowser doesn't exist"*, while
+43 other `com.sec.android.*` packages are present. So the images are not stripped in general;
+Samsung Internet specifically is not in them.
+
+The Korean device was chosen precisely to test "it's a European unbundling" — that hypothesis is
+**disproved**. `com.sec.android.app.sbrowser:id/location_bar_edit_text` therefore **cannot be
+settled on this service**, and a third booking is not the way to settle it. What would: a real
+Samsung owned by a real person, or the first profile report from a Samsung user once the app is on
+Play (`BugReportSender.reportDeviceProfile` already reports the claim as unproven per phone).
+
+### If an OEM browser isn't installed
+
+Before spending the session on anything else:
+
+```
+pm list packages | grep sbrowser        # there?
+pm list packages -u | grep sbrowser     # installed, but removed for this user?
+cmd package install-existing com.sec.android.app.sbrowser
+```
+
+`install-existing` restores a preinstalled system app **with no download and no store sign-in**,
+which is the only acceptable route — never sideload a browser from a download site onto a device
+whose result you then intend to trust, and never sign in to a store account on a leased phone.
+If all three come back empty, end the session (unused time is refunded) and pick another model.
+
+## Three things a fresh lab phone does that look like app bugs
+
+All three cost time on 23 Aug 2026 and none of them is a defect in AppBlocker.
+
+- **A browser that has never been opened shows its own terms screen, not a page.** Chrome on a
+  fresh device sits on *"By continuing, you agree to the Terms of Service"* and simply ignores the
+  `am start` URL, so `prove` reports **NOT READ** for a browser that reads perfectly well. The
+  watcher's own log gives it away — `scan[...]: 264 chars: By continuing, you agree...`. Tap
+  through the welcome screen before measuring anything, and read the log before believing a
+  verdict.
+- **Running the instrumentation leaves the watcher switched on and DEAF.** After `am instrument`,
+  `Bound services:{}` with a frozen `health_last_event_at` — seen on **both** Samsungs now, so it
+  is a pattern and not an accident. Always `alive` after `probe` or `suite`, and `rebind` before
+  measuring a block. A page that fails to be blocked in this state proves nothing.
+- **Samsung's system font is taller than the emulator's**, so a rendering case can pass at the
+  Galaxy's exact geometry on an emulator (`wm size 1080x2340; wm density 450`) and still fail on
+  the phone. `AccountScreenTest.nameFieldAndSaveSurviveTheKeyboard` does exactly that. Before
+  calling that an app bug, measure the **real** keyboard: on the A36 the field, Continue and Skip
+  all sat in the top 1230px of 2340 with the keyboard up — roughly 470dp of room, far more than the
+  320dp the test squeezes to.
+
 ## The run sheet, in priority order
 
 `setup`, `alive`, `seed`, `probe` are cheap and answer most of the table. Then:
@@ -108,7 +213,7 @@ storage — let the *shell* open the file and pipe the bytes into `run-as` on st
 | # | What | Settles | Where the fix goes |
 |---|---|---|---|
 | 0 | `probe` — `DeviceProbeTest` | uninstall screen, keep-alive deep link, `<queries>` visibility | named in the failure message |
-| 1 | Blocked site in **the OEM browser** | whether the address bar is really readable — the claim that is wrong in the *silent* direction | `service/ScreenText.kt`, `service/PackageSets.kt` |
+| 1 | `prove <oem-browser>` | whether the address bar is really readable — the claim that is wrong in the *silent* direction. **Read the ordering section above first** | `service/ScreenText.kt`, `service/PackageSets.kt` |
 | 2 | Strict Mode on → attempt uninstall | whether the guard actually bounces it here | `service/GuardPackages.kt` |
 | 3 | `who` on the OEM's accessibility page | the class fast-path, which is AOSP/Xiaomi-shaped | `service/AppInfoScreen.kt` |
 | 4 | Tap the keep-alive button | whether it lands on the OEM battery page or falls back silently | `data/DeviceVendor.kt` |

@@ -151,15 +151,28 @@ class AccountScreenTest {
     }
 
     /**
-     * **The dialog bug, in its new home.** Squeezed to roughly what the keyboard leaves, the field
-     * and Save must both still be on screen — that is the entire reason this is not a Dialog. Put
-     * the Save button inside the scrolling column and this fails.
+     * **The dialog bug, in its new home.** Squeezed to roughly what the keyboard leaves, Save must
+     * still be on screen and the field must still be reachable — that is the entire reason this is
+     * not a Dialog. Put the Save button inside the scrolling column and this fails.
+     *
+     * **Save is asserted visible, the field only *reachable*, and that difference is the screen's
+     * actual design:** `AccountScreen` scrolls its content inside `Box(Modifier.weight(1f))` and
+     * pins Save as a sibling below it. "The field is visible without scrolling at 320dp" is not
+     * something the screen ever promised, and asserting it made this case depend on the height of
+     * one heading in one font.
+     *
+     * Measured on a Galaxy A36 (One UI 8, Remote Test Lab, 23 Aug 2026): it failed there while
+     * passing on an emulator reshaped to that phone's exact geometry (`wm size 1080x2340;
+     * wm density 450`) — so the difference is Samsung's taller system font, not the layout. And
+     * the situation this stands in for is fine on that phone: with the real keyboard up, the
+     * field and both buttons sat within the top 1230px of 2340 — roughly 470dp, far more room
+     * than the 320dp squeezed here.
      */
     @Test
     fun nameFieldAndSaveSurviveTheKeyboard() {
         setScreen(height = 320.dp) { AccountScreen(onBack = {}) }
 
-        compose.onNodeWithTag(ACCOUNT_NAME_FIELD_TAG).assertIsDisplayed()
+        compose.onNodeWithTag(ACCOUNT_NAME_FIELD_TAG).performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag(ACCOUNT_SAVE_TAG).assertIsDisplayed().assertHeightIsAtLeast(40.dp)
     }
 

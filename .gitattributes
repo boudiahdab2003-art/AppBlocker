@@ -1,0 +1,4 @@
+# Shell scripts and python must keep LF. A CRLF tools/rtl.sh fails with a carriage-return in
+# every command name, and it fails on the one day it matters: mid-session, on a rented phone.
+*.sh text eol=lf
+*.py text eol=lf

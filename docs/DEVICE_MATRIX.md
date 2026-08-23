@@ -21,12 +21,21 @@ have stopped being guesses.
 | Emulator `appblocker_test` | 14 | ✅ AOSP installer | — generic advice, no link | ✅ | Chrome only | every release |
 | Emulator `appblocker_a15` | 15 | ✅ `com.google.android.packageinstaller` | — generic advice, no link | ✅ all 7 | Chrome only | 22 Aug 2026 |
 | **Samsung** Galaxy S24 FE (SM-S721B, EEA) | 15 / One UI 7.0 | ✅ but **`com.google.android.packageinstaller`** — Samsung's own installer is *not installed here* | ✅ `com.samsung.android.lool/…sm.battery.ui.BatteryActivity` (the **second** of the two guesses) | ✅ all 7 | ❌ **Samsung Internet not installed on the lab unit** — claim still unproven | 22 Aug 2026, Remote Test Lab |
+| **Samsung** Galaxy A36 5G (SM-A366N, **Korea**) | **16 / One UI 8.0.5** | ✅ **`com.google.android.packageinstaller` again** — so the S24 FE result is not an EEA quirk | ✅ same `…lool/…BatteryActivity`, on One UI 8 too | ✅ all 7 | ✅ **Chrome read here**, `instagram.com` covered by the site layer | 23 Aug 2026, Remote Test Lab |
 | **Huawei / Honor** | — | ❓ guessed | ❓ guessed | ❓ | ❓ claim unproven | **never** |
 | **Oppo / Realme / OnePlus** | — | ❓ guessed | ❓ guessed | ❓ | ❓ claim unproven | **never** |
 | **Vivo / iQOO** | — | ❓ guessed | ❓ guessed | ❓ | ❓ claim unproven | **never** |
 
-Four brands the app claims to support, none of them ever seen. That is the honest position, and
-the four bold rows are the work.
+**Samsung is now measured twice** — two models, two countries, two Android versions — and the two
+runs agree on every column they share. The uninstall-screen answer in particular is no longer a
+one-unit surprise: Samsung routes uninstalls through **Google's** package installer on both, so
+`com.samsung.android.packageinstaller` in `GuardPackages.INSTALLERS` has never fired on a real
+Samsung yet. Three brands remain entirely unseen, and those three bold rows are the work.
+
+**The one Samsung question that stays open is Samsung Internet**, and it cannot be closed here:
+Remote Test Lab images do not contain it — see `REMOTE_TEST_LAB.md`, where the Korean unit proved
+it is absent rather than merely disabled. It will be answered by the first profile report from a
+real Samsung owner, not by another booking.
 
 ## How a row gets filled in
 
