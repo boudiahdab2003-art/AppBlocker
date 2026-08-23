@@ -76,6 +76,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.appblocker.data.SettingsStore
 import com.appblocker.data.StrictEdits
 import com.appblocker.service.AccessibilityUtil
+import androidx.compose.ui.res.stringResource
+import com.appblocker.R
 
 /** The editor's internal pages. The picker drill-ins stay local (not top-level Overlays) so the
  *  staged selections survive navigating in and out. */
@@ -174,10 +176,10 @@ fun BlockEditorScreen(
         when (p) {
             EditorPage.SUMMARY -> Scaffold(
                 containerColor = Color.Transparent,
-                topBar = { EditorTopBar("Quick Block", onBack) },
+                topBar = { EditorTopBar(stringResource(R.string.quick_block), onBack) },
                 bottomBar = {
                     // Save is allowed during Strict — you can tighten, just not loosen.
-                    GradientButton(text = "Save", onClick = ::save,
+                    GradientButton(text = stringResource(R.string.common_save), onClick = ::save,
                         modifier = Modifier.navigationBarsPadding().padding(16.dp))
                 },
             ) { padding ->
@@ -192,8 +194,10 @@ fun BlockEditorScreen(
                         )
                         Spacer(Modifier.padding(top = 4.dp))
                         Text(
-                            if (allowlist) "Select apps you want to allow. All others will be blocked."
-                            else "Select apps, sites or words you want to block.",
+                            stringResource(
+                                if (allowlist) R.string.editor_allowlist_intro
+                                else R.string.editor_blocklist_intro,
+                            ),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -219,12 +223,18 @@ fun BlockEditorScreen(
                             Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
                                 .background(MaterialTheme.colorScheme.surface),
                         ) {
-                            SummaryRow(Icons.Filled.Apps, "Apps", installedSelected, stripIcons) {
+                            SummaryRow(
+                                Icons.Filled.Apps, stringResource(R.string.editor_apps),
+                                installedSelected, stripIcons,
+                            ) {
                                 page = EditorPage.APPS
                             }
                             if (!allowlist) {
                                 RowDivider()
-                                SummaryRow(Icons.Filled.Web, "Websites & words", keywords.size) {
+                                SummaryRow(
+                                    Icons.Filled.Web,
+                                    stringResource(R.string.editor_websites_words), keywords.size,
+                                ) {
                                     page = EditorPage.WEBSITES
                                 }
                             }
@@ -233,7 +243,7 @@ fun BlockEditorScreen(
 
                     item {
                         Spacer(Modifier.padding(top = 20.dp))
-                        SectionHeader(Icons.Filled.Block, "Extra options", null)
+                        SectionHeader(Icons.Filled.Block, stringResource(R.string.editor_extra_options), null)
                         Spacer(Modifier.padding(top = 4.dp))
                         // `ed || !value` — switching one ON is always allowed, including mid-Strict;
                         // switching it OFF is what a session refuses. These four were the only
@@ -243,21 +253,29 @@ fun BlockEditorScreen(
                         // the app checkboxes below, and by both toggles in KeywordsScreen.
                         // Once switched on, `!value` is false and the row locks itself for the rest
                         // of the session — which is the point.
-                        ToggleRow(Icons.Filled.NoAdultContent, "Porn sites blocking",
-                            "Detects and blocks adult sites in your browsers.",
+                        ToggleRow(
+                            Icons.Filled.NoAdultContent,
+                            stringResource(R.string.editor_porn_title),
+                            stringResource(R.string.editor_porn_desc),
                             adult, ed || !adult) { adult = it }
                         // "Add newly installed apps" is a Blocklist concept — in Allowlist mode a new
                         // app is already blocked (it isn't allowed), so the toggle is hidden.
                         if (!allowlist) {
-                            ToggleRow(Icons.Filled.GetApp, "Add newly installed apps",
-                                "Newly installed apps are automatically blocked.",
+                            ToggleRow(
+                                Icons.Filled.GetApp,
+                                stringResource(R.string.editor_newapps_title),
+                                stringResource(R.string.editor_newapps_desc),
                                 addNew, ed || !addNew) { addNew = it }
                         }
-                        ToggleRow(Icons.Filled.ShoppingBasket, "In-app purchases blocking",
-                            "Blocks the Google Play purchase prompt in games and apps.",
+                        ToggleRow(
+                            Icons.Filled.ShoppingBasket,
+                            stringResource(R.string.editor_purchases_title),
+                            stringResource(R.string.editor_purchases_desc),
                             purchases, ed || !purchases) { purchases = it }
-                        ToggleRow(Icons.Filled.Web, "Block unsupported browsers",
-                            "Blocks browsers we can't filter (e.g. Brave) so they can't bypass website blocking.",
+                        ToggleRow(
+                            Icons.Filled.Web,
+                            stringResource(R.string.editor_browsers_title),
+                            stringResource(R.string.editor_browsers_desc),
                             unsupported, ed || !unsupported) { unsupported = it }
                         Spacer(Modifier.padding(top = 16.dp))
                     }
@@ -266,19 +284,26 @@ fun BlockEditorScreen(
 
             EditorPage.APPS -> Scaffold(
                 containerColor = Color.Transparent,
-                topBar = { EditorTopBar("Apps", onBack = { page = EditorPage.SUMMARY }) },
+                topBar = {
+                    EditorTopBar(
+                        stringResource(R.string.editor_apps),
+                        onBack = { page = EditorPage.SUMMARY },
+                    )
+                },
             ) { padding ->
                 LazyColumn(Modifier.padding(padding).fillMaxSize().padding(horizontal = 16.dp)) {
                     item {
                         Spacer(Modifier.padding(top = 4.dp))
                         Text(
-                            if (allowlist) "Pick the apps that stay open. Everything else is blocked."
-                            else "Pick the apps to block.",
+                            stringResource(
+                                if (allowlist) R.string.editor_pick_allowed
+                                else R.string.editor_pick_blocked,
+                            ),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                         OutlinedTextField(
                             value = query, onValueChange = { query = it },
-                            placeholder = { Text("Search apps") },
+                            placeholder = { Text(stringResource(R.string.editor_search_apps)) },
                             leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                             singleLine = true, enabled = ed,
                             shape = RoundedCornerShape(28.dp),
@@ -286,7 +311,10 @@ fun BlockEditorScreen(
                         )
                     }
                     if (loading) {
-                        item { Text("Loading apps…", color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        item {
+                            Text(
+                                stringResource(R.string.editor_loading),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(8.dp)) }
                     } else {
                         categorizedAppItems(
@@ -332,11 +360,15 @@ fun BlockEditorScreen(
                         item {
                             Spacer(Modifier.padding(top = 16.dp))
                             val preBlockCount = apps.count { !it.installed && selected.contains(it.packageName) }
-                            CollapsibleHeader(Icons.Filled.GetApp, "Hypothetical apps", preBlockCount, preBlockOpen) {
+                            CollapsibleHeader(
+                                Icons.Filled.GetApp,
+                                stringResource(R.string.editor_hypothetical),
+                                preBlockCount, preBlockOpen,
+                            ) {
                                 preBlockOpen = !preBlockOpen
                             }
                             if (preBlockOpen) {
-                                Text("Apps you don't have yet. Block them now and they'll be blocked the moment you install them.",
+                                Text(stringResource(R.string.editor_hypothetical_desc),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(bottom = 4.dp))
@@ -346,7 +378,7 @@ fun BlockEditorScreen(
                             items(preBlockApps, key = { it.packageName }) { app ->
                                 val isChecked = selected.contains(app.packageName)
                                 AppCheckRow(app, checked = isChecked, enabled = ed || !isChecked,
-                                    subtitle = "Not installed yet") { on -> toggleApp(app.packageName, on) }
+                                    subtitle = stringResource(R.string.editor_not_installed)) { on -> toggleApp(app.packageName, on) }
                             }
                         }
                         item { Spacer(Modifier.padding(top = 16.dp)) }
@@ -356,19 +388,23 @@ fun BlockEditorScreen(
 
             EditorPage.WEBSITES -> Scaffold(
                 containerColor = Color.Transparent,
-                topBar = { EditorTopBar("Websites & words", onBack = { page = EditorPage.SUMMARY }) },
+                topBar = {
+                    EditorTopBar(
+                        stringResource(R.string.editor_websites_words),
+                        onBack = { page = EditorPage.SUMMARY },
+                    )
+                },
             ) { padding ->
                 LazyColumn(Modifier.padding(padding).fillMaxSize().padding(horizontal = 16.dp)) {
                     item {
                         Spacer(Modifier.padding(top = 4.dp))
-                        Text("Any web address or search containing one of these is blocked. " +
-                            "Also on the Blocked words screen (Blocking tab), where you can block them inside apps too.",
+                        Text(stringResource(R.string.editor_words_intro),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                             OutlinedTextField(
                                 value = newWord, onValueChange = { newWord = it },
-                                placeholder = { Text("Add a word or site") },
+                                placeholder = { Text(stringResource(R.string.editor_add_word_site)) },
                                 singleLine = true, enabled = true, // adding is allowed during Strict
                                 shape = RoundedCornerShape(28.dp),
                                 modifier = Modifier.weight(1f),
@@ -409,7 +445,7 @@ fun BlockEditorScreen(
 @Composable
 private fun BlockingModeHeader(allowlist: Boolean, enabled: Boolean, onClick: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
-        Text("Blocking", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge,
+        Text(stringResource(R.string.editor_blocking), Modifier.weight(1f), style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
         Row(
             Modifier.clip(RoundedCornerShape(20.dp)).clickable(enabled = enabled) { onClick() }
@@ -419,7 +455,7 @@ private fun BlockingModeHeader(allowlist: Boolean, enabled: Boolean, onClick: ()
             Icon(if (allowlist) Icons.Filled.Star else Icons.Filled.Block, contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
-            Text(if (allowlist) "Allowlist" else "Blocklist",
+            Text(stringResource(if (allowlist) R.string.editor_allowlist else R.string.editor_blocklist),
                 style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary)
             if (enabled) {

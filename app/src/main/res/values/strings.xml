@@ -770,4 +770,73 @@
     <string name="expand">Expand</string>
     <string name="collapse">Collapse</string>
     <string name="back">Back</string>
+
+    <!-- ===================== Schedule editor ===================== -->
+    <string name="sched_start_now">Start blocking straight away</string>
+    <string name="sched_create_off">Create it switched off</string>
+    <string name="sched_is_on">This schedule is on</string>
+    <string name="sched_is_off">This schedule is off</string>
+    <string name="sched_strict_note">Strict Mode is running. A schedule can be switched on while a session is active, but not off.</string>
+    <string name="sched_will_start">It\'ll start working as soon as you create it.</string>
+    <string name="sched_saved_off">It\'ll be saved in your list, ready to switch on later.</string>
+    <string name="sched_enforcing">It\'s being enforced right now.</string>
+    <string name="sched_kept">It\'s kept in your list, but it isn\'t blocking anything.</string>
+    <string name="sched_delete">Delete</string>
+    <string name="sched_create">Create schedule</string>
+    <string name="sched_name">Name</string>
+    <string name="sched_start">Start</string>
+    <string name="sched_days">Days</string>
+    <string name="sched_pick_a_day">Pick at least one day — otherwise this schedule would never run.</string>
+    <string name="sched_same_time">Start and end are the same, so this would never run. For a whole day, use 00:00 to 23:59.</string>
+    <string name="sched_daily_limit">Daily limit</string>
+    <string name="sched_open_limit">Block after how many opens / day</string>
+    <string name="sched_any_wifi">Any Wi-Fi network</string>
+    <string name="sched_wifi_name">Wi-Fi name (SSID)</string>
+    <string name="sched_wifi_needs_location">Reading a specific network\'s name needs the Location permission.</string>
+    <string name="sched_wont_work">This schedule won\'t work yet</string>
+    <string name="sched_location">Location</string>
+    <string name="sched_location_needed">Location access is needed to block by place.</string>
+    <string name="sched_grant_location">Grant location access</string>
+    <string name="sched_no_location">No location captured yet.</string>
+
+    <!-- ===================== Quick Block editor ===================== -->
+    <string name="editor_save">Save</string>
+    <string name="editor_allowlist_intro">Select apps you want to allow. All others will be blocked.</string>
+    <string name="editor_blocklist_intro">Select apps, sites or words you want to block.</string>
+    <string name="editor_apps">Apps</string>
+    <string name="editor_websites_words">Websites &amp; words</string>
+    <string name="editor_extra_options">Extra options</string>
+    <string name="editor_porn_title">Porn sites blocking</string>
+    <string name="editor_porn_desc">Detects and blocks adult sites in your browsers.</string>
+    <string name="editor_newapps_title">Add newly installed apps</string>
+    <string name="editor_newapps_desc">Newly installed apps are automatically blocked.</string>
+    <string name="editor_purchases_title">In-app purchases blocking</string>
+    <string name="editor_purchases_desc">Blocks the Google Play purchase prompt in games and apps.</string>
+    <string name="editor_browsers_title">Block unsupported browsers</string>
+    <string name="editor_browsers_desc">Blocks browsers we can\'t filter (e.g. Brave) so they can\'t bypass website blocking.</string>
+    <string name="editor_pick_allowed">Pick the apps that stay open. Everything else is blocked.</string>
+    <string name="editor_pick_blocked">Pick the apps to block.</string>
+    <string name="editor_search_apps">Search apps</string>
+    <string name="editor_loading">Loading apps…</string>
+    <string name="editor_hypothetical">Hypothetical apps</string>
+    <string name="editor_hypothetical_desc">Apps you don\'t have yet. Block them now and they\'ll be blocked the moment you install them.</string>
+    <string name="editor_not_installed">Not installed yet</string>
+    <string name="editor_words_intro">Any web address or search containing one of these is blocked. Also on the Blocked words screen (Blocking tab), where you can block them inside apps too.</string>
+    <string name="editor_add_word_site">Add a word or site</string>
+    <string name="editor_blocking">Blocking</string>
+    <string name="editor_allowlist">Allowlist</string>
+    <string name="editor_blocklist">Blocklist</string>
+
+    <!-- ===================== Coach chat ===================== -->
+    <string name="chat_knows">What your coach knows</string>
+    <string name="chat_clear">Clear chat</string>
+    <string name="chat_thinking">Thinking…</string>
+    <string name="chat_clear_title">Clear chat?</string>
+    <string name="chat_clear_confirm">Clear</string>
+    <string name="chat_nothing_yet">Nothing yet — the more you chat, the better your coach knows you.</string>
+    <string name="chat_close">Close</string>
+    <string name="chat_forget">Forget everything</string>
+    <string name="chat_your_goals">Your goals</string>
+    <string name="chat_placeholder">Message your coach…</string>
+    <string name="chat_send">Send</string>
 </resources>

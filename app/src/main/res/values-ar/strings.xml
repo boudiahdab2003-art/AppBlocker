@@ -829,4 +829,73 @@
     <string name="expand">توسيع</string>
     <string name="collapse">طيّ</string>
     <string name="back">رجوع</string>
+
+    <!-- ===================== محرّر الجداول ===================== -->
+    <string name="sched_start_now">ابدأ الحظر فورًا</string>
+    <string name="sched_create_off">أنشئه متوقّفًا</string>
+    <string name="sched_is_on">هذا الجدول مُفعَّل</string>
+    <string name="sched_is_off">هذا الجدول متوقّف</string>
+    <string name="sched_strict_note">الوضع الصارم يعمل. يمكن تشغيل جدول أثناء الجلسة، لكن لا يمكن إيقافه.</string>
+    <string name="sched_will_start">سيبدأ العمل بمجرد إنشائه.</string>
+    <string name="sched_saved_off">سيُحفظ في قائمتك، جاهزًا لتشغيله لاحقًا.</string>
+    <string name="sched_enforcing">يُطبَّق الآن.</string>
+    <string name="sched_kept">محفوظ في قائمتك، لكنه لا يحظر شيئًا.</string>
+    <string name="sched_delete">حذف</string>
+    <string name="sched_create">أنشئ الجدول</string>
+    <string name="sched_name">الاسم</string>
+    <string name="sched_start">البداية</string>
+    <string name="sched_days">الأيام</string>
+    <string name="sched_pick_a_day">اختر يومًا واحدًا على الأقل — وإلا فلن يعمل هذا الجدول أبدًا.</string>
+    <string name="sched_same_time">البداية والنهاية متطابقتان، فلن يعمل هذا أبدًا. لليوم كامل استخدم 00:00 إلى 23:59.</string>
+    <string name="sched_daily_limit">الحدّ اليومي</string>
+    <string name="sched_open_limit">احظر بعد كم فتحة في اليوم</string>
+    <string name="sched_any_wifi">أي شبكة Wi-Fi</string>
+    <string name="sched_wifi_name">اسم شبكة Wi-Fi (SSID)</string>
+    <string name="sched_wifi_needs_location">قراءة اسم شبكة بعينها تحتاج إذن الموقع.</string>
+    <string name="sched_wont_work">هذا الجدول لن يعمل بعد</string>
+    <string name="sched_location">الموقع</string>
+    <string name="sched_location_needed">إذن الموقع لازم للحظر حسب المكان.</string>
+    <string name="sched_grant_location">امنح إذن الموقع</string>
+    <string name="sched_no_location">لم يُلتقط أي موقع بعد.</string>
+
+    <!-- ===================== محرّر الحظر السريع ===================== -->
+    <string name="editor_save">حفظ</string>
+    <string name="editor_allowlist_intro">اختر التطبيقات التي تريد السماح بها. وسيُحظر كل ما عداها.</string>
+    <string name="editor_blocklist_intro">اختر التطبيقات أو المواقع أو الكلمات التي تريد حظرها.</string>
+    <string name="editor_apps">التطبيقات</string>
+    <string name="editor_websites_words">المواقع والكلمات</string>
+    <string name="editor_extra_options">خيارات إضافية</string>
+    <string name="editor_porn_title">حظر المواقع الإباحية</string>
+    <string name="editor_porn_desc">يكتشف مواقع البالغين في متصفحاتك ويحظرها.</string>
+    <string name="editor_newapps_title">أضِف التطبيقات المثبَّتة حديثًا</string>
+    <string name="editor_newapps_desc">تُحظر التطبيقات المثبَّتة حديثًا تلقائيًا.</string>
+    <string name="editor_purchases_title">حظر عمليات الشراء داخل التطبيقات</string>
+    <string name="editor_purchases_desc">يحظر نافذة الشراء من Google Play في الألعاب والتطبيقات.</string>
+    <string name="editor_browsers_title">احظر المتصفحات غير المدعومة</string>
+    <string name="editor_browsers_desc">يحظر المتصفحات التي لا نستطيع فلترتها (مثل Brave) حتى لا تلتفّ على حظر المواقع.</string>
+    <string name="editor_pick_allowed">اختر التطبيقات التي تبقى مفتوحة. وكل ما عداها محظور.</string>
+    <string name="editor_pick_blocked">اختر التطبيقات التي تريد حظرها.</string>
+    <string name="editor_search_apps">ابحث في التطبيقات</string>
+    <string name="editor_loading">يحمّل التطبيقات…</string>
+    <string name="editor_hypothetical">تطبيقات افتراضية</string>
+    <string name="editor_hypothetical_desc">تطبيقات لا تملكها بعد. احظرها الآن وستُحظر لحظة تثبيتها.</string>
+    <string name="editor_not_installed">غير مثبَّت بعد</string>
+    <string name="editor_words_intro">أي عنوان ويب أو بحث يحتوي على واحدة من هذه يُحظر. وهي أيضًا في شاشة الكلمات المحظورة (تبويب الحظر)، حيث تستطيع حظرها داخل التطبيقات كذلك.</string>
+    <string name="editor_add_word_site">أضِف كلمة أو موقعًا</string>
+    <string name="editor_blocking">الحظر</string>
+    <string name="editor_allowlist">قائمة السماح</string>
+    <string name="editor_blocklist">قائمة الحظر</string>
+
+    <!-- ===================== محادثة المدرّب ===================== -->
+    <string name="chat_knows">ما الذي يعرفه مدرّبك</string>
+    <string name="chat_clear">امسح المحادثة</string>
+    <string name="chat_thinking">يفكّر…</string>
+    <string name="chat_clear_title">أتمسح المحادثة؟</string>
+    <string name="chat_clear_confirm">امسح</string>
+    <string name="chat_nothing_yet">لا شيء بعد — كلما تحدثت أكثر، عرفك مدرّبك أفضل.</string>
+    <string name="chat_close">إغلاق</string>
+    <string name="chat_forget">انسَ كل شيء</string>
+    <string name="chat_your_goals">أهدافك</string>
+    <string name="chat_placeholder">راسل مدرّبك…</string>
+    <string name="chat_send">إرسال</string>
 </resources>

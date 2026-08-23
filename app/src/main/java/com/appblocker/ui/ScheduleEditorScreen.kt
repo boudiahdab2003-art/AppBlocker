@@ -77,6 +77,8 @@ import com.appblocker.data.SavedPlace
 import com.appblocker.data.Schedule
 import com.appblocker.data.ScheduleType
 import com.appblocker.service.timeScheduleCanFire
+import androidx.compose.ui.res.stringResource
+import com.appblocker.R
 
 private val DAY_LABELS = listOf("S", "M", "T", "W", "T", "F", "S") // bit0 = Sunday
 
@@ -108,10 +110,10 @@ private fun ScheduleEnabledRow(
         Column(Modifier.weight(1f)) {
             Text(
                 when {
-                    isNew && on -> "Start blocking straight away"
-                    isNew -> "Create it switched off"
-                    on -> "This schedule is on"
-                    else -> "This schedule is off"
+                    isNew && on -> stringResource(R.string.sched_start_now)
+                    isNew -> stringResource(R.string.sched_create_off)
+                    on -> stringResource(R.string.sched_is_on)
+                    else -> stringResource(R.string.sched_is_off)
                 },
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
@@ -121,10 +123,10 @@ private fun ScheduleEnabledRow(
                 when {
                     !canChange -> "Strict Mode is running. A schedule can be switched on while " +
                         "it is, but not off."
-                    isNew && on -> "It'll start working as soon as you create it."
-                    isNew -> "It'll be saved in your list, ready to switch on later."
-                    on -> "It's being enforced right now."
-                    else -> "It's kept in your list, but it isn't blocking anything."
+                    isNew && on -> stringResource(R.string.sched_will_start)
+                    isNew -> stringResource(R.string.sched_saved_off)
+                    on -> stringResource(R.string.sched_enforcing)
+                    else -> stringResource(R.string.sched_kept)
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -179,7 +181,7 @@ fun ScheduleEditorScreen(
             EditorTopBar(typeTitle(type), onBack) {
                 if (existing != null && editable) {
                     IconButton(onClick = { vm.delete(existing); onBack() }) {
-                        Icon(Icons.Filled.Delete, contentDescription = "Delete",
+                        Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.sched_delete),
                             tint = MaterialTheme.colorScheme.error)
                     }
                 }
@@ -187,7 +189,9 @@ fun ScheduleEditorScreen(
         },
         bottomBar = {
             GradientButton(
-                text = if (existing == null) "Create schedule" else "Save",
+                text = stringResource(
+                    if (existing == null) R.string.sched_create else R.string.common_save,
+                ),
                 onClick = {
                     vm.save(
                         (existing ?: Schedule(name = name, type = type)).copy(
@@ -246,7 +250,7 @@ fun ScheduleEditorScreen(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Name") },
+                    label = { Text(stringResource(R.string.sched_name)) },
                     singleLine = true,
                     enabled = editable,
                     modifier = Modifier.fillMaxWidth(),
@@ -257,11 +261,11 @@ fun ScheduleEditorScreen(
             when (type) {
                 ScheduleType.TIME -> item {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        TimeField("Start", start, enabled = editable, modifier = Modifier.weight(1f)) { start = it }
+                        TimeField(stringResource(R.string.sched_start), start, enabled = editable, modifier = Modifier.weight(1f)) { start = it }
                         TimeField("End", end, enabled = editable, modifier = Modifier.weight(1f)) { end = it }
                     }
                     Spacer(Modifier.padding(top = 12.dp))
-                    SectionLabel("Days")
+                    SectionLabel(stringResource(R.string.sched_days))
                     Spacer(Modifier.padding(top = 6.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         DAY_LABELS.forEachIndexed { i, label ->
@@ -276,7 +280,7 @@ fun ScheduleEditorScreen(
                         Spacer(Modifier.padding(top = 8.dp))
                         Text(
                             if ((daysMask and 0b1111111) == 0)
-                                "Pick at least one day — otherwise this schedule would never run."
+                                stringResource(R.string.sched_pick_a_day)
                             else "Start and end are the same, so this would never run. " +
                                 "For a whole day, use 00:00 to 23:59.",
                             style = MaterialTheme.typography.bodyMedium,
@@ -288,7 +292,7 @@ fun ScheduleEditorScreen(
                 ScheduleType.USAGE_LIMIT -> item {
                     val hours = limit / 60
                     val mins = limit % 60
-                    SectionLabel("Daily limit")
+                    SectionLabel(stringResource(R.string.sched_daily_limit))
                     Spacer(Modifier.padding(top = 6.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         StepperField("hours", hours, "h", min = 0, max = 23, step = 1,
@@ -312,7 +316,7 @@ fun ScheduleEditorScreen(
                     Spacer(Modifier.padding(top = 12.dp))
                 }
                 ScheduleType.LAUNCH_COUNT -> item {
-                    SectionLabel("Block after how many opens / day")
+                    SectionLabel(stringResource(R.string.sched_open_limit))
                     Spacer(Modifier.padding(top = 6.dp))
                     StepperField("opens", limitCount, "opens", min = 1, max = 999, step = 1,
                         enabled = editable, modifier = Modifier.fillMaxWidth()) { limitCount = it }
@@ -320,7 +324,7 @@ fun ScheduleEditorScreen(
                 }
                 ScheduleType.WIFI -> item {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Any Wi-Fi network", Modifier.weight(1f),
+                        Text(stringResource(R.string.sched_any_wifi), Modifier.weight(1f),
                             style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground)
                         Switch(checked = anyWifi, enabled = editable, onCheckedChange = { anyWifi = it })
                     }
@@ -328,7 +332,7 @@ fun ScheduleEditorScreen(
                         Spacer(Modifier.padding(top = 6.dp))
                         OutlinedTextField(
                             value = wifiSsid, onValueChange = { wifiSsid = it },
-                            label = { Text("Wi-Fi name (SSID)") }, singleLine = true, enabled = editable,
+                            label = { Text(stringResource(R.string.sched_wifi_name)) }, singleLine = true, enabled = editable,
                             shape = RoundedCornerShape(28.dp), modifier = Modifier.fillMaxWidth(),
                         )
                         // Android refuses to reveal the network name without location access, and
@@ -342,7 +346,7 @@ fun ScheduleEditorScreen(
                             ActivityResultContracts.RequestPermission()
                         ) { /* state re-reads on resume */ }
                         if (hasLoc) {
-                            Text("Reading a specific network's name needs the Location permission.",
+                            Text(stringResource(R.string.sched_wifi_needs_location),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(top = 4.dp))
@@ -354,7 +358,7 @@ fun ScheduleEditorScreen(
                                     .padding(14.dp),
                             ) {
                                 Column {
-                                    Text("This schedule won't work yet",
+                                    Text(stringResource(R.string.sched_wont_work),
                                         style = MaterialTheme.typography.titleSmall,
                                         fontWeight = FontWeight.SemiBold,
                                         color = MaterialTheme.colorScheme.onErrorContainer)
@@ -368,7 +372,9 @@ fun ScheduleEditorScreen(
                                 }
                             }
                             Spacer(Modifier.padding(top = 8.dp))
-                            GradientButton(text = "Grant location access", enabled = editable, onClick = {
+                            GradientButton(
+                            text = stringResource(R.string.sched_grant_location),
+                            enabled = editable, onClick = {
                                 wifiLocLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                             })
                         }
@@ -384,15 +390,17 @@ fun ScheduleEditorScreen(
                         ActivityResultContracts.RequestPermission()
                     ) { /* state re-reads on resume */ }
 
-                    SectionLabel("Location")
+                    SectionLabel(stringResource(R.string.sched_location))
                     Spacer(Modifier.padding(top = 6.dp))
                     if (!hasFine) {
                         Text(
-                            "Location access is needed to block by place.",
+                            stringResource(R.string.sched_location_needed),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.padding(top = 8.dp))
-                        GradientButton(text = "Grant location access", enabled = editable, onClick = {
+                        GradientButton(
+                            text = stringResource(R.string.sched_grant_location),
+                            enabled = editable, onClick = {
                             fineLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                         })
                     } else {
@@ -401,7 +409,7 @@ fun ScheduleEditorScreen(
                         var placeToDelete by remember { mutableStateOf<SavedPlace?>(null) }
 
                         Text(
-                            if (locCaptured) "Captured: %.4f, %.4f".format(lat, lng) else "No location captured yet.",
+                            if (locCaptured) "Captured: %.4f, %.4f".format(lat, lng) else stringResource(R.string.sched_no_location),
                             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.padding(top = 8.dp))
                         GradientButton(text = "Use my current location", enabled = editable, onClick = {
@@ -607,7 +615,7 @@ private fun UsageAccessWarning(onFix: () -> Unit) {
             .padding(14.dp),
     ) {
         Column {
-            Text("This schedule won't work yet",
+            Text(stringResource(R.string.sched_wont_work),
                 style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onErrorContainer)
             Spacer(Modifier.padding(top = 2.dp))
