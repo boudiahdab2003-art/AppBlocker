@@ -1,5 +1,98 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Every word the app says, in English.
+
+  Two rules for anyone editing this file:
+
+  1. **The English wording is load-bearing.** The rendering tests in app/src/androidTest assert on
+     these exact strings and run under the device's default locale. Changing a word here without
+     changing the test that reads it turns a green suite red for a reason that has nothing to do
+     with the change.
+  2. **Counts go in <plurals>, never in a concatenated string.** English needs two forms; Arabic
+     needs six (zero one two few many other). "$n days" cannot be made correct by translation.
+
+  values-ar/strings.xml must carry every key in here — StringResourcesTest fails the build if it
+  does not. A missing key does not error at runtime: it silently falls back to English in the
+  middle of an Arabic sentence.
+-->
 <resources>
     <string name="app_name">AppBlocker</string>
     <string name="accessibility_description">AppBlocker uses this to detect when a blocked app opens, and to check the web address or search text on screen against your blocked sites/keywords, so it can stop them. All screen checking happens on your device; screen content is never stored or sent anywhere. See the privacy policy in the app\'s README for details on the optional AI Coach.</string>
+
+    <!-- ===================== Language picker ===================== -->
+    <string name="language">Language</string>
+    <string name="language_system">Your phone\'s language</string>
+    <string name="language_subtitle">Currently: %1$s. AppBlocker speaks English and Arabic.</string>
+
+    <!-- ===================== The block screen ===================== -->
+    <!-- The chrome, shared by the overlay layouts and the fallback activity. -->
+    <string name="block_title">Blocked</string>
+    <string name="block_got_it">Got it</string>
+    <string name="block_minutes_reclaimed">Minutes reclaimed today</string>
+    <string name="block_generic_message">This is blocked right now.</string>
+    <string name="block_app_message">%1$s is blocked</string>
+
+    <!-- Why the cover is up. Built by service/BlockDecision.kt, which stays free of a Context and
+         resolves these through a lambda the caller supplies. -->
+    <string name="block_locked_title">Locked</string>
+    <plurals name="block_locked_word">
+        <item quantity="one">“%1$s” was found here. Locked for %2$d more min.</item>
+        <item quantity="other">“%1$s” was found here. Locked for %2$d more min.</item>
+    </plurals>
+    <plurals name="block_locked_generic">
+        <item quantity="one">A blocked word was found here. Locked for %1$d more min.</item>
+        <item quantity="other">A blocked word was found here. Locked for %1$d more min.</item>
+    </plurals>
+
+    <string name="block_strict_title">Strict Mode</string>
+    <string name="block_strict_message">Blocked until your Strict session ends.</string>
+    <string name="block_allowlist_message">Only your allowed apps work right now.</string>
+    <string name="block_quick_message">Quick Block is on for this app.</string>
+
+    <string name="block_limit_title">Daily limit reached</string>
+    <plurals name="block_limit_message">
+        <item quantity="one">You\'ve used your %1$d min for today.</item>
+        <item quantity="other">You\'ve used your %1$d min for today.</item>
+    </plurals>
+    <string name="block_limit_zero_message">This app is blocked for today.</string>
+
+    <string name="block_schedule_title">Blocked by schedule</string>
+    <string name="block_schedule_message">%1$s is on until %2$s.</string>
+    <plurals name="block_schedule_usage_message">
+        <item quantity="one">%1$d min used today — the limit set by %2$s.</item>
+        <item quantity="other">%1$d min used today — the limit set by %2$s.</item>
+    </plurals>
+    <string name="block_opens_title">Open limit reached</string>
+    <plurals name="block_opens_message">
+        <item quantity="one">Opened %1$d time today — the limit set by %2$s.</item>
+        <item quantity="other">Opened %1$d times today — the limit set by %2$s.</item>
+    </plurals>
+
+    <string name="block_wifi_title">Blocked on this Wi-Fi</string>
+    <string name="block_wifi_any_message">This app is blocked while you\'re on Wi-Fi.</string>
+    <string name="block_wifi_named_message">This app is blocked on “%1$s”.</string>
+    <string name="block_location_title">Blocked at this location</string>
+    <string name="block_location_message">This app is blocked here by %1$s.</string>
+
+    <string name="block_browser_title">Browser blocked</string>
+    <string name="block_browser_message">This browser can\'t be filtered, so it\'s blocked while word blocking is on.</string>
+
+    <string name="block_offswitch_title">This is your off-switch</string>
+    <string name="block_offswitch_message">Blocking guards this page. You can unlock it in AppBlocker — it takes %1$s.</string>
+    <string name="block_offswitch_strict_title">Locked during Strict Mode</string>
+    <string name="block_offswitch_strict_message">You can\'t change this while Strict Mode is active.</string>
+    <string name="block_purchase_title">Purchase blocked</string>
+    <string name="block_purchase_message">In-app purchases are blocked.</string>
+    <string name="block_shorts_title">Shorts blocked</string>
+    <string name="block_shorts_message">YouTube Shorts is blocked.</string>
+    <string name="block_shorts_web_message">YouTube Shorts is blocked. The rest of YouTube still works.</string>
+
+    <!-- What the web filter caught. -->
+    <string name="block_word_title">Blocked word</string>
+    <string name="block_word_message">“%1$s” is on your blocked list.</string>
+    <string name="block_adult_title">Adult content blocked</string>
+    <string name="block_adult_word_message">“%1$s” is a blocked adult word.</string>
+    <string name="block_adult_search_message">“%1$s” looks like adult content.</string>
+    <string name="block_adult_site_title">Adult site blocked</string>
+    <string name="block_adult_site_message">“%1$s” is on the adult-content list.</string>
 </resources>

@@ -25,6 +25,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
 import com.appblocker.BuildConfig
 import com.appblocker.R
+import com.appblocker.data.AppLocale
 import com.appblocker.data.AppRule
 import com.appblocker.data.AdminPrompt
 import com.appblocker.data.AdminScreens
@@ -75,6 +76,11 @@ import kotlinx.coroutines.withContext
  *    minus a small exclusion set that keeps the phone usable).
  */
 class BlockerAccessibilityService : AccessibilityService() {
+
+    /** The cover's wording in the app's language. A property so every cover in this file reads
+     *  the same way; see [coverWords] for why a Service cannot simply call `getString`. */
+    private val words: BlockWords get() = coverWords(this)
+
 
     // The handler is the safety net for the background scans: without it, an exception inside a
     // launched coroutine reaches the thread's default handler and kills the process — taking all
@@ -1153,12 +1159,14 @@ class BlockerAccessibilityService : AccessibilityService() {
         // Name the actual reason. A cover saying "Strict Mode" on a day with no session running
         // reads as a bug, and sends the owner looking for a session to end that doesn't exist.
         showBlockScreen(
-            title = if (strict) "Locked during Strict Mode" else "This is your off-switch",
+            title = words.get(
+                if (strict) R.string.block_offswitch_strict_title
+                else R.string.block_offswitch_title,
+            ),
             message = if (strict) {
-                "You can't change this while Strict Mode is active."
+                words.get(R.string.block_offswitch_strict_message)
             } else {
-                "Blocking guards this page. You can unlock it in AppBlocker — it takes " +
-                    "${OffSwitchGuard.DELAY_LABEL}."
+                words.get(R.string.block_offswitch_message, OffSwitchGuard.DELAY_LABEL)
             },
             packageName = null,
             counterKey = "strict_guard",
@@ -1336,8 +1344,8 @@ class BlockerAccessibilityService : AccessibilityService() {
         val isPurchase = PURCHASE_HINTS.any { cn.contains(it) }
         if (!isPurchase) return false
         showBlockScreen(
-            title = "Purchase blocked",
-            message = "In-app purchases are blocked.",
+            title = words.get(R.string.block_purchase_title),
+            message = words.get(R.string.block_purchase_message),
             packageName = null,
             counterKey = "purchase",
             why = BlockWhy.PURCHASE,
@@ -1396,6 +1404,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                 },
                 scheduleLabel = ::schedLabel,
                 hourMinuteLabel = ::hm,
+                words = words,
             )
         )
     }
@@ -1914,8 +1923,8 @@ class BlockerAccessibilityService : AccessibilityService() {
                     // page usable in between. As "web" it behaves like every other page block:
                     // held while he is on the page, dismiss-suppressed after "Got it", counted in
                     // Insights' Websites row. The log still says why=shorts.
-                    showBlockScreen(title = "Shorts blocked",
-                        message = "YouTube Shorts is blocked.", packageName = null,
+                    showBlockScreen(title = words.get(R.string.block_shorts_title),
+                        message = words.get(R.string.block_shorts_message), packageName = null,
                         counterKey = CoverGate.WEB_KEY, offenceKey = pkg, why = BlockWhy.SHORTS)
                 } else lastWebText = null // left during the scan — don't cover what's there now
             }
@@ -2074,8 +2083,8 @@ class BlockerAccessibilityService : AccessibilityService() {
                 // window event never arrived, since it asks the window tree rather than the cache.
                 if (lastForegroundPkg == YOUTUBE_PKG && stillOnScreen(YOUTUBE_PKG)) {
                     showBlockScreen(
-                        title = "Shorts blocked",
-                        message = "YouTube Shorts is blocked. The rest of YouTube still works.",
+                        title = words.get(R.string.block_shorts_title),
+                        message = words.get(R.string.block_shorts_web_message),
                         packageName = null,
                         counterKey = CoverGate.SHORTS_KEY, why = BlockWhy.SHORTS,
                     )
@@ -2504,4 +2513,6 @@ class BlockerAccessibilityService : AccessibilityService() {
         private const val UNKNOWN_SSID = "<unknown ssid>"
 
     }
+
+
 }

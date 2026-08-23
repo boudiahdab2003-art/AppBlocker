@@ -33,7 +33,7 @@ class WebContentFilterTest {
         domains: List<String> = emptyList(),
         adultKeywords: List<String> = emptyList(),
         pack: List<String> = emptyList(),
-    ) = WebContentFilter(domains, adultKeywords, pack)
+    ) = WebContentFilter(domains, adultKeywords, pack, EnglishStrings)
 
     // The three answers the address bar can give, short enough to read at a glance in a call.
     private fun at(url: String) = BrowserAddress.At(url)

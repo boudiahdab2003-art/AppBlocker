@@ -1,6 +1,7 @@
 package com.appblocker.service
 
 import android.content.Context
+import com.appblocker.R
 import com.appblocker.data.ServiceHealth
 
 /**
@@ -53,6 +54,16 @@ class WebContentFilter internal constructor(
     private val adultDomains: List<String>,
     private val adultKeywords: List<String>,
     private val packWords: List<String>,
+    /**
+     * The cover's wording, in the app's language.
+     *
+     * A constructor parameter rather than a lookup, so the unit tests — which build this
+     * directly — can hand it the shipped English resources and keep asserting on real wording.
+     * Production passes [coverWords], backed by [com.appblocker.data.AppLocale.wrap]: a filter
+     * that formatted its hits with the *phone's* locale would put an English line on an otherwise
+     * Arabic block screen.
+     */
+    private val words: BlockWords,
 ) {
     /** [site] = matched because the user blocked an app and this is that app's WEBSITE (not a
      *  typed word). Callers treat site hits more gently (cover the page, but don't lock the
@@ -125,7 +136,10 @@ class WebContentFilter internal constructor(
                 // loose UI text that merely contains it ("instagrammer", icon labels).
                 val kw = k.trim().lowercase()
                 if (kw.isNotEmpty() && containsWord(lower, kw)) {
-                    return Hit("Blocked word", "“$kw” is on your blocked list.", kw)
+                    return Hit(
+                        words.get(R.string.block_word_title),
+                        words.get(R.string.block_word_message, kw), kw,
+                    )
                 }
             }
             // Site keywords are deliberately skipped with no URL: "block the website, not the
@@ -141,7 +155,10 @@ class WebContentFilter internal constructor(
             val norm = normalizeArabic(lower)
             for (w in packWords) {
                 if (containsWord(norm, w)) {
-                    return Hit("Adult content blocked", "“$w” is a blocked adult word.", w, adult = true)
+                    return Hit(
+                        words.get(R.string.block_adult_title),
+                        words.get(R.string.block_adult_word_message, w), w, adult = true,
+                    )
                 }
             }
         }
@@ -167,10 +184,16 @@ class WebContentFilter internal constructor(
      *  could not be argued with, and the report could not be acted on. The word stays on the
      *  device: [com.appblocker.data.BlockLog] and the bug report still carry no subjects. */
     private fun adultSiteHit(domain: String) =
-        Hit("Adult site blocked", "“$domain” is on the adult-content list.", domain, adult = true)
+        Hit(
+            words.get(R.string.block_adult_site_title),
+            words.get(R.string.block_adult_site_message, domain), domain, adult = true,
+        )
 
     private fun adultSearchHit(word: String) =
-        Hit("Adult content blocked", "“$word” looks like adult content.", word, adult = true)
+        Hit(
+            words.get(R.string.block_adult_title),
+            words.get(R.string.block_adult_search_message, word), word, adult = true,
+        )
 
     /**
      * The two layers that need nothing but the address bar: the user's own words, then the
@@ -189,7 +212,10 @@ class WebContentFilter internal constructor(
             // "instagram.com/reels" while "instagrammer" doesn't.
             val kw = k.trim().lowercase()
             if (kw.isNotEmpty() && containsWord(host, kw)) {
-                return Hit("Blocked word", "“$kw” is on your blocked list.", kw)
+                return Hit(
+                        words.get(R.string.block_word_title),
+                        words.get(R.string.block_word_message, kw), kw,
+                    )
             }
         }
         for (k in siteKeywords) {
@@ -221,7 +247,10 @@ class WebContentFilter internal constructor(
             val norm = normalizeArabic(lower)
             for (w in packWords) {
                 if (containsWord(norm, w)) {
-                    return Hit("Adult content blocked", "“$w” is a blocked adult word.", w, adult = true)
+                    return Hit(
+                        words.get(R.string.block_adult_title),
+                        words.get(R.string.block_adult_word_message, w), w, adult = true,
+                    )
                 }
             }
         }
@@ -268,7 +297,10 @@ class WebContentFilter internal constructor(
                     val keywords = readLines(context, "adult_keywords.txt")
                     val pack = readLines(context, "adult_words_pack.txt")?.map(::normalizeArabic)
                     val loaded = domains != null && keywords != null && pack != null
-                    WebContentFilter(domains.orEmpty(), keywords.orEmpty(), pack.orEmpty())
+                    WebContentFilter(
+                        domains.orEmpty(), keywords.orEmpty(), pack.orEmpty(),
+                        words = coverWords(context),
+                    )
                         .also { if (loaded) INSTANCE = it }
                 }
             }

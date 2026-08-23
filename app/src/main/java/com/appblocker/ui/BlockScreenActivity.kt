@@ -1,5 +1,6 @@
 package com.appblocker.ui
 
+import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
@@ -35,6 +36,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -42,6 +44,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
+import com.appblocker.R
+import com.appblocker.data.AppLocale
 import com.appblocker.data.AppIcons
 import com.appblocker.data.AttemptCounter
 import com.appblocker.data.BlockArrangement
@@ -55,11 +59,22 @@ import com.appblocker.ui.theme.AppGradients
 
 /** Full-screen page shown when a blocked app or web page is opened. */
 class BlockScreenActivity : ComponentActivity() {
+    /**
+     * The chosen language, applied before anything is laid out.
+     *
+     * One line per Activity is the whole of it here; the half that needs remembering is everything
+     * the accessibility service draws, which never passes through this and has to be wrapped by
+     * hand. See [com.appblocker.data.AppLocale].
+     */
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(AppLocale.wrap(newBase))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         val pkg = intent.getStringExtra(EXTRA_PACKAGE)
-        val title = intent.getStringExtra(EXTRA_TITLE) ?: "Blocked"
+        val title = intent.getStringExtra(EXTRA_TITLE) ?: getString(R.string.block_title)
         // Every dodged open counts as ~3 minutes of life back (mirrors the overlay).
         val reclaimedMinutes = AttemptCounter.totalToday(this) * 3
 
@@ -67,8 +82,8 @@ class BlockScreenActivity : ComponentActivity() {
         val appLabel = pkg?.let { loadLabel(it) }
         val appIcon = pkg?.let { loadIcon(it) }
         val message = intent.getStringExtra(EXTRA_MESSAGE)
-            ?: appLabel?.let { "$it is blocked" }
-            ?: "This is blocked right now."
+            ?: appLabel?.let { getString(R.string.block_app_message, it) }
+            ?: getString(R.string.block_generic_message)
         val quote = Quotes.random()
 
         // Leaving the block screen should go to the home screen, never back to
@@ -282,6 +297,6 @@ private fun BlockScreen(
             )
         }
 
-        GradientButton(text = "Got it", onClick = onClose)
+        GradientButton(text = stringResource(R.string.block_got_it), onClick = onClose)
     }
 }

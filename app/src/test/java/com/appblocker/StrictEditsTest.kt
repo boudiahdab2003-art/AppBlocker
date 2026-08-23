@@ -110,7 +110,7 @@ class StrictEditsTest {
      */
     @Test
     fun `a covered word never blocked an address its site word does not`() {
-        val filter = WebContentFilter(emptyList(), emptyList(), emptyList())
+        val filter = WebContentFilter(emptyList(), emptyList(), emptyList(), EnglishStrings)
         val addresses = listOf(
             "instagram.com", "www.instagram.com/reels", "m.instagram.com/p/abc",
             "instagram.com.evil.example", "example.com/instagram.com", "notinstagram.com",
@@ -131,7 +131,7 @@ class StrictEditsTest {
 
     @Test
     fun `an uncovered word has an address that proves it - the word itself`() {
-        val filter = WebContentFilter(emptyList(), emptyList(), emptyList())
+        val filter = WebContentFilter(emptyList(), emptyList(), emptyList(), EnglishStrings)
         val word = "insta"
         assertNull(StrictEdits.coveringSiteWord(word, instagramWords))
         assertTrue(filter.checkUrl(word, listOf(word), emptyList()) != null)

@@ -1,6 +1,7 @@
 package com.appblocker.ui
 
 import android.content.Context
+import android.app.Activity
 import android.content.Intent
 import android.provider.Settings
 import android.widget.Toast
@@ -41,6 +42,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Timelapse
@@ -74,12 +76,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.appblocker.Dist
+import com.appblocker.R
 import com.appblocker.data.AppIcons
+import com.appblocker.data.AppLocale
 import com.appblocker.data.AttemptCounter
 import com.appblocker.data.BlockLayouts
 import com.appblocker.data.BlockThemes
@@ -177,6 +182,8 @@ fun ProfileScreen(
     // re-runs this `remember` and picks the new name up. resumeTick covers the rest.
     val userName = remember(resumeTick) { SettingsStore.userName(context) }
     var showTheme by remember { mutableStateOf(false) }
+    var showLanguage by remember { mutableStateOf(false) }
+    val languageTag = remember(resumeTick) { AppLocale.tag(context) }
     var currentIcon by remember { mutableStateOf(AppIcons.current(context)) }
     // resumeTick so the row updates after returning from the picker.
     val currentBlockTheme = remember(resumeTick) { BlockThemes.current(context) }
@@ -488,6 +495,21 @@ fun ProfileScreen(
         SectionTitle("Appearance")
         SettingCard {
             ProfileRow(
+                icon = Icons.Filled.Language,
+                title = stringResource(R.string.language),
+                subtitle = stringResource(
+                    R.string.language_subtitle,
+                    if (languageTag.isEmpty()) stringResource(R.string.language_system)
+                    else AppLocale.label(languageTag),
+                ),
+                chevron = true,
+                // Never locked by Strict Mode. Reading the app in a language you understand is
+                // not a protection you can weaken.
+                enabled = true,
+                onClick = { showLanguage = true },
+            )
+            Divider()
+            ProfileRow(
                 icon = Icons.Filled.DarkMode,
                 title = "Appearance",
                 subtitle = "Theme: ${themeModeLabel(themeController.mode)}.",
@@ -703,6 +725,19 @@ fun ProfileScreen(
             },
         )
     }
+    if (showLanguage) {
+        LanguageDialog(
+            current = languageTag,
+            onSelect = { tag ->
+                AppLocale.set(context, tag)
+                showLanguage = false
+                // The whole window has to be laid out again: every string on screen was resolved
+                // at composition, and on an Arabic phone the layout direction flips too.
+                (context as? Activity)?.recreate()
+            },
+            onDismiss = { showLanguage = false },
+        )
+    }
     if (showTheme) {
         ThemeDialog(
             current = themeController.mode,
@@ -716,6 +751,50 @@ private fun themeModeLabel(mode: String): String = when (mode) {
     "light" -> "Light"
     "dark" -> "Dark"
     else -> "System default"
+}
+
+/**
+ * The language picker.
+ *
+ * **Each language names itself.** "Arabic" written in English is no help to the person most likely
+ * to be looking for this row — they are looking for it precisely because they cannot read the
+ * screen it is on. Only the "follow your phone" row is translated, because it is the only one whose
+ * meaning is about the phone rather than about a language.
+ */
+@Composable
+private fun LanguageDialog(current: String, onSelect: (String) -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        title = { Text(stringResource(R.string.language)) },
+        text = {
+            Column {
+                AppLocale.CHOICES.forEach { tag ->
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                            .clickable { onSelect(tag) }
+                            .padding(vertical = 14.dp, horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            if (tag.isEmpty()) stringResource(R.string.language_system)
+                            else AppLocale.label(tag),
+                            Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        if (tag == current) {
+                            Icon(
+                                Icons.Filled.Check, contentDescription = "Selected",
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+                }
+            }
+        },
+    )
 }
 
 /** Three-way theme picker: follow the phone, or force Light / Dark. */
