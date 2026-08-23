@@ -63,6 +63,7 @@ in a real report. That is how Huawei, Oppo and Vivo get answered without anyone 
 |---|---|---|
 | Emulator (stock, API 34) | `com.android.settings/Settings$AccessibilitySettingsActivity` | n/a — the generic wording |
 | **Samsung** Galaxy A36, One UI 8 | `com.android.settings/Settings$AccessibilitySettingsActivity` — **identical to stock** | ✅ **Settings ▸ Accessibility ▸ Installed apps**, photographed 23 Aug 2026 |
+| **Xiaomi** (owner's, HyperOS) | — | ✅ **Settings ▸ Accessibility ▸ Downloaded apps**, from the owner's own screenshot 23 Aug 2026 — the shipped path had an extra **Additional settings** step that HyperOS no longer has |
 | Everything else | — | **not yet measured** |
 
 ## How a row gets filled in

@@ -131,7 +131,12 @@ object DeviceVendor {
                 "com.miui.permcenter.autostart.AutoStartManagementActivity",
         ),
         clonedAppsFeature = "Second Space or Dual Apps",
-        accessibilityPath = "Settings ▸ Additional settings ▸ Accessibility ▸ Downloaded apps",
+        accessibilityPath = "Settings ▸ Accessibility ▸ Downloaded apps",
+        // Read off the owner's own HyperOS phone, 23 Aug 2026. The guess had an extra level in
+        // it — "Additional settings" — which is where older MIUI kept Accessibility and where
+        // HyperOS no longer does. A path with a step that does not exist is exactly how a
+        // stuck person concludes the app is describing someone else's phone.
+        accessibilityPathMeasured = true,
         spacesWarning = "Switching to Second Space and back shuts AppBlocker down in this " +
             "space, and Android's switch still says it's on. Lock AppBlocker in Recents (swipe " +
             "down on its card), allow Auto-start, and set Battery saver to “No restrictions”. " +

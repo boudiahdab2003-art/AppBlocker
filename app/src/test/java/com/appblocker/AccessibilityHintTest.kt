@@ -21,8 +21,9 @@ class AccessibilityHintTest {
 
     @Test
     fun `an unmeasured brand is offered as a likelihood, never as a fact`() {
-        // Samsung is absent on purpose: it HAS been measured now, and has its own case below.
-        for (brand in listOf("Xiaomi", "Huawei", "Oppo", "Vivo")) {
+        // Samsung and Xiaomi are absent on purpose: both have been measured on real phones and
+        // have their own case below. These three still have not.
+        for (brand in listOf("Huawei", "Oppo", "Vivo")) {
             val hint = hintFor(brand)
             assertTrue(
                 "$brand: an unmeasured path must be hedged, not asserted — got: $hint",
@@ -79,10 +80,26 @@ class AccessibilityHintTest {
      */
     @Test
     fun `a measured brand is stated as fact`() {
-        val hint = hintFor("Samsung")
+        for ((brand, section) in mapOf("Samsung" to "Installed apps", "Xiaomi" to "Downloaded apps")) {
+            val hint = hintFor(brand)
+            assertTrue("$brand was measured; say so — got: $hint", hint.contains("On your phone"))
+            assertTrue("$brand: wrong section — got: $hint", hint.contains(section))
+            assertFalse("stop hedging a checked fact — got: $hint", hint.contains("On most"))
+        }
+    }
 
-        assertTrue("Samsung was measured; say so — got: $hint", hint.contains("On your phone"))
-        assertTrue(hint.contains("Installed apps"))
-        assertFalse("stop hedging a checked fact — got: $hint", hint.contains("On most"))
+    /**
+     * **The correction that paid for the exercise.** Xiaomi's path was written as "Settings ▸
+     * Additional settings ▸ Accessibility ▸ Downloaded apps" — where older MIUI kept it. On the
+     * owner's own HyperOS phone Accessibility sits at the top level, so the sentence contained a
+     * step that does not exist. That is how a stuck person concludes the app is describing
+     * somebody else's phone.
+     */
+    @Test
+    fun `Xiaomi is not sent through a menu that no longer exists`() {
+        val hint = hintFor("Xiaomi")
+
+        assertFalse("HyperOS has no Additional settings step — got: $hint",
+            hint.contains("Additional settings"))
     }
 }
