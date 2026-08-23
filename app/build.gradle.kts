@@ -153,6 +153,9 @@ dependencies {
     androidTestImplementation(composeBom)
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    // GrantPermissionRule. Without it the notification tests assume-away in CI, where the app
+    // is installed with no runtime permissions — green, and testing nothing.
+    androidTestImplementation("androidx.test:rules:1.5.0")
     // Supplies the bare ComponentActivity that createComposeRule() hosts the composable in.
     // debugImplementation, not androidTestImplementation: it contributes a manifest entry, which
     // has to be merged into the app under test rather than into the test APK.

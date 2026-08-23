@@ -64,9 +64,57 @@ data class VendorAdvice(
      * would be the kind of claim this project has learnt costs a release to walk back.
      */
     val spacesWarning: String? = null,
+
+    /**
+     * Where this brand hides the accessibility list, in its own words.
+     *
+     * **The wizard cannot follow the user into Settings**, so the last thing it can do is name
+     * the destination exactly. The default is stock Android's; every brand that renames or
+     * buries the page overrides it. Wrong here costs one wrong sentence, never a blocking
+     * decision — the same bargain the rest of this file makes.
+     */
+    val accessibilityPath: String = "Settings ▸ Accessibility",
+
+    /**
+     * Whether [accessibilityPath] has ever been read off a phone of this brand, or is still
+     * somebody's recollection.
+     *
+     * **Every brand path here started as the second kind, and this project has been burned by
+     * exactly that before** — `com.samsung.android.packageinstaller` was believed for a year
+     * and measured wrong in twenty minutes. A wrong menu path does not fail silently, but it
+     * does send a stuck person to a screen that isn't there, which is the moment setup is
+     * abandoned. So an unmeasured path is offered as a likelihood ('on most Samsungs…') with
+     * the search-box fallback beside it, and a measured one is stated plainly.
+     *
+     * Flip a brand to true only when a real phone of it has been seen — a lab session, or an
+     * `accessibilityScreen` line in a profile report (see [DeviceProfile]).
+     */
+    val accessibilityPathMeasured: Boolean = false,
 )
 
 object DeviceVendor {
+
+    /**
+     * How to tell someone where the accessibility list lives, without claiming more than we
+     * know.
+     *
+     * **The search box is the part that is always true.** Every Android Settings app has one,
+     * on every brand and every version, and typing "Accessibility" into it works even where
+     * the menu has been renamed or moved — so it is the one instruction that cannot go stale,
+     * and it is what an unmeasured brand leans on.
+     */
+    fun accessibilityHint(advice: VendorAdvice): String = when {
+        advice.brand.isBlank() ->
+            "Open Settings, tap the search icon, and type Accessibility."
+        // Stated as fact, because somebody went and looked — but the search box stays. A brand is
+        // one OS update away from moving its own menu, and the fallback costs one sentence.
+        advice.accessibilityPathMeasured ->
+            "On your phone the list is at ${advice.accessibilityPath}. If you can't see it, " +
+                "open Settings, tap the search icon, and type Accessibility."
+        else ->
+            "On most ${advice.brand} phones it is at ${advice.accessibilityPath}. If it " +
+                "isn't there, open Settings, tap the search icon, and type Accessibility."
+    }
 
     private val XIAOMI = VendorAdvice(
         brand = "Xiaomi",
@@ -83,6 +131,12 @@ object DeviceVendor {
                 "com.miui.permcenter.autostart.AutoStartManagementActivity",
         ),
         clonedAppsFeature = "Second Space or Dual Apps",
+        accessibilityPath = "Settings ▸ Accessibility ▸ Downloaded apps",
+        // Read off the owner's own HyperOS phone, 23 Aug 2026. The guess had an extra level in
+        // it — "Additional settings" — which is where older MIUI kept Accessibility and where
+        // HyperOS no longer does. A path with a step that does not exist is exactly how a
+        // stuck person concludes the app is describing someone else's phone.
+        accessibilityPathMeasured = true,
         spacesWarning = "Switching to Second Space and back shuts AppBlocker down in this " +
             "space, and Android's switch still says it's on. Lock AppBlocker in Recents (swipe " +
             "down on its card), allow Auto-start, and set Battery saver to “No restrictions”. " +
@@ -104,6 +158,10 @@ object DeviceVendor {
             "com.samsung.android.lool" to "com.samsung.android.sm.battery.ui.BatteryActivity",
         ),
         clonedAppsFeature = "Secure Folder or Dual Messenger",
+        accessibilityPath = "Settings ▸ Accessibility ▸ Installed apps",
+        // Read off a Galaxy A36 running One UI 8 on 23 Aug 2026, not recalled: the screen has
+        // an "Installed apps" row and AppBlocker is inside it. See docs/DEVICE_MATRIX.md.
+        accessibilityPathMeasured = true,
         spacesWarning = "Coming back from Secure Folder, or switching between users, can stop " +
             "AppBlocker while Android's switch still says it's on. Add AppBlocker to “Never " +
             "sleeping apps” and lock it in Recents to make that rarer.",
@@ -123,6 +181,7 @@ object DeviceVendor {
                 "com.huawei.systemmanager.optimize.process.ProtectActivity",
         ),
         clonedAppsFeature = "App Twin or PrivateSpace",
+        accessibilityPath = "Settings ▸ Accessibility features ▸ Accessibility",
     )
 
     private val OPPO = VendorAdvice(
@@ -139,6 +198,7 @@ object DeviceVendor {
             "com.oplus.battery" to "com.oplus.powermanager.fuelgaue.PowerConsumptionActivity",
         ),
         clonedAppsFeature = "App Clone",
+        accessibilityPath = "Settings ▸ Additional settings ▸ Accessibility ▸ Downloaded apps",
     )
 
     private val VIVO = VendorAdvice(
@@ -154,6 +214,7 @@ object DeviceVendor {
             "com.iqoo.secure" to "com.iqoo.secure.ui.phoneoptimize.BgStartUpManager",
         ),
         clonedAppsFeature = "App Clone",
+        accessibilityPath = "Settings ▸ Shortcuts & accessibility ▸ Accessibility",
     )
 
     /**

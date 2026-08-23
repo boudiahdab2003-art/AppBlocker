@@ -39,6 +39,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -55,10 +56,15 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.appblocker.Dist
+import com.appblocker.data.DeviceVendor
 import com.appblocker.data.DisplayName
 import com.appblocker.data.SettingsStore
+import com.appblocker.data.SetupGuides
+import com.appblocker.service.SetupStepsNotifier
+import com.appblocker.ui.theme.AppShapes
 import com.appblocker.ui.theme.AppGradients
 import com.appblocker.ui.theme.appBackground
 
@@ -180,11 +186,17 @@ private fun StepScaffold(
     }
 }
 
-/** Big circular icon used at the top of each step. */
+/**
+ * Big circular icon used at the top of each step.
+ *
+ * [size] exists because the permission steps cannot afford it at full height: they carry the
+ * picture guide, and at 96dp the decoration pushed the first instruction below the fold on an
+ * ordinary phone — so the person who does not scroll saw a button and nothing to press it about.
+ */
 @Composable
-private fun StepIcon(icon: ImageVector, granted: Boolean = false) {
+private fun StepIcon(icon: ImageVector, granted: Boolean = false, size: Dp = 96.dp) {
     Box(
-        Modifier.size(96.dp).clip(CircleShape)
+        Modifier.size(size).clip(CircleShape)
             .background(
                 if (granted) MaterialTheme.colorScheme.primary
                 else MaterialTheme.colorScheme.primaryContainer
@@ -195,7 +207,7 @@ private fun StepIcon(icon: ImageVector, granted: Boolean = false) {
             if (granted) Icons.Filled.Check else icon,
             contentDescription = null,
             tint = if (granted) Color.White else MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(48.dp),
+            modifier = Modifier.size(size / 2),
         )
     }
 }
@@ -357,47 +369,151 @@ private fun CoachFeatureRow(icon: ImageVector, title: String, desc: String) {
     }
 }
 
+/** Internal rather than private so the rendering test can measure the real step — whether the
+ *  first picture is on screen without scrolling is the whole point of this screen's layout. */
 @Composable
-private fun EssentialStep(
+internal fun EssentialStep(
     perm: Perm,
     onContinue: () -> Unit,
     onSkip: () -> Unit,
     onRequestDisclosure: (() -> Unit) -> Unit,
 ) {
     val icon = if (perm.key == "accessibility") Icons.Filled.Shield else Icons.Filled.Visibility
+    val guide = remember(perm.key) {
+        SetupGuides.forPermission(perm.key, DeviceVendor.advice().brand)
+    }
+
+    // **Did they go to Settings and come back without it working?** Until now that produced the
+    // identical screen with nothing to say they had failed, which is the single most likely place
+    // for a first-time user to give up — they cannot tell "I did it wrong" from "this app is
+    // broken". `resumeTick` already counts returns to the app; comparing the count taken when
+    // Grant was pressed against the current one is what separates "still here" from "been and
+    // come back". Plain `remember`, not `rememberSaveable`, deliberately: the tick itself resets
+    // if the process is killed in Settings, and a saved attempt marker would then outlive its
+    // counter and accuse someone who has only just arrived.
+    val tick = resumeTick()
+    var attemptTick by remember(perm.key) { mutableIntStateOf(NO_ATTEMPT) }
+    val attempt = setupAttempt(attemptTick, tick, perm.granted)
+    val stuck = attempt == SetupAttempt.STUCK
+    val justSucceeded = attempt == SetupAttempt.SUCCEEDED
+
+    val context = LocalContext.current
+    val grant = gatedFix(perm, onRequestDisclosure)
+    // **The steps go with them.** Once Settings opens, this screen is behind them and every
+    // picture on it is out of reach; a notification is the only channel that still carries the
+    // instructions there (see SetupStepsNotifier for why an overlay is not).
+    val grantAndRemember = {
+        attemptTick = tick
+        guide?.let { SetupStepsNotifier.show(context, it, stepHeadline(perm)) }
+        grant()
+    }
+
+    // Down again the moment they are back, whether it worked or not — and when the step is
+    // left by any route at all, so a half-finished setup cannot leave litter in the shade.
+    DisposableEffect(tick, perm.granted) {
+        if (attempt != SetupAttempt.NONE || perm.granted) SetupStepsNotifier.clear(context)
+        onDispose { SetupStepsNotifier.clear(context) }
+    }
+
     StepScaffold(footer = {
         if (perm.granted) {
             GradientButton(text = "Continue", onClick = onContinue)
         } else {
-            GradientButton(text = "Grant", onClick = gatedFix(perm, onRequestDisclosure))
+            // The button says what pressing it does. "Grant" is this app's word for it, not the
+            // reader's, and it gives no hint that the next thing to happen is being moved into a
+            // different app entirely.
+            GradientButton(
+                text = when {
+                    stuck -> "Try again"
+                    // Accessibility shows the disclosure first (gatedFix), so "Open Settings"
+                    // would promise a screen that is one tap further away than it says.
+                    perm.key == ACCESSIBILITY_PERM -> "Turn on blocking"
+                    else -> "Open Settings"
+                },
+                onClick = grantAndRemember,
+            )
             Spacer(Modifier.height(8.dp))
             TextButton(onClick = onSkip) {
                 Text("Skip for now", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }) {
-        Spacer(Modifier.height(8.dp))
-        StepIcon(icon, granted = perm.granted)
-        Spacer(Modifier.height(24.dp))
+        // Half height, and no "Required" chip while it is still off: between them they were ~130dp
+        // of decoration above the first instruction, which is exactly the difference between a
+        // picture being on screen and being below the fold. The chip stays for the granted case,
+        // where it is the reward rather than a label repeating the sentence underneath it.
+        Spacer(Modifier.height(4.dp))
+        StepIcon(icon, granted = perm.granted, size = 56.dp)
+        Spacer(Modifier.height(14.dp))
         Text(
-            perm.label,
+            stepHeadline(perm),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Center,
         )
-        Spacer(Modifier.height(8.dp))
-        StatusChip(granted = perm.granted, requiredLabel = "Required")
-        Spacer(Modifier.height(16.dp))
+        if (perm.granted) {
+            Spacer(Modifier.height(8.dp))
+            StatusChip(granted = true, requiredLabel = "Required")
+        }
+        Spacer(Modifier.height(10.dp))
         Text(
             perm.desc,
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
+        if (justSucceeded) {
+            Spacer(Modifier.height(16.dp))
+            Text(
+                "That's it — it's on. Tap Continue.",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.testTag(SETUP_SUCCESS_TAG),
+            )
+        }
+        if (stuck) {
+            Spacer(Modifier.height(20.dp))
+            StuckNote(perm.key)
+        }
+        // The pictures of the screen they are about to land on. Not shown once the permission is
+        // on: at that point they are a wall of instructions for something already done.
+        //
+        // **Above the greyed-out note deliberately.** These are the main path, that note is a
+        // contingency for one Android version, and it is four paragraphs long — putting it first
+        // pushed the pictures off the bottom of the screen, so the person who needs them most
+        // (the one who does not read four paragraphs) never saw them.
+        if (!perm.granted && guide != null) {
+            Spacer(Modifier.height(20.dp))
+            // **The two lines that were missing entirely.** A heading, so it is obvious at a glance
+            // that instructions exist below — and a warning that the button moves them into a
+            // different app, which is the most disorienting moment in the whole product and was
+            // never mentioned anywhere on this screen.
+            Text(
+                "What to do in Settings — ${guide.shots.size} steps",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "The button below leaves AppBlocker and opens your phone's own Settings. Do these, " +
+                    "then come straight back here — this screen will tell you if it worked. " +
+                    "The steps go with you: swipe down from the top of the screen to see them " +
+                    "again while you're in Settings.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(14.dp))
+            SetupGuideStrip(guide)
+        }
         // The dead end this wizard walks new users straight into on Android 13+: Grant opens the
-        // Accessibility page, and the toggle is greyed out with no explanation. Shown under the
-        // description so it is on screen *before* they press Grant and conclude it's broken.
+        // Accessibility page, and the toggle is greyed out with no explanation. Still on screen
+        // *before* they press Grant and conclude it's broken — just after the pictures.
         if (perm.key == ACCESSIBILITY_PERM &&
             needsRestrictedSettingsNote(
                 Build.VERSION.SDK_INT,
@@ -408,6 +524,66 @@ private fun EssentialStep(
             Spacer(Modifier.height(20.dp))
             RestrictedSettingsNote()
         }
+    }
+}
+
+
+const val SETUP_SUCCESS_TAG = "setup_success"
+const val SETUP_STUCK_TAG = "setup_stuck"
+
+/**
+ * The headline for a permission step, in the reader's words rather than Android's.
+ *
+ * **The Android name is not thrown away — it moves.** "Accessibility" and "Display over other apps"
+ * are meaningless as a promise of what the app will do for you, and essential as the label to hunt
+ * for once you are inside Settings. So the headline states the benefit and [Perm.desc] names the
+ * setting; the OS's vocabulary in the biggest text on the screen served neither purpose.
+ *
+ * Falls back to the permission's own label, so a permission added later is never headline-less.
+ */
+private fun stepHeadline(perm: Perm): String = when (perm.key) {
+    // Deliberately not the button's words ("Turn on blocking"): a headline repeating its own button
+    // tells the reader nothing new. This one states the size of the job, which is the reassuring
+    // part — it really is one switch.
+    ACCESSIBILITY_PERM -> "Blocking needs one switch"
+    "overlay" -> "Let the block screen show"
+    else -> perm.label
+}
+
+/**
+ * Shown only after someone has gone to Settings and come back with the permission still off.
+ *
+ * It has to do one thing before anything else: say that **nothing is broken**. Everything else on
+ * this screen looks identical to the first visit, so without this the reasonable conclusion is
+ * that the app does not work — and that conclusion is the end of the setup.
+ */
+@Composable
+private fun StuckNote(permKey: String) {
+    Column(
+        Modifier.fillMaxWidth().clip(AppShapes.card)
+            .background(MaterialTheme.colorScheme.surface).padding(18.dp)
+            .testTag(SETUP_STUCK_TAG),
+    ) {
+        Text(
+            "Not switched on yet",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            if (permKey == ACCESSIBILITY_PERM) {
+                "Nothing is broken — this screen is easy to miss. " +
+                    DeviceVendor.accessibilityHint(DeviceVendor.advice()) +
+                    " Tap “Try again” and follow the pictures below; the row you are looking for " +
+                    "is called AppBlocker."
+            } else {
+                "Nothing is broken — that list is easy to miss. Tap “Try again”, find AppBlocker " +
+                    "in the list, and turn its switch on."
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -494,24 +670,28 @@ private fun DoneStep(grantedEssentials: Int, totalEssentials: Int, onFinish: () 
         Spacer(Modifier.height(24.dp))
         StepIcon(Icons.Filled.Shield, granted = allEssential)
         Spacer(Modifier.height(28.dp))
+        // **"Almost there" was what this said when blocking would not work at all**, under a line
+        // counting "essential permissions enabled" — a phrase nobody outside this repo uses. If
+        // someone skipped the switch, the last thing they see has to say so in words they cannot
+        // misread, because everything after this screen quietly does nothing.
         Text(
-            if (allEssential) "You're all set" else "Almost there",
+            if (allEssential) "You're all set" else "Blocking is not on yet",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = if (allEssential) MaterialTheme.colorScheme.onSurface
+            else MaterialTheme.colorScheme.error,
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(12.dp))
         Text(
-            "$grantedEssentials of $totalEssentials essential permissions enabled.",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            if (allEssential) "AppBlocker can now block reliably. Start adding apps to block."
-            else "You can finish granting these any time from the “Finish setup” banner.",
+            if (allEssential) {
+                "AppBlocker can now block reliably. Start adding apps to block."
+            } else {
+                "You skipped ${totalEssentials - grantedEssentials} of the $totalEssentials " +
+                    "switches AppBlocker needs, so nothing will be blocked yet. You can finish " +
+                    "any time — tap “Finish setup” on the home screen, and it will show you the " +
+                    "pictures again."
+            },
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,

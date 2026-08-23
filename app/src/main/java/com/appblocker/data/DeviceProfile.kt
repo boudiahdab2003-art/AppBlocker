@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.provider.Settings
 import com.appblocker.service.GuardPackages
 import com.appblocker.service.KNOWN_BROWSERS
 import com.appblocker.service.KNOWN_READABLE_BROWSERS
@@ -62,6 +63,31 @@ object DeviceProfile {
     }.getOrNull()
 
     /**
+     * Which Settings screen the **Grant** button actually lands on here, as `package/ShortClass`.
+     *
+     * **This is the measurement that replaces a guess.** The setup guide tells people where their
+     * brand of phone keeps the accessibility list, and every one of those sentences was written
+     * from knowledge rather than from looking at a phone — precisely the kind of claim this
+     * project has already had to walk back once (`com.samsung.android.packageinstaller`, believed
+     * for a year, measured wrong in twenty minutes).
+     *
+     * No API exposes a menu's *label*, so this cannot read "Installed apps" off the screen. What it
+     * can read is the activity that handles the intent, and that is enough to tell the phones
+     * apart: an OEM that has rebuilt its accessibility screen answers with its own class name.
+     * Reported from every phone the app runs on, so the brands nobody here will ever own fill in
+     * the table themselves.
+     *
+     * Null means the intent resolves nowhere — Grant would go nowhere — which is worth hearing
+     * loudly rather than discovering from a confused user.
+     */
+    fun accessibilityScreen(context: Context): String? = runCatching {
+        context.packageManager
+            .resolveActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS), 0)
+            ?.activityInfo
+            ?.let { "${it.packageName}/${it.name.substringAfterLast('.')}" }
+    }.getOrNull()
+
+    /**
      * The first keep-alive deep link that exists on this phone, or null if none did.
      *
      * Null means two different things and the caller must keep them apart: [VendorAdvice.deepLinks]
@@ -106,6 +132,7 @@ object DeviceProfile {
         buildMap {
             put("brand", advice.brand.ifBlank { "(unrecognised — generic advice)" })
             put("uninstallHandler", handler ?: "(did not resolve)")
+            put("accessibilityScreen", accessibilityScreen(context) ?: "NONE RESOLVED")
             put(
                 "uninstallGuard",
                 uninstallGuardVerdict(handler, GuardPackages.INSTALLERS).name,

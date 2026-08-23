@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.appblocker.Dist
 import com.appblocker.data.DeviceVendor
+import com.appblocker.data.SetupGuides
 import com.appblocker.service.ProtectionNotifier
 import com.appblocker.ui.theme.AppShapes
 
@@ -72,6 +73,16 @@ fun PermissionsScreen(
             ) {
                 RestrictedSettingsNote()
                 Spacer(Modifier.padding(top = 12.dp))
+            }
+            // The same pictures the wizard shows, for the person who skipped setup or is coming
+            // back to fix it — one copy of the guide, exactly as RestrictedSettingsNote above is
+            // one copy of its explanation. Only while accessibility is still off: once it is on,
+            // this is three screenshots of a job already done, in front of every other card.
+            if (perms.none { it.key == ACCESSIBILITY_PERM && it.granted }) {
+                SetupGuides.forPermission(ACCESSIBILITY_PERM, vendor.brand)?.let {
+                    SetupGuideStrip(it)
+                    Spacer(Modifier.padding(top = 16.dp))
+                }
             }
             perms.forEach { p ->
                 PermCard(p, onRequestDisclosure)
@@ -171,10 +182,23 @@ fun RestrictedSettingsNote() {
         )
         Spacer(Modifier.padding(top = 6.dp))
         Text(
-            "Android 13 and newer block this setting for apps installed outside the Play Store, " +
-                "and says nothing about why. To unlock it: open Settings ▸ Apps ▸ AppBlocker, " +
-                "tap ⋮ in the top corner, and choose “Allow restricted settings”. Then come back " +
-                "and turn Accessibility on.",
+            "This only matters if the switch is actually greyed out. Android 13 and newer block " +
+                "it for apps installed outside an app store, and say nothing about why. To " +
+                "unlock it: open Settings ▸ Apps ▸ AppBlocker, tap ⋮ in the top corner, and " +
+                "choose “Allow restricted settings”. Then come back and turn Accessibility on.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.padding(top = 6.dp))
+        // **Android 15 redesigned App info and there is no ⋮ on it** (measured on an Android 15
+        // emulator, 23 Aug 2026 — the top-right icon is "open in new", not an overflow menu). The
+        // instructions above are right for 13 and 14, where this dead end was found; rather than
+        // guess at where Android 15 moved the item, say the one thing that is certainly true and
+        // is also the reassurance a stuck person needs.
+        Text(
+            "On Android 15 that ⋮ menu may not be there — Android redesigned the page. If you " +
+                "can't find it, go back and try the switch again: if it isn't greyed out, none " +
+                "of this applies to you.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

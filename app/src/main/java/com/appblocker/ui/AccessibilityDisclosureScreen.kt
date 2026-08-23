@@ -171,7 +171,7 @@ fun AccessibilityDisclosureScreen(
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Tapping “Agree & continue” takes you to Android's Accessibility settings, " +
+                    "Tapping “Agree & open Settings” takes you to Android's Accessibility settings, " +
                         "where you switch AppBlocker on yourself. Nothing is granted until you do.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -188,7 +188,7 @@ fun AccessibilityDisclosureScreen(
         // bug that came from capping only one of the two.
         Column(Modifier.pageWidth().padding(horizontal = 16.dp)) {
             GradientButton(
-                text = "Agree & continue",
+                text = "Agree & open Settings",
                 onClick = onAgree,
                 modifier = Modifier.testTag(DISCLOSURE_AGREE_TAG),
             )

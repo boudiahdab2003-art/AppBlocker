@@ -80,6 +80,14 @@ class DeviceVendorTest {
                 "$b: deep link with a blank package or class",
                 advice.deepLinks.all { it.first.isNotBlank() && it.second.isNotBlank() },
             )
+            // The wizard reads this out when someone comes back from Settings without having
+            // switched the service on, so a blank one leaves that rescue mid-sentence.
+            assertTrue("$b: blank accessibilityPath", advice.accessibilityPath.isNotBlank())
+            assertTrue(
+                "$b: accessibilityPath should name both Settings and Accessibility",
+                advice.accessibilityPath.contains("Settings") &&
+                    advice.accessibilityPath.contains("ccessibility"),
+            )
         }
     }
 

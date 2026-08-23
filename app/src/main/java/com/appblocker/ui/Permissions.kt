@@ -121,6 +121,43 @@ fun needsRestrictedSettingsNote(
     accessibilityGranted: Boolean,
 ): Boolean = sideloadedBuild && sdkInt >= Build.VERSION_CODES.TIRAMISU && !accessibilityGranted
 
+/** No trip to Settings has been made yet. Any real resume count is >= 0. */
+const val NO_ATTEMPT = -1
+
+/** What happened to the user's trip to Settings — see [setupAttempt]. */
+enum class SetupAttempt {
+    /** They have not gone yet, or have not come back. Say nothing. */
+    NONE,
+
+    /** They went, came back, and it is still off. This is where people give up. */
+    STUCK,
+
+    /** They went, came back, and it worked. Say so. */
+    SUCCEEDED,
+}
+
+/**
+ * Whether the user has been to Settings and come back, and how it went.
+ *
+ * **The case this exists for is STUCK.** Until it existed, someone who could not find the row came
+ * back to a screen identical to the one they left, with nothing to say they had failed — no way to
+ * tell "I did it wrong" from "this app does not work", which is where a first-time setup ends.
+ *
+ * The trick is telling "been and come back" from "still standing here", and `resumeTick` already
+ * counts returns to the app. Recording its value when Grant is pressed and comparing it with the
+ * current one answers it exactly: a strictly higher count means at least one resume has happened
+ * since, which is the return trip.
+ *
+ * Pure, so the three cases can be pinned in a JVM test rather than by driving a real phone into
+ * Settings — same reason as [needsRestrictedSettingsNote] above.
+ */
+fun setupAttempt(attemptTick: Int, resumeTick: Int, granted: Boolean): SetupAttempt = when {
+    attemptTick == NO_ATTEMPT -> SetupAttempt.NONE
+    resumeTick <= attemptTick -> SetupAttempt.NONE
+    granted -> SetupAttempt.SUCCEEDED
+    else -> SetupAttempt.STUCK
+}
+
 /** All setup steps with live granted-state; re-checked on resume. */
 @Composable
 fun rememberPermissions(): List<Perm> {
@@ -130,12 +167,14 @@ fun rememberPermissions(): List<Perm> {
         listOf(
             Perm(
                 "accessibility", "Accessibility (the blocker)",
-                "Required. Lets AppBlocker see which app is open and block it.",
+                "This is the one switch that makes blocking work. In your phone's " +
+                    "Settings it is called “Accessibility”.",
                 AccessibilityUtil.isEnabled(ctx), essential = true,
             ) { open(ctx, Settings.ACTION_ACCESSIBILITY_SETTINGS) },
             Perm(
                 "overlay", "Display over other apps",
-                "Required. Lets the block screen appear over a blocked app.",
+                "This lets the block screen appear on top of a blocked app. In Settings " +
+                    "it is called “Display over other apps”.",
                 Settings.canDrawOverlays(ctx), essential = true,
             ) { open(ctx, Settings.ACTION_MANAGE_OVERLAY_PERMISSION, withPackage = true) },
             Perm(
