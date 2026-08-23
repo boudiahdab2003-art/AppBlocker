@@ -167,12 +167,14 @@ fun rememberPermissions(): List<Perm> {
         listOf(
             Perm(
                 "accessibility", "Accessibility (the blocker)",
-                "Required. Lets AppBlocker see which app is open and block it.",
+                "This is the one switch that makes blocking work. In your phone's " +
+                    "Settings it is called “Accessibility”.",
                 AccessibilityUtil.isEnabled(ctx), essential = true,
             ) { open(ctx, Settings.ACTION_ACCESSIBILITY_SETTINGS) },
             Perm(
                 "overlay", "Display over other apps",
-                "Required. Lets the block screen appear over a blocked app.",
+                "This lets the block screen appear on top of a blocked app. In Settings " +
+                    "it is called “Display over other apps”.",
                 Settings.canDrawOverlays(ctx), essential = true,
             ) { open(ctx, Settings.ACTION_MANAGE_OVERLAY_PERMISSION, withPackage = true) },
             Perm(
