@@ -396,7 +396,7 @@ fun ProfileScreen(
                 // every protection in the app.
                 onClick = {
                     if (isDeviceAdminActive(context)) {
-                        onRequestGate(PREVENT_UNINSTALL_GATE) {
+                        onRequestGate(preventUninstallGate(context)) {
                             // removeActiveAdmin completes asynchronously, so flip the badge
                             // ourselves rather than re-reading a state that hasn't changed yet.
                             disableDeviceAdmin(context)

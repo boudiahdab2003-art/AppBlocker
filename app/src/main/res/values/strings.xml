@@ -311,4 +311,94 @@
     <string name="profile_status_off">Off</string>
     <string name="profile_required">Required</string>
     <string name="profile_optional">Optional</string>
+
+    <!-- ===================== First run &amp; permissions ===================== -->
+    <string name="onboarding_step">Step %1$s of %2$s</string>
+    <string name="onboarding_get_started">Get started</string>
+    <string name="onboarding_welcome_title">Welcome to AppBlocker</string>
+    <string name="onboarding_welcome_body">AppBlocker keeps you off distracting apps and sites. Two quick permissions and you\'re ready to block.</string>
+    <string name="onboarding_continue">Continue</string>
+    <string name="onboarding_continue_as">Continue as %1$s</string>
+    <string name="onboarding_skip">Skip</string>
+    <string name="onboarding_skip_for_now">Skip for now</string>
+    <string name="onboarding_name_title">What should we call you?</string>
+    <string name="onboarding_name_label">Your name</string>
+    <string name="onboarding_name_placeholder">Optional</string>
+    <string name="onboarding_name_body">A first name is plenty. It\'s only used to greet you on your profile and in the AI Coach — it stays on this phone, and you can change or remove it any time.</string>
+    <string name="onboarding_coach_title">Meet your AI Coach</string>
+    <string name="onboarding_coach_body">Not just a blocker — a coach in your pocket that helps you win back your time.</string>
+    <string name="onboarding_coach_numbers_title">Knows your real numbers</string>
+    <string name="onboarding_coach_numbers_body">Talks about your actual screen time and habits, never generic advice.</string>
+    <string name="onboarding_coach_knows_title">Gets to know you</string>
+    <string name="onboarding_coach_knows_body">Remembers why you\'re blocking and what tempts you. Ask it anything in chat.</string>
+    <string name="onboarding_coach_goals_title">Sets goals with you</string>
+    <string name="onboarding_coach_goals_body">Agree on targets together, track them live, and get fresh tips through the day.</string>
+    <string name="onboarding_coach_footer">Free, and works right out of the box — find it in Insights ▸ AI Coach.</string>
+    <string name="onboarding_try_again">Try again</string>
+    <string name="onboarding_turn_on_blocking">Turn on blocking</string>
+    <string name="onboarding_open_settings">Open Settings</string>
+    <string name="onboarding_done">That\'s it — it\'s on. Tap Continue.</string>
+    <string name="onboarding_steps_heading">What to do in Settings — %1$s steps</string>
+    <string name="onboarding_leaves_app">The button below leaves AppBlocker and opens your phone\'s own Settings. Do these, then come straight back here — this screen will tell you if it worked. The steps go with you: swipe down from the top of the screen to see them again while you\'re in Settings.</string>
+    <string name="onboarding_headline_accessibility">Blocking needs one switch</string>
+    <string name="onboarding_headline_overlay">Let the block screen show</string>
+    <string name="onboarding_stuck_title">Not switched on yet</string>
+
+    <string name="perm_accessibility_label">Accessibility (the blocker)</string>
+    <string name="perm_accessibility_desc">This is the one switch that makes blocking work. In your phone\'s Settings it is called “Accessibility”.</string>
+    <string name="perm_overlay_label">Display over other apps</string>
+    <string name="perm_overlay_desc">This lets the block screen appear on top of a blocked app. In Settings it is called “Display over other apps”.</string>
+    <string name="perm_usage_label">Usage access</string>
+    <string name="perm_usage_desc">Needed for daily limits and Insights.</string>
+    <string name="perm_notifications_label">Notification access</string>
+    <string name="perm_notifications_desc">Optional. Lets AppBlocker count your daily notifications for Insights.</string>
+    <string name="perm_battery_label">Disable battery optimization</string>
+    <string name="perm_battery_desc">Keeps the blocker running so it can\'t be killed in the background.</string>
+    <string name="perm_location_label">Location</string>
+    <string name="perm_location_desc">Only for Wi-Fi and Location schedules. Not needed otherwise.</string>
+    <string name="perm_deviceadmin_label">Prevent uninstall (Device admin)</string>
+    <string name="perm_deviceadmin_desc">Stops AppBlocker being uninstalled until you turn this off — extra friction against bypassing your blocks.</string>
+    <string name="perm_grant">Grant</string>
+
+    <string name="gate_uninstall_title">Allow uninstalling</string>
+    <string name="gate_uninstall_blurb">This is the switch that actually refuses an uninstall. Type the paragraph below — you can\'t paste it — before the clock runs out.</string>
+    <string name="gate_uninstall_detail">The guard only makes the Settings page hard to reach; this is the switch that refuses the uninstall itself. With it off, AppBlocker can be removed in a few taps, and every block goes with it. Miss the clock and you get a fresh paragraph and a fresh clock. Turning it back on is always one tap.</string>
+    <string name="gate_uninstall_confirm">Turn protection off</string>
+    <string name="admin_explanation">Lets AppBlocker resist being uninstalled until you turn this off.</string>
+
+    <string name="disclosure_topbar">How blocking works</string>
+    <string name="disclosure_title">What AppBlocker can see</string>
+    <string name="disclosure_intro">Blocking only works if the app can tell what\'s on your screen. Here is exactly what that means, before you\'re asked to allow it.</string>
+    <string name="disclosure_reads">What it reads</string>
+    <string name="disclosure_never">What never happens</string>
+    <string name="disclosure_front_title">Which app is in front</string>
+    <string name="disclosure_front_body">So the moment you open something you\'ve blocked, the block screen can cover it.</string>
+    <string name="disclosure_browser_title">In web browsers only — the address and the text on the page</string>
+    <string name="disclosure_browser_body">So a blocked site or a blocked word is caught in the browser too, not just in apps. Outside browsers, AppBlocker only looks at which app is open.</string>
+    <string name="disclosure_local_title">It never leaves your phone</string>
+    <string name="disclosure_local_body">Every check happens on this device. Screen content is never stored and never sent anywhere.</string>
+    <string name="disclosure_noaccount_title">There\'s no account and no server</string>
+    <string name="disclosure_coach_title">The AI Coach never sees your screen</string>
+    <string name="disclosure_coach_body">If you switch the coach on, it receives your screen-time numbers and your settings — never the pages you visit or the text on them.</string>
+    <string name="disclosure_onlyblocking_title">It\'s only used for blocking</string>
+    <string name="disclosure_onlyblocking_body">No ads, no analytics, no tracking. Turning the service off in Android\'s settings stops all of it immediately.</string>
+    <string name="disclosure_policy_link">Read the full privacy policy</string>
+    <string name="disclosure_footer">Tapping “Agree &amp; open Settings” takes you to Android\'s Accessibility settings, where you switch AppBlocker on yourself. Nothing is granted until you do.</string>
+    <string name="disclosure_agree">Agree &amp; open Settings</string>
+    <string name="disclosure_decline">Not now</string>
+
+    <string name="permissions_header">Grant these so AppBlocker can block reliably.</string>
+    <string name="permissions_brand_note">Note for %1$s phones</string>
+    <string name="permissions_clone_note">A copy of an app inside %1$s is a separate app that AppBlocker cannot see or block. Blocking the original doesn\'t cover the copy.</string>
+    <string name="permissions_spaces_title">Switching spaces or users</string>
+    <string name="permissions_alert_title">Protection alert</string>
+    <string name="permissions_alert_body">AppBlocker warns you with a notification if blocking ever stops — whether you switched it off or your phone shut it down while still showing it as on. Tap below to check the alert reaches your phone.</string>
+    <string name="permissions_alert_button">Send a test alert</string>
+    <string name="restricted_title">Accessibility toggle greyed out?</string>
+    <string name="restricted_body">This only matters if the switch is actually greyed out. Android 13 and newer block it for apps installed outside an app store, and say nothing about why. To unlock it: open Settings ▸ Apps ▸ AppBlocker, tap ⋮ in the top corner, and choose “Allow restricted settings”. Then come back and turn Accessibility on.</string>
+    <string name="restricted_android15">On Android 15 that ⋮ menu may not be there — Android redesigned the page. If you can\'t find it, go back and try the switch again: if it isn\'t greyed out, none of this applies to you.</string>
+
+    <string name="disclosure_noaccount_body">AppBlocker has no sign-in. Nobody — including the developer — can see what\'s on your screen or what you block.</string>
+    <string name="onboarding_stuck_accessibility">Nothing is broken — this screen is easy to miss. %1$s Tap “Try again” and follow the pictures below; the row you are looking for is called AppBlocker.</string>
+    <string name="onboarding_stuck_other">Nothing is broken — that list is easy to miss. Tap “Try again”, find AppBlocker in the list, and turn its switch on.</string>
 </resources>

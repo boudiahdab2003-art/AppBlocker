@@ -28,9 +28,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.appblocker.Dist
+import com.appblocker.R
 import com.appblocker.data.DeviceVendor
 import com.appblocker.data.SetupGuides
 import com.appblocker.service.ProtectionNotifier
@@ -51,14 +53,14 @@ fun PermissionsScreen(
 
     Scaffold(
         containerColor = Color.Transparent,
-        topBar = { EditorTopBar("Setup & permissions", onBack) },
+        topBar = { EditorTopBar(stringResource(R.string.profile_permissions_title), onBack) },
     ) { padding ->
         Column(
             Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         ) {
             Text(
-                if (remaining == 0) "You're all set — protection can run fully."
-                else "Grant these so AppBlocker can block reliably.",
+                if (remaining == 0) stringResource(R.string.profile_header_all_set)
+                else stringResource(R.string.permissions_header),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -100,15 +102,14 @@ fun PermissionsScreen(
             // than one they know about.
             vendor.clonedAppsFeature?.let { feature ->
                 Text(
-                    "Note for ${vendor.brand} phones",
+                    stringResource(R.string.permissions_brand_note, vendor.brand),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Spacer(Modifier.padding(top = 4.dp))
                 Text(
-                    "A copy of an app inside $feature is a separate app that AppBlocker cannot " +
-                        "see or block. Blocking the original doesn't cover the copy.",
+                    stringResource(R.string.permissions_clone_note, feature),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 16.dp),
@@ -120,7 +121,7 @@ fun PermissionsScreen(
             // Same feature, opposite advice — merging them would leave each reader half wrong.
             vendor.spacesWarning?.let { warning ->
                 Text(
-                    "Switching spaces or users",
+                    stringResource(R.string.permissions_spaces_title),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -134,22 +135,20 @@ fun PermissionsScreen(
                 )
             }
             Text(
-                "Protection alert",
+                stringResource(R.string.permissions_alert_title),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Spacer(Modifier.padding(top = 4.dp))
             Text(
-                "AppBlocker warns you with a notification if blocking ever stops — whether you " +
-                    "switched it off or your phone shut it down while still showing it as on. " +
-                    "Tap below to check the alert reaches your phone.",
+                stringResource(R.string.permissions_alert_body),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.padding(top = 12.dp))
             GradientButton(
-                text = "Send a test alert",
+                text = stringResource(R.string.permissions_alert_button),
                 onClick = { ProtectionNotifier.notifyTest(context) },
             )
             Spacer(Modifier.padding(top = 24.dp))
@@ -175,17 +174,14 @@ fun RestrictedSettingsNote() {
             .background(MaterialTheme.colorScheme.surface).padding(18.dp),
     ) {
         Text(
-            "Accessibility toggle greyed out?",
+            stringResource(R.string.restricted_title),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Spacer(Modifier.padding(top = 6.dp))
         Text(
-            "This only matters if the switch is actually greyed out. Android 13 and newer block " +
-                "it for apps installed outside an app store, and say nothing about why. To " +
-                "unlock it: open Settings ▸ Apps ▸ AppBlocker, tap ⋮ in the top corner, and " +
-                "choose “Allow restricted settings”. Then come back and turn Accessibility on.",
+            stringResource(R.string.restricted_body),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -196,9 +192,7 @@ fun RestrictedSettingsNote() {
         // guess at where Android 15 moved the item, say the one thing that is certainly true and
         // is also the reassurance a stuck person needs.
         Text(
-            "On Android 15 that ⋮ menu may not be there — Android redesigned the page. If you " +
-                "can't find it, go back and try the switch again: if it isn't greyed out, none " +
-                "of this applies to you.",
+            stringResource(R.string.restricted_android15),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -224,10 +218,12 @@ private fun PermCard(p: Perm, onRequestDisclosure: (() -> Unit) -> Unit) {
                     Text("On", style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                 } } else if (!p.essential) {
-                Text("Optional", style = MaterialTheme.typography.labelMedium,
+                Text(stringResource(R.string.profile_optional),
+                    style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
-                Text("Required", style = MaterialTheme.typography.labelMedium,
+                Text(stringResource(R.string.profile_required),
+                    style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold, color = Color(0xFFFFB020))
             }
         }
@@ -237,7 +233,10 @@ private fun PermCard(p: Perm, onRequestDisclosure: (() -> Unit) -> Unit) {
         if (!p.granted) {
             Spacer(Modifier.padding(top = 12.dp))
             GradientButton(
-                text = if (p.key == "autostart") "Open settings" else "Grant",
+                text = stringResource(
+                    if (p.key == "autostart") R.string.onboarding_open_settings
+                    else R.string.perm_grant,
+                ),
                 onClick = gatedFix(p, onRequestDisclosure),
             )
         }

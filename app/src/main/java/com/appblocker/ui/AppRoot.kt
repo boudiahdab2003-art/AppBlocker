@@ -193,20 +193,23 @@ fun AppRoot(
                 )
             is Overlay.CoachChat ->
                 CoachChatScreen(onBack = { overlay = null })
+            // Wrapped in EnglishOnly: these six are the long-form reading material the owner
+            // chose to leave in English, and English text inside a right-to-left layout puts its
+            // punctuation at the wrong end. See [EnglishOnly].
             is Overlay.Changelog ->
-                ChangelogScreen(onBack = { overlay = null })
+                EnglishOnly { ChangelogScreen(onBack = { overlay = null }) }
             is Overlay.Instructions ->
-                InstructionsScreen(onBack = { overlay = null })
+                EnglishOnly { InstructionsScreen(onBack = { overlay = null }) }
             is Overlay.Diagnostics ->
-                DiagnosticsScreen(onBack = { overlay = null })
+                EnglishOnly { DiagnosticsScreen(onBack = { overlay = null }) }
             is Overlay.Repair ->
                 RepairScreen(onBack = { overlay = null })
             is Overlay.DetoxGuide ->
-                DopamineDetoxScreen(onBack = { overlay = null })
+                EnglishOnly { DopamineDetoxScreen(onBack = { overlay = null }) }
             is Overlay.Scenarios ->
-                ScenariosScreen(onBack = { overlay = null })
+                EnglishOnly { ScenariosScreen(onBack = { overlay = null }) }
             is Overlay.TwelveSteps ->
-                TwelveStepsScreen(onBack = { overlay = null })
+                EnglishOnly { TwelveStepsScreen(onBack = { overlay = null }) }
             is Overlay.IconPicker ->
                 IconPickerScreen(onBack = { overlay = null })
             is Overlay.CleanCounter ->

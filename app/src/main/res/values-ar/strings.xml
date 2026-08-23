@@ -364,4 +364,94 @@
     <string name="profile_status_off">مُعطَّل</string>
     <string name="profile_required">مطلوب</string>
     <string name="profile_optional">اختياري</string>
+
+    <!-- ===================== التشغيل الأول والأذونات ===================== -->
+    <string name="onboarding_step">الخطوة %1$s من %2$s</string>
+    <string name="onboarding_get_started">لنبدأ</string>
+    <string name="onboarding_welcome_title">أهلًا بك في AppBlocker</string>
+    <string name="onboarding_welcome_body">يُبعدك AppBlocker عن التطبيقات والمواقع التي تشتّتك. إذنان سريعان وتصبح جاهزًا للحظر.</string>
+    <string name="onboarding_continue">متابعة</string>
+    <string name="onboarding_continue_as">تابع باسم %1$s</string>
+    <string name="onboarding_skip">تخطٍّ</string>
+    <string name="onboarding_skip_for_now">تخطَّ الآن</string>
+    <string name="onboarding_name_title">بماذا نناديك؟</string>
+    <string name="onboarding_name_label">اسمك</string>
+    <string name="onboarding_name_placeholder">اختياري</string>
+    <string name="onboarding_name_body">الاسم الأول يكفي. يُستخدم فقط لتحيّتك في ملفك الشخصي ومع المدرّب الذكي — يبقى على هذا الهاتف، ويمكنك تغييره أو حذفه في أي وقت.</string>
+    <string name="onboarding_coach_title">تعرّف على مدرّبك الذكي</string>
+    <string name="onboarding_coach_body">ليس مجرد حاجب — بل مدرّب في جيبك يساعدك على استعادة وقتك.</string>
+    <string name="onboarding_coach_numbers_title">يعرف أرقامك الحقيقية</string>
+    <string name="onboarding_coach_numbers_body">يتحدث عن وقت شاشتك وعاداتك أنت، لا نصائح عامة.</string>
+    <string name="onboarding_coach_knows_title">يتعرّف عليك</string>
+    <string name="onboarding_coach_knows_body">يتذكّر لماذا تحظر وما الذي يغريك. اسأله ما شئت في المحادثة.</string>
+    <string name="onboarding_coach_goals_title">يضع الأهداف معك</string>
+    <string name="onboarding_coach_goals_body">تتفقان على أهداف، وتتابعها مباشرة، وتصلك نصائح جديدة خلال اليوم.</string>
+    <string name="onboarding_coach_footer">مجاني، ويعمل فور تشغيله — تجده في الإحصاءات ▸ المدرّب الذكي.</string>
+    <string name="onboarding_try_again">حاول مجددًا</string>
+    <string name="onboarding_turn_on_blocking">شغّل الحظر</string>
+    <string name="onboarding_open_settings">افتح الإعدادات</string>
+    <string name="onboarding_done">هذا كل شيء — إنه يعمل. اضغط متابعة.</string>
+    <string name="onboarding_steps_heading">ما عليك فعله في الإعدادات — %1$s خطوات</string>
+    <string name="onboarding_leaves_app">الزر أدناه يخرجك من AppBlocker ويفتح إعدادات هاتفك. نفّذ هذه الخطوات ثم عُد إلى هنا مباشرة — وستخبرك هذه الشاشة إن نجح الأمر. والخطوات تأتي معك: اسحب من أعلى الشاشة لتراها مجددًا وأنت داخل الإعدادات.</string>
+    <string name="onboarding_headline_accessibility">الحظر يحتاج مفتاحًا واحدًا</string>
+    <string name="onboarding_headline_overlay">دع شاشة الحظر تظهر</string>
+    <string name="onboarding_stuck_title">لم يُشغَّل بعد</string>
+
+    <string name="perm_accessibility_label">إمكانية الوصول (الحاظر)</string>
+    <string name="perm_accessibility_desc">هذا هو المفتاح الوحيد الذي يجعل الحظر يعمل. في إعدادات هاتفك يُسمّى «إمكانية الوصول».</string>
+    <string name="perm_overlay_label">العرض فوق التطبيقات الأخرى</string>
+    <string name="perm_overlay_desc">هذا يسمح لشاشة الحظر بالظهور فوق التطبيق المحظور. في الإعدادات يُسمّى «العرض فوق التطبيقات الأخرى».</string>
+    <string name="perm_usage_label">الوصول إلى بيانات الاستخدام</string>
+    <string name="perm_usage_desc">لازم للحدود اليومية وللإحصاءات.</string>
+    <string name="perm_notifications_label">الوصول إلى الإشعارات</string>
+    <string name="perm_notifications_desc">اختياري. يتيح لـAppBlocker عدّ إشعاراتك اليومية من أجل الإحصاءات.</string>
+    <string name="perm_battery_label">إيقاف تحسين البطارية</string>
+    <string name="perm_battery_desc">يُبقي الحاظر يعمل حتى لا يُقتل في الخلفية.</string>
+    <string name="perm_location_label">الموقع</string>
+    <string name="perm_location_desc">فقط لجداول Wi-Fi والموقع. غير لازم فيما عدا ذلك.</string>
+    <string name="perm_deviceadmin_label">منع إلغاء التثبيت (مسؤول الجهاز)</string>
+    <string name="perm_deviceadmin_desc">يمنع إلغاء تثبيت AppBlocker حتى توقف هذا — عائق إضافي أمام الالتفاف على قوائم حظرك.</string>
+    <string name="perm_grant">امنح</string>
+
+    <string name="gate_uninstall_title">السماح بإلغاء التثبيت</string>
+    <string name="gate_uninstall_blurb">هذا هو المفتاح الذي يرفض إلغاء التثبيت فعلًا. اكتب الفقرة أدناه — لا يمكنك لصقها — قبل أن ينفد الوقت.</string>
+    <string name="gate_uninstall_detail">الحارس يجعل صفحة الإعدادات صعبة الوصول فقط؛ أما هذا فهو المفتاح الذي يرفض الإزالة نفسها. بإيقافه يمكن حذف AppBlocker في بضع نقرات، وتذهب معه كل قوائم حظرك. وإن فاتك الوقت حصلت على فقرة جديدة ومؤقّت جديد. أما إعادة تشغيله فنقرة واحدة دائمًا.</string>
+    <string name="gate_uninstall_confirm">أوقف الحماية</string>
+    <string name="admin_explanation">يتيح لـAppBlocker مقاومة إلغاء التثبيت حتى توقف هذا.</string>
+
+    <string name="disclosure_topbar">كيف يعمل الحظر</string>
+    <string name="disclosure_title">ما الذي يستطيع AppBlocker رؤيته</string>
+    <string name="disclosure_intro">لا يعمل الحظر إلا إذا استطاع التطبيق معرفة ما على شاشتك. وهذا بالضبط ما يعنيه ذلك، قبل أن يُطلب منك السماح به.</string>
+    <string name="disclosure_reads">ما الذي يقرأه</string>
+    <string name="disclosure_never">ما الذي لا يحدث أبدًا</string>
+    <string name="disclosure_front_title">أي تطبيق في المقدمة</string>
+    <string name="disclosure_front_body">حتى إذا فتحتَ شيئًا حظرته، تستطيع شاشة الحظر أن تغطّيه في اللحظة نفسها.</string>
+    <string name="disclosure_browser_title">في المتصفحات فقط — العنوان والنص الظاهر على الصفحة</string>
+    <string name="disclosure_browser_body">حتى يُلتقط الموقع المحظور أو الكلمة المحظورة داخل المتصفح أيضًا، لا في التطبيقات وحدها. أما خارج المتصفحات فلا ينظر AppBlocker إلا إلى أي تطبيق مفتوح.</string>
+    <string name="disclosure_local_title">لا يغادر هاتفك أبدًا</string>
+    <string name="disclosure_local_body">كل فحص يجري على هذا الجهاز. لا يُخزَّن ما يظهر على الشاشة ولا يُرسل إلى أي مكان.</string>
+    <string name="disclosure_noaccount_title">لا حساب ولا خادم</string>
+    <string name="disclosure_coach_title">المدرّب الذكي لا يرى شاشتك أبدًا</string>
+    <string name="disclosure_coach_body">إن شغّلت المدرّب فهو يتلقّى أرقام وقت شاشتك وإعداداتك — لا الصفحات التي تزورها ولا النص الذي عليها.</string>
+    <string name="disclosure_onlyblocking_title">يُستخدم للحظر فقط</string>
+    <string name="disclosure_onlyblocking_body">لا إعلانات، ولا تحليلات، ولا تتبّع. وإيقاف الخدمة من إعدادات أندرويد يوقف كل ذلك فورًا.</string>
+    <string name="disclosure_policy_link">اقرأ سياسة الخصوصية كاملة</string>
+    <string name="disclosure_footer">الضغط على «أوافق وافتح الإعدادات» ينقلك إلى إعدادات إمكانية الوصول في أندرويد، حيث تُشغّل AppBlocker بنفسك. لا يُمنح شيء قبل أن تفعل ذلك.</string>
+    <string name="disclosure_agree">أوافق وافتح الإعدادات</string>
+    <string name="disclosure_decline">ليس الآن</string>
+
+    <string name="permissions_header">امنح هذه الأذونات ليحظر AppBlocker بثبات.</string>
+    <string name="permissions_brand_note">ملاحظة لهواتف %1$s</string>
+    <string name="permissions_clone_note">نسخة التطبيق داخل %1$s هي تطبيق منفصل لا يستطيع AppBlocker رؤيته ولا حظره. وحظر الأصل لا يشمل النسخة.</string>
+    <string name="permissions_spaces_title">تبديل المساحات أو المستخدمين</string>
+    <string name="permissions_alert_title">تنبيه الحماية</string>
+    <string name="permissions_alert_body">ينبّهك AppBlocker بإشعار إذا توقّف الحظر يومًا — سواء أوقفته أنت أو أغلقه هاتفك بينما ما زال يُظهره مُفعَّلًا. اضغط أدناه للتأكد من وصول التنبيه إلى هاتفك.</string>
+    <string name="permissions_alert_button">أرسل تنبيهًا تجريبيًا</string>
+    <string name="restricted_title">مفتاح إمكانية الوصول باهت ولا يعمل؟</string>
+    <string name="restricted_body">هذا يهمّك فقط إن كان المفتاح باهتًا فعلًا. أندرويد 13 وما بعده يحجبه عن التطبيقات المثبَّتة من خارج متجر، دون أن يوضّح السبب. لفتحه: افتح الإعدادات ▸ التطبيقات ▸ AppBlocker، اضغط ⋮ في الزاوية العلوية، واختر «السماح بالإعدادات المقيّدة». ثم عُد وشغّل إمكانية الوصول.</string>
+    <string name="restricted_android15">في أندرويد 15 قد لا تجد قائمة ⋮ تلك — فقد أعاد أندرويد تصميم الصفحة. إن لم تجدها، فعُد وجرّب المفتاح مرة أخرى: إن لم يكن باهتًا فلا شيء من هذا يعنيك.</string>
+
+    <string name="disclosure_noaccount_body">لا يوجد تسجيل دخول في AppBlocker. لا أحد — بمن فيهم المطوّر — يستطيع رؤية ما على شاشتك ولا ما تحظره.</string>
+    <string name="onboarding_stuck_accessibility">لا شيء معطّل — هذه الشاشة يسهل تفويتها. %1$s اضغط «حاول مجددًا» واتبع الصور أدناه؛ السطر الذي تبحث عنه اسمه AppBlocker.</string>
+    <string name="onboarding_stuck_other">لا شيء معطّل — تلك القائمة يسهل تفويتها. اضغط «حاول مجددًا»، وابحث عن AppBlocker في القائمة، وشغّل مفتاحه.</string>
 </resources>

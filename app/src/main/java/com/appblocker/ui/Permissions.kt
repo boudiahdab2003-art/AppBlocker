@@ -28,6 +28,7 @@ import com.appblocker.data.AdminPrompt
 import com.appblocker.data.DeviceVendor
 import com.appblocker.service.AccessibilityUtil
 import com.appblocker.service.NotificationCountListener
+import com.appblocker.R
 
 /** One setup step the user may need to grant. */
 data class Perm(
@@ -166,30 +167,28 @@ fun rememberPermissions(): List<Perm> {
     return remember(tick) {
         listOf(
             Perm(
-                "accessibility", "Accessibility (the blocker)",
-                "This is the one switch that makes blocking work. In your phone's " +
-                    "Settings it is called “Accessibility”.",
+                "accessibility", ctx.getString(R.string.perm_accessibility_label),
+                ctx.getString(R.string.perm_accessibility_desc),
                 AccessibilityUtil.isEnabled(ctx), essential = true,
             ) { open(ctx, Settings.ACTION_ACCESSIBILITY_SETTINGS) },
             Perm(
-                "overlay", "Display over other apps",
-                "This lets the block screen appear on top of a blocked app. In Settings " +
-                    "it is called “Display over other apps”.",
+                "overlay", ctx.getString(R.string.perm_overlay_label),
+                ctx.getString(R.string.perm_overlay_desc),
                 Settings.canDrawOverlays(ctx), essential = true,
             ) { open(ctx, Settings.ACTION_MANAGE_OVERLAY_PERMISSION, withPackage = true) },
             Perm(
-                "usage", "Usage access",
-                "Needed for daily limits and Insights.",
+                "usage", ctx.getString(R.string.perm_usage_label),
+                ctx.getString(R.string.perm_usage_desc),
                 hasUsageAccess(ctx), essential = false,
             ) { open(ctx, Settings.ACTION_USAGE_ACCESS_SETTINGS) },
             Perm(
-                "notifications", "Notification access",
-                "Optional. Lets AppBlocker count your daily notifications for Insights.",
+                "notifications", ctx.getString(R.string.perm_notifications_label),
+                ctx.getString(R.string.perm_notifications_desc),
                 isNotificationListenerEnabled(ctx), essential = false,
             ) { open(ctx, Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS) },
             Perm(
-                "battery", "Disable battery optimization",
-                "Keeps the blocker running so it can't be killed in the background.",
+                "battery", ctx.getString(R.string.perm_battery_label),
+                ctx.getString(R.string.perm_battery_desc),
                 isIgnoringBattery(ctx), essential = false,
             ) {
                 if (runCatching {
@@ -211,13 +210,13 @@ fun rememberPermissions(): List<Perm> {
                 ) { openAutostart(ctx) }
             },
             Perm(
-                "location", "Location",
-                "Only for Wi-Fi and Location schedules. Not needed otherwise.",
+                "location", ctx.getString(R.string.perm_location_label),
+                ctx.getString(R.string.perm_location_desc),
                 hasLocation(ctx), essential = false,
             ) { open(ctx, Settings.ACTION_APPLICATION_DETAILS_SETTINGS, withPackage = true) },
             Perm(
-                "deviceadmin", "Prevent uninstall (Device admin)",
-                "Stops AppBlocker being uninstalled until you turn this off — extra friction against bypassing your blocks.",
+                "deviceadmin", ctx.getString(R.string.perm_deviceadmin_label),
+                ctx.getString(R.string.perm_deviceadmin_desc),
                 isDeviceAdminActive(ctx), essential = false,
                 // On only, and that is all this screen can do: the Grant button is drawn under
                 // `if (!perm.granted)`. It used to call a toggle, which would have turned the
@@ -286,15 +285,11 @@ fun gatedFix(perm: Perm, onRequestDisclosure: (() -> Unit) -> Unit): () -> Unit 
  * the screen that asks for it, because every height in it is derived from the space it is handed
  * and a tab hands it the tab. See [FrictionGate].
  */
-val PREVENT_UNINSTALL_GATE = GateCopy(
-    title = "Allow uninstalling",
-    blurb = "This is the switch that actually refuses an uninstall. Type the paragraph " +
-        "below — you can't paste it — before the clock runs out.",
-    detail = "The guard only makes the Settings page hard to reach; this is the switch that " +
-        "refuses the uninstall itself. With it off, AppBlocker can be removed in a few taps, " +
-        "and every block goes with it. Miss the clock and you get a fresh paragraph and a " +
-        "fresh clock. Turning it back on is always one tap.",
-    confirmLabel = "Turn protection off",
+fun preventUninstallGate(ctx: Context) = GateCopy(
+    title = ctx.getString(R.string.gate_uninstall_title),
+    blurb = ctx.getString(R.string.gate_uninstall_blurb),
+    detail = ctx.getString(R.string.gate_uninstall_detail),
+    confirmLabel = ctx.getString(R.string.gate_uninstall_confirm),
 )
 
 /** Whether AppBlocker is currently an active device admin (so it can't be uninstalled). */

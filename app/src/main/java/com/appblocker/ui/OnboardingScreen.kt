@@ -1,6 +1,7 @@
 package com.appblocker.ui
 
 import android.os.Build
+import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -52,6 +53,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -59,6 +61,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.appblocker.Dist
+import com.appblocker.R
 import com.appblocker.data.DeviceVendor
 import com.appblocker.data.DisplayName
 import com.appblocker.data.SettingsStore
@@ -157,7 +160,7 @@ private fun ProgressHeader(current: Int, total: Int) {
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            "Step $current of $total",
+            stringResource(R.string.onboarding_step, current.toString(), total.toString()),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -214,12 +217,16 @@ private fun StepIcon(icon: ImageVector, granted: Boolean = false, size: Dp = 96.
 
 @Composable
 private fun WelcomeStep(onNext: () -> Unit) {
-    StepScaffold(footer = { GradientButton(text = "Get started", onClick = onNext) }) {
+    StepScaffold(
+        footer = {
+            GradientButton(text = stringResource(R.string.onboarding_get_started), onClick = onNext)
+        },
+    ) {
         Spacer(Modifier.height(24.dp))
         StepIcon(Icons.Filled.Shield)
         Spacer(Modifier.height(28.dp))
         Text(
-            "Welcome to AppBlocker",
+            stringResource(R.string.onboarding_welcome_title),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
@@ -227,8 +234,7 @@ private fun WelcomeStep(onNext: () -> Unit) {
         )
         Spacer(Modifier.height(12.dp))
         Text(
-            "AppBlocker keeps you off distracting apps and sites. Two quick permissions and you're " +
-                "ready to block.",
+            stringResource(R.string.onboarding_welcome_body),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -262,12 +268,16 @@ private fun NameStep(onNext: () -> Unit) {
     StepScaffold(
         footer = {
             GradientButton(
-                text = if (typed.isEmpty()) "Continue" else "Continue as $typed",
+                text = if (typed.isEmpty()) stringResource(R.string.onboarding_continue)
+                else stringResource(R.string.onboarding_continue_as, typed),
                 onClick = { saveAndGo() },
                 modifier = Modifier.testTag(ONBOARDING_NAME_CONTINUE_TAG),
             )
             TextButton(onClick = { saveAndGo() }) {
-                Text("Skip", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    stringResource(R.string.onboarding_skip),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         },
     ) {
@@ -275,7 +285,7 @@ private fun NameStep(onNext: () -> Unit) {
         StepIcon(Icons.Filled.Person)
         Spacer(Modifier.height(24.dp))
         Text(
-            "What should we call you?",
+            stringResource(R.string.onboarding_name_title),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
@@ -290,8 +300,8 @@ private fun NameStep(onNext: () -> Unit) {
         OutlinedTextField(
             value = text,
             onValueChange = { text = it.take(DisplayName.MAX_LENGTH) },
-            label = { Text("Your name") },
-            placeholder = { Text("Optional") },
+            label = { Text(stringResource(R.string.onboarding_name_label)) },
+            placeholder = { Text(stringResource(R.string.onboarding_name_placeholder)) },
             singleLine = true,
             shape = RoundedCornerShape(12.dp),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
@@ -300,8 +310,7 @@ private fun NameStep(onNext: () -> Unit) {
         )
         Spacer(Modifier.height(16.dp))
         Text(
-            "A first name is plenty. It's only used to greet you on your profile and in the AI " +
-                "Coach — it stays on this phone, and you can change or remove it any time.",
+            stringResource(R.string.onboarding_name_body),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -318,7 +327,7 @@ private fun CoachStep(onNext: () -> Unit) {
         StepIcon(Icons.Filled.AutoAwesome)
         Spacer(Modifier.height(24.dp))
         Text(
-            "Meet your AI Coach",
+            stringResource(R.string.onboarding_coach_title),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
@@ -326,23 +335,32 @@ private fun CoachStep(onNext: () -> Unit) {
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            "Not just a blocker — a coach in your pocket that helps you win back your time.",
+            stringResource(R.string.onboarding_coach_body),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(20.dp))
-        CoachFeatureRow(Icons.Filled.QueryStats, "Knows your real numbers",
-            "Talks about your actual screen time and habits, never generic advice.")
+        CoachFeatureRow(
+            Icons.Filled.QueryStats,
+            stringResource(R.string.onboarding_coach_numbers_title),
+            stringResource(R.string.onboarding_coach_numbers_body),
+        )
         Spacer(Modifier.height(12.dp))
-        CoachFeatureRow(Icons.Filled.Person, "Gets to know you",
-            "Remembers why you're blocking and what tempts you. Ask it anything in chat.")
+        CoachFeatureRow(
+            Icons.Filled.Person,
+            stringResource(R.string.onboarding_coach_knows_title),
+            stringResource(R.string.onboarding_coach_knows_body),
+        )
         Spacer(Modifier.height(12.dp))
-        CoachFeatureRow(Icons.Filled.Flag, "Sets goals with you",
-            "Agree on targets together, track them live, and get fresh tips through the day.")
+        CoachFeatureRow(
+            Icons.Filled.Flag,
+            stringResource(R.string.onboarding_coach_goals_title),
+            stringResource(R.string.onboarding_coach_goals_body),
+        )
         Spacer(Modifier.height(16.dp))
         Text(
-            "Free, and works right out of the box — find it in Insights ▸ AI Coach.",
+            stringResource(R.string.onboarding_coach_footer),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -404,7 +422,7 @@ internal fun EssentialStep(
     // instructions there (see SetupStepsNotifier for why an overlay is not).
     val grantAndRemember = {
         attemptTick = tick
-        guide?.let { SetupStepsNotifier.show(context, it, stepHeadline(perm)) }
+        guide?.let { SetupStepsNotifier.show(context, it, stepHeadline(context, perm)) }
         grant()
     }
 
@@ -417,24 +435,28 @@ internal fun EssentialStep(
 
     StepScaffold(footer = {
         if (perm.granted) {
-            GradientButton(text = "Continue", onClick = onContinue)
+            GradientButton(text = stringResource(R.string.onboarding_continue), onClick = onContinue)
         } else {
             // The button says what pressing it does. "Grant" is this app's word for it, not the
             // reader's, and it gives no hint that the next thing to happen is being moved into a
             // different app entirely.
             GradientButton(
                 text = when {
-                    stuck -> "Try again"
+                    stuck -> stringResource(R.string.onboarding_try_again)
                     // Accessibility shows the disclosure first (gatedFix), so "Open Settings"
                     // would promise a screen that is one tap further away than it says.
-                    perm.key == ACCESSIBILITY_PERM -> "Turn on blocking"
-                    else -> "Open Settings"
+                    perm.key == ACCESSIBILITY_PERM ->
+                        stringResource(R.string.onboarding_turn_on_blocking)
+                    else -> stringResource(R.string.onboarding_open_settings)
                 },
                 onClick = grantAndRemember,
             )
             Spacer(Modifier.height(8.dp))
             TextButton(onClick = onSkip) {
-                Text("Skip for now", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    stringResource(R.string.onboarding_skip_for_now),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }) {
@@ -446,7 +468,7 @@ internal fun EssentialStep(
         StepIcon(icon, granted = perm.granted, size = 56.dp)
         Spacer(Modifier.height(14.dp))
         Text(
-            stepHeadline(perm),
+            stepHeadline(LocalContext.current, perm),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
@@ -454,7 +476,7 @@ internal fun EssentialStep(
         )
         if (perm.granted) {
             Spacer(Modifier.height(8.dp))
-            StatusChip(granted = true, requiredLabel = "Required")
+            StatusChip(granted = true, requiredLabel = stringResource(R.string.profile_required))
         }
         Spacer(Modifier.height(10.dp))
         Text(
@@ -466,7 +488,7 @@ internal fun EssentialStep(
         if (justSucceeded) {
             Spacer(Modifier.height(16.dp))
             Text(
-                "That's it — it's on. Tap Continue.",
+                stringResource(R.string.onboarding_done),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.primary,
@@ -492,7 +514,7 @@ internal fun EssentialStep(
             // different app, which is the most disorienting moment in the whole product and was
             // never mentioned anywhere on this screen.
             Text(
-                "What to do in Settings — ${guide.shots.size} steps",
+                stringResource(R.string.onboarding_steps_heading, guide.shots.size.toString()),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -500,10 +522,7 @@ internal fun EssentialStep(
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                "The button below leaves AppBlocker and opens your phone's own Settings. Do these, " +
-                    "then come straight back here — this screen will tell you if it worked. " +
-                    "The steps go with you: swipe down from the top of the screen to see them " +
-                    "again while you're in Settings.",
+                stringResource(R.string.onboarding_leaves_app),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth(),
@@ -541,12 +560,12 @@ const val SETUP_STUCK_TAG = "setup_stuck"
  *
  * Falls back to the permission's own label, so a permission added later is never headline-less.
  */
-private fun stepHeadline(perm: Perm): String = when (perm.key) {
+private fun stepHeadline(ctx: Context, perm: Perm): String = when (perm.key) {
     // Deliberately not the button's words ("Turn on blocking"): a headline repeating its own button
     // tells the reader nothing new. This one states the size of the job, which is the reassuring
     // part — it really is one switch.
-    ACCESSIBILITY_PERM -> "Blocking needs one switch"
-    "overlay" -> "Let the block screen show"
+    ACCESSIBILITY_PERM -> ctx.getString(R.string.onboarding_headline_accessibility)
+    "overlay" -> ctx.getString(R.string.onboarding_headline_overlay)
     else -> perm.label
 }
 
@@ -565,7 +584,7 @@ private fun StuckNote(permKey: String) {
             .testTag(SETUP_STUCK_TAG),
     ) {
         Text(
-            "Not switched on yet",
+            stringResource(R.string.onboarding_stuck_title),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
@@ -573,13 +592,12 @@ private fun StuckNote(permKey: String) {
         Spacer(Modifier.height(6.dp))
         Text(
             if (permKey == ACCESSIBILITY_PERM) {
-                "Nothing is broken — this screen is easy to miss. " +
-                    DeviceVendor.accessibilityHint(DeviceVendor.advice()) +
-                    " Tap “Try again” and follow the pictures below; the row you are looking for " +
-                    "is called AppBlocker."
+                stringResource(
+                    R.string.onboarding_stuck_accessibility,
+                    DeviceVendor.accessibilityHint(DeviceVendor.advice()),
+                )
             } else {
-                "Nothing is broken — that list is easy to miss. Tap “Try again”, find AppBlocker " +
-                    "in the list, and turn its switch on."
+                stringResource(R.string.onboarding_stuck_other)
             },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -593,7 +611,11 @@ private fun RecommendedStep(
     onContinue: () -> Unit,
     onRequestDisclosure: (() -> Unit) -> Unit,
 ) {
-    StepScaffold(footer = { GradientButton(text = "Continue", onClick = onContinue) }) {
+    StepScaffold(
+        footer = {
+            GradientButton(text = stringResource(R.string.onboarding_continue), onClick = onContinue)
+        },
+    ) {
         Spacer(Modifier.height(8.dp))
         StepIcon(Icons.Filled.BatteryChargingFull)
         Spacer(Modifier.height(24.dp))

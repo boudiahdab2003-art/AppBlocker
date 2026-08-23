@@ -42,10 +42,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import com.appblocker.R
 import com.appblocker.ui.theme.AppCard
 import com.appblocker.ui.theme.AppGradients
 import com.appblocker.ui.theme.appBackground
@@ -98,7 +100,7 @@ fun AccessibilityDisclosureScreen(
     // background BEFORE safeDrawingPadding so the app colour still paints behind the system bars
     // (targetSdk 35 = forced edge-to-edge on Android 15+), same as every other full-screen page.
     Column(Modifier.fillMaxSize().background(appBackground()).safeDrawingPadding()) {
-        EditorTopBar("How blocking works", onBack = onDecline)
+        EditorTopBar(stringResource(R.string.disclosure_topbar), onBack = onDecline)
         Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) {
             Column(
                 Modifier.pageWidth()
@@ -107,60 +109,52 @@ fun AccessibilityDisclosureScreen(
                 Hero()
 
                 Spacer(Modifier.height(24.dp))
-                SectionLabel("What it reads")
+                SectionLabel(stringResource(R.string.disclosure_reads))
                 AppCard(elevation = 4.dp, contentPadding = PaddingValues(0.dp)) {
                     DisclosureRow(
                         icon = Icons.Filled.Visibility,
-                        title = "Which app is in front",
-                        subtitle = "So the moment you open something you've blocked, the block " +
-                            "screen can cover it.",
+                        title = stringResource(R.string.disclosure_front_title),
+                        subtitle = stringResource(R.string.disclosure_front_body),
                     )
                     RowLine()
                     DisclosureRow(
                         icon = Icons.Filled.Language,
-                        title = "In web browsers only — the address and the text on the page",
-                        subtitle = "So a blocked site or a blocked word is caught in the browser " +
-                            "too, not just in apps. Outside browsers, AppBlocker only looks at " +
-                            "which app is open.",
+                        title = stringResource(R.string.disclosure_browser_title),
+                        subtitle = stringResource(R.string.disclosure_browser_body),
                     )
                 }
 
                 Spacer(Modifier.height(24.dp))
-                SectionLabel("What never happens")
+                SectionLabel(stringResource(R.string.disclosure_never))
                 AppCard(elevation = 4.dp, contentPadding = PaddingValues(0.dp)) {
                     DisclosureRow(
                         icon = Icons.Filled.PhoneAndroid,
-                        title = "It never leaves your phone",
-                        subtitle = "Every check happens on this device. Screen content is never " +
-                            "stored and never sent anywhere.",
+                        title = stringResource(R.string.disclosure_local_title),
+                        subtitle = stringResource(R.string.disclosure_local_body),
                     )
                     RowLine()
                     DisclosureRow(
                         icon = Icons.Filled.CloudOff,
-                        title = "There's no account and no server",
-                        subtitle = "AppBlocker has no sign-in. Nobody — including the developer " +
-                            "— can see what's on your screen or what you block.",
+                        title = stringResource(R.string.disclosure_noaccount_title),
+                        subtitle = stringResource(R.string.disclosure_noaccount_body),
                     )
                     RowLine()
                     DisclosureRow(
                         icon = Icons.Filled.Lock,
-                        title = "The AI Coach never sees your screen",
-                        subtitle = "If you switch the coach on, it receives your screen-time " +
-                            "numbers and your settings — never the pages you visit or the text " +
-                            "on them.",
+                        title = stringResource(R.string.disclosure_coach_title),
+                        subtitle = stringResource(R.string.disclosure_coach_body),
                     )
                     RowLine()
                     DisclosureRow(
                         icon = Icons.Filled.Block,
-                        title = "It's only used for blocking",
-                        subtitle = "No ads, no analytics, no tracking. Turning the service off " +
-                            "in Android's settings stops all of it immediately.",
+                        title = stringResource(R.string.disclosure_onlyblocking_title),
+                        subtitle = stringResource(R.string.disclosure_onlyblocking_body),
                     )
                 }
 
                 Spacer(Modifier.height(16.dp))
                 Text(
-                    "Read the full privacy policy",
+                    stringResource(R.string.disclosure_policy_link),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.primary,
                     textDecoration = TextDecoration.Underline,
@@ -171,8 +165,7 @@ fun AccessibilityDisclosureScreen(
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Tapping “Agree & open Settings” takes you to Android's Accessibility settings, " +
-                        "where you switch AppBlocker on yourself. Nothing is granted until you do.",
+                    stringResource(R.string.disclosure_footer),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -188,7 +181,7 @@ fun AccessibilityDisclosureScreen(
         // bug that came from capping only one of the two.
         Column(Modifier.pageWidth().padding(horizontal = 16.dp)) {
             GradientButton(
-                text = "Agree & open Settings",
+                text = stringResource(R.string.disclosure_agree),
                 onClick = onAgree,
                 modifier = Modifier.testTag(DISCLOSURE_AGREE_TAG),
             )
@@ -197,7 +190,10 @@ fun AccessibilityDisclosureScreen(
                 modifier = Modifier.align(Alignment.CenterHorizontally)
                     .testTag(DISCLOSURE_DECLINE_TAG),
             ) {
-                Text("Not now", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    stringResource(R.string.disclosure_decline),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
@@ -228,14 +224,13 @@ private fun Hero() {
             }
             Spacer(Modifier.height(14.dp))
             Text(
-                "What AppBlocker can see",
+                stringResource(R.string.disclosure_title),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold, color = Color.White, textAlign = TextAlign.Center,
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                "Blocking only works if the app can tell what's on your screen. Here is exactly " +
-                    "what that means, before you're asked to allow it.",
+                stringResource(R.string.disclosure_intro),
                 style = MaterialTheme.typography.bodyMedium,
                 color = Color.White.copy(alpha = 0.9f), textAlign = TextAlign.Center,
             )
