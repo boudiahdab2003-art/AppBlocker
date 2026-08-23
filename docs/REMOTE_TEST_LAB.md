@@ -206,6 +206,24 @@ All three cost time on 23 Aug 2026 and none of them is a defect in AppBlocker.
   all sat in the top 1230px of 2340 with the keyboard up — roughly 470dp of room, far more than the
   320dp the test squeezes to.
 
+## The Android-13 "greyed out" dead end cannot be photographed on an emulator
+
+Tried 23 Aug 2026 and worth not repeating. Two separate walls:
+
+- **An `adb install` is not restricted.** On an Android 15 emulator the accessibility switch for
+  a sideloaded-by-cable build reads `enabled="true"` — Android treats the cable as a trusted
+  installer, so the dead end this note exists for never appears and there is nothing to shoot.
+  Reproducing it needs an APK downloaded and opened on a real phone.
+- **Android 15's App info page has no ⋮ at all.** It was rebuilt (`com.android.settings/.spa
+  .SpaActivity`); the top-right icon is "open in new". So `RestrictedSettingsNote`'s "tap ⋮ in
+  the top corner" is right for 13 and 14 and points at nothing on 15. The note now says so and
+  falls back on the one certainly-true sentence: if the switch is not greyed out, none of it
+  applies.
+
+⚠️ Also: **this machine's emulators ANR their SystemUI constantly** under `swangle_indirect`,
+and a hung SystemUI looks exactly like "the intent will not open" — `am start` reports success
+while focus stays on the launcher. Check `topResumedActivity`, not `mCurrentFocus`, and reboot
+the emulator before concluding anything about an intent.
 ## The run sheet, in priority order
 
 `setup`, `alive`, `seed`, `probe` are cheap and answer most of the table. Then:
