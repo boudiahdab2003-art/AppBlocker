@@ -90,6 +90,46 @@ object SetupGuides {
         ),
     )
 
+
+    /**
+     * Photographed on a Galaxy A36, One UI 8, 23 Aug 2026 (Remote Test Lab).
+     *
+     * **This set is why per-brand pictures exist.** Samsung's accessibility screen is not the
+     * stock one with different colours — it is a different screen: categories instead of a flat
+     * list, the services hidden behind an **Installed apps** sub-page, an **Off** row where
+     * stock says "Use AppBlocker", and a confirmation whose three buttons sit side by side
+     * rather than stacked. A Samsung owner shown the stock pictures would have gone looking for
+     * rows that are not on their phone.
+     */
+    private val SAMSUNG_ACCESSIBILITY = SetupGuide(
+        takenOn = "These pictures are from a Galaxy running One UI 8. Yours may look a little " +
+            "different, but the steps are the same.",
+        shots = listOf(
+            GuideShot(
+                R.drawable.setup_samsung_a11y_installed,
+                Ring(0.037f, 0.475f, 0.972f, 0.875f),
+                "Scroll down and tap “Installed apps”.",
+            ),
+            GuideShot(
+                R.drawable.setup_samsung_a11y_list,
+                Ring(0.042f, 0.500f, 0.963f, 0.944f),
+                "Tap AppBlocker in the list.",
+            ),
+            GuideShot(
+                R.drawable.setup_samsung_a11y_switch,
+                Ring(0.010f, 0.167f, 0.995f, 0.854f),
+                "Turn the switch on — the row that says “Off”.",
+            ),
+            GuideShot(
+                R.drawable.setup_samsung_a11y_allow,
+                Ring(0.716f, 0.278f, 0.892f, 0.778f),
+                "Android asks whether to allow full control. Tap “Allow”. That is what " +
+                    "lets AppBlocker see which app is open, so it can block it. Nothing is " +
+                    "recorded or sent anywhere.",
+            ),
+        ),
+    )
+
     /** Per-permission pictures for one brand. An absent brand falls through to [STOCK]. */
     private val STOCK = mapOf(
         "accessibility" to STOCK_ACCESSIBILITY,
@@ -99,12 +139,17 @@ object SetupGuides {
     /**
      * Brand-specific sets, keyed by [VendorAdvice.brand].
      *
-     * Empty today: the Samsung set needs a Remote Test Lab session to photograph
-     * (docs/REMOTE_TEST_LAB.md) and the Xiaomi set needs screenshots from the owner's own phone.
-     * Until then every phone gets [STOCK] plus its honest "yours may look different" line, which is
+     * Samsung is in, photographed on real hardware. Xiaomi still needs screenshots from the
+     * owner's own phone; Huawei, Oppo and Vivo have no hardware anyone here can reach.
+     * Everything not listed gets [STOCK] plus its honest "yours may look different" line, which is
      * the whole reason that line exists.
      */
-    private val BY_BRAND: Map<String, Map<String, SetupGuide>> = emptyMap()
+    private val BY_BRAND: Map<String, Map<String, SetupGuide>> = mapOf(
+        // Samsung's accessibility journey is genuinely its own — see SAMSUNG_ACCESSIBILITY. The
+        // overlay permission is not in here, so a Samsung falls back to the stock picture for that
+        // one, carrying the honest "yours may look different" line with it.
+        "Samsung" to mapOf("accessibility" to SAMSUNG_ACCESSIBILITY),
+    )
 
     /**
      * Pictures for one permission on one brand, or null when we have none — callers must render

@@ -106,8 +106,11 @@ object DeviceVendor {
     fun accessibilityHint(advice: VendorAdvice): String = when {
         advice.brand.isBlank() ->
             "Open Settings, tap the search icon, and type Accessibility."
+        // Stated as fact, because somebody went and looked — but the search box stays. A brand is
+        // one OS update away from moving its own menu, and the fallback costs one sentence.
         advice.accessibilityPathMeasured ->
-            "On your phone the list is at ${advice.accessibilityPath}."
+            "On your phone the list is at ${advice.accessibilityPath}. If you can't see it, " +
+                "open Settings, tap the search icon, and type Accessibility."
         else ->
             "On most ${advice.brand} phones it is at ${advice.accessibilityPath}. If it " +
                 "isn't there, open Settings, tap the search icon, and type Accessibility."
@@ -151,6 +154,9 @@ object DeviceVendor {
         ),
         clonedAppsFeature = "Secure Folder or Dual Messenger",
         accessibilityPath = "Settings ▸ Accessibility ▸ Installed apps",
+        // Read off a Galaxy A36 running One UI 8 on 23 Aug 2026, not recalled: the screen has
+        // an "Installed apps" row and AppBlocker is inside it. See docs/DEVICE_MATRIX.md.
+        accessibilityPathMeasured = true,
         spacesWarning = "Coming back from Secure Folder, or switching between users, can stop " +
             "AppBlocker while Android's switch still says it's on. Add AppBlocker to “Never " +
             "sleeping apps” and lock it in Recents to make that rarer.",

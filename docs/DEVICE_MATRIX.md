@@ -49,12 +49,20 @@ from recollection — the same footing as `com.samsung.android.packageinstaller`
 and measured wrong in twenty minutes. Until a brand has been seen, its path is shown hedged ("on
 most Samsungs…") next to the one instruction that is true everywhere: use the Settings search box.
 
+⚠️ **The activity name does not tell the brands apart.** Samsung answers with exactly the same
+class as stock Android while showing a completely different screen — categories instead of a
+flat list, the services behind an *Installed apps* sub-page, an *Off* row rather than *Use
+AppBlocker*, and a confirmation whose buttons sit side by side. So `accessibilityScreen` proves
+the button has somewhere to land; it cannot stand in for looking at the phone. That is what the
+per-brand screenshots in `data/SetupGuides.kt` are for.
+
 **Flip `accessibilityPathMeasured` to true only on evidence** — a lab session, or this line arriving
 in a real report. That is how Huawei, Oppo and Vivo get answered without anyone owning one.
 
 | Phone | `accessibilityScreen` | Path confirmed? |
 |---|---|---|
 | Emulator (stock, API 34) | `com.android.settings/Settings$AccessibilitySettingsActivity` | n/a — the generic wording |
+| **Samsung** Galaxy A36, One UI 8 | `com.android.settings/Settings$AccessibilitySettingsActivity` — **identical to stock** | ✅ **Settings ▸ Accessibility ▸ Installed apps**, photographed 23 Aug 2026 |
 | Everything else | — | **not yet measured** |
 
 ## How a row gets filled in

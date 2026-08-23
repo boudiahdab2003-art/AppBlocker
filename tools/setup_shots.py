@@ -37,6 +37,16 @@ SHOTS = [
     ("setup_stock_a11y_switch", "stock-02-service-page.png", (40, 600, 1060, 860), (66, 646, 1032, 830)),
     ("setup_stock_a11y_allow", "stock-03-confirm.png", (74, 1500, 1006, 1990), (74, 1560, 1006, 1680)),
     ("setup_stock_overlay_row", "stock-04-overlay.png", (0, 860, 1080, 1130), (40, 900, 900, 1090)),
+
+    # Samsung, One UI 8 (Galaxy A36, Remote Test Lab, 23 Aug 2026). A completely different
+    # shape from stock: categories rather than a flat list, an "Installed apps" sub-page, an
+    # "Off" row instead of "Use AppBlocker", and a confirmation whose buttons sit side by side.
+    # Showing a Samsung owner the stock pictures would have sent them looking for rows that are
+    # not there.
+    ("setup_samsung_a11y_installed", "sam-01-a11y.png", (0, 1250, 1080, 1650), (40, 1440, 1050, 1600)),
+    ("setup_samsung_a11y_list", "sam-02-installed.png", (0, 140, 1080, 500), (45, 320, 1040, 480)),
+    ("setup_samsung_a11y_switch", "sam-03-service.png", (20, 260, 1060, 500), (30, 300, 1055, 465)),
+    ("setup_samsung_a11y_allow", "sam-04-confirm.png", (30, 1980, 1050, 2160), (760, 2030, 940, 2120)),
 ]
 
 

@@ -21,7 +21,8 @@ class AccessibilityHintTest {
 
     @Test
     fun `an unmeasured brand is offered as a likelihood, never as a fact`() {
-        for (brand in listOf("Samsung", "Xiaomi", "Huawei", "Oppo", "Vivo")) {
+        // Samsung is absent on purpose: it HAS been measured now, and has its own case below.
+        for (brand in listOf("Xiaomi", "Huawei", "Oppo", "Vivo")) {
             val hint = hintFor(brand)
             assertTrue(
                 "$brand: an unmeasured path must be hedged, not asserted — got: $hint",
@@ -69,5 +70,19 @@ class AccessibilityHintTest {
             assertTrue("$brand: too short to help — got: $hint", hint.length >= 40)
             assertTrue("$brand: does not end as a sentence", hint.trim().endsWith("."))
         }
+    }
+
+    /**
+     * **Samsung has been looked at, so Samsung is told plainly.** A Galaxy A36 on One UI 8 really
+     * does keep the services behind Accessibility ▸ Installed apps — photographed 23 Aug 2026,
+     * not recalled. Hedging a fact somebody went and checked would waste the trip.
+     */
+    @Test
+    fun `a measured brand is stated as fact`() {
+        val hint = hintFor("Samsung")
+
+        assertTrue("Samsung was measured; say so — got: $hint", hint.contains("On your phone"))
+        assertTrue(hint.contains("Installed apps"))
+        assertFalse("stop hedging a checked fact — got: $hint", hint.contains("On most"))
     }
 }
