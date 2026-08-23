@@ -79,7 +79,9 @@ the diagnostics screen, the probe and the reporter must never be able to disagre
   general 24-char cap exists to catch values long *because something unintended got in*, and it
   would shred `com.sec.android.app.sbrowser`. Safe only because every profile value is built from
   our own constants. Do not fold them back into `ALLOWED_CONTEXT_KEYS`.
-- **`docs/REMOTE_TEST_LAB.md`** is the run sheet for actually getting onto that hardware —
+- **`docs/REMOTE_TEST_LAB.md`** is the run sheet for actually getting onto that hardware, and
+  **`tools/lab_apk.sh`** (builds a Samsung-installable APK) and **`tools/rtl.sh`** (drives the
+  session; `prove <browser>` is the whole address-bar measurement) are its hands —
   Samsung Remote Test Lab, a ~20-minute clock on a device that is wiped afterwards. It holds
   the three traps that silently disarm blocking on a freshly flashed phone (the after-update
   pause, `pm clear` pruning the accessibility setting, and `am force-stop` rebinding the
