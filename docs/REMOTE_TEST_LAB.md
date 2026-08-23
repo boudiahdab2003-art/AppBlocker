@@ -155,10 +155,24 @@ the blocked list). That path matches the **address only** and never page text, s
 cannot have come from anywhere else. A blocked *word* is a weaker instrument: the word may equally
 have been found in the page.
 
-### If the OEM browser isn't installed
+### Samsung Internet is not on Remote Test Lab devices — settled, stop looking
 
-The first Samsung unit had **no Samsung Internet at all**, which left its claim unproven. Before
-spending the session on anything else:
+**Two units, two firmwares, neither has it:** the Galaxy S24 FE (EEA, One UI 7, 22 Aug 2026) and
+the Galaxy A36 5G (**SM-A366N, Korea**, One UI 8, 23 Aug 2026). On the Korean unit it is not merely
+disabled or removed-for-user — `pm list packages -u` finds nothing and
+`cmd package install-existing` answers *"Package com.sec.android.app.sbrowser doesn't exist"*, while
+43 other `com.sec.android.*` packages are present. So the images are not stripped in general;
+Samsung Internet specifically is not in them.
+
+The Korean device was chosen precisely to test "it's a European unbundling" — that hypothesis is
+**disproved**. `com.sec.android.app.sbrowser:id/location_bar_edit_text` therefore **cannot be
+settled on this service**, and a third booking is not the way to settle it. What would: a real
+Samsung owned by a real person, or the first profile report from a Samsung user once the app is on
+Play (`BugReportSender.reportDeviceProfile` already reports the claim as unproven per phone).
+
+### If an OEM browser isn't installed
+
+Before spending the session on anything else:
 
 ```
 pm list packages | grep sbrowser        # there?
@@ -170,6 +184,27 @@ cmd package install-existing com.sec.android.app.sbrowser
 which is the only acceptable route — never sideload a browser from a download site onto a device
 whose result you then intend to trust, and never sign in to a store account on a leased phone.
 If all three come back empty, end the session (unused time is refunded) and pick another model.
+
+## Three things a fresh lab phone does that look like app bugs
+
+All three cost time on 23 Aug 2026 and none of them is a defect in AppBlocker.
+
+- **A browser that has never been opened shows its own terms screen, not a page.** Chrome on a
+  fresh device sits on *"By continuing, you agree to the Terms of Service"* and simply ignores the
+  `am start` URL, so `prove` reports **NOT READ** for a browser that reads perfectly well. The
+  watcher's own log gives it away — `scan[...]: 264 chars: By continuing, you agree...`. Tap
+  through the welcome screen before measuring anything, and read the log before believing a
+  verdict.
+- **Running the instrumentation leaves the watcher switched on and DEAF.** After `am instrument`,
+  `Bound services:{}` with a frozen `health_last_event_at` — seen on **both** Samsungs now, so it
+  is a pattern and not an accident. Always `alive` after `probe` or `suite`, and `rebind` before
+  measuring a block. A page that fails to be blocked in this state proves nothing.
+- **Samsung's system font is taller than the emulator's**, so a rendering case can pass at the
+  Galaxy's exact geometry on an emulator (`wm size 1080x2340; wm density 450`) and still fail on
+  the phone. `AccountScreenTest.nameFieldAndSaveSurviveTheKeyboard` does exactly that. Before
+  calling that an app bug, measure the **real** keyboard: on the A36 the field, Continue and Skip
+  all sat in the top 1230px of 2340 with the keyboard up — roughly 470dp of room, far more than the
+  320dp the test squeezes to.
 
 ## The run sheet, in priority order
 
