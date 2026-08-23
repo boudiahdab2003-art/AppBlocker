@@ -36,12 +36,12 @@
          resolves these through a lambda the caller supplies. -->
     <string name="block_locked_title">Locked</string>
     <plurals name="block_locked_word">
-        <item quantity="one">“%1$s” was found here. Locked for %2$d more min.</item>
-        <item quantity="other">“%1$s” was found here. Locked for %2$d more min.</item>
+        <item quantity="one">“%1$s” was found here. Locked for %2$s more min.</item>
+        <item quantity="other">“%1$s” was found here. Locked for %2$s more min.</item>
     </plurals>
     <plurals name="block_locked_generic">
-        <item quantity="one">A blocked word was found here. Locked for %1$d more min.</item>
-        <item quantity="other">A blocked word was found here. Locked for %1$d more min.</item>
+        <item quantity="one">A blocked word was found here. Locked for %1$s more min.</item>
+        <item quantity="other">A blocked word was found here. Locked for %1$s more min.</item>
     </plurals>
 
     <string name="block_strict_title">Strict Mode</string>
@@ -51,21 +51,21 @@
 
     <string name="block_limit_title">Daily limit reached</string>
     <plurals name="block_limit_message">
-        <item quantity="one">You\'ve used your %1$d min for today.</item>
-        <item quantity="other">You\'ve used your %1$d min for today.</item>
+        <item quantity="one">You\'ve used your %1$s min for today.</item>
+        <item quantity="other">You\'ve used your %1$s min for today.</item>
     </plurals>
     <string name="block_limit_zero_message">This app is blocked for today.</string>
 
     <string name="block_schedule_title">Blocked by schedule</string>
     <string name="block_schedule_message">%1$s is on until %2$s.</string>
     <plurals name="block_schedule_usage_message">
-        <item quantity="one">%1$d min used today — the limit set by %2$s.</item>
-        <item quantity="other">%1$d min used today — the limit set by %2$s.</item>
+        <item quantity="one">%1$s min used today — the limit set by %2$s.</item>
+        <item quantity="other">%1$s min used today — the limit set by %2$s.</item>
     </plurals>
     <string name="block_opens_title">Open limit reached</string>
     <plurals name="block_opens_message">
-        <item quantity="one">Opened %1$d time today — the limit set by %2$s.</item>
-        <item quantity="other">Opened %1$d times today — the limit set by %2$s.</item>
+        <item quantity="one">Opened %1$s time today — the limit set by %2$s.</item>
+        <item quantity="other">Opened %1$s times today — the limit set by %2$s.</item>
     </plurals>
 
     <string name="block_wifi_title">Blocked on this Wi-Fi</string>
@@ -95,4 +95,220 @@
     <string name="block_adult_search_message">“%1$s” looks like adult content.</string>
     <string name="block_adult_site_title">Adult site blocked</string>
     <string name="block_adult_site_message">“%1$s” is on the adult-content list.</string>
+
+    <!-- ===================== Shared words ===================== -->
+    <string name="common_cancel">Cancel</string>
+    <string name="common_next">Next</string>
+    <string name="common_save">Save</string>
+    <string name="common_delete">Delete</string>
+    <string name="common_done">Done</string>
+    <string name="common_open">Open</string>
+    <string name="day_today">Today</string>
+    <string name="day_yesterday">Yesterday</string>
+
+    <!-- A duration written the way a sentence would say it. Separate plurals per unit because
+         Arabic inflects each one differently and English does not inflect min/sec at all. -->
+    <plurals name="length_days">
+        <item quantity="one">%1$s day</item>
+        <item quantity="other">%1$s days</item>
+    </plurals>
+    <plurals name="length_hours">
+        <item quantity="one">%1$s hour</item>
+        <item quantity="other">%1$s hours</item>
+    </plurals>
+    <plurals name="length_minutes">
+        <item quantity="one">%1$s minute</item>
+        <item quantity="other">%1$s minutes</item>
+    </plurals>
+    <string name="length_moment">less than a minute</string>
+
+    <!-- ===================== Profile: Recovery ===================== -->
+    <string name="profile_section_recovery">Recovery</string>
+    <string name="profile_counter_title">Your counter</string>
+    <string name="profile_counter_subtitle">How long it has been since your last relapse — days, hours, minutes and seconds, counting.</string>
+    <string name="profile_journal_title">Journal</string>
+    <string name="profile_journal_subtitle">Write about any day — how it felt, what set it off, what helped. Stored on this phone only.</string>
+
+    <!-- ===================== The counter ===================== -->
+    <string name="counter_title">Your counter</string>
+    <string name="counter_hero_lead">You have held on for</string>
+    <plurals name="counter_unit_days">
+        <item quantity="one">day</item>
+        <item quantity="other">days</item>
+    </plurals>
+    <plurals name="counter_unit_hours">
+        <item quantity="one">hours</item>
+        <item quantity="other">hours</item>
+    </plurals>
+    <plurals name="counter_unit_minutes">
+        <item quantity="one">min</item>
+        <item quantity="other">min</item>
+    </plurals>
+    <plurals name="counter_unit_seconds">
+        <item quantity="one">sec</item>
+        <item quantity="other">sec</item>
+    </plurals>
+    <string name="counter_since">Since %1$s.</string>
+    <string name="counter_record">Your longest run so far was %1$s.</string>
+    <string name="counter_record_beaten">This is the longest you have ever gone.</string>
+    <string name="counter_fresh">It is running again from here. That is the whole of what today has to be.</string>
+    <string name="counter_not_started_title">Not counting yet</string>
+    <string name="counter_not_started_body">Start it and this screen shows exactly how long it has been — days, hours, minutes and seconds — from that moment on. If you have already been going a while, you can tell it when you really started.</string>
+    <string name="counter_start">Start the count</string>
+    <string name="counter_started_earlier">I started earlier than now</string>
+    <string name="counter_write_today">Write about today</string>
+    <string name="counter_undo_title">Reset by mistake?</string>
+    <string name="counter_undo_body">Undo puts the count back exactly where it was. Available for %1$s after a reset.</string>
+    <string name="counter_undo">Undo</string>
+    <string name="counter_change_start_title">Change the start time</string>
+    <string name="counter_change_start_body">If the count started before you told the app. This records nothing — it just corrects the date it is counting from.</string>
+    <string name="counter_relapse_title">It happened — start again</string>
+    <string name="counter_relapse_body">Records today and starts the count from zero. You can take this back for %1$s afterwards.</string>
+    <string name="counter_privacy">This count, and everything you write in the journal, is stored on this phone only. It is never sent anywhere — not in a bug report, and not to the AI Coach.</string>
+    <string name="counter_confirm_title">Start the count again?</string>
+    <string name="counter_confirm_body_after_run">The %1$s you have just done still happened. This records today and starts the clock from now.</string>
+    <string name="counter_confirm_body">This records today and starts the clock from now.</string>
+    <string name="counter_confirm_undo_note">You can undo it for the next %1$s.</string>
+    <string name="counter_confirm_earlier">It happened earlier — pick when</string>
+    <string name="counter_confirm_now">Start again from now</string>
+    <string name="counter_pick_start">When did it start?</string>
+    <string name="counter_pick_relapse">When did it happen?</string>
+    <string name="counter_pick_time">What time?</string>
+    <string name="undo_window">24 hours</string>
+
+    <!-- ===================== The journal ===================== -->
+    <string name="journal_title">Journal</string>
+    <string name="journal_index_title">Write it down</string>
+    <string name="journal_index_body">One entry for each day — how it felt, what set it off, what helped. Nothing here leaves your phone.</string>
+    <string name="journal_today">Today · %1$s</string>
+    <string name="journal_empty_today">Nothing written yet. Tap to start.</string>
+    <string name="journal_earlier">EARLIER</string>
+    <string name="journal_another_day">Write about another day</string>
+    <string name="journal_placeholder">How did the day go?</string>
+    <string name="journal_delete_cd">Delete this entry</string>
+    <string name="journal_delete_title">Delete this entry?</string>
+    <string name="journal_delete_body">What you wrote on %1$s is removed from this phone. There is no copy of it anywhere else.</string>
+    <string name="journal_prompt_what_happened">What happened</string>
+    <string name="journal_prompt_set_off">What set it off</string>
+    <string name="journal_prompt_helped">What helped</string>
+    <string name="journal_prompt_tomorrow">Tomorrow</string>
+
+    <!-- ===================== Profile ===================== -->
+    <string name="profile_section_you">You</string>
+    <string name="profile_section_protection">Protection</string>
+    <string name="profile_section_appearance">Appearance</string>
+    <string name="profile_section_permissions">Permissions</string>
+    <string name="profile_section_about">About</string>
+
+    <string name="profile_header_all_set">You\'re all set — protection can run fully.</string>
+    <string name="profile_strict_banner">🔒 Strict Mode is on — settings are locked until the timer ends.</string>
+    <string name="profile_tap_add_name">Tap to add your name</string>
+    <string name="profile_version_line">AppBlocker · v%1$s</string>
+    <string name="profile_stat_apps">apps blocked</string>
+    <plurals name="profile_stat_schedules">
+        <item quantity="one">schedule</item>
+        <item quantity="other">schedules</item>
+    </plurals>
+    <string name="profile_stat_blocks">blocks today</string>
+    <string name="profile_selected">Selected</string>
+
+    <string name="status_action_needed">Action needed — tap to fix</string>
+    <string name="status_active">Protection active</string>
+    <string name="status_stopped">Blocking has stopped — tap to fix</string>
+    <string name="status_paused">Paused after update — see Blocking tab</string>
+
+    <string name="profile_your_profile">Your profile</string>
+    <string name="profile_your_profile_set">You\'re set up as %1$s. Change your name, or run the setup walkthrough again.</string>
+    <string name="profile_your_profile_unset">Tell the app what to call you — it\'s stored on this phone and nowhere else.</string>
+
+    <plurals name="profile_health_errors_title">
+        <item quantity="one">Blocking hit %1$s error</item>
+        <item quantity="other">Blocking hit %1$s errors</item>
+    </plurals>
+    <string name="profile_health_reported">Blocking kept running. Reported automatically — tap to clear.</string>
+    <string name="profile_health_unreported">Blocking kept running. Tap to clear once you\'ve reported it.</string>
+
+    <string name="profile_report_title">Report a problem</string>
+    <string name="profile_report_subtitle">Describe what went wrong and it goes straight to the developer. Never includes your blocked words, sites or app names.</string>
+    <string name="profile_report_disabled">Reporting isn\'t set up in this build.</string>
+    <string name="profile_report_prompt">What happened? Anything helps — what you were doing, which app, whether a block screen appeared when it shouldn\'t have, or didn\'t when it should.</string>
+    <string name="profile_report_placeholder">Describe the problem</string>
+    <string name="profile_report_privacy">Sent with: app version, Android version, phone model, and your current settings — which block screen you use, whether blocking is running, and how many blocks happened today.\n\nNever sent: your blocked words, the sites you visit, or which apps you block.</string>
+    <string name="profile_report_send">Send</string>
+    <string name="profile_report_thanks">Sent — thank you</string>
+
+    <string name="profile_pin_change">Change PIN</string>
+    <string name="profile_pin_set">Set a PIN</string>
+    <string name="profile_pin_on">A PIN is set. It\'s needed to change your blocks.</string>
+    <string name="profile_pin_off">Lock your settings so blocks can\'t be removed on a whim.</string>
+    <string name="profile_pin_remove">Remove PIN</string>
+    <string name="profile_pin_remove_subtitle">Stop requiring a PIN to open settings.</string>
+
+    <string name="profile_uninstall_title">Prevent uninstall</string>
+    <string name="profile_uninstall_on">On. AppBlocker can\'t be uninstalled until you turn this off — and turning it off means typing a paragraph first.</string>
+    <string name="profile_uninstall_off">OFF — AppBlocker can be uninstalled right now. Turn this on; the guard only makes the page hard to reach, this is what actually stops removal.</string>
+
+    <string name="profile_guard_title">Guard the off-switch</string>
+    <string name="profile_guard_off">Off. Blocking can be switched off in Settings at any moment.</string>
+    <string name="profile_guard_waiting_strict">Unlocking in %1$s, but Strict Mode is running — the guard can\'t come down until the session ends.</string>
+    <string name="profile_guard_strict">On, and locked while Strict Mode is running. You can\'t lower it until the session ends.</string>
+    <string name="profile_guard_waiting">Unlocking in %1$s. The guard is still on.</string>
+    <string name="profile_guard_open">Unlocked — tap to turn the guard off. Closes again in %1$s.</string>
+    <string name="profile_guard_on">On. The Accessibility page is blocked, so blocking can\'t be switched off on a whim. Turning this off takes %1$s.</string>
+    <string name="profile_guard_cancel_title">Cancel the unlock</string>
+    <string name="profile_guard_cancel_subtitle">Change your mind — the guard stays on and the wait is dropped.</string>
+
+    <string name="gate_guard_title">Turn off the guard</string>
+    <string name="gate_guard_blurb">This is the switch that stops you switching blocking off in a bad moment. Type the paragraph below — you can\'t paste it — before the clock runs out.</string>
+    <string name="gate_guard_detail">Miss the clock and you get a fresh paragraph and a fresh clock, as many times as it takes. Even once you\'ve typed it, the guard stays on for another %1$s; after that you have %2$s to turn it off.</string>
+    <string name="gate_guard_confirm">Start the %1$s wait</string>
+
+    <string name="profile_appearance_title">Appearance</string>
+    <string name="profile_appearance_subtitle">Theme: %1$s.</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="theme_system">System default</string>
+    <string name="profile_icon_title">App icon</string>
+    <string name="profile_icon_subtitle">Current: %1$s. Choose from your icon collection.</string>
+    <string name="profile_blockscreen_title">Block screen</string>
+    <string name="profile_blockscreen_subtitle">Current: %1$s in %2$s. Change what\'s on the block screen and its colour.</string>
+
+    <string name="profile_permissions_title">Setup &amp; permissions</string>
+    <string name="profile_permissions_subtitle">Accessibility, overlay, usage access, battery &amp; auto-start — all in one place.</string>
+
+    <string name="profile_update_play">Updates arrive through Google Play.</string>
+    <string name="profile_update_checking">Checking for updates…</string>
+    <string name="profile_update_current">You\'re on the latest version.</string>
+    <string name="profile_update_available">Update available: v%1$s — tap to install</string>
+    <string name="profile_update_downloading">Downloading… %1$s%%</string>
+    <string name="profile_update_retry">%1$s Tap to retry.</string>
+    <string name="profile_update_check">Tap to check for updates</string>
+    <string name="profile_version_title">AppBlocker v%1$s</string>
+
+    <string name="profile_instructions_title">Instructions</string>
+    <string name="profile_instructions_subtitle">How every feature works, explained in detail.</string>
+    <string name="profile_diagnostics_title">What the blocker sees</string>
+    <string name="profile_diagnostics_subtitle">Why something isn\'t being blocked — browsers found, what it last looked at, and whether blocking is on.</string>
+    <string name="profile_detox_title">Dopamine detox guide</string>
+    <string name="profile_detox_subtitle">Clear rules to reset your brain\'s reward system.</string>
+    <string name="profile_scenarios_title">Scenarios</string>
+    <string name="profile_scenarios_subtitle">Guides for the hard moments — relapse, focus, sleep, and more.</string>
+    <string name="profile_steps_title">The Twelve Steps</string>
+    <string name="profile_steps_subtitle">The programme, in plain English — and where to find the real thing.</string>
+    <string name="profile_changelog_title">What\'s new</string>
+    <string name="profile_changelog_subtitle">Every version and what it changed.</string>
+    <string name="profile_autoupdate_title">Update automatically</string>
+    <string name="profile_autoupdate_on">On. New versions install by themselves, on Wi-Fi, without asking. Blocking keeps running throughout.</string>
+    <string name="profile_autoupdate_off">Off. You\'ll be told when an update is ready and install it yourself.</string>
+    <string name="profile_privacy_title">Privacy policy</string>
+    <string name="profile_privacy_subtitle">What the app stores, what it never sends, and what the AI Coach sees.</string>
+    <string name="profile_share_title">Share AppBlocker</string>
+    <string name="profile_share_subtitle">Send the install link to a friend.</string>
+    <string name="profile_share_text">Block distracting apps &amp; websites with AppBlocker:\n%1$s</string>
+    <string name="profile_sponsor_title">Support AppBlocker</string>
+    <string name="profile_sponsor_subtitle">It\'s free, has no ads, and collects nothing about you. If it\'s helped, you can chip in — everything works exactly the same either way.</string>
+    <string name="profile_status_on">On</string>
+    <string name="profile_status_off">Off</string>
+    <string name="profile_required">Required</string>
+    <string name="profile_optional">Optional</string>
 </resources>

@@ -5,6 +5,7 @@ import com.appblocker.data.AppRule
 import com.appblocker.data.BlockMode
 import com.appblocker.data.Schedule
 import com.appblocker.data.ScheduleType
+import com.appblocker.data.Words
 
 /**
  * Why a cover was raised, from a fixed vocabulary, so a bug report can say **which rule fired**
@@ -96,21 +97,6 @@ internal data class BlockReason(val title: String, val message: String, val why:
  * Only genuinely device-dependent lookups stay as lambdas, and they are called lazily so a phone
  * with no schedules never pays for them.
  */
-/**
- * How this file gets its words without ever holding a Context.
- *
- * `decideBlock` is the one piece of the blocking core that is a pure function of its inputs, which
- * is why it is the one piece with real unit-test coverage. Handing it a Context to look strings up
- * with would end that. So the caller supplies the lookup, exactly as it already supplies
- * [BlockInputs.scheduleLabel] and [BlockInputs.hourMinuteLabel] — and the caller is the service,
- * which resolves them through [com.appblocker.data.AppLocale.wrap] so the cover speaks the app's
- * language rather than the phone's.
- */
-internal interface BlockWords {
-    fun get(id: Int, vararg args: Any): String
-    fun plural(id: Int, count: Int, vararg args: Any): String
-}
-
 internal data class BlockInputs(
     val pkg: String,
     /** After an app update, nothing blocks until the user reactivates. */
@@ -138,8 +124,8 @@ internal data class BlockInputs(
     val scheduleConditionMet: (Schedule) -> Boolean,
     val scheduleLabel: (Schedule) -> String,
     val hourMinuteLabel: (Int) -> String,
-    /** The cover's wording, in the app's language. See [BlockWords]. */
-    val words: BlockWords,
+    /** The cover's wording, in the app's language. See [Words]. */
+    val words: Words,
 )
 
 /**
@@ -168,8 +154,8 @@ internal fun decideBlock(i: BlockInputs): BlockReason? {
         val w = i.lockoutWord
         return BlockReason(
             i.words.get(R.string.block_locked_title),
-            if (w != null) i.words.plural(R.plurals.block_locked_word, mins.toInt(), w, mins.toInt())
-            else i.words.plural(R.plurals.block_locked_generic, mins.toInt(), mins.toInt()),
+            if (w != null) i.words.plural(R.plurals.block_locked_word, mins.toInt(), w, mins.toString())
+            else i.words.plural(R.plurals.block_locked_generic, mins.toInt(), mins.toString()),
             why = BlockWhy.LOCKOUT,
         )
     }
@@ -209,7 +195,7 @@ internal fun decideBlock(i: BlockInputs): BlockReason? {
                     if (i.rule.dailyLimitMinutes > 0)
                         i.words.plural(
                             R.plurals.block_limit_message,
-                            i.rule.dailyLimitMinutes, i.rule.dailyLimitMinutes,
+                            i.rule.dailyLimitMinutes, i.rule.dailyLimitMinutes.toString(),
                         )
                     else i.words.get(R.string.block_limit_zero_message),
                     why = BlockWhy.LIMIT,
@@ -235,7 +221,7 @@ internal fun decideBlock(i: BlockInputs): BlockReason? {
                 i.words.get(R.string.block_limit_title),
                 i.words.plural(
                     R.plurals.block_schedule_usage_message,
-                    s.limitMinutes, s.limitMinutes, i.scheduleLabel(s),
+                    s.limitMinutes, s.limitMinutes.toString(), i.scheduleLabel(s),
                 ),
                 why = BlockWhy.SCHED_USAGE,
             ) else null
@@ -245,7 +231,7 @@ internal fun decideBlock(i: BlockInputs): BlockReason? {
                 i.words.get(R.string.block_opens_title),
                 i.words.plural(
                     R.plurals.block_opens_message,
-                    s.limitCount, s.limitCount, i.scheduleLabel(s),
+                    s.limitCount, s.limitCount.toString(), i.scheduleLabel(s),
                 ),
                 why = BlockWhy.SCHED_LAUNCH,
             ) else null

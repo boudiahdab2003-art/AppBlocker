@@ -1,6 +1,6 @@
 package com.appblocker
 
-import com.appblocker.service.BlockWords
+import com.appblocker.data.Words
 import org.w3c.dom.Element
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
@@ -18,7 +18,7 @@ import javax.xml.parsers.DocumentBuilderFactory
  * Android's `R` class is on the unit-test classpath (its fields are plain static ints), so the
  * id → name direction comes from reflection and the name → text direction from the XML.
  */
-object EnglishStrings : BlockWords {
+object EnglishStrings : Words {
 
     override fun get(id: Int, vararg args: Any): String {
         val name = stringNames[id] ?: error("no <string> in R.string with id $id")

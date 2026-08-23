@@ -26,6 +26,7 @@ import androidx.core.graphics.drawable.toBitmap
 import com.appblocker.BuildConfig
 import com.appblocker.R
 import com.appblocker.data.AppLocale
+import com.appblocker.data.Words
 import com.appblocker.data.AppRule
 import com.appblocker.data.AdminPrompt
 import com.appblocker.data.AdminScreens
@@ -78,8 +79,8 @@ import kotlinx.coroutines.withContext
 class BlockerAccessibilityService : AccessibilityService() {
 
     /** The cover's wording in the app's language. A property so every cover in this file reads
-     *  the same way; see [coverWords] for why a Service cannot simply call `getString`. */
-    private val words: BlockWords get() = coverWords(this)
+     *  the same way; see [Words.of] for why a Service cannot simply call `getString`. */
+    private val words: Words get() = Words.of(this)
 
 
     // The handler is the safety net for the background scans: without it, an exception inside a

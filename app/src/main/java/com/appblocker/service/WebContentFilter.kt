@@ -3,6 +3,7 @@ package com.appblocker.service
 import android.content.Context
 import com.appblocker.R
 import com.appblocker.data.ServiceHealth
+import com.appblocker.data.Words
 
 /**
  * What the browser's address bar says — three answers, not two.
@@ -59,11 +60,11 @@ class WebContentFilter internal constructor(
      *
      * A constructor parameter rather than a lookup, so the unit tests — which build this
      * directly — can hand it the shipped English resources and keep asserting on real wording.
-     * Production passes [coverWords], backed by [com.appblocker.data.AppLocale.wrap]: a filter
+     * Production passes [Words.of], backed by [com.appblocker.data.AppLocale.wrap]: a filter
      * that formatted its hits with the *phone's* locale would put an English line on an otherwise
      * Arabic block screen.
      */
-    private val words: BlockWords,
+    private val words: Words,
 ) {
     /** [site] = matched because the user blocked an app and this is that app's WEBSITE (not a
      *  typed word). Callers treat site hits more gently (cover the page, but don't lock the
@@ -299,7 +300,7 @@ class WebContentFilter internal constructor(
                     val loaded = domains != null && keywords != null && pack != null
                     WebContentFilter(
                         domains.orEmpty(), keywords.orEmpty(), pack.orEmpty(),
-                        words = coverWords(context),
+                        words = Words.of(context),
                     )
                         .also { if (loaded) INSTANCE = it }
                 }

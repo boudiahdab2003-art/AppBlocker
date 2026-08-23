@@ -63,10 +63,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.appblocker.data.CleanStreak
+import com.appblocker.R
 import com.appblocker.data.JournalEntry
 import com.appblocker.data.dayStartMillis
 import com.appblocker.data.prevDayStamp
@@ -162,25 +164,27 @@ private fun JournalIndex(
     // No Scaffold here, so pad the system bars ourselves (edge-to-edge is forced on Android 15+).
     Column(Modifier.fillMaxSize().safeDrawingPadding()) {
         EditorTopBar(
-            title = "Journal",
+            title = stringResource(R.string.journal_title),
             onBack = onBack,
             actions = {
                 IconButton(onClick = { pickingDay = true }) {
-                    Icon(Icons.Filled.CalendarMonth, contentDescription = "Write about another day")
+                    Icon(
+                        Icons.Filled.CalendarMonth,
+                        contentDescription = stringResource(R.string.journal_another_day),
+                    )
                 }
             },
         )
         LazyColumn(Modifier.fillMaxSize().pageWidth().padding(horizontal = 20.dp)) {
             item {
                 Text(
-                    "Write it down",
+                    stringResource(R.string.journal_index_title),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onBackground,
                 )
                 Text(
-                    "One entry for each day — how it felt, what set it off, what helped. Nothing " +
-                        "here leaves your phone.",
+                    stringResource(R.string.journal_index_body),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 2.dp, bottom = 16.dp),
@@ -191,7 +195,7 @@ private fun JournalIndex(
             if (past.isNotEmpty()) {
                 item {
                     Text(
-                        "EARLIER",
+                        stringResource(R.string.journal_earlier),
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary,
@@ -220,7 +224,7 @@ private fun JournalIndex(
                     )
                     Spacer(Modifier.width(12.dp))
                     Text(
-                        "Write about another day",
+                        stringResource(R.string.journal_another_day),
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.primary,
                     )
@@ -244,9 +248,13 @@ private fun JournalIndex(
                         state.selectedDateMillis?.let { onOpen(utcDateToDayStamp(it)) }
                         pickingDay = false
                     },
-                ) { Text("Open") }
+                ) { Text(stringResource(R.string.common_open)) }
             },
-            dismissButton = { TextButton(onClick = { pickingDay = false }) { Text("Cancel") } },
+            dismissButton = {
+                TextButton(onClick = { pickingDay = false }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            },
         ) {
             DatePicker(state = state)
         }
@@ -262,13 +270,14 @@ private fun TodayCard(entry: JournalEntry?, onClick: () -> Unit) {
     ) {
         Column {
             Text(
-                "Today · ${dayTitle(todayStamp())}",
+                stringResource(R.string.journal_today, dayTitle(todayStamp())),
                 style = MaterialTheme.typography.labelLarge,
                 color = Color.White.copy(alpha = 0.85f),
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                entry?.text?.takeIf { it.isNotBlank() } ?: "Nothing written yet. Tap to start.",
+                entry?.text?.takeIf { it.isNotBlank() }
+                    ?: stringResource(R.string.journal_empty_today),
                 style = MaterialTheme.typography.bodyLarge,
                 color = Color.White,
                 maxLines = 4,
@@ -389,7 +398,10 @@ internal fun JournalEntryBody(
             actions = {
                 if (draft.isNotBlank()) {
                     IconButton(onClick = { confirmDelete = true }) {
-                        Icon(Icons.Filled.Delete, contentDescription = "Delete this entry")
+                        Icon(
+                            Icons.Filled.Delete,
+                            contentDescription = stringResource(R.string.journal_delete_cd),
+                        )
                     }
                 }
                 // **Done lives in the app bar, above the scroll.** That is what makes it
@@ -398,7 +410,7 @@ internal fun JournalEntryBody(
                 TextButton(
                     onClick = onBack,
                     modifier = Modifier.testTag(JOURNAL_DONE_TAG),
-                ) { Text("Done") }
+                ) { Text(stringResource(R.string.common_done)) }
             },
         )
         // **The writing area is not the flexible one.** `weight(1f)` here would hand the field
@@ -410,10 +422,11 @@ internal fun JournalEntryBody(
                 .padding(horizontal = 20.dp),
         ) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PROMPTS.forEach { prompt ->
+                PROMPTS.forEach { id ->
+                    val heading = stringResource(id)
                     AssistChip(
-                        onClick = { onDraft(withPrompt(draft, prompt)) },
-                        label = { Text(prompt) },
+                        onClick = { onDraft(withPrompt(draft, heading)) },
+                        label = { Text(heading) },
                     )
                 }
             }
@@ -421,7 +434,7 @@ internal fun JournalEntryBody(
             OutlinedTextField(
                 value = draft,
                 onValueChange = onDraft,
-                placeholder = { Text("How did the day go?") },
+                placeholder = { Text(stringResource(R.string.journal_placeholder)) },
                 shape = RoundedCornerShape(Radius.medium),
                 modifier = Modifier.fillMaxWidth().heightIn(min = JOURNAL_FIELD_FLOOR)
                     .testTag(JOURNAL_FIELD_TAG),
@@ -433,18 +446,19 @@ internal fun JournalEntryBody(
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
-            title = { Text("Delete this entry?") },
+            title = { Text(stringResource(R.string.journal_delete_title)) },
             text = {
-                Text(
-                    "What you wrote on ${dayLabel(day)} is removed from this phone. There is no " +
-                        "copy of it anywhere else."
-                )
+                Text(stringResource(R.string.journal_delete_body, dayLabel(day)))
             },
             confirmButton = {
-                TextButton(onClick = { confirmDelete = false; onDelete() }) { Text("Delete") }
+                TextButton(onClick = { confirmDelete = false; onDelete() }) {
+                    Text(stringResource(R.string.common_delete))
+                }
             },
             dismissButton = {
-                TextButton(onClick = { confirmDelete = false }) { Text("Cancel") }
+                TextButton(onClick = { confirmDelete = false }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
             },
         )
     }
@@ -457,7 +471,12 @@ internal fun JournalEntryBody(
  * whatever is actually there — but "write a full report" is much easier when something has already
  * suggested where to start.
  */
-private val PROMPTS = listOf("What happened", "What set it off", "What helped", "Tomorrow")
+private val PROMPTS = listOf(
+    R.string.journal_prompt_what_happened,
+    R.string.journal_prompt_set_off,
+    R.string.journal_prompt_helped,
+    R.string.journal_prompt_tomorrow,
+)
 
 /** Append a heading, leaving a blank line before it unless the page is still empty. */
 internal fun withPrompt(text: String, heading: String): String {
@@ -467,12 +486,18 @@ internal fun withPrompt(text: String, heading: String): String {
 
 // ─────────────────────────────────────────────────────────────────────── dates
 
-/** "Today" / "Yesterday" / "Friday, 8 August" — what the person would call the day themselves. */
+/**
+ * "Today" / "Yesterday" / "Friday, 8 August" — what the person would call the day themselves.
+ *
+ * Composable because the first two are words and the third is a date: only the caller's context
+ * knows which language to say them in.
+ */
+@Composable
 internal fun dayLabel(day: Int): String {
     val today = todayStamp()
     return when (day) {
-        today -> "Today"
-        prevDayStamp(today) -> "Yesterday"
+        today -> stringResource(R.string.day_today)
+        prevDayStamp(today) -> stringResource(R.string.day_yesterday)
         else -> dayTitle(day)
     }
 }
