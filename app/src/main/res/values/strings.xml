@@ -401,4 +401,117 @@
     <string name="disclosure_noaccount_body">AppBlocker has no sign-in. Nobody — including the developer — can see what\'s on your screen or what you block.</string>
     <string name="onboarding_stuck_accessibility">Nothing is broken — this screen is easy to miss. %1$s Tap “Try again” and follow the pictures below; the row you are looking for is called AppBlocker.</string>
     <string name="onboarding_stuck_other">Nothing is broken — that list is easy to miss. Tap “Try again”, find AppBlocker in the list, and turn its switch on.</string>
+
+    <!-- ===================== Notifications ===================== -->
+    <string name="channel_protection_name">Protection alerts</string>
+    <string name="channel_protection_desc">Tells you if AppBlocker\'s blocking service gets turned off.</string>
+    <string name="channel_stalled_name">Blocking has stopped</string>
+    <string name="channel_stalled_desc">The alert that says blocking is switched on but not actually running. Keep this one loud.</string>
+    <string name="channel_setup_name">Setup help</string>
+    <string name="channel_setup_desc">While you\'re in Settings, this holds the steps for switching blocking on. It disappears as soon as you come back.</string>
+
+    <string name="notif_off_title">Protection is off</string>
+    <string name="notif_off_collapsed">Tap to turn blocking back on</string>
+    <string name="notif_off_headline">PROTECTION OFF</string>
+    <string name="notif_off_subtitle">Blocking has stopped</string>
+    <string name="notif_off_action">Turn on</string>
+
+    <string name="notif_stalled_title">Blocking has stopped</string>
+    <string name="notif_stalled_collapsed">Your phone shut it down — tap to switch it back on</string>
+    <string name="notif_stalled_headline">BLOCKING HAS STOPPED</string>
+    <string name="notif_stalled_subtitle">Nothing is being blocked</string>
+    <string name="notif_stalled_action">Fix it</string>
+
+    <string name="notif_paused_title">Blocking is paused after the update</string>
+    <string name="notif_paused_collapsed">Tap to turn it back on</string>
+    <string name="notif_paused_headline">BLOCKING IS OFF</string>
+    <string name="notif_paused_subtitle">Paused since the app updated</string>
+    <string name="notif_paused_action">Turn it back on</string>
+
+    <string name="notif_test_title">Notifications are on</string>
+    <string name="notif_test_collapsed">You\'ll be warned if protection stops</string>
+    <string name="notif_test_headline">NOTIFICATIONS ON</string>
+    <string name="notif_test_subtitle">Alerts are working</string>
+
+    <string name="tile_label">Quick Block</string>
+    <string name="tile_strict">Strict</string>
+    <string name="tile_setup">Set up</string>
+    <string name="tile_paused">Paused</string>
+
+    <!-- ===================== Strict Mode ===================== -->
+    <string name="strict_title">Strict Mode</string>
+    <string name="strict_locked">Your blocks are locked</string>
+    <string name="strict_unlocked">Your blocks are unlocked</string>
+    <string name="strict_no_stopping">No stopping early — that was the point. You can add time, never take it away.</string>
+    <string name="strict_whats_locked">What\'s locked when active:</string>
+    <string name="strict_locked_blocks">Changing or removing your blocks</string>
+    <string name="strict_locked_service">Turning off the blocker</string>
+    <string name="strict_locked_uninstall">Uninstalling the app</string>
+    <string name="strict_unlock_method">UNLOCK METHOD</string>
+    <string name="strict_timer">Timer</string>
+    <string name="strict_nothing_to_lock">Add something to block first — set up Quick Block or a schedule.</string>
+    <string name="strict_activate">Activate lock</string>
+    <string name="strict_set_timer">Set the timer</string>
+    <string name="strict_start_lock">Start lock</string>
+    <string name="strict_confirm_title">Start Strict Mode?</string>
+    <string name="strict_confirm_body">Your blocks will be locked for %1$s — until %2$s. You can add more time while it runs, but never cut it short.</string>
+    <string name="strict_add_time_header">ADD MORE TIME</string>
+    <string name="strict_ends_at">Ends %1$s. Adding time can\'t be undone.</string>
+    <string name="strict_add_more_time">Add more time</string>
+    <string name="strict_add_the_time">Add the time</string>
+    <string name="strict_add_confirm_title">Add %1$s?</string>
+    <string name="strict_add_confirm_body">Your blocks will stay locked until %1$s.</string>
+    <string name="strict_locks_summary">Locks %1$s.</string>
+    <string name="strict_adult_filter">adult filter</string>
+    <string name="strict_needs_admin">Strict Mode needs this so AppBlocker can\'t be uninstalled until the timer ends.</string>
+
+    <!-- ===================== The Blocking tab ===================== -->
+    <string name="blocking_back_on">Blocking is back on 💪</string>
+    <string name="quick_block">Quick Block</string>
+    <string name="quick_start">Start</string>
+    <string name="quick_paused">Paused — tap the card to edit your list.</string>
+    <string name="quick_active">Active</string>
+    <string name="quick_tap_to_edit">Tap to edit</string>
+    <string name="blocked_words">Blocked words</string>
+    <string name="blocked_words_none">Block words everywhere on your phone</string>
+    <plurals name="blocked_words_count">
+        <item quantity="one">%1$s word · blocked in every app</item>
+        <item quantity="other">%1$s words · blocked in every app</item>
+    </plurals>
+    <string name="new_schedule">New schedule</string>
+    <string name="new_schedule_first">Let\'s do this — schedule your first blocking!</string>
+    <string name="new_schedule_body">Block apps on a timetable or after too much use.</string>
+    <string name="schedule_time">Time</string>
+    <string name="schedule_usage_limit">Usage limit</string>
+    <string name="schedule_launch_count">Launch count</string>
+    <string name="schedule_wifi">Wi-Fi</string>
+    <string name="schedule_location">Location</string>
+    <string name="your_schedules">Your schedules</string>
+    <string name="templates">Templates</string>
+    <string name="templates_body">One tap to block a whole category.</string>
+    <string name="template_applied">Applied “%1$s”</string>
+    <string name="template_apply">Apply</string>
+    <string name="template_apply_title">Apply “%1$s”?</string>
+    <string name="timer_started">Timer started — blocks for %1$s</string>
+    <string name="pomodoro_started">Pomodoro started — %1$s min work · %2$s min break</string>
+    <string name="pomodoro">Pomodoro</string>
+    <string name="pomodoro_body">Block during work, free during breaks.</string>
+    <string name="timer">Timer</string>
+    <string name="quick_allowing">Allowing %1$s apps, blocking all others</string>
+    <string name="quick_allowed_pill">allowed · all others blocked</string>
+    <string name="quick_pill_desc">Blocking %1$s apps, %2$s words</string>
+    <string name="quick_pill_desc_adult">Blocking %1$s apps, %2$s words, adult filter on</string>
+
+    <string name="banner_finish_setup">Finish setup</string>
+    <plurals name="banner_steps_left">
+        <item quantity="one">%1$s required step left — tap to fix</item>
+        <item quantity="other">%1$s required steps left — tap to fix</item>
+    </plurals>
+    <string name="banner_stopped_title">Blocking has stopped</string>
+    <string name="banner_stopped_body">Your phone shut it down — tap to switch it back on</string>
+    <string name="banner_update_title">Update available — v%1$s</string>
+    <string name="banner_update_body">Tap to download &amp; install the latest version</string>
+    <string name="banner_paused_title">Blocking is paused after the update</string>
+    <string name="banner_paused_body">Nothing is blocked right now. Tap below when you\'re ready.</string>
+    <string name="banner_reactivate">Reactivate blocking</string>
 </resources>

@@ -56,6 +56,8 @@ import com.appblocker.ui.theme.pageWidth
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.compose.ui.res.stringResource
+import com.appblocker.R
 
 @Composable
 fun StrictModeScreen(
@@ -83,7 +85,7 @@ fun StrictModeScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Spacer(Modifier.height(8.dp))
-        Text("Strict Mode", style = MaterialTheme.typography.titleLarge,
+        Text(stringResource(R.string.strict_title), style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
         Spacer(Modifier.height(28.dp))
 
@@ -91,7 +93,9 @@ fun StrictModeScreen(
         Spacer(Modifier.height(24.dp))
 
         Text(
-            if (active) "Your blocks are locked" else "Your blocks are unlocked",
+            stringResource(
+                if (active) R.string.strict_locked else R.string.strict_unlocked,
+            ),
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground,
@@ -106,7 +110,7 @@ fun StrictModeScreen(
                 color = MaterialTheme.colorScheme.primary,
             )
             Spacer(Modifier.height(8.dp))
-            Text("No stopping early — that was the point. You can add time, never take it away.",
+            Text(stringResource(R.string.strict_no_stopping),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
             Spacer(Modifier.height(24.dp))
@@ -114,7 +118,8 @@ fun StrictModeScreen(
             Spacer(Modifier.height(24.dp))
             LockedList()
         } else {
-            Text("What's locked when active:", style = MaterialTheme.typography.bodyMedium,
+            Text(stringResource(R.string.strict_whats_locked),
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(12.dp))
             LockedList()
@@ -175,9 +180,9 @@ private fun LockOrb(locked: Boolean) {
 @Composable
 private fun LockedList() {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        LockedRow("Changing or removing your blocks")
-        LockedRow("Turning off the blocker")
-        LockedRow("Uninstalling the app")
+        LockedRow(stringResource(R.string.strict_locked_blocks))
+        LockedRow(stringResource(R.string.strict_locked_service))
+        LockedRow(stringResource(R.string.strict_locked_uninstall))
     }
 }
 
@@ -198,7 +203,8 @@ private fun UnlockMethod(canActivate: Boolean, summary: String, onActivate: (Int
     var showPicker by remember { mutableStateOf(false) }
     var confirm by remember { mutableStateOf(false) }
 
-    Text("UNLOCK METHOD", style = MaterialTheme.typography.labelMedium,
+    Text(stringResource(R.string.strict_unlock_method),
+        style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.fillMaxWidth())
     Spacer(Modifier.height(10.dp))
 
@@ -212,7 +218,8 @@ private fun UnlockMethod(canActivate: Boolean, summary: String, onActivate: (Int
         Icon(Icons.Filled.Schedule, contentDescription = null,
             tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
         Spacer(Modifier.width(10.dp))
-        Text("Timer", style = MaterialTheme.typography.titleMedium,
+        Text(stringResource(R.string.strict_timer),
+            style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurface)
         Spacer(Modifier.weight(1f))
         Text(durationLabel(minutes), style = MaterialTheme.typography.titleMedium,
@@ -224,18 +231,22 @@ private fun UnlockMethod(canActivate: Boolean, summary: String, onActivate: (Int
     Spacer(Modifier.height(16.dp))
     Text(
         if (canActivate) summary
-        else "Add something to block first — set up Quick Block or a schedule.",
+        else stringResource(R.string.strict_nothing_to_lock),
         style = MaterialTheme.typography.bodyMedium,
         color = if (canActivate) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFFFFB020),
         textAlign = TextAlign.Center,
         modifier = Modifier.fillMaxWidth(),
     )
     Spacer(Modifier.height(12.dp))
-    GradientButton(text = "Activate lock", enabled = canActivate, onClick = { confirm = true })
+    GradientButton(
+        text = stringResource(R.string.strict_activate),
+        enabled = canActivate,
+        onClick = { confirm = true },
+    )
 
     if (showPicker) {
         DurationPickerDialog(
-            title = "Set the timer",
+            title = stringResource(R.string.strict_set_timer),
             initialMinutes = minutes,
             onSave = { minutes = it },
             onDismiss = { showPicker = false },
@@ -246,10 +257,16 @@ private fun UnlockMethod(canActivate: Boolean, summary: String, onActivate: (Int
         AlertDialog(
             onDismissRequest = { confirm = false },
             confirmButton = {
-                TextButton(onClick = { confirm = false; onActivate(minutes) }) { Text("Start lock") }
+                TextButton(onClick = { confirm = false; onActivate(minutes) }) {
+                    Text(stringResource(R.string.strict_start_lock))
+                }
             },
-            dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel") } },
-            title = { Text("Start Strict Mode?") },
+            dismissButton = {
+                TextButton(onClick = { confirm = false }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            },
+            title = { Text(stringResource(R.string.strict_confirm_title)) },
             text = {
                 Text(
                     "Your blocks will be locked for ${humanDuration(minutes)} — until " +
@@ -291,7 +308,8 @@ internal fun AddTimeRow(remaining: Long, onAdd: (Int) -> Unit) {
     val deadline = System.currentTimeMillis() + remaining
 
     Text(
-        "ADD MORE TIME", style = MaterialTheme.typography.labelMedium,
+        stringResource(R.string.strict_add_time_header),
+        style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center,
     )
@@ -314,7 +332,7 @@ internal fun AddTimeRow(remaining: Long, onAdd: (Int) -> Unit) {
     }
     Spacer(Modifier.height(10.dp))
     Text(
-        "Ends ${endsAt(0, deadline)}. Adding time can't be undone.",
+        stringResource(R.string.strict_ends_at, endsAt(0, deadline)),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center,
@@ -322,7 +340,7 @@ internal fun AddTimeRow(remaining: Long, onAdd: (Int) -> Unit) {
 
     if (showPicker) {
         DurationPickerDialog(
-            title = "Add more time",
+            title = stringResource(R.string.strict_add_more_time),
             initialMinutes = 30,
             // Measured from the session's deadline, so the picker's live "Ends …" preview tells
             // the truth about an extension rather than about a fresh session.
@@ -336,11 +354,17 @@ internal fun AddTimeRow(remaining: Long, onAdd: (Int) -> Unit) {
             onDismissRequest = { pendingMinutes = 0 },
             confirmButton = {
                 TextButton(onClick = { val m = pendingMinutes; pendingMinutes = 0; onAdd(m) }) {
-                    Text("Add the time")
+                    Text(stringResource(R.string.strict_add_the_time))
                 }
             },
-            dismissButton = { TextButton(onClick = { pendingMinutes = 0 }) { Text("Cancel") } },
-            title = { Text("Add ${humanDuration(pendingMinutes)}?") },
+            dismissButton = {
+                TextButton(onClick = { pendingMinutes = 0 }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            },
+            title = {
+                Text(stringResource(R.string.strict_add_confirm_title, humanDuration(pendingMinutes)))
+            },
             text = {
                 Text(
                     "Your blocks will stay locked until ${endsAt(pendingMinutes, deadline)}." +
@@ -417,6 +441,5 @@ private fun durationLabel(minutes: Int): String = when {
  */
 private fun ensureDeviceAdmin(context: Context) = enableDeviceAdmin(
     context,
-    explanation =
-        "Strict Mode needs this so AppBlocker can't be uninstalled until the timer ends.",
+    explanation = context.getString(R.string.strict_needs_admin),
 )

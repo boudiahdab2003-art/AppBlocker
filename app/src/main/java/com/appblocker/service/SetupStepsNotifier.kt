@@ -11,6 +11,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.appblocker.R
 import com.appblocker.data.SetupGuide
+import com.appblocker.data.Words
 
 /**
  * The setup steps, carried into Settings.
@@ -48,13 +49,12 @@ object SetupStepsNotifier {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "Setup help",
+            Words.of(context).get(R.string.channel_setup_name),
             // Deliberately not HIGH — see the class note. This one must not float over the screen
             // it is describing.
             NotificationManager.IMPORTANCE_DEFAULT,
         ).apply {
-            description = "While you're in Settings, this holds the steps for switching " +
-                "blocking on. It disappears as soon as you come back."
+            description = Words.of(context).get(R.string.channel_setup_desc)
             enableVibration(false)
         }
         context.getSystemService(NotificationManager::class.java)

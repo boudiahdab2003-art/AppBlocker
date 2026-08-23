@@ -70,6 +70,9 @@ import com.appblocker.ui.theme.AppShapes
 import com.appblocker.ui.theme.pageWidth
 import com.appblocker.ui.theme.softGlow
 import kotlinx.coroutines.delay
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import com.appblocker.R
 
 @Composable
 fun BlockingScreen(
@@ -140,7 +143,9 @@ fun BlockingScreen(
                 UpdatePausedBanner {
                     SettingsStore.setUpdatePaused(context, false)
                     updatePausedUi = false
-                    Toast.makeText(context, "Blocking is back on 💪", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(
+                        context, R.string.blocking_back_on, Toast.LENGTH_SHORT,
+                    ).show()
                 }
                 Spacer(Modifier.padding(top = 16.dp))
             }
@@ -167,14 +172,18 @@ fun BlockingScreen(
                 border = if (active) BorderStroke(1.5.dp, AppGradients.accent) else null,
             ) {
                 Column(Modifier.padding(22.dp)) {
-                    Text("Quick Block", style = MaterialTheme.typography.titleLarge,
+                    Text(stringResource(R.string.quick_block),
+                        style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     Spacer(Modifier.padding(top = 14.dp))
                     QuickBlockPill(apps = appsBlocked, words = keywords, adultOn = adultOn,
                         dimmed = !active, allowlist = allowlist, allowed = appsAllowed)
                     Spacer(Modifier.padding(top = 18.dp))
                     when {
-                        !configured -> GradientButton(text = "Start", onClick = onEditQuickBlock)
+                        !configured -> GradientButton(
+                            text = stringResource(R.string.quick_start),
+                            onClick = onEditQuickBlock,
+                        )
                         session.active -> {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(Modifier.size(26.dp).clip(CircleShape)
@@ -195,11 +204,13 @@ fun BlockingScreen(
                         }
                         paused -> {
                             // Starting/strengthening is always allowed — even during Strict Mode.
-                            GradientButton(text = "Start", enabled = true, onClick = {
+                            GradientButton(
+                                text = stringResource(R.string.quick_start),
+                                enabled = true, onClick = {
                                 SettingsStore.setQuickBlockPaused(context, false); paused = false
                             })
                             Spacer(Modifier.padding(top = 10.dp))
-                            Text("Paused — tap the card to edit your list.",
+                            Text(stringResource(R.string.quick_paused),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Spacer(Modifier.padding(top = 12.dp))
@@ -218,10 +229,12 @@ fun BlockingScreen(
                                         tint = Color.White, modifier = Modifier.size(16.dp))
                                 }
                                 Spacer(Modifier.width(10.dp))
-                                Text("Active", style = MaterialTheme.typography.titleMedium,
+                                Text(stringResource(R.string.quick_active),
+                                    style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                                 Spacer(Modifier.weight(1f))
-                                Text("Tap to edit", style = MaterialTheme.typography.bodyMedium,
+                                Text(stringResource(R.string.quick_tap_to_edit),
+                                    style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             Spacer(Modifier.padding(top = 12.dp))
@@ -257,11 +270,14 @@ fun BlockingScreen(
                     }
                     Spacer(Modifier.width(14.dp))
                     Column(Modifier.weight(1f)) {
-                        Text("Blocked words", style = MaterialTheme.typography.titleMedium,
+                        Text(stringResource(R.string.blocked_words),
+                            style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                         Text(
-                            if (keywords == 0) "Block words everywhere on your phone"
-                            else "$keywords ${if (keywords == 1) "word" else "words"} · blocked in every app",
+                            if (keywords == 0) stringResource(R.string.blocked_words_none)
+                            else pluralStringResource(
+                                R.plurals.blocked_words_count, keywords, keywords.toString(),
+                            ),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -275,14 +291,14 @@ fun BlockingScreen(
         // New schedule
         item {
             Text(
-                "New schedule",
+                stringResource(R.string.new_schedule),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground,
             )
             Text(
-                if (schedules.isEmpty()) "Let's do this — schedule your first blocking!"
-                else "Block apps on a timetable or after too much use.",
+                if (schedules.isEmpty()) stringResource(R.string.new_schedule_first)
+                else stringResource(R.string.new_schedule_body),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -297,11 +313,23 @@ fun BlockingScreen(
                 Row(rowModifier, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     val tiles = buildList {
                         add(Triple("Time", Icons.Filled.Schedule, ScheduleType.TIME))
-                        add(Triple("Usage limit", Icons.Filled.HourglassEmpty, ScheduleType.USAGE_LIMIT))
-                        add(Triple("Launch count", Icons.AutoMirrored.Filled.OpenInNew, ScheduleType.LAUNCH_COUNT))
+                        add(Triple(
+                            stringResource(R.string.schedule_usage_limit),
+                            Icons.Filled.HourglassEmpty, ScheduleType.USAGE_LIMIT,
+                        ))
+                        add(Triple(
+                            stringResource(R.string.schedule_launch_count),
+                            Icons.AutoMirrored.Filled.OpenInNew, ScheduleType.LAUNCH_COUNT,
+                        ))
                         if (Dist.LOCATION_SCHEDULES) {
-                            add(Triple("Wi-Fi", Icons.Filled.Wifi, ScheduleType.WIFI))
-                            add(Triple("Location", Icons.Filled.LocationOn, ScheduleType.LOCATION))
+                            add(Triple(
+                                stringResource(R.string.schedule_wifi),
+                                Icons.Filled.Wifi, ScheduleType.WIFI,
+                            ))
+                            add(Triple(
+                                stringResource(R.string.schedule_location),
+                                Icons.Filled.LocationOn, ScheduleType.LOCATION,
+                            ))
                         }
                     }
                     tiles.forEach { (label, icon, type) ->
@@ -320,7 +348,7 @@ fun BlockingScreen(
         if (schedules.isNotEmpty()) {
             item {
                 Text(
-                    "Your schedules",
+                    stringResource(R.string.your_schedules),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onBackground,
@@ -342,9 +370,10 @@ fun BlockingScreen(
         // Templates — one-tap preset bundles
         item {
             Spacer(Modifier.padding(top = 8.dp))
-            Text("Templates", style = MaterialTheme.typography.titleLarge,
+            Text(stringResource(R.string.templates),
+                style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-            Text("One tap to block a whole category.",
+            Text(stringResource(R.string.templates_body),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.padding(top = 12.dp))
@@ -372,23 +401,35 @@ fun BlockingScreen(
             confirmButton = {
                 TextButton(onClick = {
                     vm.applyTemplate(t)
-                    Toast.makeText(context, "Applied “${t.title}”", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.template_applied, t.title),
+                        Toast.LENGTH_SHORT,
+                    ).show()
                     pending = null
-                }) { Text("Apply") }
+                }) { Text(stringResource(R.string.template_apply)) }
             },
-            dismissButton = { TextButton(onClick = { pending = null }) { Text("Cancel") } },
-            title = { Text("Apply “${t.title}”?") },
+            dismissButton = {
+                TextButton(onClick = { pending = null }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            },
+            title = { Text(stringResource(R.string.template_apply_title, t.title)) },
             text = { Text(templateSummary(t, context)) },
         )
     }
 
     if (showTimer) {
         DurationPickerDialog(
-            title = "Set the timer",
+            title = stringResource(R.string.strict_set_timer),
             initialMinutes = 25,
             onSave = {
                 QuickSession.startTimer(context, it); tick = System.currentTimeMillis()
-                Toast.makeText(context, "Timer started — blocks for ${fmtDuration(it)}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.timer_started, fmtDuration(it)),
+                    Toast.LENGTH_SHORT,
+                ).show()
             },
             onDismiss = { showTimer = false },
         )
@@ -398,7 +439,13 @@ fun BlockingScreen(
             onStart = { work, brk, rounds ->
                 QuickSession.startPomodoro(context, work, brk, rounds)
                 tick = System.currentTimeMillis()
-                Toast.makeText(context, "Pomodoro started — $work min work · $brk min break", Toast.LENGTH_SHORT).show()
+                Toast.makeText(
+                    context,
+                    context.getString(
+                        R.string.pomodoro_started, work.toString(), brk.toString(),
+                    ),
+                    Toast.LENGTH_SHORT,
+                ).show()
             },
             onDismiss = { showPomo = false },
         )

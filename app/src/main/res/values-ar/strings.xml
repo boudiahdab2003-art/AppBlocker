@@ -454,4 +454,125 @@
     <string name="disclosure_noaccount_body">لا يوجد تسجيل دخول في AppBlocker. لا أحد — بمن فيهم المطوّر — يستطيع رؤية ما على شاشتك ولا ما تحظره.</string>
     <string name="onboarding_stuck_accessibility">لا شيء معطّل — هذه الشاشة يسهل تفويتها. %1$s اضغط «حاول مجددًا» واتبع الصور أدناه؛ السطر الذي تبحث عنه اسمه AppBlocker.</string>
     <string name="onboarding_stuck_other">لا شيء معطّل — تلك القائمة يسهل تفويتها. اضغط «حاول مجددًا»، وابحث عن AppBlocker في القائمة، وشغّل مفتاحه.</string>
+
+    <!-- ===================== الإشعارات ===================== -->
+    <string name="channel_protection_name">تنبيهات الحماية</string>
+    <string name="channel_protection_desc">تخبرك إن توقّفت خدمة الحظر في AppBlocker.</string>
+    <string name="channel_stalled_name">الحظر توقّف</string>
+    <string name="channel_stalled_desc">التنبيه الذي يقول إن الحظر مُفعَّل لكنه لا يعمل فعليًا. أبقِ صوته مرتفعًا.</string>
+    <string name="channel_setup_name">مساعدة الإعداد</string>
+    <string name="channel_setup_desc">بينما أنت داخل الإعدادات، يحتفظ هذا بخطوات تشغيل الحظر. ويختفي بمجرد عودتك.</string>
+
+    <string name="notif_off_title">الحماية متوقّفة</string>
+    <string name="notif_off_collapsed">اضغط لإعادة تشغيل الحظر</string>
+    <string name="notif_off_headline">الحماية متوقّفة</string>
+    <string name="notif_off_subtitle">الحظر توقّف</string>
+    <string name="notif_off_action">شغّل</string>
+
+    <string name="notif_stalled_title">الحظر توقّف</string>
+    <string name="notif_stalled_collapsed">هاتفك أغلقه — اضغط لإعادة تشغيله</string>
+    <string name="notif_stalled_headline">الحظر توقّف</string>
+    <string name="notif_stalled_subtitle">لا شيء يُحظر الآن</string>
+    <string name="notif_stalled_action">أصلحه</string>
+
+    <string name="notif_paused_title">الحظر متوقّف مؤقتًا بعد التحديث</string>
+    <string name="notif_paused_collapsed">اضغط لإعادة تشغيله</string>
+    <string name="notif_paused_headline">الحظر متوقّف</string>
+    <string name="notif_paused_subtitle">متوقّف منذ تحديث التطبيق</string>
+    <string name="notif_paused_action">أعد تشغيله</string>
+
+    <string name="notif_test_title">الإشعارات تعمل</string>
+    <string name="notif_test_collapsed">سنحذّرك إن توقّفت الحماية</string>
+    <string name="notif_test_headline">الإشعارات تعمل</string>
+    <string name="notif_test_subtitle">التنبيهات تصل</string>
+
+    <string name="tile_label">الحظر السريع</string>
+    <string name="tile_strict">صارم</string>
+    <string name="tile_setup">إعداد</string>
+    <string name="tile_paused">متوقّف</string>
+
+    <!-- ===================== الوضع الصارم ===================== -->
+    <string name="strict_title">الوضع الصارم</string>
+    <string name="strict_locked">قوائم حظرك مُقفلة</string>
+    <string name="strict_unlocked">قوائم حظرك غير مُقفلة</string>
+    <string name="strict_no_stopping">لا توقّف مبكرًا — هذا هو المقصود. تستطيع إضافة وقت، لا أن تنقص منه.</string>
+    <string name="strict_whats_locked">ما الذي يُقفل عند التفعيل:</string>
+    <string name="strict_locked_blocks">تغيير قوائم حظرك أو إزالتها</string>
+    <string name="strict_locked_service">إيقاف الحاظر</string>
+    <string name="strict_locked_uninstall">إلغاء تثبيت التطبيق</string>
+    <string name="strict_unlock_method">طريقة الفتح</string>
+    <string name="strict_timer">مؤقّت</string>
+    <string name="strict_nothing_to_lock">أضِف ما تريد حظره أولًا — أعِدّ الحظر السريع أو جدولًا.</string>
+    <string name="strict_activate">فعّل القفل</string>
+    <string name="strict_set_timer">اضبط المؤقّت</string>
+    <string name="strict_start_lock">ابدأ القفل</string>
+    <string name="strict_confirm_title">هل نبدأ الوضع الصارم؟</string>
+    <string name="strict_confirm_body">ستُقفل قوائم حظرك لمدة %1$s — حتى %2$s. تستطيع إضافة وقت أثناء عمله، لكن لا تستطيع تقصيره أبدًا.</string>
+    <string name="strict_add_time_header">أضِف مزيدًا من الوقت</string>
+    <string name="strict_ends_at">ينتهي %1$s. وإضافة الوقت لا يمكن التراجع عنها.</string>
+    <string name="strict_add_more_time">أضِف مزيدًا من الوقت</string>
+    <string name="strict_add_the_time">أضِف الوقت</string>
+    <string name="strict_add_confirm_title">أتضيف %1$s؟</string>
+    <string name="strict_add_confirm_body">ستبقى قوائم حظرك مُقفلة حتى %1$s.</string>
+    <string name="strict_locks_summary">يقفل %1$s.</string>
+    <string name="strict_adult_filter">فلتر البالغين</string>
+    <string name="strict_needs_admin">يحتاج الوضع الصارم هذا حتى لا يمكن إلغاء تثبيت AppBlocker قبل انتهاء المؤقّت.</string>
+
+    <!-- ===================== تبويب الحظر ===================== -->
+    <string name="blocking_back_on">عاد الحظر يعمل 💪</string>
+    <string name="quick_block">الحظر السريع</string>
+    <string name="quick_start">ابدأ</string>
+    <string name="quick_paused">متوقّف مؤقتًا — اضغط البطاقة لتعديل قائمتك.</string>
+    <string name="quick_active">يعمل</string>
+    <string name="quick_tap_to_edit">اضغط للتعديل</string>
+    <string name="blocked_words">الكلمات المحظورة</string>
+    <string name="blocked_words_none">احظر كلمات في كل مكان على هاتفك</string>
+    <plurals name="blocked_words_count">
+        <item quantity="zero">لا كلمات · محظورة في كل تطبيق</item>
+        <item quantity="one">كلمة واحدة · محظورة في كل تطبيق</item>
+        <item quantity="two">كلمتان · محظورتان في كل تطبيق</item>
+        <item quantity="few">%1$s كلمات · محظورة في كل تطبيق</item>
+        <item quantity="many">%1$s كلمة · محظورة في كل تطبيق</item>
+        <item quantity="other">%1$s كلمة · محظورة في كل تطبيق</item>
+    </plurals>
+    <string name="new_schedule">جدول جديد</string>
+    <string name="new_schedule_first">هيا بنا — جدوِل أول حظر لك!</string>
+    <string name="new_schedule_body">احظر التطبيقات وفق جدول زمني أو بعد استخدام مفرط.</string>
+    <string name="schedule_time">وقت</string>
+    <string name="schedule_usage_limit">حدّ الاستخدام</string>
+    <string name="schedule_launch_count">عدد الفتحات</string>
+    <string name="schedule_wifi">Wi-Fi</string>
+    <string name="schedule_location">الموقع</string>
+    <string name="your_schedules">جداولك</string>
+    <string name="templates">القوالب</string>
+    <string name="templates_body">نقرة واحدة لحظر فئة كاملة.</string>
+    <string name="template_applied">طُبِّق «%1$s»</string>
+    <string name="template_apply">طبّق</string>
+    <string name="template_apply_title">أتطبّق «%1$s»؟</string>
+    <string name="timer_started">بدأ المؤقّت — يحظر لمدة %1$s</string>
+    <string name="pomodoro_started">بدأت بومودورو — %1$s دقيقة عمل · %2$s دقيقة راحة</string>
+    <string name="pomodoro">بومودورو</string>
+    <string name="pomodoro_body">احظر أثناء العمل، وتحرّر أثناء الراحة.</string>
+    <string name="timer">مؤقّت</string>
+    <string name="quick_allowing">يسمح بـ%1$s تطبيقات، ويحظر ما عداها</string>
+    <string name="quick_allowed_pill">مسموح · وكل ما عداه محظور</string>
+    <string name="quick_pill_desc">يحظر %1$s تطبيقًا و%2$s كلمة</string>
+    <string name="quick_pill_desc_adult">يحظر %1$s تطبيقًا و%2$s كلمة، وفلتر البالغين مُفعَّل</string>
+
+    <string name="banner_finish_setup">أكمِل الإعداد</string>
+    <plurals name="banner_steps_left">
+        <item quantity="zero">لا خطوات متبقية</item>
+        <item quantity="one">بقيت خطوة مطلوبة — اضغط للإصلاح</item>
+        <item quantity="two">بقيت خطوتان مطلوبتان — اضغط للإصلاح</item>
+        <item quantity="few">بقيت %1$s خطوات مطلوبة — اضغط للإصلاح</item>
+        <item quantity="many">بقيت %1$s خطوة مطلوبة — اضغط للإصلاح</item>
+        <item quantity="other">بقيت %1$s خطوة مطلوبة — اضغط للإصلاح</item>
+    </plurals>
+    <string name="banner_stopped_title">الحظر توقّف</string>
+    <string name="banner_stopped_body">هاتفك أغلقه — اضغط لإعادة تشغيله</string>
+    <string name="banner_update_title">يتوفّر تحديث — الإصدار %1$s</string>
+    <string name="banner_update_body">اضغط لتنزيل أحدث إصدار وتثبيته</string>
+    <string name="banner_paused_title">الحظر متوقّف مؤقتًا بعد التحديث</string>
+    <string name="banner_paused_body">لا شيء محظور الآن. اضغط أدناه عندما تكون مستعدًا.</string>
+    <string name="banner_reactivate">أعِد تفعيل الحظر</string>
 </resources>

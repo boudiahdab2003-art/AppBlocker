@@ -29,6 +29,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.appblocker.ui.theme.AppGradients
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import com.appblocker.R
 
 @Composable
 internal fun SetupBanner(missing: Int, onClick: () -> Unit) {
@@ -41,9 +44,11 @@ internal fun SetupBanner(missing: Int, onClick: () -> Unit) {
             modifier = Modifier.size(26.dp))
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text("Finish setup", style = MaterialTheme.typography.titleMedium,
+            Text(stringResource(R.string.banner_finish_setup),
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-            Text("$missing required ${if (missing == 1) "step" else "steps"} left — tap to fix",
+            Text(
+                pluralStringResource(R.plurals.banner_steps_left, missing, missing.toString()),
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null,
@@ -71,9 +76,10 @@ internal fun StoppedBanner(onClick: () -> Unit) {
             modifier = Modifier.size(26.dp))
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text("Blocking has stopped", style = MaterialTheme.typography.titleMedium,
+            Text(stringResource(R.string.banner_stopped_title),
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-            Text("Your phone shut it down — tap to switch it back on",
+            Text(stringResource(R.string.banner_stopped_body),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -93,9 +99,10 @@ internal fun UpdateBanner(version: String, onClick: () -> Unit) {
             modifier = Modifier.size(26.dp))
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text("Update available — v$version", style = MaterialTheme.typography.titleMedium,
+            Text(stringResource(R.string.banner_update_title, version),
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold, color = Color.White)
-            Text("Tap to download & install the latest version",
+            Text(stringResource(R.string.banner_update_body),
                 style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.9f))
         }
         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = Color.White)
@@ -114,15 +121,16 @@ internal fun UpdatePausedBanner(onReactivate: () -> Unit) {
                 modifier = Modifier.size(26.dp))
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text("Blocking is paused after the update", style = MaterialTheme.typography.titleMedium,
+                Text(stringResource(R.string.banner_paused_title),
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-                Text("Nothing is blocked right now. Tap below when you're ready.",
+                Text(stringResource(R.string.banner_paused_body),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         Spacer(Modifier.padding(top = 12.dp))
-        GradientButton(text = "Reactivate blocking", onClick = onReactivate)
+        GradientButton(text = stringResource(R.string.banner_reactivate), onClick = onReactivate)
     }
 }
 

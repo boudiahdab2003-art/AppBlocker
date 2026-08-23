@@ -16,6 +16,7 @@ import com.appblocker.MainActivity
 import com.appblocker.R
 import com.appblocker.data.SettingsStore
 import java.util.concurrent.TimeUnit
+import com.appblocker.data.Words
 
 /** Alerts the user if AppBlocker's Accessibility service gets silently turned off — or stops
  *  responding while still switched on. */
@@ -77,24 +78,26 @@ object ProtectionNotifier {
     private val ACCENT_COLOR = 0xFFFFB020.toInt()
 
     fun createChannel(context: Context) {
+        // The words in the app's language, not the phone's: a Service never passes through
+        // attachBaseContext. See com.appblocker.data.Words.
+        val w = Words.of(context)
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "Protection alerts",
+            w.get(R.string.channel_protection_name),
             NotificationManager.IMPORTANCE_HIGH,
         ).apply {
-            description = "Tells you if AppBlocker's blocking service gets turned off."
+            description = w.get(R.string.channel_protection_desc)
             enableLights(true)
             lightColor = ACCENT_COLOR
             enableVibration(true)
         }
         val stalled = NotificationChannel(
             CHANNEL_ID_STALLED,
-            "Blocking has stopped",
+            w.get(R.string.channel_stalled_name),
             NotificationManager.IMPORTANCE_HIGH,
         ).apply {
-            description = "The alert that says blocking is switched on but not actually running. " +
-                "Keep this one loud."
+            description = w.get(R.string.channel_stalled_desc)
             enableLights(true)
             lightColor = ACCENT_COLOR
             enableVibration(true)
@@ -114,6 +117,9 @@ object ProtectionNotifier {
      */
     @SuppressLint("MissingPermission") // guarded by the areNotificationsEnabled() check below.
     fun notifyDisabled(context: Context, force: Boolean = false) {
+        // The words in the app's language, not the phone's: a Service never passes through
+        // attachBaseContext. See com.appblocker.data.Words.
+        val w = Words.of(context)
         val manager = NotificationManagerCompat.from(context)
         // If notifications are off (permission denied / channel blocked), bail WITHOUT consuming
         // the cooldown — otherwise a check that couldn't actually post would still "use up" the
@@ -128,11 +134,11 @@ object ProtectionNotifier {
 
         val notification = build(
             context,
-            title = "Protection is off",
-            collapsed = "Tap to turn blocking back on",
-            bannerHeadline = "PROTECTION OFF",
-            bannerSubtitle = "Blocking has stopped",
-            action = "Turn on",
+            title = w.get(R.string.notif_off_title),
+            collapsed = w.get(R.string.notif_off_collapsed),
+            bannerHeadline = w.get(R.string.notif_off_headline),
+            bannerSubtitle = w.get(R.string.notif_off_subtitle),
+            action = w.get(R.string.notif_off_action),
             requestCode = NOTIF_ID,
         )
         manager.notify(NOTIF_ID, notification)
@@ -159,6 +165,9 @@ object ProtectionNotifier {
      */
     @SuppressLint("MissingPermission") // guarded by the areNotificationsEnabled() check below.
     fun notifyStalled(context: Context, force: Boolean = false) {
+        // The words in the app's language, not the phone's: a Service never passes through
+        // attachBaseContext. See com.appblocker.data.Words.
+        val w = Words.of(context)
         val manager = NotificationManagerCompat.from(context)
         if (!manager.areNotificationsEnabled()) return
 
@@ -170,11 +179,11 @@ object ProtectionNotifier {
 
         val notification = build(
             context,
-            title = "Blocking has stopped",
-            collapsed = "Your phone shut it down — tap to switch it back on",
-            bannerHeadline = "BLOCKING HAS STOPPED",
-            bannerSubtitle = "Nothing is being blocked",
-            action = "Fix it",
+            title = w.get(R.string.notif_stalled_title),
+            collapsed = w.get(R.string.notif_stalled_collapsed),
+            bannerHeadline = w.get(R.string.notif_stalled_headline),
+            bannerSubtitle = w.get(R.string.notif_stalled_subtitle),
+            action = w.get(R.string.notif_stalled_action),
             requestCode = NOTIF_ID_STALLED,
             openRepair = true,
             // The one alert that stands until it is true no longer. See [ongoing] on build().
@@ -226,6 +235,9 @@ object ProtectionNotifier {
      */
     @SuppressLint("MissingPermission") // guarded by the areNotificationsEnabled() check below.
     fun notifyPaused(context: Context, force: Boolean = false) {
+        // The words in the app's language, not the phone's: a Service never passes through
+        // attachBaseContext. See com.appblocker.data.Words.
+        val w = Words.of(context)
         val manager = NotificationManagerCompat.from(context)
         if (!manager.areNotificationsEnabled()) return
 
@@ -237,11 +249,11 @@ object ProtectionNotifier {
 
         val notification = build(
             context,
-            title = "Blocking is paused after the update",
-            collapsed = "Tap to turn it back on",
-            bannerHeadline = "BLOCKING IS OFF",
-            bannerSubtitle = "Paused since the app updated",
-            action = "Turn it back on",
+            title = w.get(R.string.notif_paused_title),
+            collapsed = w.get(R.string.notif_paused_collapsed),
+            bannerHeadline = w.get(R.string.notif_paused_headline),
+            bannerSubtitle = w.get(R.string.notif_paused_subtitle),
+            action = w.get(R.string.notif_paused_action),
             requestCode = NOTIF_ID_PAUSED,
             openPermissions = false, // Reactivate is on the Blocking tab, which is where we land
         )
@@ -256,14 +268,17 @@ object ProtectionNotifier {
      */
     @SuppressLint("MissingPermission") // guarded by the areNotificationsEnabled() check below.
     fun notifyTest(context: Context) {
+        // The words in the app's language, not the phone's: a Service never passes through
+        // attachBaseContext. See com.appblocker.data.Words.
+        val w = Words.of(context)
         val manager = NotificationManagerCompat.from(context)
         if (!manager.areNotificationsEnabled()) return
         val notification = build(
             context,
-            title = "Notifications are on",
-            collapsed = "You'll be warned if protection stops",
-            bannerHeadline = "NOTIFICATIONS ON",
-            bannerSubtitle = "Alerts are working",
+            title = w.get(R.string.notif_test_title),
+            collapsed = w.get(R.string.notif_test_collapsed),
+            bannerHeadline = w.get(R.string.notif_test_headline),
+            bannerSubtitle = w.get(R.string.notif_test_subtitle),
             action = "Open",
             requestCode = NOTIF_ID,
         )
