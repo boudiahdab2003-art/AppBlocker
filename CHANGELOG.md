@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.138
+- Profile has a new Recovery section. **Your counter** shows how long it has been since your last relapse — days, hours, minutes and seconds, ticking — and it lives on that screen and nowhere else. Recording a slip asks first, can be dated to when it actually happened rather than when you admitted it, and can be undone for 24 hours afterwards. On the day of a reset it does not show your record: that day should not come with a scoreboard. **Journal** gives you one page for every calendar day — open any date, including ones you missed, and write whatever is there, with four optional headings if you want somewhere to start. Neither the count nor a single word you write ever leaves your phone: not to the AI Coach, not in a bug report, and if you have a PIN it is already behind it.
+
 ## v1.137
 - Setting up now shows you real pictures of the screens you're about to see, with the exact row circled — Samsung owners get pictures taken on a Samsung. If you come back from Settings without it working, the app notices and says so instead of showing you the same screen. And the steps come with you: they wait in your notifications while you're in Settings, then clear themselves.
 
