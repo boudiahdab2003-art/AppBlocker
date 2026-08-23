@@ -334,6 +334,10 @@ data class BugReport(
             "uninstallHandler",
             "uninstallGuard",
             "keepAlive",
+            // Which screen "Grant" actually lands on, on this phone. The setup guide's per-brand
+            // menu paths were written from knowledge rather than measurement; this is how phones
+            // we will never own report the truth back.
+            "accessibilityScreen",
             "browsersKnown",
             "browsersClaimedReadable",
             "browsersClaimUnproven",

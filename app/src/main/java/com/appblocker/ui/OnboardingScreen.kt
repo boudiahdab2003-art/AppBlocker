@@ -491,9 +491,10 @@ private fun StuckNote(permKey: String) {
         Spacer(Modifier.height(6.dp))
         Text(
             if (permKey == ACCESSIBILITY_PERM) {
-                "Nothing is broken — this screen is easy to miss. On your phone the list lives at " +
-                    DeviceVendor.advice().accessibilityPath + ". Tap “Try again” and follow the " +
-                    "pictures below; the row you are looking for is called AppBlocker."
+                "Nothing is broken — this screen is easy to miss. " +
+                    DeviceVendor.accessibilityHint(DeviceVendor.advice()) +
+                    " Tap “Try again” and follow the pictures below; the row you are looking for " +
+                    "is called AppBlocker."
             } else {
                 "Nothing is broken — that list is easy to miss. Tap “Try again”, find AppBlocker " +
                     "in the list, and turn its switch on."

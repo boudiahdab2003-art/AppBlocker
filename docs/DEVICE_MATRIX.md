@@ -37,6 +37,26 @@ Remote Test Lab images do not contain it — see `REMOTE_TEST_LAB.md`, where the
 it is absent rather than merely disabled. It will be answered by the first profile report from a
 real Samsung owner, not by another booking.
 
+## The accessibility screen — the column the phones fill in themselves
+
+Since v1.137 every profile report carries **`accessibilityScreen`**: the activity that actually
+handles `ACTION_ACCESSIBILITY_SETTINGS` on that phone, which is where the setup wizard's **Grant**
+button lands. Stock Android answers `com.android.settings/Settings$AccessibilitySettingsActivity`;
+an OEM that has rebuilt the screen answers with its own class.
+
+It exists because the wizard's per-brand menu paths (`VendorAdvice.accessibilityPath`) were written
+from recollection — the same footing as `com.samsung.android.packageinstaller`, believed for a year
+and measured wrong in twenty minutes. Until a brand has been seen, its path is shown hedged ("on
+most Samsungs…") next to the one instruction that is true everywhere: use the Settings search box.
+
+**Flip `accessibilityPathMeasured` to true only on evidence** — a lab session, or this line arriving
+in a real report. That is how Huawei, Oppo and Vivo get answered without anyone owning one.
+
+| Phone | `accessibilityScreen` | Path confirmed? |
+|---|---|---|
+| Emulator (stock, API 34) | `com.android.settings/Settings$AccessibilitySettingsActivity` | n/a — the generic wording |
+| Everything else | — | **not yet measured** |
+
 ## How a row gets filled in
 
 Run `DeviceProbeTest` on the phone. It answers the first four columns by itself:

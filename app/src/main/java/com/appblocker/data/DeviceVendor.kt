@@ -74,9 +74,44 @@ data class VendorAdvice(
      * decision — the same bargain the rest of this file makes.
      */
     val accessibilityPath: String = "Settings ▸ Accessibility",
+
+    /**
+     * Whether [accessibilityPath] has ever been read off a phone of this brand, or is still
+     * somebody's recollection.
+     *
+     * **Every brand path here started as the second kind, and this project has been burned by
+     * exactly that before** — `com.samsung.android.packageinstaller` was believed for a year
+     * and measured wrong in twenty minutes. A wrong menu path does not fail silently, but it
+     * does send a stuck person to a screen that isn't there, which is the moment setup is
+     * abandoned. So an unmeasured path is offered as a likelihood ('on most Samsungs…') with
+     * the search-box fallback beside it, and a measured one is stated plainly.
+     *
+     * Flip a brand to true only when a real phone of it has been seen — a lab session, or an
+     * `accessibilityScreen` line in a profile report (see [DeviceProfile]).
+     */
+    val accessibilityPathMeasured: Boolean = false,
 )
 
 object DeviceVendor {
+
+    /**
+     * How to tell someone where the accessibility list lives, without claiming more than we
+     * know.
+     *
+     * **The search box is the part that is always true.** Every Android Settings app has one,
+     * on every brand and every version, and typing "Accessibility" into it works even where
+     * the menu has been renamed or moved — so it is the one instruction that cannot go stale,
+     * and it is what an unmeasured brand leans on.
+     */
+    fun accessibilityHint(advice: VendorAdvice): String = when {
+        advice.brand.isBlank() ->
+            "Open Settings, tap the search icon, and type Accessibility."
+        advice.accessibilityPathMeasured ->
+            "On your phone the list is at ${advice.accessibilityPath}."
+        else ->
+            "On most ${advice.brand} phones it is at ${advice.accessibilityPath}. If it " +
+                "isn't there, open Settings, tap the search icon, and type Accessibility."
+    }
 
     private val XIAOMI = VendorAdvice(
         brand = "Xiaomi",
