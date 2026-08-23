@@ -118,6 +118,35 @@ class StringResourcesTest {
         assertTrue(File(EnglishStrings.resourceFile("values-ar").path).isFile)
     }
 
+    /**
+     * **A dropped quote is not a missing quote — it is fifty-seven wrong attributions.**
+     *
+     * The block screen's quotes are two parallel `<string-array>`s zipped by index, because Android
+     * resources have no structured type. Lose one line from either array in either language and
+     * every line after it is credited to the wrong person, silently, on the one screen read at the
+     * worst moment. Nothing else would catch that.
+     */
+    @Test
+    fun `the quote arrays line up, in both languages`() {
+        val en = EnglishStrings.readArrays(EnglishStrings.resourceFile("values"))
+        val ar = EnglishStrings.readArrays(EnglishStrings.resourceFile("values-ar"))
+        for ((label, table) in listOf("English" to en, "Arabic" to ar)) {
+            val texts = table["quote_texts"] ?: error("$label has no quote_texts array")
+            val authors = table["quote_authors"] ?: error("$label has no quote_authors array")
+            assertEquals(
+                "$label: ${texts.size} quotes but ${authors.size} attributions — every quote " +
+                    "after the mismatch is credited to the wrong person",
+                texts.size, authors.size,
+            )
+            assertTrue("$label has no quotes at all", texts.isNotEmpty())
+        }
+        assertEquals(
+            "Arabic has a different number of quotes from English, so the two cannot be the " +
+                "same list",
+            en["quote_texts"]!!.size, ar["quote_texts"]!!.size,
+        )
+    }
+
     private fun placeholders(text: String): Set<String> =
         Regex("%\\d+\\$[sd]").findAll(text).map { it.value }.toSet()
 }

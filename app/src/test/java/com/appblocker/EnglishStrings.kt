@@ -73,6 +73,20 @@ object EnglishStrings : Words {
             ?: error("cannot find $qualifier/strings.xml from ${File(".").absolutePath}")
     }
 
+    /** The `<string-array>`s in one strings.xml, name to items in document order. */
+    fun readArrays(file: File): Map<String, List<String>> {
+        val doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(file)
+        val out = LinkedHashMap<String, List<String>>()
+        val nodes = doc.getElementsByTagName("string-array")
+        for (n in 0 until nodes.length) {
+            val e = nodes.item(n) as Element
+            val items = e.getElementsByTagName("item")
+            out[e.getAttribute("name")] =
+                (0 until items.length).map { unescape(items.item(it).textContent) }
+        }
+        return out
+    }
+
     /** Both tables out of one strings.xml. */
     fun read(file: File): Pair<Map<String, String>, Map<String, Map<String, String>>> {
         val doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(file)

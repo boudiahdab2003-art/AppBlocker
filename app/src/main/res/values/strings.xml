@@ -603,4 +603,128 @@
     <string name="goals_which_app">Which app?</string>
     <string name="goals_time_prompt">Stay under this much per day:</string>
     <string name="goals_add">Add goal</string>
+
+    <!-- The block screen's quotes. Two arrays rather than one structured type because
+         Android has no such thing; Quotes.kt zips them and asserts they stay the same
+         length, which is what a translation dropping one would otherwise silently do. -->
+    <string-array name="quote_texts">
+        <item>You have power over your mind — not outside events. Realize this, and you will find strength.</item>
+        <item>Freedom is not procured by a full enjoyment of what is desired, but by controlling the desire.</item>
+        <item>It is not the man who has too little, but the man who craves more, that is poor.</item>
+        <item>Most powerful is he who has himself in his own power.</item>
+        <item>No man is free who is not master of himself.</item>
+        <item>Resist the beginnings; the remedy comes too late.</item>
+        <item>The first and greatest victory is to conquer yourself.</item>
+        <item>I count him braver who overcomes his desires than him who conquers his enemies.</item>
+        <item>He who conquers others is strong; he who conquers himself is mighty.</item>
+        <item>Though he conquer a thousand men, he who conquers himself is the greatest victor.</item>
+        <item>Would you have a great empire? Rule over yourself.</item>
+        <item>It is not that we have a short time to live, but that we waste a lot of it.</item>
+        <item>You could leave life right now. Let that determine what you do, say and think.</item>
+        <item>The impediment to action advances action. What stands in the way becomes the way.</item>
+        <item>While we are postponing, life speeds by.</item>
+        <item>First say to yourself what you would be; and then do what you have to do.</item>
+        <item>Concentrate every minute like a Roman on doing what\'s in front of you.</item>
+        <item>We suffer more often in imagination than in reality.</item>
+        <item>Waste no more time arguing about what a good man should be. Be one.</item>
+        <item>Nothing is ours, except time.</item>
+        <item>Do nothing which is of no use.</item>
+        <item>My experience is what I agree to attend to.</item>
+        <item>Attention is the beginning of devotion.</item>
+        <item>A wealth of information creates a poverty of attention.</item>
+        <item>How we spend our days is, of course, how we spend our lives.</item>
+        <item>All of humanity\'s problems stem from man\'s inability to sit quietly in a room alone.</item>
+        <item>The cost of a thing is the amount of life you exchange for it.</item>
+        <item>Everybody worships. The only choice we get is what to worship.</item>
+        <item>The modern devil is cheap dopamine.</item>
+        <item>If you love life, don\'t waste time, for time is what life is made up of.</item>
+        <item>Control of consciousness determines the quality of life.</item>
+        <item>Clarity about what matters provides clarity about what does not.</item>
+        <item>Tell me, what is it you plan to do with your one wild and precious life?</item>
+        <item>We are what we repeatedly do. Excellence, then, is not an act, but a habit.</item>
+        <item>Discipline equals freedom.</item>
+        <item>You do not rise to the level of your goals. You fall to the level of your systems.</item>
+        <item>Every action you take is a vote for the person you wish to become.</item>
+        <item>The pain of discipline weighs ounces. The pain of regret weighs tons.</item>
+        <item>Hard choices, easy life. Easy choices, hard life.</item>
+        <item>Discipline is choosing between what you want now and what you want most.</item>
+        <item>Self-control is strength. Right thought is mastery. Calmness is power.</item>
+        <item>The version of you who set this block knew something. Listen to him.</item>
+        <item>This craving passes in about ninety seconds. Outlast it.</item>
+        <item>In an hour you won\'t remember wanting this. You will remember beating it.</item>
+        <item>You are not being deprived. You are being protected — by yourself.</item>
+        <item>The urge is loud because it is losing.</item>
+        <item>You have done harder things than closing a screen.</item>
+        <item>Relapse starts with one negotiation. This is it. Say no here.</item>
+        <item>The feed never ends. Your time does.</item>
+        <item>Nothing on that app will matter in a week. What you do instead might.</item>
+        <item>Real life is happening right now, off this screen.</item>
+        <item>Boredom is where your best ideas are hiding. Let yourself be bored.</item>
+        <item>That app is engineered to hook you. You saw it coming — that\'s why you\'re here.</item>
+        <item>Every scroll you skip is a rep for your willpower.</item>
+        <item>Progress, not perfection. Closing this screen counts.</item>
+        <item>Your attention is the most valuable thing you own. Spend it on purpose.</item>
+        <item>Don\'t trade this evening for a dopamine hit.</item>
+        <item>Losing once does not mean losing today. Close this and keep the day.</item>
+    </string-array>
+    <string-array name="quote_authors">
+        <item>Marcus Aurelius</item>
+        <item>Epictetus</item>
+        <item>Seneca</item>
+        <item>Seneca</item>
+        <item>Epictetus</item>
+        <item>Ovid</item>
+        <item>Plato</item>
+        <item>Aristotle</item>
+        <item>Lao Tzu</item>
+        <item>The Dhammapada</item>
+        <item>Publilius Syrus</item>
+        <item>Seneca</item>
+        <item>Marcus Aurelius</item>
+        <item>Marcus Aurelius</item>
+        <item>Seneca</item>
+        <item>Epictetus</item>
+        <item>Marcus Aurelius</item>
+        <item>Seneca</item>
+        <item>Marcus Aurelius</item>
+        <item>Seneca</item>
+        <item>Miyamoto Musashi</item>
+        <item>William James</item>
+        <item>Mary Oliver</item>
+        <item>Herbert Simon</item>
+        <item>Annie Dillard</item>
+        <item>Blaise Pascal</item>
+        <item>Henry David Thoreau</item>
+        <item>David Foster Wallace</item>
+        <item>Naval Ravikant</item>
+        <item>Bruce Lee</item>
+        <item>Mihaly Csikszentmihalyi</item>
+        <item>Cal Newport</item>
+        <item>Mary Oliver</item>
+        <item>Will Durant</item>
+        <item>Jocko Willink</item>
+        <item>James Clear</item>
+        <item>James Clear</item>
+        <item>Jim Rohn</item>
+        <item>Jerzy Gregorek</item>
+        <item>Unknown</item>
+        <item>James Allen</item>
+        <item>Your coach</item>
+        <item>Your coach</item>
+        <item>Your coach</item>
+        <item>Your coach</item>
+        <item>Your coach</item>
+        <item>Your coach</item>
+        <item>Your coach</item>
+        <item>Your coach</item>
+        <item>Your coach</item>
+        <item>Your coach</item>
+        <item>Your coach</item>
+        <item>Your coach</item>
+        <item>Your coach</item>
+        <item>Your coach</item>
+        <item>Your coach</item>
+        <item>Your coach</item>
+        <item>Your coach</item>
+    </string-array>
 </resources>

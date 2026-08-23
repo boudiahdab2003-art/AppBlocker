@@ -84,7 +84,7 @@ class BlockScreenActivity : ComponentActivity() {
         val message = intent.getStringExtra(EXTRA_MESSAGE)
             ?: appLabel?.let { getString(R.string.block_app_message, it) }
             ?: getString(R.string.block_generic_message)
-        val quote = Quotes.random()
+        val quote = Quotes.random(this)
 
         // Leaving the block screen should go to the home screen, never back to
         // the blocked app sitting behind us.
