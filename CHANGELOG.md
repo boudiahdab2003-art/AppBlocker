@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.137
+- Setting up now shows you real pictures of the screens you're about to see, with the exact row circled — Samsung owners get pictures taken on a Samsung. If you come back from Settings without it working, the app notices and says so instead of showing you the same screen. And the steps come with you: they wait in your notifications while you're in Settings, then clear themselves.
+
 ## v1.136
 - The app has now been on a real Samsung for the first time - most of what it believed about Samsung was right, one thing was wrong, and the blocking-has-stopped alert proved itself on real hardware. Also: your phone now tells the app what it is, once, in Profile > What the blocker sees.
 
