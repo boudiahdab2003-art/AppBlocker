@@ -24,6 +24,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.appblocker.data.SiteWord
+import androidx.compose.ui.res.stringResource
+import com.appblocker.R
 
 /**
  * One row of the blocked-words list, shared by the Blocked words screen and the Quick Block
@@ -103,7 +105,7 @@ private fun RemoveCoveredWordDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Remove “$word”?") },
+        title = { Text(stringResource(R.string.word_remove_title, word)) },
         text = {
             Column(
                 Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()),
@@ -130,9 +132,11 @@ private fun RemoveCoveredWordDialog(
         },
         confirmButton = {
             TextButton(onClick = onConfirm) {
-                Text("Remove", color = MaterialTheme.colorScheme.error)
+                Text(stringResource(R.string.word_remove), color = MaterialTheme.colorScheme.error)
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Keep it") } },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.word_keep)) }
+        },
     )
 }

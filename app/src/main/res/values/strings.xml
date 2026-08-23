@@ -839,4 +839,36 @@
     <string name="chat_your_goals">Your goals</string>
     <string name="chat_placeholder">Message your coach…</string>
     <string name="chat_send">Send</string>
+
+    <!-- ===================== Last stragglers ===================== -->
+    <string name="sched_wifi_needs_location_body">Android only reveals which Wi-Fi network you\'re on if AppBlocker has location access. Without it this schedule can never match. Use “Any Wi-Fi network” instead, or grant access below.</string>
+    <string name="sched_use_location">Use my current location</string>
+    <string name="sched_save_place">Save this place</string>
+    <string name="sched_longpress_tip">Tip: long-press a place to delete it.</string>
+    <string name="sched_name_place">Name this place</string>
+    <string name="sched_place_label">Name (e.g. UK)</string>
+    <string name="sched_delete_place">Delete place</string>
+    <string name="sched_delete_place_body">Remove \"%1$s\" from saved places?</string>
+    <string name="sched_needs_all_the_time">Location blocking needs “Allow all the time”</string>
+    <string name="sched_needs_all_the_time_body">Blocking runs in the background, so foreground-only location isn\'t enough.</string>
+
+    <string name="update_available">Update available</string>
+    <string name="update_now">Update now</string>
+    <string name="update_later">Later</string>
+    <string name="update_downloading">Downloading update</string>
+
+    <string name="gate_placeholder">Type the paragraph above</string>
+    <string name="gate_how_title">How this works</string>
+    <string name="gate_got_it">Got it</string>
+
+    <string name="word_remove_title">Remove “%1$s”?</string>
+    <string name="word_remove">Remove</string>
+    <string name="word_keep">Keep it</string>
+
+    <string name="editor_mode_title">Blocking mode</string>
+    <string name="editor_mode_body">Choose the variant that works best for you.</string>
+    <string name="editor_shorts">Shorts</string>
+    <string name="editor_protection_off">Protection is off</string>
+    <string name="editor_protection_off_body">Turn on the blocker so your choices actually block.</string>
+    <string name="editor_turn_on">Turn on protection</string>
 </resources>

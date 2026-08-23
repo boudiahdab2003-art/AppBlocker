@@ -50,6 +50,8 @@ import com.appblocker.data.SettingsStore
 import com.appblocker.service.ProtectionWatchdog
 import com.appblocker.ui.theme.AppGradients
 import com.appblocker.ui.theme.appBackground
+import androidx.compose.ui.res.stringResource
+import com.appblocker.R
 
 private data class Tab(val label: String, val icon: ImageVector)
 
@@ -321,7 +323,7 @@ fun AppRoot(
     updatePrompt?.let { release ->
         AlertDialog(
             onDismissRequest = { updateVm.dismissPrompt() },
-            title = { Text("Update available") },
+            title = { Text(stringResource(R.string.update_available)) },
             text = {
                 Text(
                     "Version ${release.version} is ready." +
@@ -334,12 +336,12 @@ fun AppRoot(
                         updateVm.dismissPrompt()
                         updateVm.downloadAndInstall(release)
                     }
-                ) { Text("Update now") }
+                ) { Text(stringResource(R.string.update_now)) }
             },
             dismissButton = {
                 TextButton(
                     onClick = { updateVm.dismissPrompt() }
-                ) { Text("Later") }
+                ) { Text(stringResource(R.string.update_later)) }
             },
         )
     }
@@ -352,9 +354,11 @@ fun AppRoot(
             // it a stalled transfer leaves nothing to tap.
             onDismissRequest = {},
             confirmButton = {
-                TextButton(onClick = { updateVm.cancelDownload() }) { Text("Cancel") }
+                TextButton(onClick = { updateVm.cancelDownload() }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
             },
-            title = { Text("Downloading update") },
+            title = { Text(stringResource(R.string.update_downloading)) },
             text = { Text("${dl.percent}%") },
         )
     }

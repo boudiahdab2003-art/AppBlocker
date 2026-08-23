@@ -898,4 +898,36 @@
     <string name="chat_your_goals">أهدافك</string>
     <string name="chat_placeholder">راسل مدرّبك…</string>
     <string name="chat_send">إرسال</string>
+
+    <!-- ===================== ما تبقّى ===================== -->
+    <string name="sched_wifi_needs_location_body">لا يكشف أندرويد أي شبكة Wi-Fi أنت عليها إلا إذا كان لدى AppBlocker إذن الموقع. وبدونه لن يتطابق هذا الجدول أبدًا. استخدم «أي شبكة Wi-Fi» بدلاً من ذلك، أو امنح الإذن أدناه.</string>
+    <string name="sched_use_location">استخدم موقعي الحالي</string>
+    <string name="sched_save_place">احفظ هذا المكان</string>
+    <string name="sched_longpress_tip">تلميح: اضغط مطوّلًا على مكان لحذفه.</string>
+    <string name="sched_name_place">سمِّ هذا المكان</string>
+    <string name="sched_place_label">الاسم (مثلًا: البيت)</string>
+    <string name="sched_delete_place">حذف المكان</string>
+    <string name="sched_delete_place_body">أتزيل «%1$s» من الأماكن المحفوظة؟</string>
+    <string name="sched_needs_all_the_time">الحظر حسب المكان يحتاج «السماح طوال الوقت»</string>
+    <string name="sched_needs_all_the_time_body">الحظر يعمل في الخلفية، فإذن الموقع أثناء الاستخدام فقط لا يكفي.</string>
+
+    <string name="update_available">يتوفّر تحديث</string>
+    <string name="update_now">حدّث الآن</string>
+    <string name="update_later">لاحقًا</string>
+    <string name="update_downloading">جارٍ تنزيل التحديث</string>
+
+    <string name="gate_placeholder">اكتب الفقرة أعلاه</string>
+    <string name="gate_how_title">كيف يعمل هذا</string>
+    <string name="gate_got_it">فهمت</string>
+
+    <string name="word_remove_title">أتزيل «%1$s»؟</string>
+    <string name="word_remove">أزِل</string>
+    <string name="word_keep">أبقِها</string>
+
+    <string name="editor_mode_title">نمط الحظر</string>
+    <string name="editor_mode_body">اختر النمط الذي يناسبك أكثر.</string>
+    <string name="editor_shorts">Shorts</string>
+    <string name="editor_protection_off">الحماية متوقّفة</string>
+    <string name="editor_protection_off_body">شغّل الحاظر حتى تحظر اختياراتك فعلًا.</string>
+    <string name="editor_turn_on">شغّل الحماية</string>
 </resources>

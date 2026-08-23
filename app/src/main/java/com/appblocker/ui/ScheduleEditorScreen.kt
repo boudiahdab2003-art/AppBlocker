@@ -363,10 +363,7 @@ fun ScheduleEditorScreen(
                                         fontWeight = FontWeight.SemiBold,
                                         color = MaterialTheme.colorScheme.onErrorContainer)
                                     Spacer(Modifier.padding(top = 2.dp))
-                                    Text("Android only reveals which Wi-Fi network you're on if " +
-                                        "AppBlocker has location access. Without it this schedule " +
-                                        "can never match. Use “Any Wi-Fi network” instead, or " +
-                                        "grant access below.",
+                                    Text(stringResource(R.string.sched_wifi_needs_location_body),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onErrorContainer)
                                 }
@@ -412,11 +409,15 @@ fun ScheduleEditorScreen(
                             if (locCaptured) "Captured: %.4f, %.4f".format(lat, lng) else stringResource(R.string.sched_no_location),
                             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.padding(top = 8.dp))
-                        GradientButton(text = "Use my current location", enabled = editable, onClick = {
+                        GradientButton(
+                            text = stringResource(R.string.sched_use_location),
+                            enabled = editable, onClick = {
                             requestCurrentLocation(context) { la, ln -> lat = la; lng = ln; locCaptured = true }
                         })
                         if (locCaptured && editable) {
-                            TextButton(onClick = { showSaveDialog = true }) { Text("Save this place") }
+                            TextButton(onClick = { showSaveDialog = true }) {
+                                Text(stringResource(R.string.sched_save_place))
+                            }
                         }
 
                         if (places.isNotEmpty()) {
@@ -434,7 +435,7 @@ fun ScheduleEditorScreen(
                                         onLongClick = { if (editable) placeToDelete = place })
                                 }
                             }
-                            Text("Tip: long-press a place to delete it.",
+                            Text(stringResource(R.string.sched_longpress_tip),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(top = 4.dp))
@@ -458,8 +459,8 @@ fun ScheduleEditorScreen(
 
                         if (showSaveDialog) {
                             TextInputDialog(
-                                title = "Name this place",
-                                label = "Name (e.g. UK)",
+                                title = stringResource(R.string.sched_name_place),
+                                label = stringResource(R.string.sched_place_label),
                                 onConfirm = { vm.savePlace(it, lat, lng); showSaveDialog = false },
                                 onDismiss = { showSaveDialog = false },
                             )
@@ -467,13 +468,13 @@ fun ScheduleEditorScreen(
                         placeToDelete?.let { p ->
                             AlertDialog(
                                 onDismissRequest = { placeToDelete = null },
-                                title = { Text("Delete place") },
-                                text = { Text("Remove \"${p.name}\" from saved places?") },
+                                title = { Text(stringResource(R.string.sched_delete_place)) },
+                                text = { Text(stringResource(R.string.sched_delete_place_body, p.name)) },
                                 confirmButton = {
-                                    TextButton(onClick = { vm.deletePlace(p); placeToDelete = null }) { Text("Delete") }
+                                    TextButton(onClick = { vm.deletePlace(p); placeToDelete = null }) { Text(stringResource(R.string.common_delete)) }
                                 },
                                 dismissButton = {
-                                    TextButton(onClick = { placeToDelete = null }) { Text("Cancel") }
+                                    TextButton(onClick = { placeToDelete = null }) { Text(stringResource(R.string.common_cancel)) }
                                 },
                             )
                         }
@@ -487,7 +488,7 @@ fun ScheduleEditorScreen(
                 if (appsOpen) {
                     OutlinedTextField(
                         value = appQuery, onValueChange = { appQuery = it },
-                        placeholder = { Text("Search apps") },
+                        placeholder = { Text(stringResource(R.string.editor_search_apps)) },
                         singleLine = true, enabled = editable,
                         shape = RoundedCornerShape(28.dp),
                         modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
@@ -557,7 +558,7 @@ private fun TimeField(
             confirmButton = {
                 TextButton(onClick = { onPick(state.hour * 60 + state.minute); show = false }) { Text("OK") }
             },
-            dismissButton = { TextButton(onClick = { show = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { show = false }) { Text(stringResource(R.string.common_cancel)) } },
             text = { TimePicker(state = state) },
         )
     }
@@ -591,7 +592,7 @@ private fun BackgroundLocationWarning(onFix: () -> Unit) {
             .padding(14.dp),
     ) {
         Column {
-            Text("Location blocking needs “Allow all the time”",
+            Text(stringResource(R.string.sched_needs_all_the_time),
                 style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onErrorContainer)
             Spacer(Modifier.padding(top = 2.dp))
@@ -749,7 +750,7 @@ private fun TextInputDialog(
         confirmButton = {
             TextButton(enabled = valid, onClick = { onConfirm(text.trim()) }) { Text("Save") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } },
         text = {
             OutlinedTextField(
                 value = text,

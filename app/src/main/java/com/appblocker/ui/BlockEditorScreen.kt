@@ -527,11 +527,11 @@ private fun BlockingModePage(
         }
         BlockingModePreview(allowlist = pending)
         Spacer(Modifier.padding(top = 16.dp))
-        Text("Blocking mode", style = MaterialTheme.typography.headlineSmall,
+        Text(stringResource(R.string.editor_mode_title), style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
         Spacer(Modifier.padding(top = 2.dp))
-        Text("Choose the variant that works best for you.",
+        Text(stringResource(R.string.editor_mode_body),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
@@ -545,7 +545,9 @@ private fun BlockingModePage(
             selected = pending) { pending = true }
         Spacer(Modifier.weight(1f))
         // The Column already applies safeDrawingPadding, so no extra nav-bar inset here.
-        GradientButton(text = "Continue", onClick = { onContinue(pending) },
+        GradientButton(
+            text = stringResource(R.string.onboarding_continue),
+            onClick = { onContinue(pending) },
             modifier = Modifier.padding(vertical = 16.dp))
     }
 }
@@ -680,7 +682,7 @@ private fun ShortsSubRow(
             }
         }
         Spacer(Modifier.width(12.dp))
-        Text("Shorts", style = MaterialTheme.typography.bodyLarge,
+        Text(stringResource(R.string.editor_shorts), style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onBackground)
         Spacer(Modifier.width(8.dp))
         Box(
@@ -706,11 +708,11 @@ private fun ProtectionBanner(context: Context, onRequestDisclosure: (() -> Unit)
             Icon(Icons.Filled.Warning, contentDescription = null, tint = Color(0xFFFFB020),
                 modifier = Modifier.size(24.dp))
             Spacer(Modifier.width(10.dp))
-            Text("Protection is off", style = MaterialTheme.typography.titleMedium,
+            Text(stringResource(R.string.editor_protection_off), style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
         }
         Spacer(Modifier.padding(top = 6.dp))
-        Text("Turn on the blocker so your choices actually block.",
+        Text(stringResource(R.string.editor_protection_off_body),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.padding(top = 12.dp))
@@ -720,7 +722,7 @@ private fun ProtectionBanner(context: Context, onRequestDisclosure: (() -> Unit)
         // appears exactly when protection is off, which is the moment somebody is most likely to
         // press it. That is the flow Google's AccessibilityService policy is written about, and
         // it is the answer to "why does a self-control app get to read my screen?" going unasked.
-        GradientButton(text = "Turn on protection", onClick = {
+        GradientButton(text = stringResource(R.string.editor_turn_on), onClick = {
             onRequestDisclosure {
                 context.startActivity(
                     Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)

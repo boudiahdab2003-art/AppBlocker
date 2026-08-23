@@ -54,6 +54,8 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.appblocker.data.TypedChallenge
 import kotlinx.coroutines.delay
+import androidx.compose.ui.res.stringResource
+import com.appblocker.R
 
 /**
  * The wording of one gate, so a screen can *ask* for the gate without composing it.
@@ -267,7 +269,7 @@ fun FrictionGate(
                             if (TypedChallenge.isPaste(input, new)) blockedPaste = true
                             else { input = new; blockedPaste = false }
                         },
-                        placeholder = { Text("Type the paragraph above") },
+                        placeholder = { Text(stringResource(R.string.gate_placeholder)) },
                         // `singleLine`, not `minLines = 1` — and the difference is the whole bug.
                         // A minLines field *starts* at one line and grows as it fills, so by the
                         // fortieth word it would be ten lines tall and the paragraph would be back
@@ -334,7 +336,7 @@ fun FrictionGate(
     if (showHelp) {
         AlertDialog(
             onDismissRequest = { showHelp = false },
-            title = { Text("How this works") },
+            title = { Text(stringResource(R.string.gate_how_title)) },
             text = {
                 // Scrollable, because Material3's alert text is not — and this is the screen
                 // whose one bug was text outgrowing the space it was given.
@@ -344,7 +346,11 @@ fun FrictionGate(
                     Text(detail, style = MaterialTheme.typography.bodyMedium)
                 }
             },
-            confirmButton = { TextButton(onClick = { showHelp = false }) { Text("Got it") } },
+            confirmButton = {
+                TextButton(onClick = { showHelp = false }) {
+                    Text(stringResource(R.string.gate_got_it))
+                }
+            },
         )
     }
 }
