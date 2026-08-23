@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.appblocker.Dist
 import com.appblocker.data.DeviceVendor
+import com.appblocker.data.SetupGuides
 import com.appblocker.service.ProtectionNotifier
 import com.appblocker.ui.theme.AppShapes
 
@@ -72,6 +73,16 @@ fun PermissionsScreen(
             ) {
                 RestrictedSettingsNote()
                 Spacer(Modifier.padding(top = 12.dp))
+            }
+            // The same pictures the wizard shows, for the person who skipped setup or is coming
+            // back to fix it — one copy of the guide, exactly as RestrictedSettingsNote above is
+            // one copy of its explanation. Only while accessibility is still off: once it is on,
+            // this is three screenshots of a job already done, in front of every other card.
+            if (perms.none { it.key == ACCESSIBILITY_PERM && it.granted }) {
+                SetupGuides.forPermission(ACCESSIBILITY_PERM, vendor.brand)?.let {
+                    SetupGuideStrip(it)
+                    Spacer(Modifier.padding(top = 16.dp))
+                }
             }
             perms.forEach { p ->
                 PermCard(p, onRequestDisclosure)

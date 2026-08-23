@@ -64,6 +64,16 @@ data class VendorAdvice(
      * would be the kind of claim this project has learnt costs a release to walk back.
      */
     val spacesWarning: String? = null,
+
+    /**
+     * Where this brand hides the accessibility list, in its own words.
+     *
+     * **The wizard cannot follow the user into Settings**, so the last thing it can do is name
+     * the destination exactly. The default is stock Android's; every brand that renames or
+     * buries the page overrides it. Wrong here costs one wrong sentence, never a blocking
+     * decision — the same bargain the rest of this file makes.
+     */
+    val accessibilityPath: String = "Settings ▸ Accessibility",
 )
 
 object DeviceVendor {
@@ -83,6 +93,7 @@ object DeviceVendor {
                 "com.miui.permcenter.autostart.AutoStartManagementActivity",
         ),
         clonedAppsFeature = "Second Space or Dual Apps",
+        accessibilityPath = "Settings ▸ Additional settings ▸ Accessibility ▸ Downloaded apps",
         spacesWarning = "Switching to Second Space and back shuts AppBlocker down in this " +
             "space, and Android's switch still says it's on. Lock AppBlocker in Recents (swipe " +
             "down on its card), allow Auto-start, and set Battery saver to “No restrictions”. " +
@@ -104,6 +115,7 @@ object DeviceVendor {
             "com.samsung.android.lool" to "com.samsung.android.sm.battery.ui.BatteryActivity",
         ),
         clonedAppsFeature = "Secure Folder or Dual Messenger",
+        accessibilityPath = "Settings ▸ Accessibility ▸ Installed apps",
         spacesWarning = "Coming back from Secure Folder, or switching between users, can stop " +
             "AppBlocker while Android's switch still says it's on. Add AppBlocker to “Never " +
             "sleeping apps” and lock it in Recents to make that rarer.",
@@ -123,6 +135,7 @@ object DeviceVendor {
                 "com.huawei.systemmanager.optimize.process.ProtectActivity",
         ),
         clonedAppsFeature = "App Twin or PrivateSpace",
+        accessibilityPath = "Settings ▸ Accessibility features ▸ Accessibility",
     )
 
     private val OPPO = VendorAdvice(
@@ -139,6 +152,7 @@ object DeviceVendor {
             "com.oplus.battery" to "com.oplus.powermanager.fuelgaue.PowerConsumptionActivity",
         ),
         clonedAppsFeature = "App Clone",
+        accessibilityPath = "Settings ▸ Additional settings ▸ Accessibility ▸ Downloaded apps",
     )
 
     private val VIVO = VendorAdvice(
@@ -154,6 +168,7 @@ object DeviceVendor {
             "com.iqoo.secure" to "com.iqoo.secure.ui.phoneoptimize.BgStartUpManager",
         ),
         clonedAppsFeature = "App Clone",
+        accessibilityPath = "Settings ▸ Shortcuts & accessibility ▸ Accessibility",
     )
 
     /**

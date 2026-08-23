@@ -57,8 +57,11 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.appblocker.Dist
+import com.appblocker.data.DeviceVendor
 import com.appblocker.data.DisplayName
 import com.appblocker.data.SettingsStore
+import com.appblocker.data.SetupGuides
+import com.appblocker.ui.theme.AppShapes
 import com.appblocker.ui.theme.AppGradients
 import com.appblocker.ui.theme.appBackground
 
@@ -365,11 +368,35 @@ private fun EssentialStep(
     onRequestDisclosure: (() -> Unit) -> Unit,
 ) {
     val icon = if (perm.key == "accessibility") Icons.Filled.Shield else Icons.Filled.Visibility
+    val guide = remember(perm.key) {
+        SetupGuides.forPermission(perm.key, DeviceVendor.advice().brand)
+    }
+
+    // **Did they go to Settings and come back without it working?** Until now that produced the
+    // identical screen with nothing to say they had failed, which is the single most likely place
+    // for a first-time user to give up — they cannot tell "I did it wrong" from "this app is
+    // broken". `resumeTick` already counts returns to the app; comparing the count taken when
+    // Grant was pressed against the current one is what separates "still here" from "been and
+    // come back". Plain `remember`, not `rememberSaveable`, deliberately: the tick itself resets
+    // if the process is killed in Settings, and a saved attempt marker would then outlive its
+    // counter and accuse someone who has only just arrived.
+    val tick = resumeTick()
+    var attemptTick by remember(perm.key) { mutableIntStateOf(NO_ATTEMPT) }
+    val attempt = setupAttempt(attemptTick, tick, perm.granted)
+    val stuck = attempt == SetupAttempt.STUCK
+    val justSucceeded = attempt == SetupAttempt.SUCCEEDED
+
+    val grant = gatedFix(perm, onRequestDisclosure)
+    val grantAndRemember = { attemptTick = tick; grant() }
+
     StepScaffold(footer = {
         if (perm.granted) {
             GradientButton(text = "Continue", onClick = onContinue)
         } else {
-            GradientButton(text = "Grant", onClick = gatedFix(perm, onRequestDisclosure))
+            GradientButton(
+                text = if (stuck) "Try again" else "Grant",
+                onClick = grantAndRemember,
+            )
             Spacer(Modifier.height(8.dp))
             TextButton(onClick = onSkip) {
                 Text("Skip for now", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -395,9 +422,35 @@ private fun EssentialStep(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
+        if (justSucceeded) {
+            Spacer(Modifier.height(16.dp))
+            Text(
+                "That's it — it's on. Tap Continue.",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.testTag(SETUP_SUCCESS_TAG),
+            )
+        }
+        if (stuck) {
+            Spacer(Modifier.height(20.dp))
+            StuckNote(perm.key)
+        }
+        // The pictures of the screen they are about to land on. Not shown once the permission is
+        // on: at that point they are a wall of instructions for something already done.
+        //
+        // **Above the greyed-out note deliberately.** These are the main path, that note is a
+        // contingency for one Android version, and it is four paragraphs long — putting it first
+        // pushed the pictures off the bottom of the screen, so the person who needs them most
+        // (the one who does not read four paragraphs) never saw them.
+        if (!perm.granted && guide != null) {
+            Spacer(Modifier.height(24.dp))
+            SetupGuideStrip(guide)
+        }
         // The dead end this wizard walks new users straight into on Android 13+: Grant opens the
-        // Accessibility page, and the toggle is greyed out with no explanation. Shown under the
-        // description so it is on screen *before* they press Grant and conclude it's broken.
+        // Accessibility page, and the toggle is greyed out with no explanation. Still on screen
+        // *before* they press Grant and conclude it's broken — just after the pictures.
         if (perm.key == ACCESSIBILITY_PERM &&
             needsRestrictedSettingsNote(
                 Build.VERSION.SDK_INT,
@@ -408,6 +461,46 @@ private fun EssentialStep(
             Spacer(Modifier.height(20.dp))
             RestrictedSettingsNote()
         }
+    }
+}
+
+
+const val SETUP_SUCCESS_TAG = "setup_success"
+const val SETUP_STUCK_TAG = "setup_stuck"
+
+/**
+ * Shown only after someone has gone to Settings and come back with the permission still off.
+ *
+ * It has to do one thing before anything else: say that **nothing is broken**. Everything else on
+ * this screen looks identical to the first visit, so without this the reasonable conclusion is
+ * that the app does not work — and that conclusion is the end of the setup.
+ */
+@Composable
+private fun StuckNote(permKey: String) {
+    Column(
+        Modifier.fillMaxWidth().clip(AppShapes.card)
+            .background(MaterialTheme.colorScheme.surface).padding(18.dp)
+            .testTag(SETUP_STUCK_TAG),
+    ) {
+        Text(
+            "Not switched on yet",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            if (permKey == ACCESSIBILITY_PERM) {
+                "Nothing is broken — this screen is easy to miss. On your phone the list lives at " +
+                    DeviceVendor.advice().accessibilityPath + ". Tap “Try again” and follow the " +
+                    "pictures below; the row you are looking for is called AppBlocker."
+            } else {
+                "Nothing is broken — that list is easy to miss. Tap “Try again”, find AppBlocker " +
+                    "in the list, and turn its switch on."
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
