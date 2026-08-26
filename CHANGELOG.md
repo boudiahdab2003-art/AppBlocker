@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.141
+- Arabic, and three ways the block list was letting things through: a word that was in no list at all, two-word entries that could never match a search, and the site list widened from 40 to 109.
+
 ## v1.140
 - Blocks land sooner, and the danger hour's word list is six times bigger. The Xiaomi browser's address bar no longer costs thousands of lookups every time the page moves, the block screen goes up before the counting and logging rather than after, the eight-second pause after Got it is gone for websites, and the Locked screen now appears as soon as that pause ends instead of up to half a minute later. The app also times itself now - Profile, What the blocker sees, How fast it blocks. Plus the danger list at 288 words, the five-violations 24-hour tier, and the fix for the word porn being blocked as page text.
 
