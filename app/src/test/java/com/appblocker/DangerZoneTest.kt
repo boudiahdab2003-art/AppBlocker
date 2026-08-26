@@ -133,4 +133,73 @@ class DangerZoneTest {
         assertFalse(DangerZone.learns(seen))
     }
 
+    // ---- the second tier: five words keep the wider list for a day ------------------------
+
+    private fun widens(b: Map<String, GuardedDeadline>) =
+        DangerZone.widensAt(b, boot, nowRt = 1_000_000L, nowWall = 5_000_000L)
+
+    @Test
+    fun `five different words keep the wider list for a day`() {
+        assertTrue(
+            widens(
+                board(
+                    "one" to 0L, "two" to 60_000L, "three" to 120_000L,
+                    "four" to 180_000L, "five" to 240_000L,
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun `four different words are not enough`() {
+        assertFalse(
+            widens(board("one" to 0L, "two" to 60_000L, "three" to 120_000L, "four" to 180_000L)),
+        )
+    }
+
+    @Test
+    fun `the same word five times is still not a hunt`() {
+        // The rule that defines the first tier defines this one too, and for the same reason.
+        val same = board("same" to 0L, "same" to 60_000L, "same" to 120_000L)
+        assertFalse(widens(same))
+    }
+
+    @Test
+    fun `both tiers read the same board`() {
+        // The three words that shut the browsers are the FIRST THREE of the five, not a separate
+        // count. Two boards would be two sources of truth for one question, and would mean the
+        // hour's own strikes stopped counting toward the day - which is not what "after 5
+        // violations" says.
+        val five = board(
+            "one" to 0L, "two" to 60_000L, "three" to 120_000L,
+            "four" to 180_000L, "five" to 240_000L,
+        )
+        assertTrue(trips(five))
+        assertTrue(widens(five))
+        val three = board("one" to 0L, "two" to 60_000L, "three" to 120_000L)
+        assertTrue(trips(three))
+        assertFalse(widens(three))
+    }
+
+    @Test
+    fun `a strike that fell out of the window counts for neither tier`() {
+        val b = board(
+            "old" to DangerZone.STRIKE_WINDOW_MS + 1,
+            "two" to 0L, "three" to 0L, "four" to 0L, "five" to 0L,
+        )
+        assertEquals(4, DangerZone.liveStrikesAt(b, boot, 1_000_000L, 5_000_000L))
+        assertFalse(widens(b))
+        assertTrue(trips(b))
+    }
+
+    @Test
+    fun `the day outlives the hour`() {
+        // The whole point of the second tier, and the reason it is a separate deadline: the
+        // browsers come back after an hour and the wider list keeps running for the rest of the
+        // day, when the ordinary list would otherwise be all that is watching.
+        assertTrue(DangerZone.WIDE_LIST_MS > DangerZone.LOCKDOWN_MS)
+        assertEquals(24 * 60 * 60_000L, DangerZone.WIDE_LIST_MS)
+        assertEquals(5, DangerZone.WIDE_LIST_STRIKES)
+    }
+
 }

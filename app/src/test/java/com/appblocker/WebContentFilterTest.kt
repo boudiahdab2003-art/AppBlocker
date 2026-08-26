@@ -753,7 +753,7 @@ class WebContentFilterTest {
             address = BrowserAddress.Unreadable,
             userKeywords = emptyList(), siteKeywords = emptyList(),
             adultPack = true, blockAdult = true,
-            inDangerZone = true,
+            wideList = true,
         )
         assertNotNull(hit)
         assertEquals("Danger zone", hit!!.title)
@@ -773,7 +773,7 @@ class WebContentFilterTest {
                     address = BrowserAddress.Unreadable,
                     userKeywords = emptyList(), siteKeywords = emptyList(),
                     adultPack = true, blockAdult = true,
-                    inDangerZone = true,
+                    wideList = true,
                 ),
             )
         }
@@ -874,7 +874,7 @@ class WebContentFilterTest {
                     // page text on purpose - invariant 4, a failed measurement is not
                     // permission. That is older than this and is not what was wrong.)
                     adultPack = true, blockAdult = false,
-                    inDangerZone = true,
+                    wideList = true,
                 ),
             )
         }

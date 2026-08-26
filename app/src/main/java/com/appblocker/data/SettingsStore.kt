@@ -381,6 +381,19 @@ object SettingsStore {
     internal fun dangerZone(context: Context): GuardedDeadline? =
         prefs(context).getString(KEY_DANGER_ZONE, null)?.let { GuardedDeadline.decode(it)?.second }
 
+    private const val KEY_DANGER_WIDE = "danger_wide_list"
+
+    /** The 24-hour window during which `danger_words.txt` stays in force. A separate deadline
+     *  from [dangerZone] because they are separate things: that one shuts browsers for an hour,
+     *  this one only widens the word list, and it outlives the hour by design. */
+    internal fun dangerWideList(context: Context): GuardedDeadline? =
+        prefs(context).getString(KEY_DANGER_WIDE, null)?.let { GuardedDeadline.decode(it)?.second }
+
+    internal fun setDangerWideList(context: Context, value: GuardedDeadline?) =
+        prefs(context).edit().apply {
+            if (value == null) remove(KEY_DANGER_WIDE) else putString(KEY_DANGER_WIDE, value.encode("w"))
+        }.apply()
+
     internal fun setDangerZone(context: Context, value: GuardedDeadline?) =
         prefs(context).edit().apply {
             if (value == null) remove(KEY_DANGER_ZONE) else putString(KEY_DANGER_ZONE, value.encode("z"))
