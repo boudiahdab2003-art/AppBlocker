@@ -40,3 +40,89 @@ fetlife.com
 manyvids.com
 clips4sale.com
 iwantclips.com
+# ---- Tubes and aggregators the keyword layer cannot see ------------------------------------
+# Every entry here is a site whose NAME gives nothing away, so "porn"/"hentai"/"xvideos" never
+# fire on it. Sites that do name themselves (upornia, pornone, exhentai) are deliberately absent:
+# the keyword layer already has them, and a second copy is a second thing to keep in step.
+spankwire.com
+keezmovies.com
+extremetube.com
+drtuber.com
+nuvid.com
+empflix.com
+hotmovs.com
+4tube.com
+fux.com
+xbabe.com
+sxyprn.com
+thumbzilla.com
+xmoviesforyou.com
+sextvx.com
+vjav.com
+# ---- JAV ----------------------------------------------------------------------------------
+# Bare "jav" is NOT a keyword and must never become one - "java" contains it.
+javhd.com
+missav.com
+missav.ai
+supjav.com
+jable.tv
+njav.tv
+thisav.com
+avgle.com
+# ---- Cams ---------------------------------------------------------------------------------
+camsoda.com
+flirt4free.com
+imlive.com
+streamate.com
+jerkmate.com
+xcams.com
+# ---- Paid-subscription and its leak mirrors ------------------------------------------------
+fansly.com
+loyalfans.com
+fanvue.com
+justfor.fans
+coomer.su
+coomer.party
+kemono.su
+kemono.party
+simpcity.su
+nudostar.com
+leakedzone.com
+fapachi.com
+influencersgonewild.com
+bunkr.si
+erome.com
+scrolller.com
+# ---- Drawn ---------------------------------------------------------------------------------
+hitomi.la
+iwara.tv
+e621.net
+gelbooru.com
+danbooru.donmai.us
+sankakucomplex.com
+paheal.net
+# ---- Written -------------------------------------------------------------------------------
+literotica.com
+nifty.org
+asstr.org
+storiesonline.net
+# ---- Gay -----------------------------------------------------------------------------------
+boyfriendtv.com
+gaytube.com
+cockyboys.com
+# ---- The owner's own, named by him on 26 Aug 2026 -------------------------------------------
+# These four are why the address bar missed: "cuckold" and "hotwife" ARE in the always-on pack,
+# but the pack is matched whole-word and here the word is glued to the next one. A hostname is
+# the right place to say so.
+cuckoldplace.com
+wifelovers.com
+hotwifeblog.com
+watchmywife.com
+# ---- Deepfakes and stolen nudes -------------------------------------------------------------
+mrdeepfakes.com
+adultdeepfakes.com
+thefappening.pro
+celebjihad.com
+# ---- Studio sites ---------------------------------------------------------------------------
+kink.com
+bellesa.co
