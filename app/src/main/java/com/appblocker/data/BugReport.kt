@@ -257,6 +257,12 @@ data class BugReport(
          * Anything not named here is dropped, so that mistake fails safe instead of publishing.
          */
         val ALLOWED_CONTEXT_KEYS = setOf(
+            // What the blocker DECLINED to do (SilenceLog) — plain counts, no package, no host,
+            // no word. The report already carries what it blocked; without these it can say
+            // nothing at all about the half the owner cannot see for himself.
+            "deafSpells",
+            "lateSkips",
+            "unreadyDecisions",
             "layout",
             "theme",
             "serviceOn",

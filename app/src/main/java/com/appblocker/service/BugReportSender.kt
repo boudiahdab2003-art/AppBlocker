@@ -16,6 +16,7 @@ import com.appblocker.data.BugReportQueue
 import com.appblocker.data.DeviceProfile
 import com.appblocker.data.ServiceHealth
 import com.appblocker.data.SettingsStore
+import com.appblocker.data.SilenceLog
 import com.appblocker.ui.hasUsageAccess
 import com.appblocker.ui.isIgnoringBattery
 import kotlinx.coroutines.CoroutineScope
@@ -91,6 +92,16 @@ object BugReportSender {
         field("protection") { ProtectionWatchdog.state(ctx).name }
         field("guard") { SettingsStore.guardOffSwitch(ctx).toString() }
         field("blocksToday") { AttemptCounter.summary(ctx).sumOf { it.today }.toString() }
+        // The other half of "blocksToday": the spells where it declined to block. A report that
+        // only ever carries successes cannot describe an under-block, which is the failure this
+        // app cannot see (SilenceLog).
+        field("deafSpells") {
+            val c = SilenceLog.get(ctx, SilenceLog.DEAF_DISMISSALS); "${c.today}/${c.total}"
+        }
+        field("lateSkips") { SilenceLog.get(ctx, SilenceLog.LATE_DECLINES).total.toString() }
+        field("unreadyDecisions") {
+            SilenceLog.get(ctx, SilenceLog.UNREADY_DECISIONS).total.toString()
+        }
         field("adultPack") { SettingsStore.adultWordsPack(ctx).toString() }
         field("scanEverywhere") { SettingsStore.keywordsEverywhere(ctx).toString() }
         field("blockUnsupported") { SettingsStore.blockUnsupportedBrowsers(ctx).toString() }

@@ -49,6 +49,7 @@ import com.appblocker.data.ServiceHealth
 import com.appblocker.data.SessionClock
 import com.appblocker.data.RuleSnapshot
 import com.appblocker.data.SettingsStore
+import com.appblocker.data.SilenceLog
 import com.appblocker.data.StrictEdits
 import com.appblocker.data.UnlockCounter
 import com.appblocker.data.UpdatePause
@@ -234,6 +235,12 @@ class BlockerAccessibilityService : AccessibilityService() {
     // CoverGate.graceSpentBy; [currentDest] picks the matching half so a class name is never
     // compared against a host.
     @Volatile private var dismissedDest: String? = null
+    // Whether this dismissal has already been counted as one the watcher went quiet through.
+    // Per dismissal, not per event: a deaf spell that declines forty times is one page the user
+    // was reading, and counting each decline would drown the number it exists to make legible.
+    @Volatile private var dismissalCountedDeaf = false
+    // Same, for the pre-rules window: one count per bind, not one per decision.
+    @Volatile private var unreadyCounted = false
     // The current destination, tracked in the two units the covers use.
     @Volatile private var lastWindowClass: String? = null
     @Volatile private var lastBrowserHost: String? = null
@@ -641,6 +648,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         essentialPackages = findEssentialPackages(this)
         // Before the rule flow below has emitted anything. Cheap by design: one string set.
         blockedSnapshot = SettingsStore.blockedSnapshot(this)
+        unreadyCounted = false // one count per bind, and this is a bind
         // Restore unexpired keyword lockouts — a service rebind must not unlock an app early.
         // Filtered on the same reckoning that decides whether one is running, not on the wall
         // clock, or a clock change could drop a live lockout here instead of at the check.
@@ -1038,7 +1046,16 @@ class BlockerAccessibilityService : AccessibilityService() {
             // snapshot above usually answers, but it carries only HARD blocks — a schedule or a
             // limit still reads as null here, so hold what is up and re-decide when the flow
             // lands. Nothing is stranded: the ordinary re-check tick re-runs this.
-            if (!rulesLoaded && overlay.isShowing) return
+            if (!rulesLoaded) {
+                // The window invariant 11's update is about, now counted rather than merely
+                // survived: a non-zero total here says a rebind on this phone really does make
+                // decisions before Room has answered.
+                if (!unreadyCounted) {
+                    unreadyCounted = true
+                    SilenceLog.record(applicationContext, SilenceLog.UNREADY_DECISIONS)
+                }
+                if (overlay.isShowing) return
+            }
             lastBlockedPkg = null
             // Not this path's cover to remove. It answers one question — is this whole app
             // blocked? — and a "no" used to tear down whatever was up, including a cover raised by
@@ -2144,10 +2161,31 @@ class BlockerAccessibilityService : AccessibilityService() {
 
     /** True while a just-dismissed cover's re-show should stay suppressed — see [CoverGate],
      *  which owns the rules (and is unit-tested, see CoverGateTest). */
-    private fun dismissSuppressed(counterKey: String): Boolean = CoverGate.suppressed(
-        counterKey, dismissedKey, dismissedPkg, lastForegroundPkg,
-        stopwatchNow() - dismissedAt,
-    )
+    private fun dismissSuppressed(counterKey: String): Boolean {
+        val since = stopwatchNow() - dismissedAt
+        val suppressed = CoverGate.suppressed(
+            counterKey, dismissedKey, dismissedPkg, lastForegroundPkg, since,
+        )
+        if (suppressed) recordDecline(since)
+        return suppressed
+    }
+
+    /**
+     * A cover or a scan was just declined because of the dismiss grace.
+     *
+     * Nothing recorded this before, anywhere — see [SilenceLog]. The declines inside the short
+     * grace are the mechanism working and are not counted; past it, the watcher is quiet while
+     * the user sits in the app it has just covered, which is the shape of invariant 20's bug and
+     * the number that would have shown it months earlier.
+     */
+    private fun recordDecline(sinceDismissMs: Long) {
+        if (!SilenceLog.isLate(sinceDismissMs)) return
+        SilenceLog.record(applicationContext, SilenceLog.LATE_DECLINES)
+        if (!dismissalCountedDeaf) {
+            dismissalCountedDeaf = true
+            SilenceLog.record(applicationContext, SilenceLog.DEAF_DISMISSALS)
+        }
+    }
 
     /** Where the user is now, in the same unit the dismissed cover recorded — a host for a page
      *  cover, a window class for an app cover. Comparing the two kinds against each other would
@@ -2157,6 +2195,7 @@ class BlockerAccessibilityService : AccessibilityService() {
 
     /** Forget the dismissed cover, so the next block lands immediately. */
     private fun clearDismissState() {
+        dismissalCountedDeaf = false
         dismissedKey = null
         dismissedPkg = null
         dismissedDest = null
@@ -2168,9 +2207,12 @@ class BlockerAccessibilityService : AccessibilityService() {
         RuleSnapshot.ruleFor(pkg, rules, rulesLoaded, blockedSnapshot)
 
     /** The key-agnostic timing half, for the web scan. */
-    private fun withinDismissWindow(): Boolean = CoverGate.inGrace(
-        dismissedPkg, lastForegroundPkg, stopwatchNow() - dismissedAt,
-    )
+    private fun withinDismissWindow(): Boolean {
+        val since = stopwatchNow() - dismissedAt
+        val inGrace = CoverGate.inGrace(dismissedPkg, lastForegroundPkg, since)
+        if (inGrace) recordDecline(since)
+        return inGrace
+    }
 
     /**
      * Raises the block cover. [counterKey] is what the attempt is *recorded* under (a package,
@@ -2299,6 +2341,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         dismissedPkg = lastForegroundPkg
         // Read AFTER dismissedKey, which is what decides which unit this cover thinks in.
         dismissedDest = currentDest()
+        dismissalCountedDeaf = false
         if (DEBUG) Log.d(TAG, "dismissed: key=$dismissedKey pkg=$dismissedPkg dest=$dismissedDest")
         dismissedAt = stopwatchNow()
         lastBlockedPkg = null

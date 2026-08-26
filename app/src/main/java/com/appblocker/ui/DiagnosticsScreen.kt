@@ -42,6 +42,7 @@ import com.appblocker.data.PhoneFacts
 import com.appblocker.data.QuickSession
 import com.appblocker.data.ServiceHealth
 import com.appblocker.data.SettingsStore
+import com.appblocker.data.SilenceLog
 import com.appblocker.data.UninstallGuardVerdict
 import com.appblocker.data.WatcherDiagnostics
 import com.appblocker.data.uninstallGuardVerdict
@@ -130,6 +131,21 @@ fun DiagnosticsScreen(onBack: () -> Unit) {
             item {
                 AppCard(modifier = Modifier.testTag(DIAGNOSTICS_PHONE_TAG)) {
                     for (line in snapshot.phone) FactRow(line)
+                }
+            }
+
+            item { SectionHeading("When the blocker went quiet") }
+            item {
+                AppCard {
+                    Text(
+                        "Everything else on this page is about blocks that happened. This is " +
+                            "the opposite: the moments it decided not to block. Zeroes here are " +
+                            "the good answer, and they are worth as much as the numbers.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = Space.sm),
+                    )
+                    for (line in snapshot.silence) FactRow(line)
                 }
             }
 
@@ -243,6 +259,9 @@ private data class Snapshot(
      *  can ever be blocked outright by the "block unsupported browsers" switch. */
     val realBrowsers: Set<String>,
     val lastLook: List<Fact>,
+    /** What the blocker declined to do — see [SilenceLog]. The only card here that is about
+     *  absence, and the only one whose zero is worth reading. */
+    val silence: List<Fact>,
 )
 
 /**
@@ -260,6 +279,52 @@ private fun readSnapshot(context: Context): Snapshot {
     val pack = SettingsStore.adultWordsPack(context)
     val adultSites = SettingsStore.blockAdult(context)
     val unsupported = SettingsStore.blockUnsupportedBrowsers(context)
+
+    val deaf = SilenceLog.get(context, SilenceLog.DEAF_DISMISSALS)
+    val declines = SilenceLog.get(context, SilenceLog.LATE_DECLINES)
+    val unready = SilenceLog.get(context, SilenceLog.UNREADY_DECISIONS)
+    val silence = buildList {
+        add(
+            Fact(
+                "Times it went quiet after \"Got it\": ${deaf.today} today, ${deaf.total} in total",
+                if (deaf.total == 0) {
+                    "None. After a block was dismissed, it has always started watching again " +
+                        "as soon as you moved somewhere new."
+                } else {
+                    "Each one is a spell where a block screen was dismissed and the blocker " +
+                        "stayed quiet while you were still in that app. Some of that is normal " +
+                        "while your phone is going Home. If this number keeps climbing, tell " +
+                        "me — that is the shape of a block that should have come and didn't."
+                },
+                good = if (deaf.total == 0) true else null,
+            ),
+        )
+        if (declines.total > 0) {
+            add(
+                Fact(
+                    "Checks skipped in those spells: ${declines.today} today, ${declines.total} in total",
+                    "How many times it looked away during the spells above. A big number " +
+                        "against a small number of spells means one page you stayed on a while.",
+                    good = null,
+                ),
+            )
+        }
+        add(
+            Fact(
+                "Decisions made before the block list loaded: ${unready.total}",
+                if (unready.total == 0) {
+                    "None. Every time the blocker restarted, it knew what to block before " +
+                        "anything asked it."
+                } else {
+                    "Each restart — switching spaces is the usual cause — has a moment before " +
+                        "the app's own list has loaded. It now remembers what was blocked and " +
+                        "enforces that straight away, so this is a count of moments survived, " +
+                        "not moments lost."
+                },
+                good = if (unready.total == 0) true else null,
+            ),
+        )
+    }
 
     val protection = buildList {
         // FIRST, because it outranks everything below it: a watcher that isn't running makes
@@ -419,6 +484,7 @@ private fun readSnapshot(context: Context): Snapshot {
         assumedReadable = KNOWN_READABLE_BROWSERS - SettingsStore.readableBrowsers(context),
         realBrowsers = runCatching { findRealBrowserPackages(context) }.getOrDefault(emptySet()),
         lastLook = lastLook,
+        silence = silence,
     )
 }
 
