@@ -1,6 +1,9 @@
 package com.appblocker
 
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
@@ -57,15 +60,33 @@ class NetworkFilterScreenTest {
         windowHeightDp >= height.value,
     )
 
-    private fun setScreen(scale: Float, state: FilterState = FilterState.OFF) {
+    /**
+     * The state the screen is drawn from, held OUTSIDE the composition so a test can move it.
+     *
+     * `setContent` may be called once per test — a rule worth stating here because the obvious
+     * way to cover four states is a loop that calls it four times, which is what the first
+     * version of this file did and what the emulator rejected. Driving a `MutableState` instead
+     * is not just a workaround: it exercises the case that actually matters, which is the screen
+     * being **re-read after he changes the setting and comes back**.
+     */
+    private lateinit var state: MutableState<FilterState>
+
+    private fun setScreen(scale: Float, initial: FilterState = FilterState.OFF) {
         compose.setContent {
+            state = remember { mutableStateOf(initial) }
             val base = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(base.density, scale)) {
                 AppBlockerTheme(darkTheme = true) {
-                    NetworkFilterScreen(onBack = {}, stateOverride = state)
+                    NetworkFilterScreen(onBack = {}, stateOverride = state.value)
                 }
             }
         }
+    }
+
+    /** Move the reading the way the network would, and let the screen settle. */
+    private fun show(next: FilterState) {
+        compose.runOnUiThread { state.value = next }
+        compose.waitForIdle()
     }
 
     /** The two controls that finish the job, at the top of Android's font slider. */
@@ -96,8 +117,9 @@ class NetworkFilterScreenTest {
     /** Every state draws a status card, including the two that are nobody's fault. */
     @Test
     fun everyStateSaysSomething() {
-        for (state in FilterState.entries) {
-            setScreen(scale = 1f, state = state)
+        setScreen(scale = 1f)
+        for (next in FilterState.entries) {
+            show(next)
             compose.onNodeWithTag(NETDNS_STATUS_TAG).assertIsDisplayed()
         }
     }
@@ -110,10 +132,21 @@ class NetworkFilterScreenTest {
      */
     @Test
     fun aWorkingFilterHidesTheSetupSteps() {
-        setScreen(scale = 1f, state = FilterState.FILTERING)
+        setScreen(scale = 1f)
+        compose.onNodeWithTag(NETDNS_STEPS_TAG).assertExists()
+
+        // The one that matters most: he pastes the address, comes back, and the screen must stop
+        // asking. A setup screen still showing its steps after the job is done reads as "it did
+        // not work" - the exact anxiety this screen exists to end.
+        show(FilterState.FILTERING)
         compose.onNodeWithTag(NETDNS_STEPS_TAG).assertDoesNotExist()
 
-        setScreen(scale = 1f, state = FilterState.CANT_TELL)
+        // And instructions a phone cannot follow are worse than none.
+        show(FilterState.CANT_TELL)
         compose.onNodeWithTag(NETDNS_STEPS_TAG).assertDoesNotExist()
+
+        // Back to asking when it stops, without a fresh screen.
+        show(FilterState.OFF)
+        compose.onNodeWithTag(NETDNS_STEPS_TAG).assertExists()
     }
 }
