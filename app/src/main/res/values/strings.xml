@@ -94,6 +94,16 @@
     <string name="block_adult_word_message">“%1$s” is a blocked adult word.</string>
     <string name="block_adult_search_message">“%1$s” looks like adult content.</string>
     <string name="block_adult_site_title">Adult site blocked</string>
+    <!-- The danger zone: three different adult words inside half an hour. -->
+    <string name="block_danger_title">Danger zone</string>
+    <plurals name="block_danger_message">
+        <item quantity="one">You hit three of these in a row. Browsers are closed for the next %1$s minute.</item>
+        <item quantity="other">You hit three of these in a row. Browsers are closed for the next %1$s minutes.</item>
+    </plurals>
+    <string name="block_danger_word_message">“%1$s” is blocked for the rest of the hour. It normally wouldn\'t be.</string>
+    <!-- A site the phone learned itself, by catching it in two different browsers. -->
+    <string name="block_learned_site_title">Blocked site</string>
+    <string name="block_learned_site_message">“%1$s” was caught in two different browsers, so it is blocked everywhere now.</string>
     <string name="block_adult_site_message">“%1$s” is on the adult-content list.</string>
 
     <!-- ===================== Shared words ===================== -->

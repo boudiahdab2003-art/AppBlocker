@@ -1,5 +1,7 @@
 package com.appblocker.data
 
+import com.appblocker.R
+
 /**
  * "You are hunting right now, so every browser closes for an hour."
  *
@@ -148,9 +150,10 @@ internal object DangerZone {
      * not the moment for a scoreboard applies here more than anywhere, because unlike that screen
      * this one appears without being asked for.
      */
-    fun message(remainingMs: Long): String {
+    fun message(words: Words, remainingMs: Long): String {
         val mins = ((remainingMs + 59_999L) / 60_000L).coerceAtLeast(1L)
-        return "You hit three of these in a row. Browsers are closed for the next $mins " +
-            if (mins == 1L) "minute." else "minutes."
+        // %s with the number already formatted, never %d: under an Arabic locale %d renders
+        // ٠١٢٣ while Kotlin's toString() stays Western, and the two disagreed on one screen.
+        return words.plural(R.plurals.block_danger_message, mins.toInt(), mins.toString())
     }
 }

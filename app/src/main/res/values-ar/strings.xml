@@ -113,6 +113,20 @@
     <string name="block_adult_word_message">«%1$s» كلمة محظورة ضمن محتوى البالغين.</string>
     <string name="block_adult_search_message">«%1$s» يبدو محتوى للبالغين.</string>
     <string name="block_adult_site_title">موقع للبالغين محظور</string>
+    <!-- منطقة الخطر: ثلاث كلمات مختلفة خلال نصف ساعة. -->
+    <string name="block_danger_title">منطقة خطر</string>
+    <plurals name="block_danger_message">
+        <item quantity="zero">وصلت إلى ثلاث كلمات متتالية. المتصفحات مقفلة الآن.</item>
+        <item quantity="one">وصلت إلى ثلاث كلمات متتالية. المتصفحات مقفلة لدقيقة واحدة.</item>
+        <item quantity="two">وصلت إلى ثلاث كلمات متتالية. المتصفحات مقفلة لدقيقتين.</item>
+        <item quantity="few">وصلت إلى ثلاث كلمات متتالية. المتصفحات مقفلة لـ%1$s دقائق.</item>
+        <item quantity="many">وصلت إلى ثلاث كلمات متتالية. المتصفحات مقفلة لـ%1$s دقيقة.</item>
+        <item quantity="other">وصلت إلى ثلاث كلمات متتالية. المتصفحات مقفلة لـ%1$s دقيقة.</item>
+    </plurals>
+    <string name="block_danger_word_message">«%1$s» محظورة لبقية الساعة. عادةً لا تكون كذلك.</string>
+    <!-- موقع تعرّف عليه الهاتف بنفسه بعد ضبطه في متصفحين مختلفين. -->
+    <string name="block_learned_site_title">موقع محظور</string>
+    <string name="block_learned_site_message">«%1$s» ظهر في متصفحين مختلفين، لذلك صار محظورًا في كل مكان.</string>
     <string name="block_adult_site_message">«%1$s» ضمن قائمة مواقع البالغين.</string>
 
     <!-- ===================== كلمات مشتركة ===================== -->

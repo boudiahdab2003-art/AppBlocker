@@ -225,8 +225,8 @@ class WebContentFilter internal constructor(
      *  only because of the hour — so an ordinary word being blocked can be understood rather
      *  than read as the app breaking. */
     private fun dangerHit(word: String) = Hit(
-        "Danger zone",
-        "“$word” is blocked for the rest of the hour. It normally wouldn't be.",
+        words.get(R.string.block_danger_title),
+        words.get(R.string.block_danger_word_message, word),
         word,
         adult = true,
     )
@@ -253,8 +253,8 @@ class WebContentFilter internal constructor(
      *  block the user cannot account for is one they argue with — and this is the only list in
      *  the app that the app wrote itself. */
     private fun learnedSiteHit(domain: String) = Hit(
-        "Blocked site",
-        "“$domain” was caught in two different browsers, so it is blocked everywhere now.",
+        words.get(R.string.block_learned_site_title),
+        words.get(R.string.block_learned_site_message, domain),
         domain,
         adult = true,
     )

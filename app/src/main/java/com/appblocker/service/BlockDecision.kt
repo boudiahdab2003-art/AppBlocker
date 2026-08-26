@@ -150,8 +150,8 @@ internal fun decideBlock(i: BlockInputs): BlockReason? {
     // Settings or a banking app, so invariant 7 is not at risk and the phone stays usable.
     if (i.dangerZoneRemainingMs > 0L && i.isRealBrowser) {
         return BlockReason(
-            "Danger zone",
-            DangerZone.message(i.dangerZoneRemainingMs),
+            i.words.get(R.string.block_danger_title),
+            DangerZone.message(i.words, i.dangerZoneRemainingMs),
             why = BlockWhy.DANGER,
         )
     }
