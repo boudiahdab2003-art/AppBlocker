@@ -796,6 +796,33 @@ class WebContentFilterTest {
         for (w in words) {
             assertFalse("a danger word must not contain a comment marker: $w", w.contains("#"))
         }
+        assertEquals("the list should have no duplicates", words.size, words.toSet().size)
+        assertTrue("everything must be lowercase", words.all { it == it.lowercase() })
+    }
+
+    @Test
+    fun `the wider net keeps out ordinary app furniture`() {
+        // While the zone is armed the watcher scans EVERY app, not just browsers - browsers are
+        // already shut for the hour, so that is where the wider list does its work. Which means a
+        // word that appears in an ordinary app's own interface covers that app: "Gallery" and
+        // "Album" are headings in every photo app on earth, and blocking his camera roll during
+        // a bad hour is not protection, it is the app looking broken at the worst moment.
+        //
+        // These were all in the first draft of the list and were taken out for this reason. The
+        // test exists so the next person adding words meets the argument.
+        val file = File("src/main/assets/danger_words.txt")
+        val words = file.readLines()
+            .map { it.trim().lowercase() }
+            .filter { it.isNotEmpty() && !it.startsWith("#") }
+            .toSet()
+        val furniture = listOf(
+            "gallery", "album", "collection", "archive", "figure", "file", "files",
+            "photo", "photos", "image", "images", "video", "videos", "camera", "search",
+            "settings", "profile", "account", "message", "messages", "chat", "home",
+        )
+        for (w in furniture) {
+            assertFalse("too generic for a list that scans every app: $w", w in words)
+        }
     }
 
     @Test
