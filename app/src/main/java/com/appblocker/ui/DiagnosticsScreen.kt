@@ -45,6 +45,8 @@ import com.appblocker.data.ServiceHealth
 import com.appblocker.data.SettingsStore
 import com.appblocker.data.DangerZone
 import com.appblocker.data.DeviceBoot
+import com.appblocker.data.FilterState
+import com.appblocker.data.NetworkFilter
 import com.appblocker.data.SilenceLog
 import com.appblocker.data.UninstallGuardVerdict
 import com.appblocker.data.WatcherDiagnostics
@@ -476,6 +478,41 @@ private fun readSnapshot(context: Context): Snapshot {
                 ),
             )
         }
+        // The layer that keeps working when everything above it has been killed, so it belongs on
+        // the card that answers "is anything protecting me at all". Reports the STATE only - never
+        // the resolver, never a thing it resolved.
+        add(
+            when (NetworkFilter.read(context).state) {
+                FilterState.FILTERING -> Fact(
+                    "Family DNS filter is on",
+                    "Adult sites are refused before they load, in every app - including ones " +
+                        "the blocker cannot read a word of. This is the only layer your phone " +
+                        "cannot kill, because it is a setting rather than an app.",
+                    good = true,
+                )
+                FilterState.ON_BUT_UNKNOWN -> Fact(
+                    "Private DNS is on, but it is not filtering",
+                    "Your lookups are encrypted, which is good, but the server doing them blocks " +
+                        "nothing. Encrypted is not the same as filtered - Profile has the " +
+                        "address to paste instead.",
+                    good = false,
+                )
+                FilterState.OFF -> Fact(
+                    "Family DNS filter is off",
+                    "Nothing is being filtered at the network level. This is the strongest block " +
+                        "you can add and it takes about a minute to set up - Profile has it.",
+                    good = false,
+                )
+                // Not his fault and not a failure: an old phone, or a moment with no network.
+                FilterState.CANT_TELL -> Fact(
+                    "Family DNS filter: cannot tell right now",
+                    "Either this phone is older than Android 9, or there is no network to read. " +
+                        "Nothing is blocked because of this - the guard never acts on an answer " +
+                        "it does not have.",
+                    good = null,
+                )
+            },
+        )
         add(
             if (updatePaused) Fact(
                 "Blocking is paused after the update",

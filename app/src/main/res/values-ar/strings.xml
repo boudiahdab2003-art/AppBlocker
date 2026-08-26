@@ -972,4 +972,48 @@
     <!-- الغطاء الذي يظهر عند توقف فلتر DNS العائلي. -->
     <string name="block_netdns_title">فلتر العائلة متوقف</string>
     <string name="block_netdns_message">فلتر DNS العائلي على هاتفك لا يعمل، لذا لا شيء يُفلتَر على مستوى الشبكة. تبقى المتصفحات مغلقة حتى يعود للعمل — وكل شيء آخر على هاتفك يعمل كالمعتاد. افتح AppBlocker لإعادة تشغيله.</string>
+
+    <!-- شاشة فلتر DNS العائلي. -->
+    <string name="netdns_title">فلتر العائلة</string>
+    <string name="netdns_status_on">الفلترة تعمل</string>
+    <string name="netdns_status_on_body">هاتفك يرسل كل طلبات العناوين إلى فلتر العائلة. المواقع الإباحية تُحظر قبل أن تُحمَّل، في كل التطبيقات — لا في التي يستطيع الحاظر قراءتها فقط.</string>
+    <string name="netdns_status_off">الفلترة متوقفة</string>
+    <string name="netdns_status_off_body">لا شيء يُفلتَر على مستوى الشبكة. الحاظر ما زال يراقب شاشتك، لكن كل ما لا يستطيع قراءته يمر.</string>
+    <string name="netdns_status_unknown">الـ DNS الخاص مُفعّل، لكنه لا يفلتر</string>
+    <string name="netdns_status_unknown_body">هاتفك يستخدم طلبًا مشفّرًا، وهذا جيد — لكن الخادم الذي يستخدمه لا يحظر شيئًا. التشفير ليس فلترة. الصق العنوان بالأسفل بدلًا منه.</string>
+    <string name="netdns_status_unknown_device">هذا الهاتف أقدم من أن يدعمها</string>
+    <string name="netdns_status_unknown_device_body">هذه الميزة تحتاج أندرويد 9 أو أحدث. كل شيء آخر في التطبيق يعمل كالمعتاد.</string>
+    <string name="netdns_what_title">ما الذي تفعله</string>
+    <string name="netdns_what_body">قبل أن يفتح هاتفك أي موقع، عليه أن يسأل أين يقع ذلك الموقع. هذا الفلتر هو من يجيب على هذا السؤال — ويرفض الإجابة عن المواقع الإباحية. يعمل تحت كل شيء: كل تطبيق، وكل متصفح، والصور داخل التطبيقات، والصفحات التي لا يستطيع الحاظر قراءة كلمة منها.</string>
+    <string name="netdns_what_body_2">كما أنه لا يمكن لمدير البطارية في هاتفك أن يوقفه، لأنه ليس تطبيقًا — بل إعداد. وهذا هو الشيء الوحيد الذي لا تستطيع بقية أجزاء الحاظر أن تعدك به.</string>
+    <string name="netdns_steps_title">شغّله — مرة واحدة</string>
+    <string name="netdns_step_1">اضغط «انسخ العنوان» بالأسفل.</string>
+    <string name="netdns_step_2">اضغط «افتح الإعدادات».</string>
+    <string name="netdns_step_3">ابحث عن «DNS خاص». عادةً تحت «الشبكة والإنترنت»؛ وعلى شياومي تحت «الاتصال والمشاركة».</string>
+    <string name="netdns_step_4">اختر «اسم مضيف مزوّد DNS الخاص» والصق العنوان.</string>
+    <string name="netdns_step_5">احفظ، ثم عُد إلى هنا. تتحول هذه الصفحة إلى الأخضر عندما يرى التطبيق أنها تعمل.</string>
+    <string name="netdns_address_label">العنوان الذي تلصقه</string>
+    <string name="netdns_copy">انسخ العنوان</string>
+    <string name="netdns_copied">تم النسخ — الصقه الآن في «DNS خاص»</string>
+    <string name="netdns_open_settings">افتح الإعدادات</string>
+    <string name="netdns_why_title">لماذا لا يستطيع التطبيق تشغيله نيابةً عنك</string>
+    <string name="netdns_why_body">لا يسمح أندرويد لتطبيق بتغيير هذا الإعداد — وهي نفس القاعدة التي تمنع تطبيقًا سيئًا من إعادة توجيه كل ما تبحث عنه بصمت. لا بد أن تكون لمستك أنت. يستطيع التطبيق رؤيته والدفاع عنه، لكنه لا يستطيع ضبطه.</string>
+    <string name="netdns_cost_title">ماذا يحدث إذا توقف</string>
+    <string name="netdns_cost_body">طلبت فلترًا لا تستطيع إيقافه. لا يمكن لأي تطبيق على أندرويد أن يكون كذلك — لذا فإن إيقافه يكلّفك المتصفحات بدلًا من ذلك. تُغلَق كل المتصفحات حتى يعود الفلتر للعمل. الخرائط والبنك والرسائل وكل شيء آخر يستمر في العمل، والتطبيق ينتظر دقيقة قبل أن يتصرف حتى لا يكلّفك أي تغيير شبكة عادي شيئًا.</string>
+    <string name="netdns_cost_body_2">ولا يبدأ ذلك إلا بعد أن يرى التطبيق الفلتر يعمل مرة واحدة على الأقل. وقبل ذلك يكتفي بالطلب.</string>
+    <string name="profile_netdns_title">فلتر العائلة</string>
+    <string name="profile_netdns_subtitle_on">يعمل — يحظر المواقع الإباحية لكل التطبيقات</string>
+    <string name="profile_netdns_subtitle_off">لم يُضبط بعد — أقوى حظر يمكنك إضافته</string>
+    <string name="netdns_off_title">إيقاف هذه الميزة</string>
+    <string name="netdns_off_body">طلبت ألا تستطيع إيقاف هذه الميزة، لذا تعمل كما تعمل قائمة الكلمات: الطلب يبدأ انتظارًا مدته 24 ساعة، ويبقى الفلتر مدافَعًا عنه طوالها. وهي موجودة كي يكون لمشكلة حقيقية مخرج — لا كي يكون لليلة سيئة مخرج.</string>
+    <string name="netdns_off_start">اطلب إيقافه</string>
+    <string name="netdns_off_waiting">يمكنك إيقافه بعد %s</string>
+    <string name="netdns_off_now">أوقفه الآن</string>
+    <string name="netdns_off_cancel">ألغِ الطلب</string>
+    <string name="netdns_off_done">متوقف — تبقى المتصفحات مفتوحة مهما فعل الفلتر</string>
+    <string name="netdns_off_back_on">دافع عنه من جديد</string>
+    <string name="gate_netdns_title">إيقاف حماية فلتر العائلة؟</string>
+    <string name="gate_netdns_blurb">سيبدأ هذا انتظارًا مدته 24 ساعة. لا يتغير شيء قبل انقضائه.</string>
+    <string name="gate_netdns_detail">بعدها ستبقى المتصفحات مفتوحة حتى عندما يكون الفلتر متوقفًا.</string>
+    <string name="gate_netdns_confirm">ابدأ الـ 24 ساعة</string>
 </resources>

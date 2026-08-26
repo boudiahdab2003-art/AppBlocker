@@ -94,6 +94,7 @@ import com.appblocker.data.DisplayName
 import com.appblocker.data.OffSwitchGuard
 import com.appblocker.data.PinStore
 import com.appblocker.data.ServiceHealth
+import com.appblocker.data.NetworkFilter
 import com.appblocker.data.SettingsStore
 import com.appblocker.service.AccessibilityUtil
 import com.appblocker.service.BugReportSender
@@ -136,6 +137,7 @@ fun ProfileScreen(
     onOpenChangelog: () -> Unit = {},
     onOpenInstructions: () -> Unit = {},
     onOpenDiagnostics: () -> Unit = {},
+    onOpenNetworkFilter: () -> Unit = {},
     onOpenRepair: () -> Unit = {},
     onOpenDetox: () -> Unit = {},
     onOpenScenarios: () -> Unit = {},
@@ -159,6 +161,11 @@ fun ProfileScreen(
     val resumeTick = resumeTick()
     var pinSet by remember(resumeTick) { mutableStateOf(PinStore.isSet(context)) }
     val protectionStatus = remember(resumeTick) { protectionStatus(context) }
+    // Read once per resume, like the status above: NetworkFilter.read is three binder calls into
+    // ConnectivityManager, and a row subtitle must not pay that on every recomposition.
+    val netFiltering = remember(resumeTick) {
+        NetworkFilter.protecting(NetworkFilter.read(context).state)
+    }
     // **Deliberately not `remember(resumeTick)` like its neighbours — see [onRequestGate].**
     // The typed gate is composed by AppRoot, so the confirm action handed to it is a lambda that
     // OUTLIVES this composition, and `remember(key)` builds a *new* MutableState every time the
@@ -588,6 +595,18 @@ fun ProfileScreen(
                 chevron = true,
                 enabled = true,
                 onClick = onOpenInstructions,
+            )
+            Divider()
+            ProfileRow(
+                icon = Icons.Filled.Shield,
+                title = stringResource(R.string.profile_netdns_title),
+                subtitle = stringResource(
+                    if (netFiltering) R.string.profile_netdns_subtitle_on
+                    else R.string.profile_netdns_subtitle_off,
+                ),
+                chevron = true,
+                enabled = true,
+                onClick = onOpenNetworkFilter,
             )
             Divider()
             ProfileRow(

@@ -560,6 +560,48 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     what number would move?* This one asks: **if this quietly got slower, what number would move?**
     Both had the same answer, and the answer was none.
 
+27. **A protection that punishes may only act on an answer it has, about a thing it has watched
+    working.** Every rule before this one decides whether to cover a *screen*. `NetworkFilter` is
+    the first that decides whether to shut **every browser on the phone**, off a reading of a
+    system setting that can be absent, stale, or mid-change — so the cost of being wrong stops
+    being a false-positive cover and becomes a phone that cannot reach the internet and cannot be
+    told why.
+
+    Invariant 4 says a failed measurement is not permission. Its mirror had never needed stating,
+    because nothing until now could *charge* for one: **a failed measurement is not a punishment
+    either.** `CANT_TELL` is a distinct state from `OFF` for exactly this, and the "off since"
+    anchor is cleared whenever the reading is unavailable, so a flight or a dead spot can never
+    quietly pay down the wait that ends in a consequence.
+
+    Three more refusals, each a way this could have left him stuck rather than protected:
+
+    - **An unvalidated network is never judged.** A captive portal resolves nothing until you log
+      in and breaks a private-DNS filter by design; shutting the browsers there leaves him unable
+      to reach the login page *and* unable to fix the filter. The screen-reading layers still
+      cover that network — only this one stands down.
+    - **A reading must hold still.** The state churns on every handover, and a protection that
+      misfires daily is one that gets switched off.
+    - **Armed, not assumed.** The guard defends only a filter it has observed working on this
+      phone. Without that, the update shipping the feature reads an honest `OFF` on every phone
+      that never set one up and takes the browsers away from someone who was never told why —
+      with the screen that explains it reachable only through the hole it just made.
+
+    **The shape to grep for: a new layer whose failure mode is not "it didn't block" but "the
+    phone stopped working", judged by the same standards as a layer that only raises a cover.**
+
+28. **A switch that reads "on" is not a protection; the thing it points at is.** Android's Private
+    DNS can be on and filtering nothing — "automatic" mode, or any of the popular resolvers that
+    encrypt lookups without blocking a single site. Reading the switch would have called that
+    protected and defended it, which is worse than not having the feature: it puts a green light on
+    an open door. So `FilterState` distinguishes `FILTERING` from `ON_BUT_UNKNOWN`, membership of
+    `KNOWN_FAMILY_RESOLVERS` is the whole protection, and the bar for that list is *"this operator
+    publishes it as an adult filter"* — never *"this is a good resolver"*. `security.cloudflare-dns.com`
+    and `dns.adguard-dns.com` are deliberately absent for that reason.
+
+    Same family as the accessibility toggle that says "on" over a watcher the phone killed
+    (`ProtectionState.STALLED`) and the `soleHost` rule that refuses when candidates disagree:
+    **the app must read the thing, not the claim about the thing.**
+
 ## Device quirks these invariants exist for
 
 - Gesture-nav Home on HyperOS often emits **no accessibility event at all**, so the foreground

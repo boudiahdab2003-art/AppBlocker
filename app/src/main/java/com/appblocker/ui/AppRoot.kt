@@ -75,6 +75,7 @@ private sealed interface Overlay {
     data object Instructions : Overlay
     data object Diagnostics : Overlay
     data object Repair : Overlay
+    data object NetworkFilterSetup : Overlay
     data object DetoxGuide : Overlay
     data object Scenarios : Overlay
     data object TwelveSteps : Overlay
@@ -206,6 +207,8 @@ fun AppRoot(
                 EnglishOnly { DiagnosticsScreen(onBack = { overlay = null }) }
             is Overlay.Repair ->
                 RepairScreen(onBack = { overlay = null })
+            is Overlay.NetworkFilterSetup ->
+                NetworkFilterScreen(onBack = { overlay = null })
             is Overlay.DetoxGuide ->
                 EnglishOnly { DopamineDetoxScreen(onBack = { overlay = null }) }
             is Overlay.Scenarios ->
@@ -251,6 +254,7 @@ fun AppRoot(
                 onOpenInstructions = { overlay = Overlay.Instructions },
                 onOpenDiagnostics = { overlay = Overlay.Diagnostics },
                 onOpenRepair = { overlay = Overlay.Repair },
+                onOpenNetworkFilter = { overlay = Overlay.NetworkFilterSetup },
                 onOpenDetox = { overlay = Overlay.DetoxGuide },
                 onOpenScenarios = { overlay = Overlay.Scenarios },
                 onOpenSteps = { overlay = Overlay.TwelveSteps },
@@ -383,6 +387,7 @@ private fun MainScaffold(
     onOpenInstructions: () -> Unit,
     onOpenDiagnostics: () -> Unit,
     onOpenRepair: () -> Unit,
+    onOpenNetworkFilter: () -> Unit,
     onOpenDetox: () -> Unit,
     onOpenScenarios: () -> Unit,
     onOpenSteps: () -> Unit,
@@ -461,6 +466,7 @@ private fun MainScaffold(
                     onOpenChangelog = onOpenChangelog,
                     onOpenInstructions = onOpenInstructions,
                     onOpenDiagnostics = onOpenDiagnostics,
+                    onOpenNetworkFilter = onOpenNetworkFilter,
                     onOpenRepair = onOpenRepair,
                     onOpenDetox = onOpenDetox,
                     onOpenScenarios = onOpenScenarios,
