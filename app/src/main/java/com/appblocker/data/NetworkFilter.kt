@@ -56,27 +56,36 @@ enum class FilterState {
  */
 internal object NetworkFilter {
 
-    /** The resolver he chose. CleanBrowsing's family filter also forces SafeSearch on the big
-     *  search engines, which the other lists here do not. */
+    /**
+     * The resolver, fixed. His own choice — *"i want this dns family-filter-dns.cleanbrowsing.org"*
+     * — and already set on his phone and tablet before this feature existed, which is why the app
+     * arms itself on first launch with nothing for him to do.
+     *
+     * CleanBrowsing's family filter also forces SafeSearch on the big search engines, which the
+     * alternatives considered here do not.
+     */
     const val RECOMMENDED = "family-filter-dns.cleanbrowsing.org"
 
     /**
-     * Resolvers this app accepts as actually filtering adult content.
+     * The resolvers this app accepts as actually filtering adult content — **exactly one**.
      *
-     * ⚠️ **Membership is the whole protection, so the bar is "this operator publishes it as an
-     * adult filter"** — not "this is a good resolver". `security.cloudflare-dns.com` and
-     * `dns.adguard-dns.com` are deliberately absent: they block malware and ads and let everything
-     * here straight through, so accepting them would mean reading a switched-off protection as on.
+     * It began as four (Cloudflare's family filter, AdGuard's, CleanBrowsing's two) and the owner
+     * closed it on 26 Aug 2026: *"the dns i gave you is already set on my android phone and tablet
+     * so just make it fixed"*. His phone and tablet were already pointed at [RECOMMENDED] before
+     * any of this shipped, so accepting alternatives bought nothing he wanted and cost the one
+     * thing he asked for: **changing the resolver is now indistinguishable from switching the
+     * filter off**, and costs the browsers the same way. A list of four is a list of four ways to
+     * quietly end up somewhere weaker.
      *
-     * ⚠️ Verify each one resolves on a real device before shipping. A hostname in this list that
+     * ⚠️ **Membership is the whole protection.** The bar is "this operator publishes it as an
+     * adult filter" — never "this is a good resolver". `security.cloudflare-dns.com` and
+     * `dns.adguard-dns.com` block malware and ads and pass every bit of this straight through;
+     * accepting one would read a switched-off protection as on.
+     *
+     * ⚠️ If this ever grows again, verify each entry resolves on a real device first. A hostname
      * the phone cannot reach is a phone with no working DNS — the one failure worse than no filter.
      */
-    val KNOWN_FAMILY_RESOLVERS = listOf(
-        "family-filter-dns.cleanbrowsing.org", // CleanBrowsing family: adult + forced SafeSearch
-        "adult-filter-dns.cleanbrowsing.org",  // CleanBrowsing adult-only
-        "family.cloudflare-dns.com",           // Cloudflare for Families: adult + malware
-        "family.adguard-dns.com",              // AdGuard family
-    )
+    val KNOWN_FAMILY_RESOLVERS = listOf(RECOMMENDED)
 
     /**
      * How long a reading has to hold still before it costs him anything.

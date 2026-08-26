@@ -163,4 +163,30 @@ class NetworkFilterTest {
         assertTrue("and once it has been seen working, it is defended", enforce(FilterState.OFF, armed = true))
     }
 
+
+    /**
+     * **Fixed means fixed.** The list was four resolvers until he pointed out that both his
+     * devices were already on one of them: *"just make it fixed"*. So another operator's family
+     * filter — genuinely a filter, genuinely blocking this material — no longer counts, and
+     * changing the resolver costs the browsers exactly like switching it off.
+     *
+     * The cost of the choice, stated so nobody quietly "fixes" it later: if CleanBrowsing were
+     * ever unreachable he could not fall back to Cloudflare's family filter without the guard
+     * acting. That is survivable because an unreachable resolver stops the network validating,
+     * and an unvalidated network is never judged — but it is the trade, and it was his to make.
+     */
+    @Test fun `only his resolver counts, not merely a good one`() {
+        assertEquals(listOf(NetworkFilter.RECOMMENDED), NetworkFilter.KNOWN_FAMILY_RESOLVERS)
+        for (other in listOf(
+            "family.cloudflare-dns.com", "family.adguard-dns.com",
+            "adult-filter-dns.cleanbrowsing.org",
+        )) {
+            assertEquals(
+                "$other filters, but it is not the one that is set",
+                FilterState.ON_BUT_UNKNOWN,
+                NetworkFilter.classify(true, true, true, other),
+            )
+        }
+    }
+
 }
