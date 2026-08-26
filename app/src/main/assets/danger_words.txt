@@ -2,76 +2,336 @@
 #
 # Asked for on 26 Aug 2026: "make the spectrum of terms that are considered blocked even
 # broader so normal terms that were normal to use will become blocked because the person is
-# in a danger zone."
+# in a danger zone." Widened again the same day, at his request, from 51 entries.
 #
 # THE CURATION RULE, and it is the opposite of adult_words_pack.txt's.
 #
 # The pack holds words that are ~100% adult, because it is on all the time and a false block on
-# an ordinary day is a real cost. This file is the reverse trade: these words ARE ordinary, they
-# WILL sometimes block something innocent, and that is the point. They only apply in the hour
-# after three different adult words were caught inside thirty minutes — a window that has already
-# established what is going on. An hour of over-blocking then is cheap; a miss is not.
+# an ordinary day is a real cost — that file has been TRIMMED three separate times for exactly
+# that. This file is the reverse trade: these words ARE ordinary, they WILL sometimes block
+# something innocent, and that is the point. They only apply in the hour after three different
+# adult words were caught inside thirty minutes, a window that has already established what is
+# going on. An hour of over-blocking then is cheap. A miss is not.
 #
-# Still not anything goes. Two things stay out:
-#   - words needed to ask for help ("recovery", "quit", "addiction", "therapy", "support") —
-#     blocking those in the exact hour someone might reach for them would be the worst thing
-#     this app could do;
-#   - words that would break something practical he may genuinely need mid-hour (banking,
-#     directions, medical). Browsers are already shut for the hour; this must not shut the rest
-#     of the phone with them.
+# TWO THINGS STAY OUT, ALWAYS:
 #
-# Whole-word matched, lowercased, Arabic folded like the pack. One per line, # starts a comment.
+#   1. Words needed to ask for help — recovery, quit, addiction, therapy, support, counselling.
+#      Blocking those in the exact hour someone might reach for them would be the worst thing
+#      this app could do. `WebContentFilterTest` reads this file and fails if one appears.
+#   2. Words needed for something practical he may genuinely need mid-hour: banking, directions,
+#      work, medical. Browsers are already shut for the hour; this must not shut the rest of the
+#      phone with them. So no clinical anatomy either — "breast" belongs to breast cancer as much
+#      as to anything else, and the adult pack already covers the explicit vocabulary.
+#
+# Matching is WHOLE-WORD, lowercased, Arabic folded like the pack — so "cam" never fires inside
+# "came" and "leak" never fires inside "leakage". Multi-word entries match as phrases.
+# One per line. # starts a comment.
 
+# ---- Appearance, as a search rather than a description -----------------------------------
 sexy
-hot girls
+sexi
 hot girl
+hot girls
+hot guy
+hot guys
+hot woman
+hot women
+beautiful girls
+pretty girls
+gorgeous girls
+cute girls
+sexy girl
+sexy girls
+sexy woman
+sexy women
+sexy man
+sexy men
+sexy pics
+sexy pic
+sexy photo
+sexy photos
+sexy video
+sexy videos
+sexiest
+hottest girls
+hottest women
+attractive women
+attractive girls
+curvy
+thick girls
+big boobs
+big butt
+big ass
+nice ass
+perfect body
+body goals
+booty
+thicc
+
+# ---- Undressed, and what people wear to be looked at --------------------------------------
 nude
 nudes
+nudity
 naked
-lingerie
-bikini
-thong
-topless
 undressed
+undress
+unclothed
+half naked
+topless
+bottomless
+lingerie
+underwear
+panties
+thong
+g string
+bikini
+swimsuit
+swimwear
+micro bikini
+see through
+sheer
+transparent dress
+tight dress
+short skirt
+mini skirt
+crop top
+stockings
+fishnet
+garter
+corset
+babydoll
+negligee
+robe
+towel only
+
+# ---- Cameras, streams, and things you subscribe to ----------------------------------------
 webcam
+web cam
 cam girl
+cam girls
+camgirl
 camgirls
+cam boy
+cam show
+cam site
+live cam
+live cams
+camming
 onlyfans
+only fans
 fansly
+patreon leaks
+premium snap
+private snap
+snap premium
+paid content
+exclusive content
+subscriber only
+subscribers only
+private show
+private shows
+tip menu
+video call girls
+
+# ---- Meeting, paying, arranging ------------------------------------------------------------
 escort
 escorts
+escort service
+call girl
+call girls
+massage parlour
+massage parlor
+happy ending
+sensual massage
+erotic massage
+body rub
 hookup
 hookups
+hook up
 one night
-strip
+one night stand
+casual encounter
+casual encounters
+no strings
+friends with benefits
+sugar daddy
+sugar baby
+sugar mommy
+strip club
+strip clubs
 stripper
+strippers
 striptease
-seduce
-seduction
-flirt
+lap dance
+brothel
+red light
+
+# ---- Wanting, and the words for wanting ----------------------------------------------------
 horny
 aroused
-fetish
-kink
+arousal
+turned on
+turn me on
+seduce
+seduced
+seduction
+seductive
+seducing
+temptation
+tempting
+tease
+teasing
+flirt
+flirting
+flirty
+lust
+lustful
+desire
+craving
+urges
+fantasy
+fantasies
+daydream
+imagine her
+imagine him
+thirst trap
+thirst traps
+
+# ---- Genres and the vocabulary around them -------------------------------------------------
 erotic
 erotica
+erotism
+eroticism
 sensual
+sensuality
+intimate
+intimacy
 intimate scene
+intimate photos
 bedroom scene
+love scene
+sex scene
+sex scenes
+steamy
+steamy scene
+racy
+risque
+risqué
+provocative
+suggestive
+explicit
+explicit content
+adult content
+adult film
+adult movie
+adult video
+adult site
+mature content
+18+
+nsfw
+not safe for work
+xxx
+x rated
+r rated scene
+unrated
+uncut version
+
+# ---- Fetish-adjacent, kept to the ordinary-word end of it ----------------------------------
+fetish
+fetishes
+kink
+kinky
+kinks
+bdsm
+bondage
+domination
+submissive
+dominatrix
+roleplay
+role play
+taboo
+forbidden
+naughty
+filthy
+wild night
+freaky
+
+# ---- How the content gets described --------------------------------------------------------
 uncensored
 unfiltered
 leak
-leaked
 leaks
+leaked
+leaked photos
+leaked video
+leaked videos
+full video
+full vid
+watch online
+free video
+free videos
+free access
+no signup
+without registration
+hd video
+compilation
+top 10 hottest
+ranking hottest
 
-# Arabic — same rule: ordinary words that are common entry points, not clinical or help-seeking.
+# ---- Where it tends to be looked for -------------------------------------------------------
+subreddit
+reddit nsfw
+telegram channel
+telegram group
+discord server nsfw
+imageboard
+forum thread nsfw
+tumblr blog
+mega link
+mega folder
+
+# ---- Arabic -------------------------------------------------------------------------------
+# Same rule: ordinary words that are common entry points, never clinical or help-seeking.
 مثير
 مثيرة
+مثيرات
 عارية
+عاريات
 عاري
+تعري
 ملابس داخلية
+لباس داخلي
 اغراء
 إغراء
 مغري
+مغرية
 شهوة
+شهواني
 جسد
+اجساد
+أجساد
+فاتنة
+فاتنات
+جميلات
+حسناء
+حسناوات
+راقصة
+راقصات
+اثارة
+إثارة
+مثيرة للاعجاب
+حصري
+مسرب
+مسربة
+تسريب
+تسريبات
+بدون رقابة
+غير مراقب
+كامل الفيديو
+مشاهدة مباشرة
+دردشة
+كاميرا
+كام
+مواعدة
+تدليك
+مساج
