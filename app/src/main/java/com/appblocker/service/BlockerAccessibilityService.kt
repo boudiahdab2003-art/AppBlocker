@@ -428,6 +428,10 @@ class BlockerAccessibilityService : AccessibilityService() {
     // The address-bar check that runs with NO debounce (see scheduleUrlScan). Separate job so
     // it can't be cancelled by, or cancel, the heavier text scan running alongside it.
     @Volatile private var urlScanJob: Job? = null
+
+    /** Set when the address moved while a lookup was already in flight — see [scheduleUrlScan].
+     *  Without it that event was simply dropped, and its page waited for the debounced scan. */
+    @Volatile private var urlScanDirty = false
     // The omnibox text this fast path last decided on, so a page emitting a burst of content
     // events costs one node lookup rather than one per event. Null = decide again on the next
     // event; it is cleared everywhere lastWebText is, so coming back to a page re-checks it.
@@ -1140,9 +1144,29 @@ class BlockerAccessibilityService : AccessibilityService() {
     private fun scheduleUrlScan() {
         val pkg = lastForegroundPkg ?: return
         if (pkg !in browserPackages || !shouldScanPkg(pkg)) return
-        if (urlScanJob?.isActive == true) return
+        // One lookup at a time, because a scrolling page fires content events continuously and
+        // the in-flight check already covers the burst it belongs to. But an event arriving
+        // *during* a read is not part of that burst — it is the address having moved since, and
+        // dropping it outright meant a page navigated to mid-read waited for the debounced scan
+        // several hundred milliseconds later, or for the user to touch something. Remember it and
+        // read once more instead.
+        if (urlScanJob?.isActive == true) {
+            urlScanDirty = true
+            return
+        }
         val queuedAt = stopwatchNow()
-        urlScanJob = scope.launch { scanBrowserUrl(pkg, queuedAt) }
+        urlScanJob = scope.launch {
+            urlScanDirty = false
+            scanBrowserUrl(pkg, queuedAt)
+            // **One repeat at most.** The flag means "it moved while we were reading", and one
+            // more read settles that; anything arriving after belongs to the next burst and will
+            // schedule its own. Looping until the flag stays clear would let a churning page turn
+            // the fast path into a spin, which is the cost this single-flight exists to prevent.
+            if (urlScanDirty && lastForegroundPkg == pkg) {
+                urlScanDirty = false
+                scanBrowserUrl(pkg, stopwatchNow())
+            }
+        }
     }
 
     /** Debounced YouTube-Shorts check (quicker than the web scan so Shorts is caught fast).
