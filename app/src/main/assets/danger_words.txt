@@ -1,0 +1,77 @@
+# danger_words.txt — the wider net, and ONLY while the danger zone is armed.
+#
+# Asked for on 26 Aug 2026: "make the spectrum of terms that are considered blocked even
+# broader so normal terms that were normal to use will become blocked because the person is
+# in a danger zone."
+#
+# THE CURATION RULE, and it is the opposite of adult_words_pack.txt's.
+#
+# The pack holds words that are ~100% adult, because it is on all the time and a false block on
+# an ordinary day is a real cost. This file is the reverse trade: these words ARE ordinary, they
+# WILL sometimes block something innocent, and that is the point. They only apply in the hour
+# after three different adult words were caught inside thirty minutes — a window that has already
+# established what is going on. An hour of over-blocking then is cheap; a miss is not.
+#
+# Still not anything goes. Two things stay out:
+#   - words needed to ask for help ("recovery", "quit", "addiction", "therapy", "support") —
+#     blocking those in the exact hour someone might reach for them would be the worst thing
+#     this app could do;
+#   - words that would break something practical he may genuinely need mid-hour (banking,
+#     directions, medical). Browsers are already shut for the hour; this must not shut the rest
+#     of the phone with them.
+#
+# Whole-word matched, lowercased, Arabic folded like the pack. One per line, # starts a comment.
+
+sexy
+hot girls
+hot girl
+nude
+nudes
+naked
+lingerie
+bikini
+thong
+topless
+undressed
+webcam
+cam girl
+camgirls
+onlyfans
+fansly
+escort
+escorts
+hookup
+hookups
+one night
+strip
+stripper
+striptease
+seduce
+seduction
+flirt
+horny
+aroused
+fetish
+kink
+erotic
+erotica
+sensual
+intimate scene
+bedroom scene
+uncensored
+unfiltered
+leak
+leaked
+leaks
+
+# Arabic — same rule: ordinary words that are common entry points, not clinical or help-seeking.
+مثير
+مثيرة
+عارية
+عاري
+ملابس داخلية
+اغراء
+إغراء
+مغري
+شهوة
+جسد

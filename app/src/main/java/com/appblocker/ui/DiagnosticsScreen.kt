@@ -42,6 +42,8 @@ import com.appblocker.data.PhoneFacts
 import com.appblocker.data.QuickSession
 import com.appblocker.data.ServiceHealth
 import com.appblocker.data.SettingsStore
+import com.appblocker.data.DangerZone
+import com.appblocker.data.DeviceBoot
 import com.appblocker.data.SilenceLog
 import com.appblocker.data.UninstallGuardVerdict
 import com.appblocker.data.WatcherDiagnostics
@@ -131,6 +133,13 @@ fun DiagnosticsScreen(onBack: () -> Unit) {
             item {
                 AppCard(modifier = Modifier.testTag(DIAGNOSTICS_PHONE_TAG)) {
                     for (line in snapshot.phone) FactRow(line)
+                }
+            }
+
+            item { SectionHeading("Danger zone") }
+            item {
+                AppCard {
+                    for (line in snapshot.danger) FactRow(line)
                 }
             }
 
@@ -262,6 +271,8 @@ private data class Snapshot(
     /** What the blocker declined to do — see [SilenceLog]. The only card here that is about
      *  absence, and the only one whose zero is worth reading. */
     val silence: List<Fact>,
+    /** The danger zone: whether it is armed, and what the phone has taught itself. */
+    val danger: List<Fact>,
 )
 
 /**
@@ -283,6 +294,44 @@ private fun readSnapshot(context: Context): Snapshot {
     val deaf = SilenceLog.get(context, SilenceLog.DEAF_DISMISSALS)
     val declines = SilenceLog.get(context, SilenceLog.LATE_DECLINES)
     val unready = SilenceLog.get(context, SilenceLog.UNREADY_DECISIONS)
+    val boot = DeviceBoot.count(context)
+    val zoneLeft = SettingsStore.dangerZone(context)?.remaining(boot) ?: 0L
+    val learned = SettingsStore.learnedDomains(context)
+    val danger = buildList {
+        add(
+            if (zoneLeft > 0L) {
+                Fact(
+                    "Danger zone is on — ${(zoneLeft + 59_999L) / 60_000L} min left",
+                    "Three different adult words came up inside half an hour, so every browser " +
+                        "is shut and the word list is wider than usual until it runs out.",
+                    good = null,
+                )
+            } else {
+                Fact(
+                    "Danger zone is off",
+                    "It switches itself on if three different adult words come up within half " +
+                        "an hour, and closes every browser for an hour. Nothing else is touched " +
+                        "— not your maps, not your bank, not any other app.",
+                    good = true,
+                )
+            },
+        )
+        add(
+            Fact(
+                "Sites it worked out for itself: ${learned.size}",
+                if (learned.isEmpty()) {
+                    "None yet. A site is added only after being caught in TWO different " +
+                        "browsers — going to a second browser to reach the same place is the " +
+                        "part that isn't an accident."
+                } else {
+                    learned.sorted().joinToString(", ") + " — each was caught in two different " +
+                        "browsers. If one of these is wrong, tell me and it comes off."
+                },
+                good = null,
+            ),
+        )
+    }
+
     val silence = buildList {
         add(
             Fact(
@@ -485,6 +534,7 @@ private fun readSnapshot(context: Context): Snapshot {
         realBrowsers = runCatching { findRealBrowserPackages(context) }.getOrDefault(emptySet()),
         lastLook = lastLook,
         silence = silence,
+        danger = danger,
     )
 }
 

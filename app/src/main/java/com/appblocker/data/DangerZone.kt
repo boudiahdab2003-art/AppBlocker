@@ -85,6 +85,24 @@ internal object DangerZone {
         nowWall: Long,
     ): Boolean = liveStrikesAt(strikes, bootCount, nowRt, nowWall) >= STRIKES_TO_TRIP
 
+    /** Different browsers a site must be caught in before the phone blocks it outright. */
+    const val BROWSERS_TO_LEARN = 2
+
+    /**
+     * Whether a host caught in [browsers] should now be blocked everywhere.
+     *
+     * His idea, and his condition: *"if in a normal website some violations were found in
+     * different browsers the website itself would be blocked."* The cross-browser part is the
+     * whole safety argument. One adult hit on a page proves very little — a news article about
+     * porn, a forum thread about quitting, a word in a comment. **Going to a second browser and
+     * arriving at the same place is not something that happens by accident**; it is what
+     * somebody does when the first browser stopped them.
+     *
+     * So this is deliberately not "we saw a bad word here twice". It is "you tried again
+     * somewhere else", which is a statement about intent rather than about content.
+     */
+    fun learns(browsers: Set<String>): Boolean = browsers.size >= BROWSERS_TO_LEARN
+
     /**
      * What the block screen says. His choice, from three options: **name it honestly**, with the
      * countdown — over a neutral "browsers are closed" and over no number at all.

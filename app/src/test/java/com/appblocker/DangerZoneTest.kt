@@ -107,4 +107,30 @@ class DangerZoneTest {
         // Never "0 minutes" while the zone is still running.
         assertTrue(DangerZone.message(1L).contains("1 minute."))
     }
+    // ---- a site caught in two different browsers ------------------------------------------
+
+    @Test
+    fun `one browser is not enough to block a site outright`() {
+        // One adult word on a page proves very little - a news article, a forum thread about
+        // quitting, a word in a comment. This is the rule that keeps those from being blocked.
+        assertFalse(DangerZone.learns(setOf("com.android.chrome")))
+        assertFalse(DangerZone.learns(emptySet()))
+    }
+
+    @Test
+    fun `going to a second browser and arriving at the same place is the signal`() {
+        // His own condition, and the reason it is trustworthy: switching browsers to reach the
+        // same site is not something that happens by accident. It is a statement about intent
+        // rather than about the page's content.
+        assertTrue(DangerZone.learns(setOf("com.android.chrome", "com.miui.browser")))
+    }
+
+    @Test
+    fun `the same browser twice is still one browser`() {
+        // The evidence is a SET of packages, so a page reloaded twenty times in one browser
+        // never graduates. If this were a count instead, refreshing would be enough.
+        val seen = setOf("com.android.chrome") + "com.android.chrome"
+        assertFalse(DangerZone.learns(seen))
+    }
+
 }
