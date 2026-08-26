@@ -159,11 +159,37 @@ internal object CoverGate {
      * emulator rounds still reproduced the bug before the logs said why. Hence a named rule with
      * tests, rather than a line buried in the watcher.
      *
-     * Staying in the blocked app keeps [newPkg] equal to [dismissedPkg], so the stuck case the
-     * long window exists for is deliberately untouched.
+     * **A different package was never the only proof the user moved on** (26 Aug 2026). The
+     * package rule cannot see the case the owner actually relapsed through: HOME is swallowed
+     * on HyperOS, he stays in the blocked app, opens the *next* screen of it, and every window
+     * event returns early for the full [DISMISS_GRACE_STUCK_MS]. Worse in a browser, because
+     * since v1.135 a website block deliberately exits BACK and *keeps* him there — so "still in
+     * the same app" went from the rare stuck case to the normal one, and both web scanners sat
+     * out eight seconds after every website block.
+     *
+     * So [newDest] / [dismissedDest] carry *where* inside the package: the window class name for
+     * an app cover, the host for a page cover. A different destination is the user navigating; the
+     * same destination is the covered screen still emitting stragglers, which is what the grace
+     * is for. Null on either side means "we could not tell" and never releases — the same rule as
+     * a null package, and the reason this cannot degrade into releasing on every event.
+     *
+     * The stuck case the long window exists for is therefore still untouched: Home swallowed with
+     * the user sitting where they were reads as unchanged, and holds.
      */
-    fun graceSpentBy(newPkg: String?, dismissedPkg: String?): Boolean =
-        dismissedPkg != null && newPkg != null && newPkg != dismissedPkg
+    fun graceSpentBy(
+        newPkg: String?,
+        dismissedPkg: String?,
+        newDest: String? = null,
+        dismissedDest: String? = null,
+    ): Boolean {
+        if (dismissedPkg == null || newPkg == null) return false
+        if (newPkg != dismissedPkg) return true
+        // Same package, and the user is somewhere else inside it. Not knowing where they were
+        // or where they are now leaves the grace alone: a null destination is "we could not
+        // tell", and releasing on that would cancel the protection on the first event that
+        // happens to carry no class name.
+        return dismissedDest != null && newDest != null && newDest != dismissedDest
+    }
 
     /**
      * Whether a cover raised for [offenceKey] should record a new attempt, so that one open of a

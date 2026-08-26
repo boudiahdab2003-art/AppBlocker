@@ -40,6 +40,20 @@
             <action android:name="android.intent.action.DELETE" />
             <data android:scheme="package" />
         </intent>
+        <!-- The three ways an app can enforce something about OTHER apps, so a newly installed
+             blocker is recognised as one and left alone rather than auto-blocked. Without these
+             declared the queries come back empty on Android 11+ and every backup blocker the
+             owner installs gets covered by our own block screen. Named intents, not
+             QUERY_ALL_PACKAGES - see the note at the top of this block. -->
+        <intent>
+            <action android:name="android.accessibilityservice.AccessibilityService" />
+        </intent>
+        <intent>
+            <action android:name="android.net.VpnService" />
+        </intent>
+        <intent>
+            <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+        </intent>
         <!-- The OEM keep-alive pages DeviceVendor deep-links to.
              **Package visibility filters an explicit component the same way it filters a query.**
              Without these declared, `startActivity` on com.miui.securitycenter/... throws

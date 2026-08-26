@@ -77,6 +77,19 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     errors into an empty collection, and "no browsers", "no launcher", "no adult words" is never
     true. Adopting one silently fails *open*. Adopt a result only when it is non-empty, keep the
     previous value, and record the failure (`refreshPackageSets`, `WebContentFilter.get`).
+
+    **Update, 26 Aug 2026: it applies to an answer that has not ARRIVED yet, and that was the one
+    place it had never been applied — the rules themselves.** `rules` is filled by a Room Flow
+    collected in `onServiceConnected`, so between binding and the first emission it is an empty
+    map. `decideBlock` read that as "nothing is blocked" and `handleAppBlock` took the "take the
+    cover down" branch: every app open, every cover removed, for as long as the database took.
+    Every rebind hits it — boot, update, revive — and **Xiaomi's Second Space rebinds the service
+    on every switch**, which is why the owner reported it as *"slow after switching between
+    spaces"*. It was not slow. There was no blocking. `RuleSnapshot` keeps a plain set of blocked
+    package names, written on every emission and read synchronously on connect, and `rulesLoaded`
+    stops any cover coming down before Room has spoken. The shape to grep for: **a field whose
+    empty value is indistinguishable from its not-yet-populated value, read by something that
+    treats empty as an answer.** An asynchronous source has that shape by construction.
 12. **A protection may not hang on recognising one vendor's spelling.** Invariant 11's sibling,
     and the same failure with a narrower cause: not an empty *answer*, but a lookup that only
     knows one name for the thing it is looking for. Website blocking read the address bar as the
@@ -457,6 +470,41 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     off, none of the above floats. `DeviceVendor`'s Xiaomi advice says so and `RepairScreen` links
     to the page — the same honesty as *"Android doesn't let an app switch its own blocking back
     on"*, which is already on that screen.
+
+20. **A grace released by one kind of event will meet a user who never generates it.** The
+    post-"Got it" dismiss grace suppresses a re-cover so the departing app's straggler events
+    cannot re-block during the transition. It was released by exactly one thing: a *different
+    package* coming to the foreground. That is sound reasoning about the case it was written
+    against — HOME lands, another app is in front, nothing is left to absorb — and it is silent
+    for the case the owner actually relapsed through on 25 Aug 2026: **HOME is swallowed on
+    HyperOS, he never leaves the app, he simply opens the next screen of it.** Same package
+    throughout, so the release never fired and `DISMISS_GRACE_STUCK_MS` ran its full eight
+    seconds with him reading the page it was meant to cover.
+
+    **And a fix elsewhere quietly turned the rare case into the normal one.** v1.135 made a page
+    cover's "Got it" step BACK rather than HOME, deliberately keeping the user *in* the browser
+    (it was a fix for being thrown out of the browser and straight back onto the blocked page).
+    From that release on, "still in the same app" was the expected outcome of every website
+    block — so a window written for a swallowed HOME started applying to every page block, and
+    both web scanners sat out eight seconds inside the browser where the block had just happened.
+    Nobody would report that: it is an under-block, and the whole point of this file is that he
+    cannot see those.
+
+    The rule is now released by *movement*, not by a package change alone: `graceSpentBy` also
+    takes where the user was and where they are now — the window class for an app cover, the host
+    for a page cover — and `currentDest()` picks the matching unit so a class name is never
+    compared against a host. Null on either side never releases, so "we could not tell" cannot
+    degrade into releasing on every event, and the genuinely stuck case still holds the full
+    window. `scanBrowserUrl` reads the address *before* consulting the grace, because on a page
+    cover the new host is the only evidence available and it used to sit behind the very check it
+    had to answer.
+
+    **The general shape, and it is invariant 14's twin:** invariant 14 is a protection that fires
+    on a *location* rather than an action, so it eventually fires on someone doing the right
+    thing. This is a protection *released* by one specific event, so it eventually fails to
+    release for someone doing the wrong thing. Both come from naming the trigger after the
+    scenario in front of you. Ask of any timed suppression: **what ends it, and what is the user
+    doing if that never happens?**
 
 ## Device quirks these invariants exist for
 
@@ -1195,6 +1243,41 @@ foreground change, replaced the instant a different address is read, and expired
 not a browser, unreadable toolbar, no live site words, blocking paused — all present as *nothing
 happening*, and there was no way to tell them apart on the phone. Every guess-and-ship round in
 this entry existed because the app could not be asked. It can now.
+
+### Reported, not swept (26 Aug 2026) — a relapse, and two of its three causes were silence
+
+The report was *"the blocking wasn't fast enough"*, with three specifics: the Xiaomi browser,
+switching spaces, and Instagram going straight to another Instagram page. Latency was the wrong
+frame for two of the three.
+
+- **Instagram → Instagram, and every website block**: the dismiss grace released only on a package
+  change. Invariant 20 — the eight seconds, and why v1.135 turned its rare case into the common
+  one.
+- **Switching spaces**: `rules` empty until Room's first emission, read as "nothing is blocked".
+  Invariant 11's update — a rebind is a window with no enforcement in it, and Second Space rebinds
+  every switch.
+- **The Xiaomi browser: NOT INVESTIGATED, and deliberately not guessed at.** Mi Browser is read
+  only by `omniboxRead`'s tier 4 (400-node walk per root, plus an ancestor walk per candidate),
+  which no other browser pays, and every content and scroll event schedules it. That is a reading
+  of the code, not a measurement, and Mi Browser cannot be installed on a stock emulator image.
+  Nothing was changed there. The working theory is that most of what he felt in that browser was
+  the eight-second hole above, since Mi Browser is where he browses — **which is a theory, and
+  this file's own standing rule is that a theory is unproven until an experiment settles it.**
+
+Also in the same pass, from his own plan rather than a defect: **auto-blocking newly installed
+apps was about to shoot down the other blockers he intends to install as backup layers.**
+Protection apps are now recognised structurally — an accessibility service, a device-admin
+receiver or a VPN service, the only three ways to enforce anything about other apps — and are
+excluded from the *automatic* path only (`NewAppRules`, `isProtectiveApp`). A newly installed
+browser is still auto-blocked; that one really is the escape hatch.
+
+**What is verified and what is not.** The three rules are pure functions with 17 new unit tests,
+each watched failing before the fix. The *wiring* is not covered — the watcher has no test
+coverage and cannot have any as written — and an end-to-end timing run on the emulator did not
+complete: Chrome ANR'd repeatedly on a freshly cleared profile, and an `am force-stop` of our own
+app cleared `enabled_accessibility_services` outright. What that session did establish is that the
+service binds, receives events, recognises Chrome as a browser with the new `<queries>` entries in
+place, and raised a real cover. The before/after measurement is still owed.
 
 ### Reported, not swept (21 Aug 2026) — two reports, one shape
 
