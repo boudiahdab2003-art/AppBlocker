@@ -356,6 +356,36 @@ object SettingsStore {
             .map { (pkg, lockout) -> lockout.encode(pkg) }.toSet(),
     ).apply()
 
+    private const val KEY_DANGER_STRIKES = "danger_strikes"
+    private const val KEY_DANGER_ZONE = "danger_zone"
+
+    /** The words caught recently, keyed by [DangerZone.key] — a hash, never the word itself, so
+     *  nothing on disk can say what he searched for. Same storage shape as the keyword lockouts,
+     *  and for the same reason: a deadline that must not be skippable by moving the clock. */
+    internal fun dangerStrikes(context: Context): Map<String, GuardedDeadline> =
+        prefs(context).getStringSet(KEY_DANGER_STRIKES, emptySet()).orEmpty()
+            .mapNotNull { GuardedDeadline.decode(it) }
+            .toMap()
+
+    internal fun setDangerStrikes(
+        context: Context,
+        value: Map<String, GuardedDeadline>,
+        currentBootCount: Int,
+    ) = prefs(context).edit().putStringSet(
+        KEY_DANGER_STRIKES,
+        value.filterValues { it.remaining(currentBootCount) > 0L }
+            .map { (k, d) -> d.encode(k) }.toSet(),
+    ).apply()
+
+    /** The armed hour, or null. */
+    internal fun dangerZone(context: Context): GuardedDeadline? =
+        prefs(context).getString(KEY_DANGER_ZONE, null)?.let { GuardedDeadline.decode(it)?.second }
+
+    internal fun setDangerZone(context: Context, value: GuardedDeadline?) =
+        prefs(context).edit().apply {
+            if (value == null) remove(KEY_DANGER_ZONE) else putString(KEY_DANGER_ZONE, value.encode("z"))
+        }.apply()
+
     private const val KEY_BLOCKED_SNAPSHOT = "blocked_snapshot"
 
     /** The blocked packages as of the last time Room told us, so a freshly bound service can
