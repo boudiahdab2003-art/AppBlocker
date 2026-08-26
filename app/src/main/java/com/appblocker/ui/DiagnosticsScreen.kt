@@ -36,6 +36,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.appblocker.Dist
+import com.appblocker.data.BlockLatency
 import com.appblocker.data.DeviceProfile
 import com.appblocker.data.DeviceVendor
 import com.appblocker.data.PhoneFacts
@@ -140,6 +141,13 @@ fun DiagnosticsScreen(onBack: () -> Unit) {
             item {
                 AppCard {
                     for (line in snapshot.danger) FactRow(line)
+                }
+            }
+
+            item { SectionHeading("How fast it blocks") }
+            item {
+                AppCard {
+                    for (line in snapshot.speed) FactRow(line)
                 }
             }
 
@@ -273,6 +281,9 @@ private data class Snapshot(
     val silence: List<Fact>,
     /** The danger zone: whether it is armed, and what the phone has taught itself. */
     val danger: List<Fact>,
+    /** How long blocks took to appear — see [BlockLatency]. The only card here that is a
+     *  measurement rather than a state or a count. */
+    val speed: List<Fact>,
 )
 
 /**
@@ -350,6 +361,34 @@ private fun readSnapshot(context: Context): Snapshot {
                 good = null,
             ),
         )
+    }
+
+    val quick = BlockLatency.quickShare(context)
+    val speed = buildList {
+        add(
+            Fact(
+                if (quick == null) {
+                    "How fast blocks appear: nothing measured yet"
+                } else {
+                    "How fast blocks appear: $quick% land in under half a second"
+                },
+                if (quick == null) {
+                    "This starts filling in from your next block. It counts how long the " +
+                        "block screen took to arrive after the app first saw something, so " +
+                        "\"it feels slow\" turns into a number we can both look at."
+                } else {
+                    "Half a second is roughly where a block stops feeling like an answer to " +
+                        "what you did and starts feeling like a wait. The rows below are every " +
+                        "block since you installed this version, so give it a few days before " +
+                        "reading much into them."
+                },
+                good = if (quick == null) null else quick >= 80,
+            ),
+        )
+        for ((label, count) in BlockLatency.summary(context)) {
+            if (count.total == 0) continue
+            add(Fact("$label: ${count.today} today, ${count.total} in total", "", good = null))
+        }
     }
 
     val silence = buildList {
@@ -554,6 +593,7 @@ private fun readSnapshot(context: Context): Snapshot {
         realBrowsers = runCatching { findRealBrowserPackages(context) }.getOrDefault(emptySet()),
         lastLook = lastLook,
         silence = silence,
+        speed = speed,
         danger = danger,
     )
 }

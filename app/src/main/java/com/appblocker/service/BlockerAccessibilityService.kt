@@ -31,6 +31,7 @@ import com.appblocker.data.AdminScreens
 import com.appblocker.data.InstallPrompt
 import com.appblocker.data.AttemptCounter
 import com.appblocker.data.BlockMode
+import com.appblocker.data.BlockLatency
 import com.appblocker.data.BlockLog
 import com.appblocker.data.BlockedKeyword
 import com.appblocker.data.BlockerDatabase
@@ -265,6 +266,10 @@ class BlockerAccessibilityService : AccessibilityService() {
      *  HOME once BACK has failed, and then it needs the long window like any other trip Home. */
     @Volatile private var dismissedViaBack = false
 
+    /** When the accessibility event being handled right now arrived, monotonically. The start of
+     *  the interval [BlockLatency] records for a whole-app block. */
+    @Volatile private var eventArrivedAt = 0L
+
     // The app the user is being taken out of after "Got it", or null when we're not mid-exit.
     // "Got it" does not mean "take the cover away", it means "get me out of here": the cover
     // stays up until the phone is really off the blocked app. It used to come down immediately
@@ -410,9 +415,13 @@ class BlockerAccessibilityService : AccessibilityService() {
     private var webScanQueuedAt = 0L
     private val webScanRunnable = Runnable {
         guarded(applicationContext, "webScan") {
+            // Read before it is cleared: this is when the burst that led here began, which is
+            // where the stopwatch for [BlockLatency] starts. The field already existed for the
+            // debounce cap — the measurement needed no new bookkeeping, only a use for it.
+            val queuedAt = webScanQueuedAt
             webScanQueuedAt = 0L
             webScanJob?.cancel()
-            webScanJob = scope.launch { scanWebContent() }
+            webScanJob = scope.launch { scanWebContent(queuedAt) }
         }
     }
 
@@ -868,6 +877,11 @@ class BlockerAccessibilityService : AccessibilityService() {
         // The same fact monotonically, for the heartbeat's "have I gone deaf?" question. Not a
         // disk write, and never the wall clock (invariant 9).
         lastEventReceivedAt = stopwatchNow()
+        // Where the stopwatch starts for a whole-app block, which is decided and covered inside
+        // this same turn of the main thread. The scans cannot use it — they answer long after the
+        // event that woke them, by which time later events have moved it on — so they carry their
+        // own start instead. See [BlockLatency].
+        eventArrivedAt = lastEventReceivedAt
 
         when (event.eventType) {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ->
@@ -1025,7 +1039,7 @@ class BlockerAccessibilityService : AccessibilityService() {
             // pages), then in-app purchase sheet, then normal app blocking.
             if (!handleSettingsGuard(pkg, className) &&
                 !handlePurchaseBlock(pkg, className)
-            ) handleAppBlock(pkg)
+            ) handleAppBlock(pkg, eventArrivedAt)
         }
         // (Re)arm the mid-use re-check for the new foreground app; a neutral app
         // (no rules, no session, no cover) costs nothing.
@@ -1127,7 +1141,8 @@ class BlockerAccessibilityService : AccessibilityService() {
         val pkg = lastForegroundPkg ?: return
         if (pkg !in browserPackages || !shouldScanPkg(pkg)) return
         if (urlScanJob?.isActive == true) return
-        urlScanJob = scope.launch { scanBrowserUrl(pkg) }
+        val queuedAt = stopwatchNow()
+        urlScanJob = scope.launch { scanBrowserUrl(pkg, queuedAt) }
     }
 
     /** Debounced YouTube-Shorts check (quicker than the web scan so Shorts is caught fast).
@@ -1153,7 +1168,7 @@ class BlockerAccessibilityService : AccessibilityService() {
 
     // --- App blocking (unchanged behaviour) ---
 
-    private fun handleAppBlock(pkg: String) {
+    private fun handleAppBlock(pkg: String, startedAt: Long = 0L) {
         val reason = blockReason(pkg)
         if (reason == null) {
             // "No reason" is only an answer once we have been told the rules. Before Room's first
@@ -1194,7 +1209,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         lastBlockAt = now
         showBlockScreen(
             title = reason.title, message = reason.message, packageName = pkg,
-            counterKey = pkg, why = reason.why,
+            counterKey = pkg, why = reason.why, startedAt = startedAt,
         )
     }
 
@@ -1907,7 +1922,7 @@ class BlockerAccessibilityService : AccessibilityService() {
      * already on screen — and because the full scan is untouched, this one is free to decline
      * whenever it is unsure: the worst case is the old speed, never a miss.
      */
-    private suspend fun scanBrowserUrl(pkg: String) {
+    private suspend fun scanBrowserUrl(pkg: String, startedAt: Long = 0L) {
         if (lastForegroundPkg != pkg || !shouldScanPkg(pkg)) return
         // A cover is already up, so everything under it is unreachable and there is nothing
         // new to block.
@@ -1971,6 +1986,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                 showBlockScreen(
                     title = hit.title, message = hit.message, packageName = null,
                     counterKey = CoverGate.WEB_KEY, offenceKey = pkg, why = BlockWhy.ofWebHit(hit.site, hit.adult),
+                    startedAt = startedAt,
                 )
             } else lastCheckedUrl = null // left during the lookup — re-decide on the way back
         }
@@ -2026,7 +2042,7 @@ class BlockerAccessibilityService : AccessibilityService() {
     }
 
     /** Runs on a background dispatcher (the node-tree walk is heavy); only the block UI hops to main. */
-    private suspend fun scanWebContent() {
+    private suspend fun scanWebContent(startedAt: Long = 0L) {
         // Scan browsers (word + adult + social-domain filtering) and, when the user has blocked
         // words with "every app" on, every other app too (user words only). The word appearing
         // anywhere — including one the user types into another app's own text field — trips the
@@ -2058,7 +2074,7 @@ class BlockerAccessibilityService : AccessibilityService() {
             withContext(Dispatchers.Main) {
                 if (lastForegroundPkg == pkg &&
                     rootInActiveWindow?.packageName?.toString() == pkg
-                ) handleAppBlock(pkg)
+                ) handleAppBlock(pkg, startedAt)
             }
             return
         }
@@ -2170,6 +2186,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                 showBlockScreen(
                     title = hit.title, message = hit.message, packageName = null,
                     counterKey = CoverGate.WEB_KEY, offenceKey = pkg, why = BlockWhy.ofWebHit(hit.site, hit.adult),
+                    startedAt = startedAt,
                 )
             } else lastWebText = null // left during the scan — don't cover what's there now
         }
@@ -2368,6 +2385,10 @@ class BlockerAccessibilityService : AccessibilityService() {
          *  not a rule decision (the guard, a purchase sheet, a Shorts cover) pass their own
          *  fixed code rather than borrowing one that would misdescribe them in a report. */
         why: String = BlockWhy.UNKNOWN,
+        /** When the event that led here arrived, monotonically — 0 when this cover has no
+         *  meaningful start to measure from (the re-check tick, the guard, a purchase sheet).
+         *  See [BlockLatency]: the interval is recorded only when there is a real one. */
+        startedAt: Long = 0L,
     ) {
         // One cover = one recorded entry. The page/app behind a cover keeps emitting events
         // (feeds churn, activities transition), and each used to re-record an "attempt" and
@@ -2454,6 +2475,12 @@ class BlockerAccessibilityService : AccessibilityService() {
                 }
             )
         }
+        // **How long that took.** The first thing this app has ever measured about its own
+        // speed: every other instrument here records whether something happened, never how long
+        // it took to happen, so when the owner said the blocking was too slow there was no
+        // number on the phone that could agree with him. Recorded after the cover for the same
+        // reason as the breadcrumb below, and only when there is a real start to measure from.
+        if (startedAt > 0L) BlockLatency.record(applicationContext, stopwatchNow() - startedAt)
         // Diagnostic breadcrumb, recorded at the one place every cover passes through. Shape
         // only — which path raised it, whether our own UI was in front, whether the window on
         // screen actually matched what we were blocking. Never the app, word or page: see
