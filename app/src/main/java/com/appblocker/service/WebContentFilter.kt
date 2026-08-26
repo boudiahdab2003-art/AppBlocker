@@ -270,7 +270,7 @@ class WebContentFilter internal constructor(
      * retrying. Nothing here reads the page, so being early costs nothing.
      */
     fun checkUrl(url: String, userKeywords: List<String>, siteKeywords: List<String>): Hit? {
-        val host = url.lowercase().takeIf { it.isNotBlank() } ?: return null
+        val host = spacedUrl(url.lowercase()).takeIf { it.isNotBlank() } ?: return null
         for (k in userKeywords) {
             // '.' and '/' are word boundaries, so a bare "instagram" still matches inside
             // "instagram.com/reels" while "instagrammer" doesn't.
@@ -314,7 +314,7 @@ class WebContentFilter internal constructor(
          *  from two different browsers, not a guess. */
         learnedDomains: Set<String> = emptySet(),
     ): Hit? {
-        val lower = url.lowercase().takeIf { it.isNotBlank() } ?: return null
+        val lower = spacedUrl(url.lowercase()).takeIf { it.isNotBlank() } ?: return null
         // Before the switchable layers: a site caught in two different browsers was established
         // by this phone rather than shipped by me, and turning the adult lists off should not
         // quietly discard what it learned.
@@ -423,6 +423,17 @@ class WebContentFilter internal constructor(
                     ServiceHealth.recordError(context, "assets/$asset", it)
                 }
             }.getOrNull()
+
+        /** A typed search arrives at the address bar as a URL, where the spaces he typed have
+         *  become "+" or "%20". Over half of `adult_words_pack.txt` is multi-word ("big black
+         *  cock", "cuckold stories", "hot wife porn"), and [containsWord] matches whole-word —
+         *  so without this none of them can fire on the address, only on the slower page-text
+         *  walk the address path exists to beat.
+         *
+         *  This cannot widen what matches: it restores the word boundary that was there when he
+         *  typed it, and never removes one. Glued hostnames ("cuckoldplace.com") are untouched
+         *  and still refuse, which is the guard that keeps "anal" out of "analytics.com". */
+        internal fun spacedUrl(url: String): String = url.replace('+', ' ').replace("%20", " ")
 
         /** Whole-word substring search: a match only counts when it isn't glued to another
          *  letter/digit on either side (works for Latin and Arabic alike).

@@ -954,4 +954,24 @@ class WebContentFilterTest {
         )
     }
 
+
+    /**
+     * **A search query is not a sentence — it is a URL, and the separator is "+".**
+     *
+     * More than half the always-on pack is multi-word ("big black cock", "cuckold stories",
+     * "hot wife porn"). Every one of them is matched whole-word against the raw address, where
+     * the space he typed has become "+" or "%20" — so the entry never fires on the fast
+     * address-bar path, and the block falls back to the page-text walk it was written to beat.
+     */
+    @Test fun `a multi word entry matches a search url where the space became a plus`() {
+        val f = filter(pack = listOf("big black cock"))
+        assertNotNull(f.checkUrlAdult("https://google.com/search?q=big+black+cock", true, false))
+        assertNotNull(f.checkUrlAdult("https://google.com/search?q=big%20black%20cock", true, false))
+    }
+
+    @Test fun `a user keyword matches a search url where the space became a plus`() {
+        val f = filter()
+        assertNotNull(f.checkUrl("google.com/search?q=hot+wife", listOf("hot wife"), emptyList()))
+    }
+
 }
