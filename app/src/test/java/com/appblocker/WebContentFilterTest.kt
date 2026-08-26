@@ -801,6 +801,71 @@ class WebContentFilterTest {
     }
 
     @Test
+    fun `the family the owner named is on one list or the other`() {
+        // He said on 26 Aug 2026 that cuckold/BNWO is the one he falls for every time. Most of
+        // that vocabulary is in the always-on pack and blocks every day; the soft framing and the
+        // abbreviations are in the wider net because they could never be safe all day. This test
+        // does not care WHICH list a term is on — it cares that a future trim of either one
+        // cannot quietly drop the thing he specifically asked to be protected from.
+        val pack = File("src/main/assets/adult_words_pack.txt").readLines()
+            .map { it.trim().lowercase() }.filter { it.isNotEmpty() && !it.startsWith("#") }
+        val danger = File("src/main/assets/danger_words.txt").readLines()
+            .map { it.trim().lowercase() }.filter { it.isNotEmpty() && !it.startsWith("#") }
+        val covered = (pack + danger).toSet()
+        for (w in listOf(
+            "cuckold", "cuck", "cuckquean", "hotwife", "hot wife", "wittol",
+            "bnwo", "blacked", "blackedraw", "bbc", "interracial", "black owned",
+            "queen of spades", "qos", "snowbunny", "snow bunny", "black bull", "bull",
+            "netorare", "ntr", "sissy", "chastity", "humiliation", "cheating wife",
+        )) {
+            assertTrue("the owner named this family: $w is on neither list", w in covered)
+        }
+    }
+
+    @Test
+    fun `the soft half of that family only fires while the wider net is on`() {
+        // **The half of this that matters.** "bbc", "blacked", "bull", "stag" and "interracial"
+        // are real words with ordinary lives — the BBC's news site most obviously. They earn
+        // their place in danger_words.txt precisely because that list is off almost all the time
+        // and only arms after the phone has already established what is going on.
+        //
+        // If any of them ever leaked into the always-on pack, he would be blocked out of a news
+        // article on a perfectly good day, and that is how an app stops being trusted. So this
+        // asserts both directions: silent normally, blocking during the hour.
+        val danger = File("src/main/assets/danger_words.txt").readLines()
+            .map { it.trim().lowercase() }.filter { it.isNotEmpty() && !it.startsWith("#") }
+        val pack = File("src/main/assets/adult_words_pack.txt").readLines()
+            .map { it.trim().lowercase() }.filter { it.isNotEmpty() && !it.startsWith("#") }
+        val f = filter(pack = pack, danger = danger)
+        for (text in listOf(
+            "bbc news at ten",
+            "the screen blacked out for a second",
+            "the bull market continued",
+            "a stag do in edinburgh",
+            "interracial marriage rates are rising",
+        )) {
+            assertNull(
+                "must be silent on an ordinary day: $text",
+                f.check(
+                    text, address = BrowserAddress.Unreadable,
+                    userKeywords = emptyList(), siteKeywords = emptyList(),
+                    adultPack = true, blockAdult = true,
+                    wideList = false,
+                ),
+            )
+            assertNotNull(
+                "must block once the zone is armed: $text",
+                f.check(
+                    text, address = BrowserAddress.Unreadable,
+                    userKeywords = emptyList(), siteKeywords = emptyList(),
+                    adultPack = true, blockAdult = true,
+                    wideList = true,
+                ),
+            )
+        }
+    }
+
+    @Test
     fun `the wider net keeps out ordinary app furniture`() {
         // While the zone is armed the watcher scans EVERY app, not just browsers - browsers are
         // already shut for the hour, so that is where the wider list does its work. Which means a
