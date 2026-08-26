@@ -3,6 +3,12 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.140
+- Blocks land sooner, and the danger hour's word list is six times bigger. The Xiaomi browser's address bar no longer costs thousands of lookups every time the page moves, the block screen goes up before the counting and logging rather than after, the eight-second pause after Got it is gone for websites, and the Locked screen now appears as soon as that pause ends instead of up to half a minute later. The app also times itself now - Profile, What the blocker sees, How fast it blocks. Plus the danger list at 288 words, the five-violations 24-hour tier, and the fix for the word porn being blocked as page text.
+
+## v1.139
+- It wasn't slow, it was switched off — and now there's a danger zone. Three fixes where the blocker had genuinely stopped watching (the 8 seconds after every Got it, every website block, and switching spaces), the danger zone that shuts every browser for an hour after three different words in half an hour, a wider word list while it runs, sites learned from two different browsers, other blockers no longer auto-blocked, and a bug report that finally carries enough to answer a question.
+
 ## v1.138
 - Profile has a new Recovery section. **Your counter** shows how long it has been since your last relapse — days, hours, minutes and seconds, ticking — and it lives on that screen and nowhere else. Recording a slip asks first, can be dated to when it actually happened rather than when you admitted it, and can be undone for 24 hours afterwards. On the day of a reset it does not show your record: that day should not come with a scoreboard. **Journal** gives you one page for every calendar day — open any date, including ones you missed, and write whatever is there, with four optional headings if you want somewhere to start. Neither the count nor a single word you write ever leaves your phone: not to the AI Coach, not in a bug report, and if you have a PIN it is already behind it.
 

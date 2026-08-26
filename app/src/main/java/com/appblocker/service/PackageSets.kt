@@ -182,6 +182,39 @@ internal val KNOWN_BROWSERS = listOf(
  * phone/dialer app (so calls work). The launcher is handled by the service's launcher check
  * and the current keyboard by [currentImePackage] (re-read live, since it can change).
  */
+/**
+ * Whether [pkg] is another protection app — a blocker, a parental control, a content filter.
+ *
+ * **Structural, not a list of names.** An Android app can only enforce something about *other*
+ * apps three ways: an accessibility service (what we use), a device-admin receiver, or a VPN
+ * service (how the DNS-level porn blockers work). Every real blocker declares at least one, and
+ * a name list would have missed every one nobody here has heard of.
+ *
+ * Used only to keep [com.appblocker.data.NewAppRules] from auto-blocking the owner's backup
+ * layers. Deliberately generous: it also matches password managers and launchers, and letting
+ * those escape *automatic* blocking is the right mistake to make — he can still block any of
+ * them by hand, and an over-eager auto-block is what disarmed the defence in the first place.
+ *
+ * Each query is declared in `<queries>` in the manifest. Without that, Android 11+ filters the
+ * result to empty and this answers "not a blocker" for every app on the phone — the same silent
+ * filtering that made the Auto-start button open the wrong page for the app's entire life
+ * (v1.129). An empty result here fails toward auto-blocking, so the declaration is the whole
+ * protection.
+ */
+internal fun isProtectiveApp(context: Context, pkg: String): Boolean {
+    val pm = context.packageManager
+    fun anyService(action: String) = runCatching {
+        pm.queryIntentServices(Intent(action).setPackage(pkg), 0).isNotEmpty()
+    }.getOrDefault(false)
+    if (anyService("android.accessibilityservice.AccessibilityService")) return true
+    if (anyService("android.net.VpnService")) return true
+    return runCatching {
+        pm.queryBroadcastReceivers(
+            Intent("android.app.action.DEVICE_ADMIN_ENABLED").setPackage(pkg), 0,
+        ).isNotEmpty()
+    }.getOrDefault(false)
+}
+
 internal fun findEssentialPackages(context: Context): Set<String> {
     val set = mutableSetOf("android", "com.android.systemui", "com.android.settings")
     runCatching {

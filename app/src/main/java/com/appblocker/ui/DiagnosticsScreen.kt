@@ -36,12 +36,16 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.appblocker.Dist
+import com.appblocker.data.BlockLatency
 import com.appblocker.data.DeviceProfile
 import com.appblocker.data.DeviceVendor
 import com.appblocker.data.PhoneFacts
 import com.appblocker.data.QuickSession
 import com.appblocker.data.ServiceHealth
 import com.appblocker.data.SettingsStore
+import com.appblocker.data.DangerZone
+import com.appblocker.data.DeviceBoot
+import com.appblocker.data.SilenceLog
 import com.appblocker.data.UninstallGuardVerdict
 import com.appblocker.data.WatcherDiagnostics
 import com.appblocker.data.uninstallGuardVerdict
@@ -130,6 +134,35 @@ fun DiagnosticsScreen(onBack: () -> Unit) {
             item {
                 AppCard(modifier = Modifier.testTag(DIAGNOSTICS_PHONE_TAG)) {
                     for (line in snapshot.phone) FactRow(line)
+                }
+            }
+
+            item { SectionHeading("Danger zone") }
+            item {
+                AppCard {
+                    for (line in snapshot.danger) FactRow(line)
+                }
+            }
+
+            item { SectionHeading("How fast it blocks") }
+            item {
+                AppCard {
+                    for (line in snapshot.speed) FactRow(line)
+                }
+            }
+
+            item { SectionHeading("When the blocker went quiet") }
+            item {
+                AppCard {
+                    Text(
+                        "Everything else on this page is about blocks that happened. This is " +
+                            "the opposite: the moments it decided not to block. Zeroes here are " +
+                            "the good answer, and they are worth as much as the numbers.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = Space.sm),
+                    )
+                    for (line in snapshot.silence) FactRow(line)
                 }
             }
 
@@ -243,6 +276,14 @@ private data class Snapshot(
      *  can ever be blocked outright by the "block unsupported browsers" switch. */
     val realBrowsers: Set<String>,
     val lastLook: List<Fact>,
+    /** What the blocker declined to do — see [SilenceLog]. The only card here that is about
+     *  absence, and the only one whose zero is worth reading. */
+    val silence: List<Fact>,
+    /** The danger zone: whether it is armed, and what the phone has taught itself. */
+    val danger: List<Fact>,
+    /** How long blocks took to appear — see [BlockLatency]. The only card here that is a
+     *  measurement rather than a state or a count. */
+    val speed: List<Fact>,
 )
 
 /**
@@ -260,6 +301,138 @@ private fun readSnapshot(context: Context): Snapshot {
     val pack = SettingsStore.adultWordsPack(context)
     val adultSites = SettingsStore.blockAdult(context)
     val unsupported = SettingsStore.blockUnsupportedBrowsers(context)
+
+    val deaf = SilenceLog.get(context, SilenceLog.DEAF_DISMISSALS)
+    val declines = SilenceLog.get(context, SilenceLog.LATE_DECLINES)
+    val unready = SilenceLog.get(context, SilenceLog.UNREADY_DECISIONS)
+    val boot = DeviceBoot.count(context)
+    val zoneLeft = SettingsStore.dangerZone(context)?.remaining(boot) ?: 0L
+    val learned = SettingsStore.learnedDomains(context)
+    val wideLeft = SettingsStore.dangerWideList(context)?.remaining(boot) ?: 0L
+    val danger = buildList {
+        add(
+            if (zoneLeft > 0L) {
+                Fact(
+                    "Danger zone is on — ${(zoneLeft + 59_999L) / 60_000L} min left",
+                    "Three different adult words came up inside half an hour, so every browser " +
+                        "is shut and the word list is wider than usual until it runs out.",
+                    good = null,
+                )
+            } else {
+                Fact(
+                    "Danger zone is off",
+                    "It switches itself on if three different adult words come up within half " +
+                        "an hour, and closes every browser for an hour. Nothing else is touched " +
+                        "— not your maps, not your bank, not any other app.",
+                    good = true,
+                )
+            },
+        )
+        add(
+            if (wideLeft > 0L) {
+                Fact(
+                    "Wider word list is on — ${(wideLeft + 59_999L) / 3_600_000L}h left",
+                    "Five different adult words came up, so the wider list keeps running for a " +
+                        "day. Browsers are NOT shut for that day — only the first hour does " +
+                        "that. This is the list still watching once they are back.",
+                    good = null,
+                )
+            } else {
+                Fact(
+                    "Wider word list is off",
+                    "It switches on for 24 hours after five different adult words, and keeps " +
+                        "the bigger list running once the browsers reopen. It only widens what " +
+                        "counts as a blocked word; it never shuts anything by itself.",
+                    good = true,
+                )
+            },
+        )
+        add(
+            Fact(
+                "Sites it worked out for itself: ${learned.size}",
+                if (learned.isEmpty()) {
+                    "None yet. A site is added only after being caught in TWO different " +
+                        "browsers — going to a second browser to reach the same place is the " +
+                        "part that isn't an accident."
+                } else {
+                    learned.sorted().joinToString(", ") + " — each was caught in two different " +
+                        "browsers. If one of these is wrong, tell me and it comes off."
+                },
+                good = null,
+            ),
+        )
+    }
+
+    val quick = BlockLatency.quickShare(context)
+    val speed = buildList {
+        add(
+            Fact(
+                if (quick == null) {
+                    "How fast blocks appear: nothing measured yet"
+                } else {
+                    "How fast blocks appear: $quick% land in under half a second"
+                },
+                if (quick == null) {
+                    "This starts filling in from your next block. It counts how long the " +
+                        "block screen took to arrive after the app first saw something, so " +
+                        "\"it feels slow\" turns into a number we can both look at."
+                } else {
+                    "Half a second is roughly where a block stops feeling like an answer to " +
+                        "what you did and starts feeling like a wait. The rows below are every " +
+                        "block since you installed this version, so give it a few days before " +
+                        "reading much into them."
+                },
+                good = if (quick == null) null else quick >= 80,
+            ),
+        )
+        for ((label, count) in BlockLatency.summary(context)) {
+            if (count.total == 0) continue
+            add(Fact("$label: ${count.today} today, ${count.total} in total", "", good = null))
+        }
+    }
+
+    val silence = buildList {
+        add(
+            Fact(
+                "Times it went quiet after \"Got it\": ${deaf.today} today, ${deaf.total} in total",
+                if (deaf.total == 0) {
+                    "None. After a block was dismissed, it has always started watching again " +
+                        "as soon as you moved somewhere new."
+                } else {
+                    "Each one is a spell where a block screen was dismissed and the blocker " +
+                        "stayed quiet while you were still in that app. Some of that is normal " +
+                        "while your phone is going Home. If this number keeps climbing, tell " +
+                        "me — that is the shape of a block that should have come and didn't."
+                },
+                good = if (deaf.total == 0) true else null,
+            ),
+        )
+        if (declines.total > 0) {
+            add(
+                Fact(
+                    "Checks skipped in those spells: ${declines.today} today, ${declines.total} in total",
+                    "How many times it looked away during the spells above. A big number " +
+                        "against a small number of spells means one page you stayed on a while.",
+                    good = null,
+                ),
+            )
+        }
+        add(
+            Fact(
+                "Decisions made before the block list loaded: ${unready.total}",
+                if (unready.total == 0) {
+                    "None. Every time the blocker restarted, it knew what to block before " +
+                        "anything asked it."
+                } else {
+                    "Each restart — switching spaces is the usual cause — has a moment before " +
+                        "the app's own list has loaded. It now remembers what was blocked and " +
+                        "enforces that straight away, so this is a count of moments survived, " +
+                        "not moments lost."
+                },
+                good = if (unready.total == 0) true else null,
+            ),
+        )
+    }
 
     val protection = buildList {
         // FIRST, because it outranks everything below it: a watcher that isn't running makes
@@ -419,6 +592,9 @@ private fun readSnapshot(context: Context): Snapshot {
         assumedReadable = KNOWN_READABLE_BROWSERS - SettingsStore.readableBrowsers(context),
         realBrowsers = runCatching { findRealBrowserPackages(context) }.getOrDefault(emptySet()),
         lastLook = lastLook,
+        silence = silence,
+        speed = speed,
+        danger = danger,
     )
 }
 

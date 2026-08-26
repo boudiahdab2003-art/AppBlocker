@@ -257,6 +257,28 @@ data class BugReport(
          * Anything not named here is dropped, so that mistake fails safe instead of publishing.
          */
         val ALLOWED_CONTEXT_KEYS = setOf(
+            // What the blocker DECLINED to do (SilenceLog) — plain counts, no package, no host,
+            // no word. The report already carries what it blocked; without these it can say
+            // nothing at all about the half the owner cannot see for himself.
+            // What this phone is set up to block — counts and named settings only.
+            "updatePaused",
+            "ruleCount",
+            "lockouts",
+            "browsersRead",
+            "autoBlockNew",
+            "pinSet",
+            "quickSession",
+            "dangerZone",
+            "dangerStrikes",
+            "learnedCount",
+            "deafSpells",
+            "lateSkips",
+            "unreadyDecisions",
+            // How long blocks took to appear (BlockLatency) — a percentage, a total and a tail
+            // count, and nothing about what was blocked. The report could describe every block
+            // this phone raised and not one thing about how fast any of them arrived, which is
+            // the only question the owner has actually asked twice.
+            "blockSpeed",
             "layout",
             "theme",
             "serviceOn",

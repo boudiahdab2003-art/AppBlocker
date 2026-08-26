@@ -33,9 +33,11 @@ import com.appblocker.data.AdminScreens
 import com.appblocker.data.InstallPrompt
 import com.appblocker.data.AttemptCounter
 import com.appblocker.data.BlockMode
+import com.appblocker.data.BlockLatency
 import com.appblocker.data.BlockLog
 import com.appblocker.data.BlockedKeyword
 import com.appblocker.data.BlockerDatabase
+import com.appblocker.data.DangerZone
 import com.appblocker.data.DeviceBoot
 import com.appblocker.data.FocusState
 import com.appblocker.data.GuardedDeadline
@@ -49,7 +51,9 @@ import com.appblocker.data.Schedule
 import com.appblocker.data.ScheduleType
 import com.appblocker.data.ServiceHealth
 import com.appblocker.data.SessionClock
+import com.appblocker.data.RuleSnapshot
 import com.appblocker.data.SettingsStore
+import com.appblocker.data.SilenceLog
 import com.appblocker.data.StrictEdits
 import com.appblocker.data.UnlockCounter
 import com.appblocker.data.UpdatePause
@@ -100,6 +104,20 @@ class BlockerAccessibilityService : AccessibilityService() {
     private val filter: WebContentFilter get() = WebContentFilter.get(applicationContext)
 
     @Volatile private var rules: Map<String, AppRule> = emptyMap()
+    // Whether [rules] has heard from Room yet. Until it has, the empty map means "not told", not
+    // "nothing is blocked" — see RuleSnapshot, and invariant 11.
+    @Volatile private var rulesLoaded = false
+    // What was blocked last time Room spoke, read synchronously on connect so a rebind (boot,
+    // update, revive, Second Space switch) enforces from the first event rather than from the
+    // first emission.
+    @Volatile private var blockedSnapshot: Set<String> = emptySet()
+    // The armed danger-zone hour, or null. Held in memory so a block decision never costs a
+    // prefs read; the deadline itself is what decides whether it is still running.
+    @Volatile private var dangerZone: GuardedDeadline? = null
+    /** The 24-hour wider-list window. Outlives [dangerZone] by design. */
+    @Volatile private var dangerWideList: GuardedDeadline? = null
+    /** Hosts this phone caught in two different browsers — see [DangerZone.learns]. */
+    @Volatile private var learnedDomains: Set<String> = emptySet()
     // Strict/Focus deadline anchored to the monotonic clock (clock-change-proof) with a
     // wall-clock fallback. See SessionClock.
     @Volatile private var focusRealtimeStart: Long = 0L
@@ -226,12 +244,38 @@ class BlockerAccessibilityService : AccessibilityService() {
     // The app that was BEHIND the dismissed cover, so its lockout re-show (keyed by package,
     // not by the dismissed counterKey) is suppressed for the same transition window.
     @Volatile private var dismissedPkg: String? = null
+    // WHERE inside that app the dismissed cover was — the window class name for an app cover,
+    // the host for a page cover. The grace is released when the user is demonstrably somewhere
+    // else in the same app, which is the only evidence available when HOME is swallowed (or,
+    // for a page cover, when "Got it" deliberately keeps them in the browser). See
+    // CoverGate.graceSpentBy; [currentDest] picks the matching half so a class name is never
+    // compared against a host.
+    @Volatile private var dismissedDest: String? = null
+    // Whether this dismissal has already been counted as one the watcher went quiet through.
+    // Per dismissal, not per event: a deaf spell that declines forty times is one page the user
+    // was reading, and counting each decline would drown the number it exists to make legible.
+    @Volatile private var dismissalCountedDeaf = false
+    // Same, for the pre-rules window: one count per bind, not one per decision.
+    @Volatile private var unreadyCounted = false
+    // The current destination, tracked in the two units the covers use.
+    @Volatile private var lastWindowClass: String? = null
+    @Volatile private var lastBrowserHost: String? = null
 
     /** The app a page cover's BACK exit was last fired in, and when — so a second "Got it" there
      *  leaves instead of pressing back again. See [CoverGate.backExitFailed]. */
     @Volatile private var lastBackExitPkg: String? = null
     @Volatile private var lastBackExitAt: Long = 0L
     @Volatile private var dismissedAt = 0L
+
+    /** Whether the last dismissal stepped BACK inside the app rather than asking the phone to go
+     *  Home — which decides how long the grace after it runs. See [CoverGate.inGrace]. Recorded
+     *  from the branch that actually fired, not derived from the key: a page cover falls back to
+     *  HOME once BACK has failed, and then it needs the long window like any other trip Home. */
+    @Volatile private var dismissedViaBack = false
+
+    /** When the accessibility event being handled right now arrived, monotonically. The start of
+     *  the interval [BlockLatency] records for a whole-app block. */
+    @Volatile private var eventArrivedAt = 0L
 
     // The app the user is being taken out of after "Got it", or null when we're not mid-exit.
     // "Got it" does not mean "take the cover away", it means "get me out of here": the cover
@@ -378,15 +422,23 @@ class BlockerAccessibilityService : AccessibilityService() {
     private var webScanQueuedAt = 0L
     private val webScanRunnable = Runnable {
         guarded(applicationContext, "webScan") {
+            // Read before it is cleared: this is when the burst that led here began, which is
+            // where the stopwatch for [BlockLatency] starts. The field already existed for the
+            // debounce cap — the measurement needed no new bookkeeping, only a use for it.
+            val queuedAt = webScanQueuedAt
             webScanQueuedAt = 0L
             webScanJob?.cancel()
-            webScanJob = scope.launch { scanWebContent() }
+            webScanJob = scope.launch { scanWebContent(queuedAt) }
         }
     }
 
     // The address-bar check that runs with NO debounce (see scheduleUrlScan). Separate job so
     // it can't be cancelled by, or cancel, the heavier text scan running alongside it.
     @Volatile private var urlScanJob: Job? = null
+
+    /** Set when the address moved while a lookup was already in flight — see [scheduleUrlScan].
+     *  Without it that event was simply dropped, and its page waited for the debounced scan. */
+    @Volatile private var urlScanDirty = false
     // The omnibox text this fast path last decided on, so a page emitting a burst of content
     // events costs one node lookup rather than one per event. Null = decide again on the next
     // event; it is cleared everywhere lastWebText is, so coming back to a page re-checks it.
@@ -564,16 +616,19 @@ class BlockerAccessibilityService : AccessibilityService() {
     private fun recheckMatters(pkg: String): Boolean =
         overlay.isShowing ||
             keywordLockoutRemaining(pkg) > 0L ||
-            rules[pkg]?.isBlocked == true ||
+            ruleFor(pkg)?.isBlocked == true ||
             // Allowlist mode: any non-allowed app can flip (e.g. a Pomodoro break ending), so
             // keep re-checking while Quick Block is enforcing.
-            (allowlistMode && quickBlockActive() && rules[pkg]?.isAllowed != true) ||
+            (allowlistMode && quickBlockActive() && ruleFor(pkg)?.isAllowed != true) ||
             QuickSession.state(this).active ||
             schedules.any { it.enabled && pkg in it.packages }
 
     /** Millis left on [pkg]'s keyword lockout, or 0 when it isn't locked. Uses the same
      *  clock-change-proof reckoning as sessions, so winding the device clock forward can no
      *  longer lift the lockout early — see [GuardedDeadline]. */
+    /** Adult words caught recently, keyed by [DangerZone.key] — a hash, never the word. */
+    private val dangerStrikes = mutableMapOf<String, GuardedDeadline>()
+
     private fun keywordLockoutRemaining(pkg: String): Long = synchronized(keywordLockouts) {
         keywordLockouts[pkg]?.remaining(DeviceBoot.count(applicationContext)) ?: 0L
     }
@@ -593,6 +648,89 @@ class BlockerAccessibilityService : AccessibilityService() {
             SettingsStore.setKeywordLockouts(applicationContext, keywordLockouts.toMap(), boot)
         }
     }
+
+    /** Millis left on the danger zone, 0 when it is not armed. */
+    private fun dangerZoneRemaining(): Long =
+        dangerZone?.remaining(DeviceBoot.count(applicationContext)) ?: 0L
+
+    /** Millis left on the 24-hour wider-list window, 0 when it is not armed. */
+    private fun wideListRemaining(): Long =
+        dangerWideList?.remaining(DeviceBoot.count(applicationContext)) ?: 0L
+
+    /** Whether `danger_words.txt` should be matched right now — either window does it. */
+    private fun wideListOn(): Boolean = dangerZoneRemaining() > 0L || wideListRemaining() > 0L
+
+    /**
+     * The adult layer caught [word]. Three DIFFERENT ones inside half an hour close every browser
+     * for an hour — see [DangerZone] for the owner's choices and why they are not to be re-asked.
+     *
+     * Called for adult-pack hits only, never for his own blocked words: this is meant to fire when
+     * the *content* says he is hunting, not when a word he added for his own reasons turns up.
+     */
+    private fun recordDangerStrike(word: String?) {
+        if (word.isNullOrBlank()) return
+        val boot = DeviceBoot.count(applicationContext)
+        synchronized(dangerStrikes) {
+            val live = DangerZone.prunedAt(
+                dangerStrikes, boot, stopwatchNow(), System.currentTimeMillis(),
+            ).toMutableMap()
+            // Keyed by hash, so the same word again refreshes its own strike rather than adding
+            // a second one. That IS the "three different words" rule.
+            live[DangerZone.key(word)] =
+                GuardedDeadline.starting(DangerZone.STRIKE_WINDOW_MS, boot)
+            dangerStrikes.clear()
+            dangerStrikes.putAll(live)
+            val trips = DangerZone.tripsAt(
+                live, boot, stopwatchNow(), System.currentTimeMillis(),
+            )
+            // **The flat hour is protected here rather than by refusing to count.** Strikes have
+            // to keep accumulating past three or the fifth could never arrive — but re-arming the
+            // lockdown while one is running would roll it over forever, which is the escalation
+            // he explicitly turned down. So the refusal sits on the arming, not on the counting.
+            if (trips && dangerZoneRemaining() <= 0L) {
+                dangerZone = GuardedDeadline.starting(DangerZone.LOCKDOWN_MS, boot)
+                SettingsStore.setDangerZone(applicationContext, dangerZone)
+            }
+            // Five different words: the wider list stays for a day. Fixed, not rolling — being
+            // caught again inside the day does not extend it.
+            //
+            // The board is deliberately NOT wiped when either tier arms. It used to be, which
+            // made a fifth strike unreachable. Nothing is needed in its place: every strike is a
+            // 30-minute GuardedDeadline and the lockdown is 60, so by the time an hour ends the
+            // strikes that armed it have already expired on their own.
+            if (DangerZone.widensAt(live, boot, stopwatchNow(), System.currentTimeMillis()) &&
+                wideListRemaining() <= 0L
+            ) {
+                dangerWideList = GuardedDeadline.starting(DangerZone.WIDE_LIST_MS, boot)
+                SettingsStore.setDangerWideList(applicationContext, dangerWideList)
+            }
+            SettingsStore.setDangerStrikes(applicationContext, dangerStrikes.toMap(), boot)
+        }
+    }
+
+    /**
+     * An adult hit landed on [host] in browser [pkg]. Two DIFFERENT browsers and the site is
+     * blocked outright from then on — his idea and his condition, see [DangerZone.learns].
+     */
+    private fun recordSiteEvidence(pkg: String, host: String?) {
+        val h = host?.lowercase()?.takeIf { it.isNotBlank() } ?: return
+        if (pkg !in browserPackages) return
+        if (h in learnedDomains) return
+        synchronized(learnedLock) {
+            val evidence = SettingsStore.siteEvidence(applicationContext).toMutableMap()
+            val browsers = evidence[h].orEmpty() + pkg
+            if (DangerZone.learns(browsers)) {
+                learnedDomains = learnedDomains + h
+                SettingsStore.setLearnedDomains(applicationContext, learnedDomains)
+                evidence.remove(h) // graduated; the evidence has done its job
+            } else {
+                evidence[h] = browsers
+            }
+            SettingsStore.setSiteEvidence(applicationContext, evidence)
+        }
+    }
+
+    private val learnedLock = Any()
 
     /** One-shot: templates used to inject app-name words (e.g. "youtube", "twitter") into the
      *  blocked-words table, where innocent mentions tripped blocks everywhere. Templates no
@@ -628,6 +766,9 @@ class BlockerAccessibilityService : AccessibilityService() {
         updatePaused = SettingsStore.updatePaused(this)
         allowlistMode = SettingsStore.quickBlockAllowlist(this)
         essentialPackages = findEssentialPackages(this)
+        // Before the rule flow below has emitted anything. Cheap by design: one string set.
+        blockedSnapshot = SettingsStore.blockedSnapshot(this)
+        unreadyCounted = false // one count per bind, and this is a bind
         // Restore unexpired keyword lockouts — a service rebind must not unlock an app early.
         // Filtered on the same reckoning that decides whether one is running, not on the wall
         // clock, or a clock change could drop a live lockout here instead of at the check.
@@ -637,6 +778,16 @@ class BlockerAccessibilityService : AccessibilityService() {
                 SettingsStore.keywordLockouts(this).filterValues { it.remaining(boot) > 0L }
             )
         }
+        // The danger zone survives a restart for the same reason the lockouts do: an hour that a
+        // reboot, an update or a Second Space switch could end is not an hour.
+        synchronized(dangerStrikes) {
+            dangerStrikes.putAll(
+                SettingsStore.dangerStrikes(this).filterValues { it.remaining(boot) > 0L }
+            )
+        }
+        dangerZone = SettingsStore.dangerZone(this)?.takeIf { it.remaining(boot) > 0L }
+        dangerWideList = SettingsStore.dangerWideList(this)?.takeIf { it.remaining(boot) > 0L }
+        learnedDomains = SettingsStore.learnedDomains(this)
         // React to the user flipping the toggles on the Blocked-words screen without a restart.
         val sp = getSharedPreferences("appblocker_prefs", Context.MODE_PRIVATE)
         prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
@@ -662,6 +813,14 @@ class BlockerAccessibilityService : AccessibilityService() {
             db.scheduleDao().getAll(),
         ) { ruleList, focus, keywords, scheduleList ->
             rules = ruleList.associateBy { it.packageName }
+            rulesLoaded = true
+            // Keep the pre-connect fallback current. Off the main thread already (this flow runs
+            // on Dispatchers.Default), and only written when it actually changed.
+            val snapshot = RuleSnapshot.encode(ruleList)
+            if (snapshot != blockedSnapshot) {
+                blockedSnapshot = snapshot
+                runCatching { SettingsStore.setBlockedSnapshot(applicationContext, snapshot) }
+            }
             focusRealtimeStart = focus?.realtimeStartMillis ?: 0L
             focusRealtimeEnd = focus?.realtimeEndMillis ?: 0L
             focusWallStart = focus?.startTimeMillis ?: 0L
@@ -729,6 +888,11 @@ class BlockerAccessibilityService : AccessibilityService() {
         // The same fact monotonically, for the heartbeat's "have I gone deaf?" question. Not a
         // disk write, and never the wall clock (invariant 9).
         lastEventReceivedAt = stopwatchNow()
+        // Where the stopwatch starts for a whole-app block, which is decided and covered inside
+        // this same turn of the main thread. The scans cannot use it — they answer long after the
+        // event that woke them, by which time later events have moved it on — so they carry their
+        // own start instead. See [BlockLatency].
+        eventArrivedAt = lastEventReceivedAt
 
         when (event.eventType) {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ->
@@ -862,14 +1026,20 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (pkg != null && pkg != lastForegroundPkg) {
             lastForegroundPkg = pkg
             LaunchCounter.recordOpen(applicationContext, pkg) // for LAUNCH_COUNT
-            // A different app is genuinely in front now, so the app the cover was over is off
-            // screen and the dismiss grace has done its job — see CoverGate.graceSpentBy for
-            // why this is the releasing event and the exit watcher is not.
-            if (dismissedKey != null && CoverGate.graceSpentBy(pkg, dismissedPkg)) {
-                dismissedKey = null
-                dismissedPkg = null
-                dismissedAt = 0L
-            }
+            // A host read in the app we just left says nothing about where we are now.
+            lastBrowserHost = null
+        }
+        // The dismiss grace is released the moment the user has demonstrably moved on: a
+        // different app, OR a different screen inside the same one. Deliberately OUTSIDE the
+        // package check above — the case the owner relapsed through never changes package
+        // (HOME swallowed on HyperOS, he simply opens the next screen), and that is precisely
+        // the case the package-only rule could not see. See CoverGate.graceSpentBy.
+        if (pkg != null && className != null) lastWindowClass = className
+        if (dismissedKey != null &&
+            CoverGate.graceSpentBy(pkg, dismissedPkg, currentDest(), dismissedDest)
+        ) {
+            if (DEBUG) Log.d(TAG, "grace spent (foreground): $dismissedDest -> ${currentDest()}")
+            clearDismissState()
         }
         // Keep the location fix current (and recover after a late permission grant).
         if (schedules.any { it.enabled && it.type == ScheduleType.LOCATION }) {
@@ -880,7 +1050,7 @@ class BlockerAccessibilityService : AccessibilityService() {
             // pages), then in-app purchase sheet, then normal app blocking.
             if (!handleSettingsGuard(pkg, className) &&
                 !handlePurchaseBlock(pkg, className)
-            ) handleAppBlock(pkg)
+            ) handleAppBlock(pkg, eventArrivedAt)
         }
         // (Re)arm the mid-use re-check for the new foreground app; a neutral app
         // (no rules, no session, no cover) costs nothing.
@@ -931,7 +1101,13 @@ class BlockerAccessibilityService : AccessibilityService() {
             return pkg in browserPackages && (adultPackOn || SettingsStore.blockAdult(this))
         }
         if (pkg in browserPackages) return true
-        if ((userKeywords.isEmpty() && !adultPackOn) || !keywordsEverywhere) return false
+        // While the danger zone is armed, every app is scanned whether or not "check every app"
+        // is on the rest of the time. Browsers are already shut outright for that hour, so this
+        // is where the widened word list actually does its work — and an hour that only watched
+        // the browsers he cannot reach would be watching nothing.
+        if (dangerZoneRemaining() <= 0L &&
+            ((userKeywords.isEmpty() && !adultPackOn) || !keywordsEverywhere)
+        ) return false
         return !isLauncherPkg(pkg) && pkg !in KEYWORD_SCAN_EXCLUDED
     }
 
@@ -975,8 +1151,29 @@ class BlockerAccessibilityService : AccessibilityService() {
     private fun scheduleUrlScan() {
         val pkg = lastForegroundPkg ?: return
         if (pkg !in browserPackages || !shouldScanPkg(pkg)) return
-        if (urlScanJob?.isActive == true) return
-        urlScanJob = scope.launch { scanBrowserUrl(pkg) }
+        // One lookup at a time, because a scrolling page fires content events continuously and
+        // the in-flight check already covers the burst it belongs to. But an event arriving
+        // *during* a read is not part of that burst — it is the address having moved since, and
+        // dropping it outright meant a page navigated to mid-read waited for the debounced scan
+        // several hundred milliseconds later, or for the user to touch something. Remember it and
+        // read once more instead.
+        if (urlScanJob?.isActive == true) {
+            urlScanDirty = true
+            return
+        }
+        val queuedAt = stopwatchNow()
+        urlScanJob = scope.launch {
+            urlScanDirty = false
+            scanBrowserUrl(pkg, queuedAt)
+            // **One repeat at most.** The flag means "it moved while we were reading", and one
+            // more read settles that; anything arriving after belongs to the next burst and will
+            // schedule its own. Looping until the flag stays clear would let a churning page turn
+            // the fast path into a spin, which is the cost this single-flight exists to prevent.
+            if (urlScanDirty && lastForegroundPkg == pkg) {
+                urlScanDirty = false
+                scanBrowserUrl(pkg, stopwatchNow())
+            }
+        }
     }
 
     /** Debounced YouTube-Shorts check (quicker than the web scan so Shorts is caught fast).
@@ -1002,9 +1199,25 @@ class BlockerAccessibilityService : AccessibilityService() {
 
     // --- App blocking (unchanged behaviour) ---
 
-    private fun handleAppBlock(pkg: String) {
+    private fun handleAppBlock(pkg: String, startedAt: Long = 0L) {
         val reason = blockReason(pkg)
         if (reason == null) {
+            // "No reason" is only an answer once we have been told the rules. Before Room's first
+            // emission it means "we do not know yet", and taking a live cover down on it is how a
+            // Second Space switch used to uncover a blocked app (RuleSnapshot, invariant 11). The
+            // snapshot above usually answers, but it carries only HARD blocks — a schedule or a
+            // limit still reads as null here, so hold what is up and re-decide when the flow
+            // lands. Nothing is stranded: the ordinary re-check tick re-runs this.
+            if (!rulesLoaded) {
+                // The window invariant 11's update is about, now counted rather than merely
+                // survived: a non-zero total here says a rebind on this phone really does make
+                // decisions before Room has answered.
+                if (!unreadyCounted) {
+                    unreadyCounted = true
+                    SilenceLog.record(applicationContext, SilenceLog.UNREADY_DECISIONS)
+                }
+                if (overlay.isShowing) return
+            }
             lastBlockedPkg = null
             // Not this path's cover to remove. It answers one question — is this whole app
             // blocked? — and a "no" used to tear down whatever was up, including a cover raised by
@@ -1027,7 +1240,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         lastBlockAt = now
         showBlockScreen(
             title = reason.title, message = reason.message, packageName = pkg,
-            counterKey = pkg, why = reason.why,
+            counterKey = pkg, why = reason.why, startedAt = startedAt,
         )
     }
 
@@ -1371,13 +1584,15 @@ class BlockerAccessibilityService : AccessibilityService() {
                 pkg = pkg,
                 updatePaused = updatePauseActive(),
                 lockoutRemainingMs = keywordLockoutRemaining(pkg),
+                dangerZoneRemainingMs = dangerZoneRemaining(),
+                isRealBrowser = pkg in realBrowserPackages,
                 lockoutWord = keywordLockoutWord(pkg),
                 strict = strict,
                 // Enforcing when Strict, or a running Timer/Pomodoro says "block now", or
                 // (no session) when not paused. Same gate in Blocklist and Allowlist mode.
                 quickEnforcing = strict ||
                     if (session.active) session.blockingNow else !SettingsStore.quickBlockPaused(this),
-                rule = rules[pkg],
+                rule = ruleFor(pkg),
                 allowlistMode = allowlistMode,
                 isEssential = { isEssentialAllowed(pkg) },
                 schedules = schedules,
@@ -1741,26 +1956,41 @@ class BlockerAccessibilityService : AccessibilityService() {
      * already on screen — and because the full scan is untouched, this one is free to decline
      * whenever it is unsure: the worst case is the old speed, never a miss.
      */
-    private suspend fun scanBrowserUrl(pkg: String) {
+    private suspend fun scanBrowserUrl(pkg: String, startedAt: Long = 0L) {
         if (lastForegroundPkg != pkg || !shouldScanPkg(pkg)) return
         // A cover is already up, so everything under it is unreachable and there is nothing
         // new to block.
         if (overlay.isShowing && !shortsCovering) return
-        // Mid-dismissal: the page is still on screen for the trip Home. The grace is released
-        // as soon as another app is really in front, so a deliberate re-open is caught at once.
+        // Settled addresses only: acting on half-typed omnibox text would cover the screen
+        // mid-word, and the owner asked for the block to wait until he has actually gone to the
+        // site. Typing a blocked word is still caught by the page scan, at its usual speed.
+        //
+        // **Read BEFORE the dismiss grace is consulted**, which is the fix for the browser half
+        // of the eight-second hole. On a page cover "Got it" steps BACK and deliberately leaves
+        // the user in the browser (v1.135), so the package never changes and the only evidence
+        // that they have moved on is a different host — evidence this function used to return
+        // before ever looking for. Every website block therefore bought a browser nobody was
+        // watching until the grace lapsed. One omnibox lookup during the grace is the price of
+        // not being deaf; the full page scan still waits, as it always did.
+        val url = extractSettledBrowserUrl(pkg)
+        val host = WatcherDiagnostics.hostOf(url)
+        if (host != null) lastBrowserHost = host
+        if (dismissedKey != null &&
+            CoverGate.graceSpentBy(pkg, dismissedPkg, host, dismissedDest)
+        ) {
+            if (DEBUG) Log.d(TAG, "grace spent (new host): $dismissedDest -> $host")
+            clearDismissState()
+        }
+        // Mid-dismissal: the page is still on screen for the step back or the trip Home.
         if (dismissedKey != null && withinDismissWindow()) {
             if (DEBUG) Log.d(TAG, "urlScan[$pkg]: suppressed by dismiss grace")
             return
         }
-        // Settled addresses only: acting on half-typed omnibox text would cover the screen
-        // mid-word, and the owner asked for the block to wait until he has actually gone to the
-        // site. Typing a blocked word is still caught by the page scan, at its usual speed.
         // No settled address: a start page, an empty bar, a toolbar behind a fullscreen video.
         // Forget what was last checked here — the dedup below is keyed on the address alone, so
         // leaving it set means coming back to the same blocked site without leaving the browser
         // reads as "already handled" and this path skips it. The debounced scan still catches
         // that, a beat later; an under-block is the half he never sees.
-        val url = extractSettledBrowserUrl(pkg)
         if (url == null) {
             lastCheckedUrl = null
             return
@@ -1772,7 +2002,9 @@ class BlockerAccessibilityService : AccessibilityService() {
         // adult layer deliberately does not, since an update must not become the easy way out.
         val ownWords = if (updatePauseActive()) emptyList() else userKeywords
         val hit = filter.checkUrl(url, ownWords, autoSocialKeywords())
-            ?: filter.checkUrlAdult(url, adultPackOn, SettingsStore.blockAdult(applicationContext))
+            ?: filter.checkUrlAdult(
+                url, adultPackOn, SettingsStore.blockAdult(applicationContext), learnedDomains,
+            )
             ?: return
         if (DEBUG) Log.d(TAG, "URL BLOCK[$url]: ${hit.title}")
         withContext(Dispatchers.Main) {
@@ -1781,9 +2013,14 @@ class BlockerAccessibilityService : AccessibilityService() {
                 // locks the app so "Got it" isn't a free pass back in, a blocked WEBSITE still
                 // just covers the page. Arriving sooner must not change what happens.
                 if (!hit.site) addKeywordLockout(pkg, hit.word)
+                if (hit.adult) {
+                    recordDangerStrike(hit.word)
+                    recordSiteEvidence(pkg, lastBrowserHost)
+                }
                 showBlockScreen(
                     title = hit.title, message = hit.message, packageName = null,
                     counterKey = CoverGate.WEB_KEY, offenceKey = pkg, why = BlockWhy.ofWebHit(hit.site, hit.adult),
+                    startedAt = startedAt,
                 )
             } else lastCheckedUrl = null // left during the lookup — re-decide on the way back
         }
@@ -1839,7 +2076,7 @@ class BlockerAccessibilityService : AccessibilityService() {
     }
 
     /** Runs on a background dispatcher (the node-tree walk is heavy); only the block UI hops to main. */
-    private suspend fun scanWebContent() {
+    private suspend fun scanWebContent(startedAt: Long = 0L) {
         // Scan browsers (word + adult + social-domain filtering) and, when the user has blocked
         // words with "every app" on, every other app too (user words only). The word appearing
         // anywhere — including one the user types into another app's own text field — trips the
@@ -1871,7 +2108,7 @@ class BlockerAccessibilityService : AccessibilityService() {
             withContext(Dispatchers.Main) {
                 if (lastForegroundPkg == pkg &&
                     rootInActiveWindow?.packageName?.toString() == pkg
-                ) handleAppBlock(pkg)
+                ) handleAppBlock(pkg, startedAt)
             }
             return
         }
@@ -1942,11 +2179,16 @@ class BlockerAccessibilityService : AccessibilityService() {
         // adult layer (pack + adult sites) keeps matching.
         val ownWords = if (updatePauseActive()) emptyList() else userKeywords
         val hit = if (isBrowser) {
-            filter.check(text, address, ownWords, autoSocialKeywords(), adultPackOn, SettingsStore.blockAdult(applicationContext))
+            filter.check(
+                text, address, ownWords, autoSocialKeywords(), adultPackOn,
+                SettingsStore.blockAdult(applicationContext),
+                wideList = wideListOn(),
+            )
         } else {
             filter.check(
                 text, BrowserAddress.Unreadable, ownWords, siteKeywords = emptyList(),
                 adultPackOn, blockAdult = false,
+                wideList = wideListOn(),
             )
         }
         if (hit == null) {
@@ -1967,6 +2209,10 @@ class BlockerAccessibilityService : AccessibilityService() {
                 // must not be a free pass back in. A blocked WEBSITE is gentler: cover the page
                 // so the site stays blocked every visit, but don't lock the whole browser.
                 if (!hit.site) addKeywordLockout(pkg, hit.word)
+                if (hit.adult) {
+                    recordDangerStrike(hit.word)
+                    recordSiteEvidence(pkg, lastBrowserHost)
+                }
                 // Recorded under "web" (Insights shows one "Websites" row), but the OFFENCE is
                 // this app: the lockout just added makes handleAppBlock raise a second,
                 // package-keyed "Locked" cover moments from now, and one blocked word must not
@@ -1974,6 +2220,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                 showBlockScreen(
                     title = hit.title, message = hit.message, packageName = null,
                     counterKey = CoverGate.WEB_KEY, offenceKey = pkg, why = BlockWhy.ofWebHit(hit.site, hit.adult),
+                    startedAt = startedAt,
                 )
             } else lastWebText = null // left during the scan — don't cover what's there now
         }
@@ -2098,15 +2345,59 @@ class BlockerAccessibilityService : AccessibilityService() {
 
     /** True while a just-dismissed cover's re-show should stay suppressed — see [CoverGate],
      *  which owns the rules (and is unit-tested, see CoverGateTest). */
-    private fun dismissSuppressed(counterKey: String): Boolean = CoverGate.suppressed(
-        counterKey, dismissedKey, dismissedPkg, lastForegroundPkg,
-        stopwatchNow() - dismissedAt,
-    )
+    private fun dismissSuppressed(counterKey: String): Boolean {
+        val since = stopwatchNow() - dismissedAt
+        val suppressed = CoverGate.suppressed(
+            counterKey, dismissedKey, dismissedPkg, lastForegroundPkg, since, dismissedViaBack,
+        )
+        if (suppressed) recordDecline(since)
+        return suppressed
+    }
+
+    /**
+     * A cover or a scan was just declined because of the dismiss grace.
+     *
+     * Nothing recorded this before, anywhere — see [SilenceLog]. The declines inside the short
+     * grace are the mechanism working and are not counted; past it, the watcher is quiet while
+     * the user sits in the app it has just covered, which is the shape of invariant 20's bug and
+     * the number that would have shown it months earlier.
+     */
+    private fun recordDecline(sinceDismissMs: Long) {
+        if (!SilenceLog.isLate(sinceDismissMs)) return
+        SilenceLog.record(applicationContext, SilenceLog.LATE_DECLINES)
+        if (!dismissalCountedDeaf) {
+            dismissalCountedDeaf = true
+            SilenceLog.record(applicationContext, SilenceLog.DEAF_DISMISSALS)
+        }
+    }
+
+    /** Where the user is now, in the same unit the dismissed cover recorded — a host for a page
+     *  cover, a window class for an app cover. Comparing the two kinds against each other would
+     *  read as "moved" on the very first event and release the grace outright. */
+    private fun currentDest(): String? =
+        if (dismissedKey == CoverGate.WEB_KEY) lastBrowserHost else lastWindowClass
+
+    /** Forget the dismissed cover, so the next block lands immediately. */
+    private fun clearDismissState() {
+        dismissalCountedDeaf = false
+        dismissedViaBack = false
+        dismissedKey = null
+        dismissedPkg = null
+        dismissedDest = null
+        dismissedAt = 0L
+    }
+
+    /** The rule for [pkg], falling back to the pre-connect snapshot until Room has answered. */
+    private fun ruleFor(pkg: String) =
+        RuleSnapshot.ruleFor(pkg, rules, rulesLoaded, blockedSnapshot)
 
     /** The key-agnostic timing half, for the web scan. */
-    private fun withinDismissWindow(): Boolean = CoverGate.inGrace(
-        dismissedPkg, lastForegroundPkg, stopwatchNow() - dismissedAt,
-    )
+    private fun withinDismissWindow(): Boolean {
+        val since = stopwatchNow() - dismissedAt
+        val inGrace = CoverGate.inGrace(dismissedPkg, lastForegroundPkg, since, dismissedViaBack)
+        if (inGrace) recordDecline(since)
+        return inGrace
+    }
 
     /**
      * Raises the block cover. [counterKey] is what the attempt is *recorded* under (a package,
@@ -2128,6 +2419,10 @@ class BlockerAccessibilityService : AccessibilityService() {
          *  not a rule decision (the guard, a purchase sheet, a Shorts cover) pass their own
          *  fixed code rather than borrowing one that would misdescribe them in a report. */
         why: String = BlockWhy.UNKNOWN,
+        /** When the event that led here arrived, monotonically — 0 when this cover has no
+         *  meaningful start to measure from (the re-check tick, the guard, a purchase sheet).
+         *  See [BlockLatency]: the interval is recorded only when there is a real one. */
+        startedAt: Long = 0L,
     ) {
         // One cover = one recorded entry. The page/app behind a cover keeps emitting events
         // (feeds churn, activities transition), and each used to re-record an "attempt" and
@@ -2149,41 +2444,38 @@ class BlockerAccessibilityService : AccessibilityService() {
             lastCountedOffence = offenceKey
             lastCountedAt = now
         }
-        // Diagnostic breadcrumb, recorded at the one place every cover passes through. Shape
-        // only — which path raised it, whether our own UI was in front, whether the window on
-        // screen actually matched what we were blocking. Never the app, word or page: see
-        // BlockLog. `ownUi=true` or `rootOk=false` here is what identifies a cover landing
-        // somewhere it shouldn't, which is otherwise invisible after the milliseconds it lasts.
-        runCatching {
-            BlockLog.record(
-                context = applicationContext,
-                kind = when {
-                    counterKey == "strict_guard" -> "guard"
-                    // `why` as well as the key: the browser Shorts cover is *counted* as a web
-                    // block (it is a page block, and must not wear the player scan's key — see
-                    // scanWebContent), but in a report it is still a Shorts block and reading it
-                    // as "word" would send the next reader looking for a keyword that never
-                    // existed. Invariant 17: an instrument must mean one thing.
-                    counterKey == CoverGate.SHORTS_KEY || why == BlockWhy.SHORTS -> "shorts"
-                    packageName != null -> "app"
-                    else -> "word"
-                },
-                ownUi = OwnUi.visible,
-                // Three-way, because the boolean this replaces meant two opposite things at once:
-                // "the cover landed on the wrong app" (a bug) and "the tree was unreadable, so we
-                // blocked anyway" (deliberate, invariant 1) both read as false. Report #5 turned
-                // on exactly that distinction and the log could not answer it.
-                window = when {
-                    packageName == null -> BlockLog.Window.NA
-                    else -> when (rootInActiveWindow?.packageName?.toString()) {
-                        null -> BlockLog.Window.BLIND
-                        packageName -> BlockLog.Window.MATCH
-                        else -> BlockLog.Window.OTHER
-                    }
-                },
-                why = why,
-                counted = fresh,
-            )
+        // What the breadcrumb will say, worked out here but *written* after the cover is up —
+        // see the record below. Both of these have to be read now: `OwnUi.visible` and the window
+        // tree describe the moment of the decision, and our own cover is about to become part of
+        // both (the overlay is non-focusable and can itself report as the active window, which is
+        // exactly the quirk ExitView exists for). Reading them afterwards would describe the
+        // cover instead of what it covered.
+        val logKind = when {
+            counterKey == "strict_guard" -> "guard"
+            // `why` as well as the key: the browser Shorts cover is *counted* as a web
+            // block (it is a page block, and must not wear the player scan's key — see
+            // scanWebContent), but in a report it is still a Shorts block and reading it
+            // as "word" would send the next reader looking for a keyword that never
+            // existed. Invariant 17: an instrument must mean one thing.
+            counterKey == CoverGate.SHORTS_KEY || why == BlockWhy.SHORTS -> "shorts"
+            packageName != null -> "app"
+            else -> "word"
+        }
+        val logOwnUi = OwnUi.visible
+        // Three-way, because the boolean this replaces meant two opposite things at once:
+        // "the cover landed on the wrong app" (a bug) and "the tree was unreadable, so we
+        // blocked anyway" (deliberate, invariant 1) both read as false. Report #5 turned
+        // on exactly that distinction and the log could not answer it.
+        //
+        // Costs a look into the window tree, and only for a whole-app block: a page or word cover
+        // passes no package, answers NA, and asks the system nothing at all.
+        val logWindow = when {
+            packageName == null -> BlockLog.Window.NA
+            else -> when (rootInActiveWindow?.packageName?.toString()) {
+                null -> BlockLog.Window.BLIND
+                packageName -> BlockLog.Window.MATCH
+                else -> BlockLog.Window.OTHER
+            }
         }
         val label = packageName?.let { loadLabel(it) }
         val msg = message ?: label?.let { "$it is blocked" } ?: "This is blocked right now."
@@ -2217,6 +2509,34 @@ class BlockerAccessibilityService : AccessibilityService() {
                 }
             )
         }
+        // **How long that took.** The first thing this app has ever measured about its own
+        // speed: every other instrument here records whether something happened, never how long
+        // it took to happen, so when the owner said the blocking was too slow there was no
+        // number on the phone that could agree with him. Recorded after the cover for the same
+        // reason as the breadcrumb below, and only when there is a real start to measure from.
+        if (startedAt > 0L) BlockLatency.record(applicationContext, stopwatchNow() - startedAt)
+        // Diagnostic breadcrumb, recorded at the one place every cover passes through. Shape
+        // only — which path raised it, whether our own UI was in front, whether the window on
+        // screen actually matched what we were blocking. Never the app, word or page: see
+        // BlockLog. `ownUi=true` or a non-matching window here is what identifies a cover landing
+        // somewhere it shouldn't, which is otherwise invisible after the milliseconds it lasts.
+        //
+        // **Written after the cover, not in front of it.** Recording an entry means reading the
+        // stored log, splitting up to sixty entries, rebuilding the list and writing it back —
+        // none of which changes a pixel of what is drawn. It used to sit between the decision and
+        // the frame; it now goes on the next message, like the blocked app's icon.
+        handler.post {
+            runCatching {
+                BlockLog.record(
+                    context = applicationContext,
+                    kind = logKind,
+                    ownUi = logOwnUi,
+                    window = logWindow,
+                    why = why,
+                    counted = fresh,
+                )
+            }
+        }
         // (Re)arm the mid-use re-check whenever a cover goes up: after a dismissal it
         // re-blocks a locked-out app even when the page is static and emits no events.
         handler.removeCallbacks(recheckRunnable)
@@ -2233,7 +2553,12 @@ class BlockerAccessibilityService : AccessibilityService() {
         val wasShorts = overlay.counterKey == CoverGate.SHORTS_KEY
         dismissedKey = overlay.counterKey
         dismissedPkg = lastForegroundPkg
+        // Read AFTER dismissedKey, which is what decides which unit this cover thinks in.
+        dismissedDest = currentDest()
+        dismissalCountedDeaf = false
+        if (DEBUG) Log.d(TAG, "dismissed: key=$dismissedKey pkg=$dismissedPkg dest=$dismissedDest")
         dismissedAt = stopwatchNow()
+        dismissedViaBack = false
         lastBlockedPkg = null
         // Re-arm word detection: coming back to the page that was just blocked must
         // block again, not read as "already handled" via the text dedup.
@@ -2269,8 +2594,24 @@ class BlockerAccessibilityService : AccessibilityService() {
             // exactly as it already does for the trip Home.
             lastBackExitPkg = dismissedPkg
             lastBackExitAt = stopwatchNow()
+            dismissedViaBack = true
             overlay.remove()
             performGlobalAction(GLOBAL_ACTION_BACK)
+            // **A blocked word locks the whole app, and nothing was raising that lock's cover.**
+            // The lockout is recorded the instant the word is caught, but the "Locked" screen it
+            // calls for waits for [handleAppBlock] to run again — and the only things that run it
+            // are a foreground change and the thirty-second re-check tick. BACK keeps him in the
+            // same app, and the page it lands on is static and emits nothing, so an app he had
+            // just been locked out of sat there usable for up to half a minute.
+            //
+            // Re-decide the moment the grace ends instead. No scan and no reading of the screen:
+            // the lockout is already recorded, so this is a decision whose inputs are all in hand.
+            lastForegroundPkg?.let { pkg ->
+                if (keywordLockoutRemaining(pkg) > 0L) {
+                    handler.removeCallbacks(recheckRunnable)
+                    handler.postDelayed(recheckRunnable, CoverGate.DISMISS_GRACE_MS + 150L)
+                }
+            }
         } else {
             // Everything else — a whole app, the purchase sheet, a Settings page we bounced out
             // of, and a page whose BACK has already been tried — is held until the user is really
@@ -2314,9 +2655,7 @@ class BlockerAccessibilityService : AccessibilityService() {
             // is most of the time on gesture nav, and relying on it left the grace running in
             // exactly the case that mattered. onForegroundChanged owns the release; see
             // CoverGate.graceSpentBy.
-            dismissedKey = null
-            dismissedPkg = null
-            dismissedAt = 0L
+            clearDismissState()
         } else if (confirmed) {
             // HOME never landed and the user IS still in the blocked app. The cover has to come
             // down (never trap anyone), so schedule the re-check for just after the dismiss

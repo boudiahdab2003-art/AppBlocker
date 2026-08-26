@@ -356,6 +356,90 @@ object SettingsStore {
             .map { (pkg, lockout) -> lockout.encode(pkg) }.toSet(),
     ).apply()
 
+    private const val KEY_DANGER_STRIKES = "danger_strikes"
+    private const val KEY_DANGER_ZONE = "danger_zone"
+
+    /** The words caught recently, keyed by [DangerZone.key] — a hash, never the word itself, so
+     *  nothing on disk can say what he searched for. Same storage shape as the keyword lockouts,
+     *  and for the same reason: a deadline that must not be skippable by moving the clock. */
+    internal fun dangerStrikes(context: Context): Map<String, GuardedDeadline> =
+        prefs(context).getStringSet(KEY_DANGER_STRIKES, emptySet()).orEmpty()
+            .mapNotNull { GuardedDeadline.decode(it) }
+            .toMap()
+
+    internal fun setDangerStrikes(
+        context: Context,
+        value: Map<String, GuardedDeadline>,
+        currentBootCount: Int,
+    ) = prefs(context).edit().putStringSet(
+        KEY_DANGER_STRIKES,
+        value.filterValues { it.remaining(currentBootCount) > 0L }
+            .map { (k, d) -> d.encode(k) }.toSet(),
+    ).apply()
+
+    /** The armed hour, or null. */
+    internal fun dangerZone(context: Context): GuardedDeadline? =
+        prefs(context).getString(KEY_DANGER_ZONE, null)?.let { GuardedDeadline.decode(it)?.second }
+
+    private const val KEY_DANGER_WIDE = "danger_wide_list"
+
+    /** The 24-hour window during which `danger_words.txt` stays in force. A separate deadline
+     *  from [dangerZone] because they are separate things: that one shuts browsers for an hour,
+     *  this one only widens the word list, and it outlives the hour by design. */
+    internal fun dangerWideList(context: Context): GuardedDeadline? =
+        prefs(context).getString(KEY_DANGER_WIDE, null)?.let { GuardedDeadline.decode(it)?.second }
+
+    internal fun setDangerWideList(context: Context, value: GuardedDeadline?) =
+        prefs(context).edit().apply {
+            if (value == null) remove(KEY_DANGER_WIDE) else putString(KEY_DANGER_WIDE, value.encode("w"))
+        }.apply()
+
+    internal fun setDangerZone(context: Context, value: GuardedDeadline?) =
+        prefs(context).edit().apply {
+            if (value == null) remove(KEY_DANGER_ZONE) else putString(KEY_DANGER_ZONE, value.encode("z"))
+        }.apply()
+
+    private const val KEY_SITE_EVIDENCE = "danger_site_evidence"
+    private const val KEY_LEARNED_DOMAINS = "learned_domains"
+
+    /** host -> the browser packages an adult hit has landed on it in. Stored as
+     *  `host|pkg,pkg`; a host that reaches [DangerZone.BROWSERS_TO_LEARN] browsers graduates to
+     *  [learnedDomains] and its evidence is dropped. */
+    internal fun siteEvidence(context: Context): Map<String, Set<String>> =
+        prefs(context).getStringSet(KEY_SITE_EVIDENCE, emptySet()).orEmpty().mapNotNull { row ->
+            val host = row.substringBefore('|').takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val pkgs = row.substringAfter('|', "").split(',').filter { it.isNotBlank() }.toSet()
+            if (pkgs.isEmpty()) null else host to pkgs
+        }.toMap()
+
+    internal fun setSiteEvidence(context: Context, value: Map<String, Set<String>>) =
+        prefs(context).edit().putStringSet(
+            KEY_SITE_EVIDENCE,
+            value.entries.take(200).map { (h, p) -> "$h|${p.joinToString(",")}" }.toSet(),
+        ).apply()
+
+    /** Hosts the phone worked out for itself. **Kept in the clear, unlike the danger-zone
+     *  strikes**, and the difference is deliberate: a strike is a record of what he searched and
+     *  belongs to nobody, while this is a block list, and a block list nobody can read is one
+     *  nobody can correct. */
+    internal fun learnedDomains(context: Context): Set<String> =
+        prefs(context).getStringSet(KEY_LEARNED_DOMAINS, emptySet()).orEmpty()
+
+    internal fun setLearnedDomains(context: Context, value: Set<String>) =
+        prefs(context).edit().putStringSet(KEY_LEARNED_DOMAINS, value.take(500).toSet()).apply()
+
+    private const val KEY_BLOCKED_SNAPSHOT = "blocked_snapshot"
+
+    /** The blocked packages as of the last time Room told us, so a freshly bound service can
+     *  enforce something before the database answers. See [RuleSnapshot] for why an empty rule
+     *  map is not "nothing is blocked". Read synchronously on the connect path — a plain string
+     *  set, deliberately cheap enough for that. */
+    internal fun blockedSnapshot(context: Context): Set<String> =
+        prefs(context).getStringSet(KEY_BLOCKED_SNAPSHOT, emptySet()).orEmpty()
+
+    internal fun setBlockedSnapshot(context: Context, value: Set<String>) =
+        prefs(context).edit().putStringSet(KEY_BLOCKED_SNAPSHOT, value).apply()
+
     private const val KEY_GUARD_OFF_SWITCH = "guard_off_switch"
 
     /**

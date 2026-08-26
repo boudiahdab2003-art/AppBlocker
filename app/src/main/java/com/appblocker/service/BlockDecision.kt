@@ -3,6 +3,7 @@ package com.appblocker.service
 import com.appblocker.R
 import com.appblocker.data.AppRule
 import com.appblocker.data.BlockMode
+import com.appblocker.data.DangerZone
 import com.appblocker.data.Schedule
 import com.appblocker.data.ScheduleType
 import com.appblocker.data.Words
@@ -32,11 +33,12 @@ internal object BlockWhy {
     const val SCHED_WIFI = "sched-wifi"
     const val SCHED_LOCATION = "sched-location"
     const val BROWSER = "browser"          // "block unsupported browsers"
+    const val DANGER = "danger"            // three different adult words in half an hour
     const val UNKNOWN = "?"                // decoded from a log entry written before this existed
 
     val ALL = setOf(
         LOCKOUT, ALLOWLIST, STRICT, QUICK, LIMIT, SCHED_TIME, SCHED_USAGE, SCHED_LAUNCH,
-        SCHED_WIFI, SCHED_LOCATION, BROWSER, UNKNOWN,
+        SCHED_WIFI, SCHED_LOCATION, BROWSER, DANGER, UNKNOWN,
     )
 
     // The layers that raise a cover without going through decideBlock — a page scan, the Shorts
@@ -106,6 +108,10 @@ internal data class BlockInputs(
     val lockoutWord: String?,
     /** A Strict session is running: it overrides pausing and every per-app mode. */
     val strict: Boolean,
+    /** Millis left on the danger zone (0 = not armed). See [com.appblocker.data.DangerZone]. */
+    val dangerZoneRemainingMs: Long,
+    /** This package declares itself a browser — the strict set, never the generous one. */
+    val isRealBrowser: Boolean,
     /** Quick Block is enforcing right now (Strict, or a session saying "block now", or not paused). */
     val quickEnforcing: Boolean,
     val rule: AppRule?,
@@ -134,6 +140,22 @@ internal data class BlockInputs(
  * unsupported browsers.
  */
 internal fun decideBlock(i: BlockInputs): BlockReason? {
+    // The danger zone comes FIRST, ahead of even the update pause. It is armed only by the adult
+    // layer, and that layer deliberately keeps working through an update (see shouldScanPkg:
+    // "an update must not become the easy one") — pausing here would make installing an update
+    // the cheapest way out of the hour, which is the shape of every bypass this app has closed.
+    //
+    // Browsers only, from the strict self-declared set (invariant 13), which is also the whole
+    // safety argument for having no escape hatch: it can never land on the launcher, the dialer,
+    // Settings or a banking app, so invariant 7 is not at risk and the phone stays usable.
+    if (i.dangerZoneRemainingMs > 0L && i.isRealBrowser) {
+        return BlockReason(
+            "Danger zone",
+            DangerZone.message(i.dangerZoneRemainingMs),
+            why = BlockWhy.DANGER,
+        )
+    }
+
     // After an update: nothing blocks until the user reactivates (the update also ends
     // any Strict session — see UpdatePause).
     if (i.updatePaused) return null

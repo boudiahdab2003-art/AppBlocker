@@ -7,6 +7,7 @@ import com.appblocker.data.AppRule
 import com.appblocker.data.BlockerDatabase
 import com.appblocker.data.InstalledAppsRepository
 import com.appblocker.data.NewAppWatcher
+import com.appblocker.data.NewAppRules
 import com.appblocker.data.SettingsStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -32,15 +33,18 @@ class PackageInstallReceiver : BroadcastReceiver() {
         // EXTRA_REPLACING = an update to an existing app, not a brand-new install.
         if (intent.getBooleanExtra(Intent.EXTRA_REPLACING, false)) return
         InstalledAppsRepository.invalidate(context)
-        // In Allowlist mode a new app is already blocked (it isn't on the allowlist), so there's
-        // nothing to auto-add. The "Add newly installed apps" toggle is a Blocklist concept.
-        if (SettingsStore.quickBlockAllowlist(context)) return
-        if (!SettingsStore.addNewApps(context)) return
-
         val pkg = intent.data?.schemeSpecificPart ?: return
         if (pkg == context.packageName) return
         val pm = context.packageManager
-        if (pm.getLaunchIntentForPackage(pkg) == null) return // skip non-launchable / background apps
+        // One rule, shared with NewAppWatcher's backstop so the two cannot disagree about an app.
+        if (!NewAppRules.shouldAutoBlock(
+                addNewApps = SettingsStore.addNewApps(context),
+                allowlistMode = SettingsStore.quickBlockAllowlist(context),
+                launchable = pm.getLaunchIntentForPackage(pkg) != null,
+                isProtector = isProtectiveApp(context, pkg),
+                isBrowser = pkg in findRealBrowserPackages(context),
+            )
+        ) return
 
         val label = runCatching {
             pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()

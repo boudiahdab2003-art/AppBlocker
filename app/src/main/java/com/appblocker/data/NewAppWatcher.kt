@@ -2,6 +2,8 @@ package com.appblocker.data
 
 import android.content.Context
 import android.content.pm.PackageManager
+import com.appblocker.service.findRealBrowserPackages
+import com.appblocker.service.isProtectiveApp
 
 /**
  * The backstop behind "Add newly installed apps".
@@ -65,10 +67,22 @@ object NewAppWatcher {
 
         val baseline = SettingsStore.knownPackages(context)
         // Blocklist-only, exactly like the receiver: in Allowlist mode a new app is already
-        // blocked by not being on the list, so there is nothing to add.
+        // blocked by not being on the list, so there is nothing to add. Everything already
+        // in `current` is launchable by construction.
         val enforcing = SettingsStore.addNewApps(context) &&
             !SettingsStore.quickBlockAllowlist(context)
-        val newOnes = if (enforcing) newlyInstalled(baseline, current) else emptySet()
+        val browsers = if (enforcing) findRealBrowserPackages(context) else emptySet()
+        val newOnes = if (enforcing) {
+            newlyInstalled(baseline, current).filter {
+                NewAppRules.shouldAutoBlock(
+                    addNewApps = true,
+                    allowlistMode = false,
+                    launchable = true,
+                    isProtector = isProtectiveApp(context, it),
+                    isBrowser = it in browsers,
+                )
+            }.toSet()
+        } else emptySet()
 
         if (newOnes.isNotEmpty()) {
             val dao = BlockerDatabase.get(context).appRuleDao()

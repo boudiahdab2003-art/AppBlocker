@@ -32,7 +32,13 @@ object BlockLog {
     private const val KEY = "block_log"
 
     /** Short: this is a window into "what just happened", not an audit trail. */
-    private const val MAX = 15
+    /** How many covers are kept. Raised from 15 on 26 Aug 2026 at the owner's request — fifteen
+     *  entries is a couple of minutes on a busy evening, and the log is read *backwards from the
+     *  complaint*, so the entries that explain a report are routinely the ones that had already
+     *  fallen off the end. Each record is a handful of bytes and carries no subject, so length is
+     *  nearly free; what it buys is the difference between "the block you mean isn't in here" and
+     *  an answer. */
+    private const val MAX = 60
 
     /**
      * The only values [kind] may take. A fixed vocabulary rather than free text, for the same

@@ -34,8 +34,12 @@ internal object BlockScreenRenderer {
      * behind most of this app's past bugs. Only the backdrop is a per-theme drawable, because those
      * differ in structure rather than just colour; the badge and button are tinted.
      */
-    fun applyTheme(context: Context, v: View): BlockThemes.BlockTheme {
-        val t = BlockThemes.current(context)
+    fun applyTheme(context: Context, v: View): BlockThemes.BlockTheme =
+        applyTheme(context, v, BlockThemes.current(context))
+
+    /** As above, for a caller that has already read the theme — see [BlockOverlay.show], which
+     *  reads it to decide whether any of this needs doing at all. */
+    fun applyTheme(context: Context, v: View, t: BlockThemes.BlockTheme): BlockThemes.BlockTheme {
         v.setBackgroundResource(t.backgroundRes)
         v.findViewById<TextView>(R.id.overlay_title)?.setTextColor(t.secondaryText)
         v.findViewById<TextView>(R.id.overlay_stat_number)?.setTextColor(t.primaryText)
@@ -69,8 +73,11 @@ internal object BlockScreenRenderer {
      * margin. The four layouts are hand-tuned and must keep looking exactly as they shipped; this
      * rearranges them, it does not restyle them.
      */
-    fun applyArrangement(context: Context, v: View): BlockArrangement.Arrangement {
-        val arrangement = BlockArrangement.load(context)
+    fun applyArrangement(context: Context, v: View): BlockArrangement.Arrangement =
+        applyArrangement(v, BlockArrangement.load(context))
+
+    /** As above, for a caller that has already loaded the arrangement. */
+    fun applyArrangement(v: View, arrangement: BlockArrangement.Arrangement): BlockArrangement.Arrangement {
         // Before the early returns below, so the quote's side is applied on every layout — the
         // ones without a quote simply find no view to align.
         alignQuote(v, arrangement.quoteAlign)

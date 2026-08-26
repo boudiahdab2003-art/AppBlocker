@@ -121,11 +121,13 @@ internal object CoverGate {
         dismissedPkg: String?,
         currentPkg: String?,
         sinceDismissMs: Long,
+        /** See [inGrace]. */
+        viaBack: Boolean,
     ): Boolean {
         if (counterKey == SHORTS_KEY) return false
         if (dismissedKey == null) return false
         if (counterKey != dismissedKey && counterKey != dismissedPkg) return false
-        return inGrace(dismissedPkg, currentPkg, sinceDismissMs)
+        return inGrace(dismissedPkg, currentPkg, sinceDismissMs, viaBack)
     }
 
     /**
@@ -134,8 +136,32 @@ internal object CoverGate {
      * cover was over. The web scan uses this directly — any dismissal suppresses it, because
      * the page stays on screen for the trip Home whatever the cover was keyed to.
      */
-    fun inGrace(dismissedPkg: String?, currentPkg: String?, sinceDismissMs: Long): Boolean {
+    fun inGrace(
+        dismissedPkg: String?,
+        currentPkg: String?,
+        sinceDismissMs: Long,
+        /** Whether that dismissal left via BACK rather than HOME — see [Exit] and [exitFor].
+         *  Passed rather than derived from the key, because a page cover falls back to HOME when
+         *  BACK has already failed once ([backExitFailed]), and then it needs the long window
+         *  like any other trip Home. What matters is the move that was actually made. */
+        viaBack: Boolean,
+    ): Boolean {
         if (sinceDismissMs < DISMISS_GRACE_MS) return true
+        // **No extension for a cover dismissed with BACK**, and staying in the app is exactly why.
+        //
+        // The long window exists for one thing: HOME landing slowly or being swallowed whole
+        // (HyperOS, split-screen), leaving the blocked app genuinely still on screen with its
+        // stragglers still arriving. BACK does not make that trip. It is a move *inside* the app,
+        // it lands at once, and "the same app is still in front" is not a symptom of it — it is
+        // the expected outcome of it. So the condition below is true from the first instant of
+        // every page dismissal, and the eight seconds ran in full every time.
+        //
+        // That is invariant 20 read the other way round. The fix there was to release the grace
+        // when the destination changes; this is the half that release cannot reach — stepping BACK
+        // onto another page of the same site, or onto one whose address cannot be read at all.
+        // The short window above still absorbs the departing page's stragglers, which is the only
+        // thing this ever had to absorb.
+        if (viaBack) return false
         return sinceDismissMs < DISMISS_GRACE_STUCK_MS && currentPkg != null &&
             currentPkg == dismissedPkg
     }
@@ -159,11 +185,37 @@ internal object CoverGate {
      * emulator rounds still reproduced the bug before the logs said why. Hence a named rule with
      * tests, rather than a line buried in the watcher.
      *
-     * Staying in the blocked app keeps [newPkg] equal to [dismissedPkg], so the stuck case the
-     * long window exists for is deliberately untouched.
+     * **A different package was never the only proof the user moved on** (26 Aug 2026). The
+     * package rule cannot see the case the owner actually relapsed through: HOME is swallowed
+     * on HyperOS, he stays in the blocked app, opens the *next* screen of it, and every window
+     * event returns early for the full [DISMISS_GRACE_STUCK_MS]. Worse in a browser, because
+     * since v1.135 a website block deliberately exits BACK and *keeps* him there — so "still in
+     * the same app" went from the rare stuck case to the normal one, and both web scanners sat
+     * out eight seconds after every website block.
+     *
+     * So [newDest] / [dismissedDest] carry *where* inside the package: the window class name for
+     * an app cover, the host for a page cover. A different destination is the user navigating; the
+     * same destination is the covered screen still emitting stragglers, which is what the grace
+     * is for. Null on either side means "we could not tell" and never releases — the same rule as
+     * a null package, and the reason this cannot degrade into releasing on every event.
+     *
+     * The stuck case the long window exists for is therefore still untouched: Home swallowed with
+     * the user sitting where they were reads as unchanged, and holds.
      */
-    fun graceSpentBy(newPkg: String?, dismissedPkg: String?): Boolean =
-        dismissedPkg != null && newPkg != null && newPkg != dismissedPkg
+    fun graceSpentBy(
+        newPkg: String?,
+        dismissedPkg: String?,
+        newDest: String? = null,
+        dismissedDest: String? = null,
+    ): Boolean {
+        if (dismissedPkg == null || newPkg == null) return false
+        if (newPkg != dismissedPkg) return true
+        // Same package, and the user is somewhere else inside it. Not knowing where they were
+        // or where they are now leaves the grace alone: a null destination is "we could not
+        // tell", and releasing on that would cancel the protection on the first event that
+        // happens to carry no class name.
+        return dismissedDest != null && newDest != null && newDest != dismissedDest
+    }
 
     /**
      * Whether a cover raised for [offenceKey] should record a new attempt, so that one open of a

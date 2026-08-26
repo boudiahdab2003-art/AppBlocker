@@ -1,6 +1,7 @@
 package com.appblocker.service
 
 import android.content.Context
+import android.os.SystemClock
 import com.appblocker.R
 import com.appblocker.data.ServiceHealth
 import com.appblocker.data.Words
@@ -55,6 +56,10 @@ class WebContentFilter internal constructor(
     private val adultDomains: List<String>,
     private val adultKeywords: List<String>,
     private val packWords: List<String>,
+    /** The wider net, matched ONLY while the danger zone is armed — see `danger_words.txt` for
+     *  the curation rule, which is deliberately the opposite of the pack's. */
+    private val dangerWords: List<String> = emptyList(),
+
     /**
      * The cover's wording, in the app's language.
      *
@@ -94,6 +99,16 @@ class WebContentFilter internal constructor(
         siteKeywords: List<String>,
         adultPack: Boolean,
         blockAdult: Boolean,
+        /**
+         * Match `danger_words.txt` as well.
+         *
+         * **Named for what it does, not for why it is on.** It was `inDangerZone`, and then a
+         * second window started setting it — five different words keep the wider list running for
+         * 24 hours after the browser lockdown has ended, so "in the danger zone" became false for
+         * half the cases that switch it on. A flag whose name and meaning drift apart is
+         * invariant 17's bug, and the last one cost a whole report.
+         */
+        wideList: Boolean = false,
     ): Hit? {
         // **A blank address bar is a start page, and a start page is not a page.**
         //
@@ -175,8 +190,46 @@ class WebContentFilter internal constructor(
                 if (lower.contains(k)) return adultSearchHit(k)
             }
         }
+
+        // The danger zone's wider net. Everything above is what runs on an ordinary day; this
+        // runs only in the hour after three different adult words inside thirty minutes.
+        //
+        // **It matters in apps rather than browsers.** Every browser is already shut outright for
+        // that hour (decideBlock), so the point of widening is everything else — and the watcher
+        // scans every app while the zone is armed, whether or not "check every app" is switched
+        // on the rest of the time.
+        if (wideList) {
+            // **[dangerWords] ONLY, and adult_keywords.txt deliberately NOT.** That list is
+            // matched as a plain substring, and its own header says every entry must be
+            // unambiguous inside innocent text — a promise made about a URL, where "porn" only
+            // ever appears because somebody went somewhere. In PAGE TEXT the same entry matches
+            // an anti-porn app's own description, a news article, a forum thread about quitting.
+            //
+            // Widening it here for the hour was exactly the mistake adult_words_pack.txt was
+            // trimmed three times to fix, and its header states the rule this broke: *the words
+            // used to TALK about porn are not porn*. Worse, it contradicted danger_words.txt's
+            // own promise that help-seeking material is never blocked — in the one hour someone
+            // is most likely to go looking for it. The owner spotted it: "why porn is a blocked
+            // word its weird it can be everywhere and doesnt say anything."
+            //
+            // The widening the zone needs is danger_words.txt, which is curated FOR page text and
+            // matched whole-word. Reaching for a second list was reaching for the wrong tool.
+            for (w in dangerWords) {
+                if (containsWord(lower, w)) return dangerHit(w)
+            }
+        }
         return null
     }
+
+    /** Names the word like every other layer does, and says plainly that this one is blocked
+     *  only because of the hour — so an ordinary word being blocked can be understood rather
+     *  than read as the app breaking. */
+    private fun dangerHit(word: String) = Hit(
+        "Danger zone",
+        "“$word” is blocked for the rest of the hour. It normally wouldn't be.",
+        word,
+        adult = true,
+    )
 
     /** Both adult-list messages name what they found, the way the pack's already does.
      *
@@ -195,6 +248,16 @@ class WebContentFilter internal constructor(
             words.get(R.string.block_adult_title),
             words.get(R.string.block_adult_search_message, word), word, adult = true,
         )
+
+    /** A site the phone learned by catching it in two different browsers. Says so, because a
+     *  block the user cannot account for is one they argue with — and this is the only list in
+     *  the app that the app wrote itself. */
+    private fun learnedSiteHit(domain: String) = Hit(
+        "Blocked site",
+        "“$domain” was caught in two different browsers, so it is blocked everywhere now.",
+        domain,
+        adult = true,
+    )
 
     /**
      * The two layers that need nothing but the address bar: the user's own words, then the
@@ -242,8 +305,22 @@ class WebContentFilter internal constructor(
      * what it blocks. So this is purely additive — the address-bar check gets the adult pack at
      * the same speed as everything else, and [check] keeps reading the page exactly as before.
      */
-    fun checkUrlAdult(url: String, adultPack: Boolean, blockAdult: Boolean): Hit? {
+    fun checkUrlAdult(
+        url: String,
+        adultPack: Boolean,
+        blockAdult: Boolean,
+        /** Hosts this phone worked out for itself — see [com.appblocker.data.DangerZone] and
+         *  `learnedDomains`. Treated exactly like the shipped adult domains: they are evidence
+         *  from two different browsers, not a guess. */
+        learnedDomains: Set<String> = emptySet(),
+    ): Hit? {
         val lower = url.lowercase().takeIf { it.isNotBlank() } ?: return null
+        // Before the switchable layers: a site caught in two different browsers was established
+        // by this phone rather than shipped by me, and turning the adult lists off should not
+        // quietly discard what it learned.
+        for (d in learnedDomains) {
+            if (lower.contains(d)) return learnedSiteHit(d)
+        }
         if (adultPack && packWords.isNotEmpty()) {
             val norm = normalizeArabic(lower)
             for (w in packWords) {
@@ -294,18 +371,42 @@ class WebContentFilter internal constructor(
             INSTANCE?.let { return it }
             return synchronized(this) {
                 INSTANCE ?: run {
+                    // A partial load is retried, but not on every single scan. Refusing to cache
+                    // it at all meant that while an asset was unreadable, every content event in
+                    // every browser re-opened four files and re-parsed them — the word pack and
+                    // the 288-entry danger list included — on the way to deciding whether to
+                    // block. The retry is what matters, not its frequency: the condition this
+                    // recovers from is an update swapping the assets under a live process, which
+                    // resolves in seconds and is not made to resolve faster by asking constantly.
+                    val now = SystemClock.elapsedRealtime()
+                    partial?.let { if (now - partialAt < PARTIAL_RETRY_MS) return@run it }
                     val domains = readLines(context, "adult_domains.txt")
                     val keywords = readLines(context, "adult_keywords.txt")
                     val pack = readLines(context, "adult_words_pack.txt")?.map(::normalizeArabic)
-                    val loaded = domains != null && keywords != null && pack != null
+                    val danger = readLines(context, "danger_words.txt")?.map(::normalizeArabic)
+                    val loaded = domains != null && keywords != null && pack != null &&
+                        danger != null
                     WebContentFilter(
-                        domains.orEmpty(), keywords.orEmpty(), pack.orEmpty(),
+                        domains.orEmpty(), keywords.orEmpty(), pack.orEmpty(), danger.orEmpty(),
                         words = Words.of(context),
-                    )
-                        .also { if (loaded) INSTANCE = it }
+                    ).also {
+                        if (loaded) {
+                            INSTANCE = it
+                            partial = null
+                        } else {
+                            partial = it
+                            partialAt = now
+                        }
+                    }
                 }
             }
         }
+
+        /** The last incomplete load, and when it happened. Held only until [PARTIAL_RETRY_MS]
+         *  is up, so a broken read costs one parse an interval rather than one per scan. */
+        @Volatile private var partial: WebContentFilter? = null
+        @Volatile private var partialAt = 0L
+        private const val PARTIAL_RETRY_MS = 5_000L
 
         /** Null when the asset could not be read at all — distinct from a legitimately empty
          *  file, so [get] can tell "nothing to match" from "we failed to look". */

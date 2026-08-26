@@ -77,6 +77,19 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     errors into an empty collection, and "no browsers", "no launcher", "no adult words" is never
     true. Adopting one silently fails *open*. Adopt a result only when it is non-empty, keep the
     previous value, and record the failure (`refreshPackageSets`, `WebContentFilter.get`).
+
+    **Update, 26 Aug 2026: it applies to an answer that has not ARRIVED yet, and that was the one
+    place it had never been applied — the rules themselves.** `rules` is filled by a Room Flow
+    collected in `onServiceConnected`, so between binding and the first emission it is an empty
+    map. `decideBlock` read that as "nothing is blocked" and `handleAppBlock` took the "take the
+    cover down" branch: every app open, every cover removed, for as long as the database took.
+    Every rebind hits it — boot, update, revive — and **Xiaomi's Second Space rebinds the service
+    on every switch**, which is why the owner reported it as *"slow after switching between
+    spaces"*. It was not slow. There was no blocking. `RuleSnapshot` keeps a plain set of blocked
+    package names, written on every emission and read synchronously on connect, and `rulesLoaded`
+    stops any cover coming down before Room has spoken. The shape to grep for: **a field whose
+    empty value is indistinguishable from its not-yet-populated value, read by something that
+    treats empty as an answer.** An asynchronous source has that shape by construction.
 12. **A protection may not hang on recognising one vendor's spelling.** Invariant 11's sibling,
     and the same failure with a narrower cause: not an empty *answer*, but a lookup that only
     knows one name for the thing it is looking for. Website blocking read the address bar as the
@@ -457,6 +470,95 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     off, none of the above floats. `DeviceVendor`'s Xiaomi advice says so and `RepairScreen` links
     to the page — the same honesty as *"Android doesn't let an app switch its own blocking back
     on"*, which is already on that screen.
+
+20. **A grace released by one kind of event will meet a user who never generates it.** The
+    post-"Got it" dismiss grace suppresses a re-cover so the departing app's straggler events
+    cannot re-block during the transition. It was released by exactly one thing: a *different
+    package* coming to the foreground. That is sound reasoning about the case it was written
+    against — HOME lands, another app is in front, nothing is left to absorb — and it is silent
+    for the case the owner actually relapsed through on 25 Aug 2026: **HOME is swallowed on
+    HyperOS, he never leaves the app, he simply opens the next screen of it.** Same package
+    throughout, so the release never fired and `DISMISS_GRACE_STUCK_MS` ran its full eight
+    seconds with him reading the page it was meant to cover.
+
+    **And a fix elsewhere quietly turned the rare case into the normal one.** v1.135 made a page
+    cover's "Got it" step BACK rather than HOME, deliberately keeping the user *in* the browser
+    (it was a fix for being thrown out of the browser and straight back onto the blocked page).
+    From that release on, "still in the same app" was the expected outcome of every website
+    block — so a window written for a swallowed HOME started applying to every page block, and
+    both web scanners sat out eight seconds inside the browser where the block had just happened.
+    Nobody would report that: it is an under-block, and the whole point of this file is that he
+    cannot see those.
+
+    The rule is now released by *movement*, not by a package change alone: `graceSpentBy` also
+    takes where the user was and where they are now — the window class for an app cover, the host
+    for a page cover — and `currentDest()` picks the matching unit so a class name is never
+    compared against a host. Null on either side never releases, so "we could not tell" cannot
+    degrade into releasing on every event, and the genuinely stuck case still holds the full
+    window. `scanBrowserUrl` reads the address *before* consulting the grace, because on a page
+    cover the new host is the only evidence available and it used to sit behind the very check it
+    had to answer.
+
+    **The general shape, and it is invariant 14's twin:** invariant 14 is a protection that fires
+    on a *location* rather than an action, so it eventually fires on someone doing the right
+    thing. This is a protection *released* by one specific event, so it eventually fails to
+    release for someone doing the wrong thing. Both come from naming the trigger after the
+    scenario in front of you. Ask of any timed suppression: **what ends it, and what is the user
+    doing if that never happens?**
+
+25. **A cost paid per node is paid four hundred times, and a wait that protects one exit is
+    charged to every exit.** Two shapes, one lesson: on this app's hot path, the unit a cost is
+    charged in matters more than its size.
+
+    `insidePage` asked "page content or the browser's own furniture?" by walking *up* to thirteen
+    parents, each a binder round trip into the browser — reasonable-looking code, and correct.
+    But it ran per candidate node inside a four-hundred-node walk, on every content and scroll
+    event, and only in the tier no browser but Mi Browser reaches. The walk already descends from
+    the window root, so the answer was known before the question was asked; carrying one boolean
+    down the queue replaced up to ~5,200 IPCs per window with a field read. **The bug was not the
+    climb. It was climbing inside a loop that already knew the answer** — and it stayed invisible
+    because it is not wrong, only expensive, and nothing here measured expense.
+
+    Retiring the thirteen-hop cap also closed a silent under-block: running out of hops answered
+    "inside the page", the refusing direction, so a toolbar label nested deeper than thirteen
+    levels was discarded and its browser read as unreadable. A bound chosen for cost had become a
+    correctness rule nobody had reasoned about. `PageScope` is pure and tested; `soleHost` still
+    does the actual guarding.
+
+    The second shape is `DISMISS_GRACE_STUCK_MS` again, from the other side. Eight seconds is the
+    right price for a swallowed HOME. It was charged to BACK too — which never makes that trip —
+    so the exit that keeps the user in the app deliberately paid the window built for the exit
+    that fails to leave it. Note what the fix is *not*: the constant did not move. What changed is
+    that the grace now knows which move was actually made, `viaBack` recorded from the branch that
+    fired rather than inferred from the counter key, because a page cover falls back to HOME once
+    BACK has failed and then needs the long window like anything else.
+
+    Ask of any per-event cost: **what is the unit — once per block, or once per node?** And of any
+    wait: **which exit was this priced for, and who else is being charged it?**
+
+    > **Numbering note, for whoever sweeps next.** This list has *two* invariants numbered 20 —
+    > the address-list one above and the dismiss-grace one that opened this section — and 21-24
+    > sit between them. Not fixed here: "invariant 20" is referenced from five source files and
+    > three places in this document, meaning different ones, so renumbering is its own careful
+    > change and does not belong inside a performance pass. These two were added as 25 and 26 to
+    > avoid making it worse.
+
+26. **An instrument that thresholds an interval has thrown the interval away.** `SilenceLog` is
+    handed the exact milliseconds since a dismissal and keeps one boolean: was it late. That was
+    the right call for the question it asks, and it meant that when the owner said *"the blocking
+    isn't fast enough"* — twice, months apart — **there was no number anywhere on the phone that
+    could agree or disagree with him.** Every instrument here recorded whether something happened;
+    none recorded how long it took. This file has said "the before/after measurement is still
+    owed" since 26 Aug 2026 and had no way to pay it.
+
+    `BlockLatency` is the dial: buckets, not an average, because an average is exactly what hides
+    a tail, and the tail is what he feels. Counts only, same rule as `BlockLog`. The stopwatch
+    needed no new bookkeeping — `webScanQueuedAt` already recorded when a burst began, for the
+    debounce cap; it simply had never been *used* as a start time.
+
+    The companion to the `SilenceLog` question. That one asks: *if this quietly stopped working,
+    what number would move?* This one asks: **if this quietly got slower, what number would move?**
+    Both had the same answer, and the answer was none.
 
 ## Device quirks these invariants exist for
 
@@ -1195,6 +1297,103 @@ foreground change, replaced the instant a different address is read, and expired
 not a browser, unreadable toolbar, no live site words, blocking paused — all present as *nothing
 happening*, and there was no way to tell them apart on the phone. Every guess-and-ship round in
 this entry existed because the app could not be asked. It can now.
+
+### Reported, not swept (26 Aug 2026) — a relapse, and two of its three causes were silence
+
+The report was *"the blocking wasn't fast enough"*, with three specifics: the Xiaomi browser,
+switching spaces, and Instagram going straight to another Instagram page. Latency was the wrong
+frame for two of the three.
+
+- **Instagram → Instagram, and every website block**: the dismiss grace released only on a package
+  change. Invariant 20 — the eight seconds, and why v1.135 turned its rare case into the common
+  one.
+- **Switching spaces**: `rules` empty until Room's first emission, read as "nothing is blocked".
+  Invariant 11's update — a rebind is a window with no enforcement in it, and Second Space rebinds
+  every switch.
+- **UPDATE, 26 Aug 2026 (later the same day): the tier-4 cost below was removed, but still not
+  measured.** `insidePage`'s ancestor climb is gone (invariant 25) — the reading of the code that
+  the bullet below refuses to act on turned out to be right about *where* the cost was, and the
+  fix took ~5,200 binder round trips per window out of every scan in that tier. That is a
+  measurement of the code, not of the phone. **Whether it is what he felt is still unproven**, and
+  Mi Browser still cannot be installed on a stock emulator. What has changed is that the phone can
+  now answer: `BlockLatency` records how long each block took, so the next report carries a number
+  instead of a feeling. Ask for one before assuming this is closed.
+
+- **The Xiaomi browser: NOT INVESTIGATED, and deliberately not guessed at.** Mi Browser is read
+  only by `omniboxRead`'s tier 4 (400-node walk per root, plus an ancestor walk per candidate),
+  which no other browser pays, and every content and scroll event schedules it. That is a reading
+  of the code, not a measurement, and Mi Browser cannot be installed on a stock emulator image.
+  Nothing was changed there. The working theory is that most of what he felt in that browser was
+  the eight-second hole above, since Mi Browser is where he browses — **which is a theory, and
+  this file's own standing rule is that a theory is unproven until an experiment settles it.**
+
+Also in the same pass, from his own plan rather than a defect: **auto-blocking newly installed
+apps was about to shoot down the other blockers he intends to install as backup layers.**
+Protection apps are now recognised structurally — an accessibility service, a device-admin
+receiver or a VPN service, the only three ways to enforce anything about other apps — and are
+excluded from the *automatic* path only (`NewAppRules`, `isProtectiveApp`). A newly installed
+browser is still auto-blocked; that one really is the escape hatch.
+
+**What is verified and what is not.** The three rules are pure functions with 17 new unit tests,
+each watched failing before the fix. The *wiring* is not covered — the watcher has no test
+coverage and cannot have any as written — and an end-to-end timing run on the emulator did not
+complete: Chrome ANR'd repeatedly on a freshly cleared profile, and an `am force-stop` of our own
+app cleared `enabled_accessibility_services` outright. What that session did establish is that the
+service binds, receives events, recognises Chrome as a browser with the new `<queries>` entries in
+place, and raised a real cover. The before/after measurement is still owed.
+
+### Swept (26 Aug 2026, later) — the latency pass, under a battery budget
+
+He came back the same day with the part v1.139 did not answer: *"the time between the blocked word
+found and the app being locked should be faster, shorter."* Asked which gap, he said **all three**
+— content to cover, cover to app locked, "Got it" to next block — and set the constraint that
+shaped everything: **"keep the battery as it is."**
+
+That rules out the obvious lever. Cutting `WEB_SCAN_DEBOUNCE_MS`/`WEB_SCAN_MAX_WAIT_MS` means
+reading the screen more often, which is precisely what he declined. So the pass looked for two
+other things only: **work done twice**, and **waiting that buys nothing**. Everything shipped makes
+the app do *less* per event than before, not more.
+
+Ruled out first, and worth recording: `notificationTimeout="0"` in
+`res/xml/accessibility_service_config.xml`, so Android imposes no per-event delay. Every
+millisecond in the path is ours.
+
+- **The tier-4 ancestor climb** — invariant 25. The largest single item, and it lands on the one
+  browser he actually uses.
+- **The draw path did its paperwork first.** `AttemptCounter.record`, `BlockLog.record` (a prefs
+  read, a sixty-entry split and a rebuild), a `rootInActiveWindow` lookup for the log alone, a full
+  repaint of theme and arrangement, and a synchronous PNG decode of the mark all sat between
+  `decideBlock` returning and `addView`. None changes a pixel. The log now goes on the next
+  message; the repaint is skipped when nothing changed; the mark is skipped when it is already the
+  thing on screen. **`OwnUi.visible` and the window classification must still be read before the
+  show** — our own non-focusable cover can report as the active window, so reading them afterwards
+  would describe the cover rather than what it covered.
+- **`DISMISS_GRACE_STUCK_MS` charged to the BACK exit** — invariant 25's second half.
+- **The lockout had no cover.** `addKeywordLockout` records the deadline; nothing raised the
+  "Locked" screen. It waited for a foreground change or `RECHECK_MS`, and after a BACK exit onto a
+  static page neither arrives. Now re-decided when the grace ends. Raising it *immediately* would
+  be wrong — the page cover is up at that instant, and a second package-keyed cover through it
+  double-counts one word and flashes twice.
+- **The single-flight URL scan dropped events.** An address arriving mid-read was never re-queued.
+  One bounded repeat now, not a loop: unbounded retry is the spin the single-flight exists to stop.
+- **`WebContentFilter.get()` re-parsed four assets per scan while a load was failing.** The retry
+  is right, its frequency was not.
+
+**Not done, deliberately: fusing the two tree walks.** `scanWebContent` walks for text and then
+`omniboxRead` walks again. Merging them would save one four-hundred-node walk on non-tier-1
+browsers — but the two differ in root selection and in how the node budget is shared (400 total vs
+400 *per root*), so on an OEM build that populates `windows` a merged walk would read a different
+four hundred nodes. That is the exact class of change whose failure mode is a silent under-block.
+After invariant 25 removed ~5,200 IPCs from that same path there was not enough left in it to
+justify restructuring the most delicate function in the app. **Revisit with `BlockLatency` numbers,
+not with a reading.**
+
+**What is verified and what is not.** 18 new unit tests, each watched failing first — the depth
+case proven by restoring the hop cap, the grace cases by removing the BACK branch, the buckets by
+rounding them the flattering way. 609 pass. The *wiring* is uncovered as always. **No before/after
+measurement on a device yet** — that is what `BlockLatency` (invariant 26) exists to produce, and
+the honest next step is to ask him for a report and read `blockSpeed` rather than to claim this
+worked.
 
 ### Reported, not swept (21 Aug 2026) — two reports, one shape
 

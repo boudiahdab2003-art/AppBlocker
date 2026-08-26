@@ -33,7 +33,8 @@ class WebContentFilterTest {
         domains: List<String> = emptyList(),
         adultKeywords: List<String> = emptyList(),
         pack: List<String> = emptyList(),
-    ) = WebContentFilter(domains, adultKeywords, pack, EnglishStrings)
+        danger: List<String> = emptyList(),
+    ) = WebContentFilter(domains, adultKeywords, pack, danger, EnglishStrings)
 
     // The three answers the address bar can give, short enough to read at a glance in a call.
     private fun at(url: String) = BrowserAddress.At(url)
@@ -729,4 +730,228 @@ class WebContentFilterTest {
             .map { it.substringBefore('#').trim() }.filter { it.isNotEmpty() }
         assertTrue("onlyfans.com must stay on the domain list", "onlyfans.com" in domains)
     }
+    // ---- the danger zone's wider net ------------------------------------------------------
+
+    @Test
+    fun `an ordinary word is not blocked on an ordinary day`() {
+        // The half that makes the feature honest. These words are ORDINARY - blocking them all
+        // the time would be the false-positive era this file's header is a monument to.
+        assertNull(
+            filter(danger = listOf("bikini")).check(
+                text = "she wore a bikini to the beach",
+                address = BrowserAddress.Unreadable,
+                userKeywords = emptyList(), siteKeywords = emptyList(),
+                adultPack = true, blockAdult = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `the same ordinary word is blocked inside the hour`() {
+        val hit = filter(danger = listOf("bikini")).check(
+            text = "she wore a bikini to the beach",
+            address = BrowserAddress.Unreadable,
+            userKeywords = emptyList(), siteKeywords = emptyList(),
+            adultPack = true, blockAdult = true,
+            wideList = true,
+        )
+        assertNotNull(hit)
+        assertEquals("Danger zone", hit!!.title)
+        // Says WHY an ordinary word blocked, so it reads as the hour rather than as a bug.
+        assertTrue(hit.message.contains("normally wouldn't be"))
+    }
+
+    @Test
+    fun `the wider net is whole-word, never a substring`() {
+        // "cam" inside "came", "leak" inside "leakage". A substring match on ordinary words is
+        // exactly the kind of block that would discredit the whole idea on its first day.
+        for (text in listOf("he came home", "there was a leakage", "the scampi was good")) {
+            assertNull(
+                text,
+                filter(danger = listOf("cam", "leak", "camp")).check(
+                    text = text,
+                    address = BrowserAddress.Unreadable,
+                    userKeywords = emptyList(), siteKeywords = emptyList(),
+                    adultPack = true, blockAdult = true,
+                    wideList = true,
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun `the shipped list keeps help-seeking words out`() {
+        // The rule stated at the top of danger_words.txt, checked against the file rather than
+        // trusted. Blocking these in the exact hour someone might reach for them would be the
+        // worst thing this app could do.
+        val file = File("src/main/assets/danger_words.txt")
+        assertTrue("danger_words.txt is missing", file.exists())
+        val words = file.readLines()
+            .map { it.trim().lowercase() }
+            .filter { it.isNotEmpty() && !it.startsWith("#") }
+        assertTrue("the list should not be empty", words.isNotEmpty())
+        for (w in listOf("recovery", "quit", "addiction", "therapy", "support", "help", "counsel")) {
+            assertFalse("a help-seeking word must never be in danger_words.txt: $w", w in words)
+        }
+        for (w in words) {
+            assertFalse("a danger word must not contain a comment marker: $w", w.contains("#"))
+        }
+        assertEquals("the list should have no duplicates", words.size, words.toSet().size)
+        assertTrue("everything must be lowercase", words.all { it == it.lowercase() })
+    }
+
+    @Test
+    fun `the family the owner named is on one list or the other`() {
+        // He said on 26 Aug 2026 that cuckold/BNWO is the one he falls for every time. Most of
+        // that vocabulary is in the always-on pack and blocks every day; the soft framing and the
+        // abbreviations are in the wider net because they could never be safe all day. This test
+        // does not care WHICH list a term is on — it cares that a future trim of either one
+        // cannot quietly drop the thing he specifically asked to be protected from.
+        val pack = File("src/main/assets/adult_words_pack.txt").readLines()
+            .map { it.trim().lowercase() }.filter { it.isNotEmpty() && !it.startsWith("#") }
+        val danger = File("src/main/assets/danger_words.txt").readLines()
+            .map { it.trim().lowercase() }.filter { it.isNotEmpty() && !it.startsWith("#") }
+        val covered = (pack + danger).toSet()
+        for (w in listOf(
+            "cuckold", "cuck", "cuckquean", "hotwife", "hot wife", "wittol",
+            "bnwo", "blacked", "blackedraw", "bbc", "interracial", "black owned",
+            "queen of spades", "qos", "snowbunny", "snow bunny", "black bull", "bull",
+            "netorare", "ntr", "sissy", "chastity", "humiliation", "cheating wife",
+        )) {
+            assertTrue("the owner named this family: $w is on neither list", w in covered)
+        }
+    }
+
+    @Test
+    fun `the soft half of that family only fires while the wider net is on`() {
+        // **The half of this that matters.** "bbc", "blacked", "bull", "stag" and "interracial"
+        // are real words with ordinary lives — the BBC's news site most obviously. They earn
+        // their place in danger_words.txt precisely because that list is off almost all the time
+        // and only arms after the phone has already established what is going on.
+        //
+        // If any of them ever leaked into the always-on pack, he would be blocked out of a news
+        // article on a perfectly good day, and that is how an app stops being trusted. So this
+        // asserts both directions: silent normally, blocking during the hour.
+        val danger = File("src/main/assets/danger_words.txt").readLines()
+            .map { it.trim().lowercase() }.filter { it.isNotEmpty() && !it.startsWith("#") }
+        val pack = File("src/main/assets/adult_words_pack.txt").readLines()
+            .map { it.trim().lowercase() }.filter { it.isNotEmpty() && !it.startsWith("#") }
+        val f = filter(pack = pack, danger = danger)
+        for (text in listOf(
+            "bbc news at ten",
+            "the screen blacked out for a second",
+            "the bull market continued",
+            "a stag do in edinburgh",
+            "interracial marriage rates are rising",
+        )) {
+            assertNull(
+                "must be silent on an ordinary day: $text",
+                f.check(
+                    text, address = BrowserAddress.Unreadable,
+                    userKeywords = emptyList(), siteKeywords = emptyList(),
+                    adultPack = true, blockAdult = true,
+                    wideList = false,
+                ),
+            )
+            assertNotNull(
+                "must block once the zone is armed: $text",
+                f.check(
+                    text, address = BrowserAddress.Unreadable,
+                    userKeywords = emptyList(), siteKeywords = emptyList(),
+                    adultPack = true, blockAdult = true,
+                    wideList = true,
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun `the wider net keeps out ordinary app furniture`() {
+        // While the zone is armed the watcher scans EVERY app, not just browsers - browsers are
+        // already shut for the hour, so that is where the wider list does its work. Which means a
+        // word that appears in an ordinary app's own interface covers that app: "Gallery" and
+        // "Album" are headings in every photo app on earth, and blocking his camera roll during
+        // a bad hour is not protection, it is the app looking broken at the worst moment.
+        //
+        // These were all in the first draft of the list and were taken out for this reason. The
+        // test exists so the next person adding words meets the argument.
+        val file = File("src/main/assets/danger_words.txt")
+        val words = file.readLines()
+            .map { it.trim().lowercase() }
+            .filter { it.isNotEmpty() && !it.startsWith("#") }
+            .toSet()
+        val furniture = listOf(
+            "gallery", "album", "collection", "archive", "figure", "file", "files",
+            "photo", "photos", "image", "images", "video", "videos", "camera", "search",
+            "settings", "profile", "account", "message", "messages", "chat", "home",
+        )
+        for (w in furniture) {
+            assertFalse("too generic for a list that scans every app: $w", w in words)
+        }
+    }
+
+    @Test
+    fun `a learned site is blocked even with the adult lists switched off`() {
+        // It was established by this phone catching it in two different browsers, not shipped by
+        // me as a guess - so turning the adult switches off must not quietly discard it.
+        val hit = filter().checkUrlAdult(
+            "https://example-adult.test/page",
+            adultPack = false, blockAdult = false,
+            learnedDomains = setOf("example-adult.test"),
+        )
+        assertNotNull(hit)
+        assertEquals("Blocked site", hit!!.title)
+        assertTrue(hit.message.contains("two different browsers"))
+    }
+
+    @Test
+    fun `nothing is learned by default`() {
+        assertNull(filter().checkUrlAdult("https://example.com", adultPack = false, blockAdult = false))
+    }
+
+    @Test
+    fun `talking about porn is never blocked, even inside the danger hour`() {
+        // The owner caught this: "why porn is a blocked word its weird it can be everywhere and
+        // doesnt say anything". adult_keywords.txt is matched as a plain SUBSTRING and its header
+        // promises every entry is unambiguous "inside innocent text" - a promise about a URL,
+        // where the word only appears because somebody went somewhere. In page text it matches an
+        // anti-porn app, a news piece, a thread about quitting.
+        //
+        // Widening it for the hour broke the rule adult_words_pack.txt was trimmed three times to
+        // establish, AND danger_words.txt's own promise that help-seeking material is never
+        // blocked - in the hour someone is most likely to reach for it.
+        val f = filter(adultKeywords = listOf("porn"), danger = listOf("sexy"))
+        for (innocent in listOf(
+            "this app blocks porn and helps you quit",
+            "a news article about porn addiction recovery",
+            "forum thread: how i stopped watching porn",
+        )) {
+            assertNull(
+                innocent,
+                f.check(
+                    text = innocent,
+                    address = BrowserAddress.Unreadable,
+                    userKeywords = emptyList(), siteKeywords = emptyList(),
+                    // blockAdult = false is how the watcher calls this for a NON-browser
+                    // app, which is where the zone's widening actually applied - browsers
+                    // are shut outright for the hour. (For a browser whose toolbar cannot be
+                    // read, blockAdult = true, the address lists have always fallen back to
+                    // page text on purpose - invariant 4, a failed measurement is not
+                    // permission. That is older than this and is not what was wrong.)
+                    adultPack = true, blockAdult = false,
+                    wideList = true,
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun `the same word still blocks in an address, where it means something`() {
+        // The layer is not weakened - it is put back where its own guarantee holds.
+        assertNotNull(
+            filter(adultKeywords = listOf("porn"))
+                .checkUrlAdult("https://freeporntube.test/x", adultPack = false, blockAdult = true),
+        )
+    }
+
 }
