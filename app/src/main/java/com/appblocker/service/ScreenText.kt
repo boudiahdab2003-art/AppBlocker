@@ -18,8 +18,39 @@ import android.view.accessibility.AccessibilityWindowInfo
 private const val MAX_NODES = 400
 private const val MAX_TEXT = 4000
 
-/** How far up tier 4 looks for a WebView ancestor before giving up — see [insidePage]. */
-private const val MAX_ANCESTORS = 12
+/**
+ * Whether a node is part of the rendered page rather than the browser's own chrome.
+ *
+ * Chromium exposes page content beneath an `android.webkit.WebView` node, so having one as an
+ * ancestor is what separates a link *on the page* from a label in the toolbar — structurally,
+ * without knowing any vendor's view ids. That is the substitute for tier 3's editability rule, and
+ * it is the part that stops the URL-shaped fallback from covering a page that merely links to a
+ * blocked site (the over-block the address-only rule exists to prevent).
+ *
+ * **The answer travels down the walk with the node, rather than being recomputed by climbing back
+ * up it.** It used to be the latter: up to thirteen `parent` lookups per candidate node, each one a
+ * binder round-trip into the browser, on every scan — and tier 4 is the only way Mi Browser's
+ * address is ever read, so his browser was the one paying it. The walk in [omniboxRead] descends
+ * from the window root, so a node's ancestry is already known by the time it is reached; carrying
+ * one boolean makes the whole climb unnecessary. `className` is a field on the node object we
+ * already hold, so this costs no IPC at all.
+ *
+ * That also retires the old thirteen-hop cap, which answered **"inside the page"** when it ran out
+ * — the refusing direction, so a toolbar label nested deeper than thirteen levels was quietly
+ * discarded and its browser read as unreadable. Descending knows the real answer at any depth.
+ * Tier 4's safety rule is unchanged and still does the guarding: [soleHost] refuses whenever the
+ * candidates disagree.
+ *
+ * Pure, so it can be tested — the walk around it cannot be, on the JVM.
+ */
+internal object PageScope {
+    /** Whether [className] and everything below it is page content, given its parent's answer. */
+    fun descend(parentInside: Boolean, className: String?): Boolean =
+        parentInside || className?.contains("WebView", ignoreCase = true) == true
+
+    /** Fold a root-to-node path of class names. The shape the walk produces, one step at a time. */
+    fun insideAt(path: List<String?>): Boolean = path.fold(false, ::descend)
+}
 
 /** Packages we never scan for keywords: they list other apps' names (see the service). */
 private val TEXT_SCAN_EXCLUDED = setOf("com.android.systemui", "com.android.settings")
@@ -192,7 +223,7 @@ private val OMNIBOX_ID_SUFFIXES = listOf(
  *    prevent. A page's links are not editable; a browser's address bar is the only editable
  *    field in its chrome. So the mistake is unreachable rather than merely unlikely.
  * 4. **A host-shaped label in the browser's chrome** — outside any WebView ("not the page", see
- *    [insidePage]) and only when the candidates agree on one host (see [soleHost]).
+ *    [PageScope]) and only when the candidates agree on one host (see [soleHost]).
  *
  *    **Tier 3's safety argument turned out to be Chrome-shaped.** "The only editable field in its
  *    chrome" assumes the address bar is a field at all, and Mi Browser's is a *label* in a bottom
@@ -297,12 +328,18 @@ private fun AccessibilityService.omniboxRead(pkg: String, settledOnly: Boolean):
     var editableHost: String? = null
     val chromeLabels = ArrayList<String>()
     for (root in mine) {
-        val queue = ArrayDeque<AccessibilityNodeInfo>()
-        queue.add(root)
+        // Each entry carries whether an ancestor was the page's WebView — see [PageScope]. The
+        // walk already descends from the root, so that answer arrives with the node instead of
+        // being rebuilt by climbing back up it once per candidate.
+        val queue = ArrayDeque<Pair<AccessibilityNodeInfo, Boolean>>()
+        queue.add(root to false)
         var visited = 0
         while (queue.isNotEmpty() && visited < MAX_NODES) {
-            val node = queue.removeFirst()
+            val (node, parentInside) = queue.removeFirst()
             visited++
+            // A field on the node object we already hold, not a lookup into the browser.
+            val className = runCatching { node.className?.toString() }.getOrNull()
+            val inside = PageScope.descend(parentInside, className)
             val id = runCatching { node.viewIdResourceName }.getOrNull()
             if (id != null && isOmniboxId(id)) {
                 if (blankBar(node)) blankBarSeen = true
@@ -314,44 +351,18 @@ private fun AccessibilityService.omniboxRead(pkg: String, settledOnly: Boolean):
                 if (editableHost == null) {
                     accept(node)?.takeIf { looksLikeHost(it) }?.let { editableHost = it }
                 }
-            } else if (editableHost == null && !insidePage(node)) {
+            } else if (editableHost == null && !inside) {
                 // Tier 4 candidate: a label in the browser's own chrome. Collected rather than
                 // returned — soleHost decides, and it refuses when they disagree.
                 accept(node)?.takeIf { looksLikeHost(it) }?.let { chromeLabels.add(it) }
             }
-            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it to inside) }
         }
     }
     return OmniboxRead(
         looseAddress(blankBarSeen, startPageSeen, editableHost, chromeLabels),
         blankBarSeen, startPageSeen,
     )
-}
-
-/**
- * Whether [node] is part of the rendered page rather than the browser's own chrome.
- *
- * Chromium exposes page content beneath an `android.webkit.WebView` node, so an ancestor of that
- * class is what separates a link *on the page* from a label in the toolbar — structurally, without
- * knowing any vendor's view ids. That is the substitute for tier 3's editability rule, and it is
- * the part that stops the URL-shaped fallback from covering a page that merely links to a blocked
- * site (the over-block the address-only rule exists to prevent).
- *
- * Bounded to [MAX_ANCESTORS] hops: a toolbar sits a handful of levels down, page content sits far
- * deeper, and an unbounded walk up a churning tree is exactly the kind of per-node cost this file
- * caps everywhere else. **Running out of hops answers "inside the page"** — the refusing
- * direction, so a node too deep to classify is never treated as an address.
- */
-private fun insidePage(node: AccessibilityNodeInfo): Boolean {
-    var current: AccessibilityNodeInfo? = node
-    var hops = 0
-    while (current != null) {
-        if (hops++ > MAX_ANCESTORS) return true
-        val cn = runCatching { current?.className?.toString() }.getOrNull().orEmpty()
-        if (cn.contains("WebView", ignoreCase = true)) return true
-        current = runCatching { current?.parent }.getOrNull()
-    }
-    return false
 }
 
 /**

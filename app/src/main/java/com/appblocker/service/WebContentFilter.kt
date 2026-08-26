@@ -1,6 +1,7 @@
 package com.appblocker.service
 
 import android.content.Context
+import android.os.SystemClock
 import com.appblocker.data.ServiceHealth
 
 /**
@@ -339,6 +340,15 @@ class WebContentFilter internal constructor(
             INSTANCE?.let { return it }
             return synchronized(this) {
                 INSTANCE ?: run {
+                    // A partial load is retried, but not on every single scan. Refusing to cache
+                    // it at all meant that while an asset was unreadable, every content event in
+                    // every browser re-opened four files and re-parsed them — the word pack and
+                    // the 288-entry danger list included — on the way to deciding whether to
+                    // block. The retry is what matters, not its frequency: the condition this
+                    // recovers from is an update swapping the assets under a live process, which
+                    // resolves in seconds and is not made to resolve faster by asking constantly.
+                    val now = SystemClock.elapsedRealtime()
+                    partial?.let { if (now - partialAt < PARTIAL_RETRY_MS) return@run it }
                     val domains = readLines(context, "adult_domains.txt")
                     val keywords = readLines(context, "adult_keywords.txt")
                     val pack = readLines(context, "adult_words_pack.txt")?.map(::normalizeArabic)
@@ -347,10 +357,24 @@ class WebContentFilter internal constructor(
                         danger != null
                     WebContentFilter(
                         domains.orEmpty(), keywords.orEmpty(), pack.orEmpty(), danger.orEmpty(),
-                    ).also { if (loaded) INSTANCE = it }
+                    ).also {
+                        if (loaded) {
+                            INSTANCE = it
+                            partial = null
+                        } else {
+                            partial = it
+                            partialAt = now
+                        }
+                    }
                 }
             }
         }
+
+        /** The last incomplete load, and when it happened. Held only until [PARTIAL_RETRY_MS]
+         *  is up, so a broken read costs one parse an interval rather than one per scan. */
+        @Volatile private var partial: WebContentFilter? = null
+        @Volatile private var partialAt = 0L
+        private const val PARTIAL_RETRY_MS = 5_000L
 
         /** Null when the asset could not be read at all — distinct from a legitimately empty
          *  file, so [get] can tell "nothing to match" from "we failed to look". */

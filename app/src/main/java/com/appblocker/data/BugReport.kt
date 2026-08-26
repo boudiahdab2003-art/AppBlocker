@@ -274,6 +274,11 @@ data class BugReport(
             "deafSpells",
             "lateSkips",
             "unreadyDecisions",
+            // How long blocks took to appear (BlockLatency) — a percentage, a total and a tail
+            // count, and nothing about what was blocked. The report could describe every block
+            // this phone raised and not one thing about how fast any of them arrived, which is
+            // the only question the owner has actually asked twice.
+            "blockSpeed",
             "layout",
             "theme",
             "serviceOn",

@@ -56,6 +56,27 @@ internal class BlockOverlay(private val context: Context) {
      *  isn't ignored in favour of the cached view. 0 = nothing held. */
     private var heldLayoutRes = 0
 
+    /**
+     * What is currently painted on the held view, so a repeat block does not repaint what is
+     * already there. The view survives between blocks (that is the point of `preInflated`), and
+     * so does everything drawn onto it — but every show used to re-run the full paint anyway:
+     * six colour lookups, two drawable copies, a text-scale pass, and a synchronous decode of
+     * the launcher-icon art, all of it between deciding to block and the first frame.
+     *
+     * Compared by identity against the view, so a rebuilt view repaints from scratch. The
+     * choices themselves are still *read* on every show — a look picked between two blocks has
+     * to appear on the next one; reading is cheap, painting is not.
+     */
+    private var styledView: View? = null
+    private var styledThemeId: String? = null
+    private var styledArrangement: BlockArrangement.Arrangement? = null
+
+    /** The view the app-blocker mark is known to be on, and which art it is. Null view means
+     *  "something else was drawn over it" — a blocked app's own icon lands there
+     *  asynchronously, so after an app block the contents are no longer ours to assume. */
+    private var markedView: View? = null
+    private var heldMarkRes = 0
+
     /** True while a cover is attached. */
     val isShowing: Boolean get() = view != null
 
@@ -117,7 +138,8 @@ internal class BlockOverlay(private val context: Context) {
         // The layout can be changed between blocks, and both `view` and `preInflated` outlive a
         // single block — so a cached view built from the previous choice has to go, or the new
         // one would not appear until the service restarted.
-        if (heldLayoutRes != BlockLayouts.current(context).layoutRes) {
+        val layout = BlockLayouts.current(context)
+        if (heldLayoutRes != layout.layoutRes) {
             view?.let { runCatching { windowManager.removeView(it) } }
             view = null
             preInflated = null
@@ -140,11 +162,19 @@ internal class BlockOverlay(private val context: Context) {
             windowManager.addView(it, params)
             view = it
         }
-        // Re-applied on every show, not just on inflate: the view is cached and reused across
-        // blocks (and survives in preInflated), so a theme picked between two blocks would
-        // otherwise not appear until the service restarted.
-        val theme = BlockScreenRenderer.applyTheme(context, v)
-        val arrangement = BlockScreenRenderer.applyArrangement(context, v)
+        // Re-applied whenever it could have changed, not just on inflate: the view is cached and
+        // reused across blocks (and survives in preInflated), so a theme picked between two blocks
+        // would otherwise not appear until the service restarted. But an unchanged look repainted
+        // identically is pure delay in front of the cover — see [styledView].
+        val theme = BlockThemes.current(context)
+        val arrangement = BlockArrangement.load(context)
+        if (v !== styledView || theme.id != styledThemeId || arrangement != styledArrangement) {
+            BlockScreenRenderer.applyTheme(context, v, theme)
+            BlockScreenRenderer.applyArrangement(v, arrangement)
+            styledView = v
+            styledThemeId = theme.id
+            styledArrangement = arrangement
+        }
         // Every lookup below is null-safe: a layout that leaves the number or the quote out is a
         // valid choice (see BlockLayouts), not a broken layout.
         v.findViewById<TextView>(R.id.overlay_title)?.text = title
@@ -166,7 +196,7 @@ internal class BlockOverlay(private val context: Context) {
                 setTextSize(
                     TypedValue.COMPLEX_UNIT_SP,
                     Quotes.sizeSpFor(quote.text) *
-                        BlockLayouts.current(context).quoteScale *
+                        layout.quoteScale *
                         arrangement.factorFor(BlockArrangement.Element.QUOTE),
                 )
             }
@@ -186,7 +216,18 @@ internal class BlockOverlay(private val context: Context) {
         val iconView = v.findViewById<ImageView>(R.id.overlay_icon)
         // Our own mark must be the launcher icon the user actually picked (icon switcher),
         // not the hardcoded default that stops matching the moment they change it.
-        iconView?.setImageResource(AppIcons.current(context).previewRes)
+        //
+        // setImageResource decodes the art synchronously, on the way to the first frame. Skipped
+        // only when this exact view is known to be showing this exact mark already — which a page
+        // or word block re-raised in the same browser always is, and a repeat app block never is,
+        // because that app's own icon was drawn over the mark a moment after the last cover.
+        val markRes = AppIcons.current(context).previewRes
+        val markOnly = packageName == null
+        if (iconView != null && !(markOnly && markedView === v && heldMarkRes == markRes)) {
+            iconView.setImageResource(markRes)
+            heldMarkRes = markRes
+            markedView = if (markOnly) v else null
+        }
         if (iconView != null && packageName != null) {
             // The icon can need a PackageManager decode (cache miss) — keep it off the
             // first frame so the cover lands instantly; guard against a torn-down cover.
