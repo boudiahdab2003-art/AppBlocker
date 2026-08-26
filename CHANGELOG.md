@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.142
+- A family filter your phone cannot kill: blocking moves one layer below the screen, to the DNS lookup every app has to make. Already set on your devices, so there is nothing to switch on — and if it ever stops, the browsers close until it is back.
+
 ## v1.141
 - Arabic, and three ways the block list was letting things through: a word that was in no list at all, two-word entries that could never match a search, and the site list widened from 40 to 109.
 
