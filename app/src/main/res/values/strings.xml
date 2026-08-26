@@ -881,4 +881,28 @@
     <string name="editor_protection_off">Protection is off</string>
     <string name="editor_protection_off_body">Turn on the blocker so your choices actually block.</string>
     <string name="editor_turn_on">Turn on protection</string>
+
+    <!-- The "blocking has stopped" repair screen. -->
+    <string name="repair_title">Blocking has stopped</string>
+    <string name="repair_what_title">What happened</string>
+    <string name="repair_what_body_1">Your phone shut AppBlocker down. On Xiaomi this usually happens when you switch between spaces — switching space stops every app in the space you left, and your phone doesn\'t always start the blocker again when you come back.</string>
+    <string name="repair_what_body_2">Android still shows the switch as on, which is why it looked fine and blocked nothing. That switch remembers what you chose — it doesn\'t check whether the blocker is actually running. Now the app checks, and tells you.</string>
+    <string name="repair_steps_title">Switch it back on</string>
+    <string name="repair_step_1">Tap the button below — it opens AppBlocker\'s own page.</string>
+    <string name="repair_step_2">Turn AppBlocker OFF.</string>
+    <string name="repair_step_3">Turn it ON again, and accept the prompt.</string>
+    <string name="repair_step_4">Come back here. This page turns green when blocking is running.</string>
+    <string name="repair_open_switch">Open the switch</string>
+    <string name="repair_floating_title">So you actually see this next time</string>
+    <string name="repair_floating_body">The alert that brought you here pops up over whatever you\'re doing and comes back every few minutes until blocking is running again. But your phone keeps “Floating notifications” as its own switch, and it\'s off by default for most apps — while it\'s off, the alert can only sit silently in the shade. This is the one thing AppBlocker can\'t switch on for you.</string>
+    <string name="repair_notification_settings">Notification settings</string>
+    <string name="repair_why_title">Why the app can\'t do this for you</string>
+    <string name="repair_why_body">Android doesn\'t let an app switch its own blocking back on. That rule is what stops a bad app from quietly switching itself on and watching your screen — and it\'s the same rule that stops this one from switching itself back. It has to be your tap.</string>
+    <string name="repair_shortcut_title">A much faster way to do it</string>
+    <string name="repair_shortcut_body">In Settings ▸ Accessibility ▸ AppBlocker there\'s a Shortcut option. Turn it on and pick the volume keys. After that, holding both volume keys for three seconds switches the blocker off, and holding them again switches it back on — from anywhere, without hunting through Settings.</string>
+    <string name="repair_vendor_title">Making it happen less often</string>
+    <string name="repair_status_on">Blocking is back on</string>
+    <string name="repair_status_off">Blocking is not running</string>
+    <string name="repair_status_on_body">The blocker is running and watching again. Nothing else to do.</string>
+    <string name="repair_status_off_body">It\'s switched on in Settings, but it isn\'t running — so nothing is being blocked right now.</string>
 </resources>

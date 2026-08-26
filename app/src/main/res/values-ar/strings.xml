@@ -944,4 +944,28 @@
     <string name="editor_protection_off">الحماية متوقّفة</string>
     <string name="editor_protection_off_body">شغّل الحاظر حتى تحظر اختياراتك فعلًا.</string>
     <string name="editor_turn_on">شغّل الحماية</string>
+
+    <!-- شاشة الإصلاح عند توقف الحظر. -->
+    <string name="repair_title">توقّف الحظر</string>
+    <string name="repair_what_title">ما الذي حدث</string>
+    <string name="repair_what_body_1">أوقف هاتفك AppBlocker. على شياومي يحدث هذا عادةً عند التنقل بين المساحات — فالانتقال يوقف كل تطبيق في المساحة التي تركتها، وهاتفك لا يعيد تشغيل الحاظر دائمًا عند عودتك.</string>
+    <string name="repair_what_body_2">ما زال أندرويد يعرض المفتاح مفتوحًا، ولهذا بدا كل شيء سليمًا بينما لم يُحظر شيء. ذلك المفتاح يتذكر ما اخترته — لا يتحقق مما إذا كان الحاظر يعمل فعلًا. الآن التطبيق يتحقق، ويخبرك.</string>
+    <string name="repair_steps_title">أعد تشغيله</string>
+    <string name="repair_step_1">اضغط الزر بالأسفل — يفتح صفحة AppBlocker نفسها.</string>
+    <string name="repair_step_2">أوقف AppBlocker.</string>
+    <string name="repair_step_3">شغّله مرة أخرى، ووافق على الرسالة.</string>
+    <string name="repair_step_4">عُد إلى هنا. تتحول هذه الصفحة إلى الأخضر عندما يعمل الحظر.</string>
+    <string name="repair_open_switch">افتح المفتاح</string>
+    <string name="repair_floating_title">لترى هذا فعلًا في المرة القادمة</string>
+    <string name="repair_floating_body">التنبيه الذي أحضرك إلى هنا يظهر فوق ما تفعله ويعود كل بضع دقائق حتى يعود الحظر للعمل. لكن هاتفك يحتفظ بـ«الإشعارات العائمة» كمفتاح مستقل، وهو مُطفأ افتراضيًا لمعظم التطبيقات — وما دام مُطفأ، لن يستطيع التنبيه إلا الجلوس صامتًا في الشريط. هذا هو الشيء الوحيد الذي لا يستطيع AppBlocker تشغيله نيابةً عنك.</string>
+    <string name="repair_notification_settings">إعدادات الإشعارات</string>
+    <string name="repair_why_title">لماذا لا يستطيع التطبيق فعل ذلك نيابةً عنك</string>
+    <string name="repair_why_body">لا يسمح أندرويد لتطبيق بإعادة تشغيل حظره بنفسه. هذه القاعدة هي ما يمنع تطبيقًا سيئًا من تشغيل نفسه بصمت ومراقبة شاشتك — وهي نفسها التي تمنع هذا التطبيق من إعادة تشغيل نفسه. لا بد أن تكون لمستك أنت.</string>
+    <string name="repair_shortcut_title">طريقة أسرع بكثير</string>
+    <string name="repair_shortcut_body">في الإعدادات ▸ إمكانية الوصول ▸ AppBlocker يوجد خيار «اختصار». شغّله واختر مفاتيح الصوت. بعد ذلك، الضغط على مفتاحي الصوت معًا ثلاث ثوانٍ يوقف الحاظر، والضغط عليهما مرة أخرى يعيد تشغيله — من أي مكان، دون البحث داخل الإعدادات.</string>
+    <string name="repair_vendor_title">لتقليل تكرار المشكلة</string>
+    <string name="repair_status_on">الحظر يعمل مجددًا</string>
+    <string name="repair_status_off">الحظر لا يعمل</string>
+    <string name="repair_status_on_body">الحاظر يعمل ويراقب من جديد. لا شيء آخر عليك فعله.</string>
+    <string name="repair_status_off_body">هو مُفعّل في الإعدادات، لكنه لا يعمل — لذا لا شيء يُحظر الآن.</string>
 </resources>
