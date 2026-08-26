@@ -39,6 +39,8 @@ import com.appblocker.data.BlockedKeyword
 import com.appblocker.data.BlockerDatabase
 import com.appblocker.data.DangerZone
 import com.appblocker.data.DeviceBoot
+import com.appblocker.data.FilterState
+import com.appblocker.data.NetworkFilter
 import com.appblocker.data.FocusState
 import com.appblocker.data.GuardedDeadline
 import com.appblocker.data.InstalledAppsRepository
@@ -606,7 +608,8 @@ class BlockerAccessibilityService : AccessibilityService() {
                 lastBlockedPkg = null
                 overlay.remove()
             }
-            if (recheckMatters(pkg)) handler.postDelayed(this, RECHECK_MS)
+            refreshNetFilter()
+            if (recheckMatters(pkg) || netFilterDown) handler.postDelayed(this, RECHECK_MS)
         }
     }
 
@@ -652,6 +655,53 @@ class BlockerAccessibilityService : AccessibilityService() {
     /** Millis left on the danger zone, 0 when it is not armed. */
     private fun dangerZoneRemaining(): Long =
         dangerZone?.remaining(DeviceBoot.count(applicationContext)) ?: 0L
+
+    /**
+     * Whether the phone's family DNS filter is down far enough to shut the browsers.
+     *
+     * Cached rather than read per decision: [NetworkFilter.read] is three binder calls into
+     * ConnectivityManager and `decideBlock` runs on every foreground change. Refreshed by
+     * [refreshNetFilter] on the recheck tick and whenever the watcher reconnects, which is well
+     * inside the [NetworkFilter.SETTLE_MS] the decision needs anyway.
+     */
+    @Volatile private var netFilterDown = false
+
+    /**
+     * Re-reads the filter and keeps the "off since" anchor honest.
+     *
+     * The anchor is **cleared** whenever the filter is protecting *or* unreadable, so the settle
+     * time only ever accumulates while it is genuinely off on a working network. Letting an
+     * unreadable moment count would mean a flight, a dead spot or an OEM throwing from
+     * ConnectivityManager silently paying down the wait — the state that costs him his browsers
+     * should only be reached by the filter actually being off.
+     */
+    private fun refreshNetFilter() {
+        val reading = NetworkFilter.read(applicationContext)
+        val ctx = applicationContext
+        if (NetworkFilter.protecting(reading.state)) {
+            // The one place arming happens: the app has now watched it work.
+            if (!SettingsStore.netFilterSeen(ctx)) SettingsStore.setNetFilterSeen(ctx)
+        }
+        if (NetworkFilter.protecting(reading.state) ||
+            reading.state == FilterState.CANT_TELL ||
+            !reading.validated
+        ) {
+            SettingsStore.clearNetFilterOffSince(ctx)
+            netFilterDown = false
+            return
+        }
+        val boot = DeviceBoot.count(ctx)
+        if (SettingsStore.netFilterOffSince(ctx) == null) {
+            SettingsStore.startNetFilterOffSince(ctx, boot)
+        }
+        val left = SettingsStore.netFilterOffSince(ctx)?.remaining(boot) ?: NetworkFilter.SETTLE_MS
+        netFilterDown = NetworkFilter.shouldShutBrowsers(
+            reading.state,
+            networkValidated = reading.validated,
+            offForMs = NetworkFilter.SETTLE_MS - left,
+            armed = SettingsStore.netFilterSeen(ctx) && SettingsStore.netFilterGuard(ctx),
+        )
+    }
 
     /** Millis left on the 24-hour wider-list window, 0 when it is not armed. */
     private fun wideListRemaining(): Long =
@@ -1585,6 +1635,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                 updatePaused = updatePauseActive(),
                 lockoutRemainingMs = keywordLockoutRemaining(pkg),
                 dangerZoneRemainingMs = dangerZoneRemaining(),
+                netFilterDown = netFilterDown,
                 isRealBrowser = pkg in realBrowserPackages,
                 lockoutWord = keywordLockoutWord(pkg),
                 strict = strict,

@@ -512,4 +512,71 @@ object SettingsStore {
 
     fun setFoundDeadPending(context: Context, value: Boolean) =
         prefs(context).edit().putBoolean(KEY_FOUND_DEAD_PENDING, value).apply()
+
+    // ---- the family DNS filter (see NetworkFilter) ----------------------------------------
+
+    private const val KEY_NET_SEEN = "net_filter_seen"
+    private const val KEY_NET_GUARD = "net_filter_guard"
+    private const val KEY_NET_OFF_SINCE = "net_filter_off_since"
+    private const val KEY_NET_OFF_REQUEST = "net_filter_off_request"
+    private const val NET_OFF_KEY = "netdns"
+
+    /**
+     * The filter has been observed actually working on this phone at least once.
+     *
+     * **The guard defends what it has watched working, and nothing else.** Without this the
+     * update that ships the feature would find no filter on a phone that never set one up, read
+     * an honest OFF, and shut every browser — with the screen that explains it reachable only
+     * through the browser-shaped hole it just made.
+     */
+    fun netFilterSeen(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_NET_SEEN, false)
+
+    fun setNetFilterSeen(context: Context) =
+        prefs(context).edit().putBoolean(KEY_NET_SEEN, true).apply()
+
+    /** The user switch. On by default — his ask was "on by default … no capability to turn it
+     *  off" — but it only has an effect once [netFilterSeen] is true. */
+    fun netFilterGuard(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_NET_GUARD, true)
+
+    fun setNetFilterGuard(context: Context, value: Boolean) =
+        prefs(context).edit().putBoolean(KEY_NET_GUARD, value).apply()
+
+    /**
+     * When the filter was first seen not protecting, as a [NetworkFilter.SETTLE_MS] deadline.
+     *
+     * A deadline rather than a timestamp for the reason [GuardedDeadline] exists at all: every
+     * other "you have to wait" in this app was once a wall-clock comparison and every one of them
+     * was a working bypass. Cleared the moment the filter comes back or becomes unreadable, so
+     * time only accumulates while it is genuinely off.
+     */
+    internal fun netFilterOffSince(context: Context): GuardedDeadline? =
+        prefs(context).getString(KEY_NET_OFF_SINCE, null)
+            ?.let { GuardedDeadline.decode(it)?.second }
+
+    internal fun startNetFilterOffSince(context: Context, bootCount: Int) =
+        prefs(context).edit().putString(
+            KEY_NET_OFF_SINCE,
+            GuardedDeadline.starting(NetworkFilter.SETTLE_MS, bootCount).encode(NET_OFF_KEY),
+        ).apply()
+
+    internal fun clearNetFilterOffSince(context: Context) =
+        prefs(context).edit().remove(KEY_NET_OFF_SINCE).apply()
+
+    /** The pending "switch the guard off" request — the same 24-hour cooling-off the adult pack
+     *  uses, and anchored the same way, because it is the same kind of promise. */
+    internal fun netFilterOffRequest(context: Context): GuardedDeadline? =
+        prefs(context).getString(KEY_NET_OFF_REQUEST, null)
+            ?.let { GuardedDeadline.decode(it)?.second }
+
+    internal fun setNetFilterOffRequest(context: Context, delayMs: Long, bootCount: Int) =
+        prefs(context).edit().putString(
+            KEY_NET_OFF_REQUEST,
+            GuardedDeadline.starting(delayMs, bootCount).encode(NET_OFF_KEY),
+        ).apply()
+
+    internal fun clearNetFilterOffRequest(context: Context) =
+        prefs(context).edit().remove(KEY_NET_OFF_REQUEST).apply()
+
 }

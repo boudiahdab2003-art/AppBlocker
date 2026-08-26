@@ -905,4 +905,8 @@
     <string name="repair_status_off">Blocking is not running</string>
     <string name="repair_status_on_body">The blocker is running and watching again. Nothing else to do.</string>
     <string name="repair_status_off_body">It\'s switched on in Settings, but it isn\'t running — so nothing is being blocked right now.</string>
+
+    <!-- The cover raised when the family DNS filter has stopped. -->
+    <string name="block_netdns_title">Family filter is off</string>
+    <string name="block_netdns_message">Your phone\'s family DNS filter is not running, so nothing is being filtered at the network level. Browsers stay closed until it is back on — everything else on your phone still works. Open AppBlocker to switch it back on.</string>
 </resources>

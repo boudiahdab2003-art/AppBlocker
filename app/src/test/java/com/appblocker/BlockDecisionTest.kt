@@ -40,6 +40,7 @@ class BlockDecisionTest {
         conditionMet: Boolean = false,
         dangerZoneRemainingMs: Long = 0L,
         isRealBrowser: Boolean = false,
+        netFilterDown: Boolean = false,
     ) = BlockInputs(
         pkg = pkg,
         updatePaused = updatePaused,
@@ -48,6 +49,7 @@ class BlockDecisionTest {
         strict = strict,
         dangerZoneRemainingMs = dangerZoneRemainingMs,
         isRealBrowser = isRealBrowser,
+        netFilterDown = netFilterDown,
         quickEnforcing = quickEnforcing,
         rule = rule,
         allowlistMode = allowlistMode,
@@ -464,4 +466,54 @@ class BlockDecisionTest {
         assertEquals(4, guards.size)
         assertTrue("the pre-split code must stay readable", BlockWhy.GUARD !in guards)
     }
+
+    // ---- the family DNS filter being off (v1.142) ------------------------------------------
+
+    /**
+     * He asked for a family DNS filter he could not switch off, and Android does not allow that of
+     * any app. So switching it off costs the browsers instead, immediately — his own choice when
+     * offered the alternatives.
+     */
+    @Test fun `browsers are shut while the family dns filter is off`() {
+        val hit = decideBlock(inputs(netFilterDown = true, isRealBrowser = true))
+        assertNotNull(hit)
+        assertEquals(BlockWhy.NETDNS, hit?.why)
+    }
+
+    /**
+     * **The half that keeps the phone usable, and the reason this is survivable with no escape
+     * hatch at all** — the same argument as the danger zone (invariant 13). A network-wide
+     * protection that took the dialer or the bank app with it would be switched off within a day,
+     * and invariant 7 says the essentials are never blocked by any layer.
+     */
+    @Test fun `nothing but a browser is shut when the filter is off`() {
+        assertNull(decideBlock(inputs(netFilterDown = true, isRealBrowser = false)))
+        assertNull(decideBlock(inputs(netFilterDown = true, isRealBrowser = false, isEssential = true)))
+    }
+
+    /**
+     * The zone is the harder state and it names the hunt honestly; being pushed under a DNS
+     * message would tell him the wrong thing about why his browser just closed.
+     */
+    @Test fun `the danger zone still speaks first when both are true`() {
+        val hit = decideBlock(
+            inputs(netFilterDown = true, dangerZoneRemainingMs = 60_000L, isRealBrowser = true),
+        )
+        assertEquals(BlockWhy.DANGER, hit?.why)
+    }
+
+    /**
+     * **An update must not become the way out**, exactly as it must not for the danger zone: the
+     * pause exists so a reactivation prompt is not fighting a cover, and an hour of nothing is a
+     * cheap trade for anyone who works out that installing an update buys it.
+     */
+    @Test fun `an update pause does not reopen the browsers`() {
+        val hit = decideBlock(inputs(netFilterDown = true, isRealBrowser = true, updatePaused = true))
+        assertEquals(BlockWhy.NETDNS, hit?.why)
+    }
+
+    @Test fun `a working filter blocks nothing at all`() {
+        assertNull(decideBlock(inputs(netFilterDown = false, isRealBrowser = true)))
+    }
+
 }

@@ -968,4 +968,8 @@
     <string name="repair_status_off">الحظر لا يعمل</string>
     <string name="repair_status_on_body">الحاظر يعمل ويراقب من جديد. لا شيء آخر عليك فعله.</string>
     <string name="repair_status_off_body">هو مُفعّل في الإعدادات، لكنه لا يعمل — لذا لا شيء يُحظر الآن.</string>
+
+    <!-- الغطاء الذي يظهر عند توقف فلتر DNS العائلي. -->
+    <string name="block_netdns_title">فلتر العائلة متوقف</string>
+    <string name="block_netdns_message">فلتر DNS العائلي على هاتفك لا يعمل، لذا لا شيء يُفلتَر على مستوى الشبكة. تبقى المتصفحات مغلقة حتى يعود للعمل — وكل شيء آخر على هاتفك يعمل كالمعتاد. افتح AppBlocker لإعادة تشغيله.</string>
 </resources>

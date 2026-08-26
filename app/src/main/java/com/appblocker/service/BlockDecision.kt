@@ -34,11 +34,12 @@ internal object BlockWhy {
     const val SCHED_LOCATION = "sched-location"
     const val BROWSER = "browser"          // "block unsupported browsers"
     const val DANGER = "danger"            // three different adult words in half an hour
+    const val NETDNS = "netdns"            // the family DNS filter is not running
     const val UNKNOWN = "?"                // decoded from a log entry written before this existed
 
     val ALL = setOf(
         LOCKOUT, ALLOWLIST, STRICT, QUICK, LIMIT, SCHED_TIME, SCHED_USAGE, SCHED_LAUNCH,
-        SCHED_WIFI, SCHED_LOCATION, BROWSER, DANGER, UNKNOWN,
+        SCHED_WIFI, SCHED_LOCATION, BROWSER, DANGER, NETDNS, UNKNOWN,
     )
 
     // The layers that raise a cover without going through decideBlock — a page scan, the Shorts
@@ -112,6 +113,8 @@ internal data class BlockInputs(
     val dangerZoneRemainingMs: Long,
     /** This package declares itself a browser — the strict set, never the generous one. */
     val isRealBrowser: Boolean,
+    /** The phone's family DNS filter is not running. See [com.appblocker.data.NetworkFilter]. */
+    val netFilterDown: Boolean,
     /** Quick Block is enforcing right now (Strict, or a session saying "block now", or not paused). */
     val quickEnforcing: Boolean,
     val rule: AppRule?,
@@ -153,6 +156,26 @@ internal fun decideBlock(i: BlockInputs): BlockReason? {
             i.words.get(R.string.block_danger_title),
             DangerZone.message(i.words, i.dangerZoneRemainingMs),
             why = BlockWhy.DANGER,
+        )
+    }
+
+    // The family DNS filter being off, on the same terms and for the same reason as the zone
+    // above: browsers only, no escape hatch, and ahead of the update pause.
+    //
+    // He asked for a filter he could not switch off. No app on Android can be that, so switching
+    // it off costs the browsers instead — which only works if it costs them *immediately*. An
+    // update pause here would mean the way out of a network-wide protection is to install an
+    // update, which is the shape of every bypass this app has closed.
+    //
+    // The zone is checked first on purpose: it is the harder state and it names the hunt
+    // honestly, and a cover that blamed DNS during a danger hour would tell him the wrong thing
+    // about why his browser just closed (invariant 17 — a reason that cannot be told apart from
+    // another sends the next fix to the wrong layer).
+    if (i.netFilterDown && i.isRealBrowser) {
+        return BlockReason(
+            i.words.get(R.string.block_netdns_title),
+            i.words.get(R.string.block_netdns_message),
+            why = BlockWhy.NETDNS,
         )
     }
 
