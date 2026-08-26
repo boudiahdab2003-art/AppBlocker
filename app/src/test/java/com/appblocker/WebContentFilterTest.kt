@@ -844,4 +844,49 @@ class WebContentFilterTest {
         assertNull(filter().checkUrlAdult("https://example.com", adultPack = false, blockAdult = false))
     }
 
+    @Test
+    fun `talking about porn is never blocked, even inside the danger hour`() {
+        // The owner caught this: "why porn is a blocked word its weird it can be everywhere and
+        // doesnt say anything". adult_keywords.txt is matched as a plain SUBSTRING and its header
+        // promises every entry is unambiguous "inside innocent text" - a promise about a URL,
+        // where the word only appears because somebody went somewhere. In page text it matches an
+        // anti-porn app, a news piece, a thread about quitting.
+        //
+        // Widening it for the hour broke the rule adult_words_pack.txt was trimmed three times to
+        // establish, AND danger_words.txt's own promise that help-seeking material is never
+        // blocked - in the hour someone is most likely to reach for it.
+        val f = filter(adultKeywords = listOf("porn"), danger = listOf("sexy"))
+        for (innocent in listOf(
+            "this app blocks porn and helps you quit",
+            "a news article about porn addiction recovery",
+            "forum thread: how i stopped watching porn",
+        )) {
+            assertNull(
+                innocent,
+                f.check(
+                    text = innocent,
+                    address = BrowserAddress.Unreadable,
+                    userKeywords = emptyList(), siteKeywords = emptyList(),
+                    // blockAdult = false is how the watcher calls this for a NON-browser
+                    // app, which is where the zone's widening actually applied - browsers
+                    // are shut outright for the hour. (For a browser whose toolbar cannot be
+                    // read, blockAdult = true, the address lists have always fallen back to
+                    // page text on purpose - invariant 4, a failed measurement is not
+                    // permission. That is older than this and is not what was wrong.)
+                    adultPack = true, blockAdult = false,
+                    inDangerZone = true,
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun `the same word still blocks in an address, where it means something`() {
+        // The layer is not weakened - it is put back where its own guarantee holds.
+        assertNotNull(
+            filter(adultKeywords = listOf("porn"))
+                .checkUrlAdult("https://freeporntube.test/x", adultPack = false, blockAdult = true),
+        )
+    }
+
 }

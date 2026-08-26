@@ -172,13 +172,21 @@ class WebContentFilter internal constructor(
         // scans every app while the zone is armed, whether or not "check every app" is switched
         // on the rest of the time.
         if (inDangerZone) {
-            // The adult keyword list is address-only on an ordinary day, because matching it
-            // against page text is too broad to live with all the time. For this hour it is not.
-            for (k in adultKeywords) {
-                if (lower.contains(k)) return adultSearchHit(k)
-            }
-            // Whole-word, never substring: these are ORDINARY words, and "cam" inside "came" or
-            // "leak" inside "leakage" would be the kind of block that discredits the whole idea.
+            // **[dangerWords] ONLY, and adult_keywords.txt deliberately NOT.** That list is
+            // matched as a plain substring, and its own header says every entry must be
+            // unambiguous inside innocent text — a promise made about a URL, where "porn" only
+            // ever appears because somebody went somewhere. In PAGE TEXT the same entry matches
+            // an anti-porn app's own description, a news article, a forum thread about quitting.
+            //
+            // Widening it here for the hour was exactly the mistake adult_words_pack.txt was
+            // trimmed three times to fix, and its header states the rule this broke: *the words
+            // used to TALK about porn are not porn*. Worse, it contradicted danger_words.txt's
+            // own promise that help-seeking material is never blocked — in the one hour someone
+            // is most likely to go looking for it. The owner spotted it: "why porn is a blocked
+            // word its weird it can be everywhere and doesnt say anything."
+            //
+            // The widening the zone needs is danger_words.txt, which is curated FOR page text and
+            // matched whole-word. Reaching for a second list was reaching for the wrong tool.
             for (w in dangerWords) {
                 if (containsWord(lower, w)) return dangerHit(w)
             }
