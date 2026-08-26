@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.139
+- It wasn't slow, it was switched off — and now there's a danger zone. Three fixes where the blocker had genuinely stopped watching (the 8 seconds after every Got it, every website block, and switching spaces), the danger zone that shuts every browser for an hour after three different words in half an hour, a wider word list while it runs, sites learned from two different browsers, other blockers no longer auto-blocked, and a bug report that finally carries enough to answer a question.
+
 ## v1.138
 - Profile has a new Recovery section. **Your counter** shows how long it has been since your last relapse — days, hours, minutes and seconds, ticking — and it lives on that screen and nowhere else. Recording a slip asks first, can be dated to when it actually happened rather than when you admitted it, and can be undone for 24 hours afterwards. On the day of a reset it does not show your record: that day should not come with a scoreboard. **Journal** gives you one page for every calendar day — open any date, including ones you missed, and write whatever is there, with four optional headings if you want somewhere to start. Neither the count nor a single word you write ever leaves your phone: not to the AI Coach, not in a bug report, and if you have a PIN it is already behind it.
 
