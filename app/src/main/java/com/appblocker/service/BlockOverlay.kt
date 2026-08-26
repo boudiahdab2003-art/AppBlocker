@@ -185,7 +185,7 @@ internal class BlockOverlay(private val context: Context) {
         // Fresh motivation every time a NEW block appears (the view is reused across blocks).
         val quoteView = v.findViewById<TextView>(R.id.overlay_quote)
         if (quoteView != null && (freshBlock || quoteView.text.isNullOrBlank())) {
-            val quote = Quotes.random()
+            val quote = Quotes.random(context)
             quoteView.apply {
                 text = quote.text
                 // Three things multiply, none of them replace: the quote's own size scales with

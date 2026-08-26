@@ -1,5 +1,908 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Every word the app says, in English.
+
+  Two rules for anyone editing this file:
+
+  1. **The English wording is load-bearing.** The rendering tests in app/src/androidTest assert on
+     these exact strings and run under the device's default locale. Changing a word here without
+     changing the test that reads it turns a green suite red for a reason that has nothing to do
+     with the change.
+  2. **Counts go in <plurals>, never in a concatenated string.** English needs two forms; Arabic
+     needs six (zero one two few many other). "$n days" cannot be made correct by translation.
+
+  values-ar/strings.xml must carry every key in here — StringResourcesTest fails the build if it
+  does not. A missing key does not error at runtime: it silently falls back to English in the
+  middle of an Arabic sentence.
+-->
 <resources>
     <string name="app_name">AppBlocker</string>
     <string name="accessibility_description">AppBlocker uses this to detect when a blocked app opens, and to check the web address or search text on screen against your blocked sites/keywords, so it can stop them. All screen checking happens on your device; screen content is never stored or sent anywhere. See the privacy policy in the app\'s README for details on the optional AI Coach.</string>
+
+    <!-- ===================== Language picker ===================== -->
+    <string name="language">Language</string>
+    <string name="language_system">Your phone\'s language</string>
+    <string name="language_subtitle">Currently: %1$s. AppBlocker speaks English and Arabic.</string>
+
+    <!-- ===================== The block screen ===================== -->
+    <!-- The chrome, shared by the overlay layouts and the fallback activity. -->
+    <string name="block_title">Blocked</string>
+    <string name="block_got_it">Got it</string>
+    <string name="block_minutes_reclaimed">Minutes reclaimed today</string>
+    <string name="block_generic_message">This is blocked right now.</string>
+    <string name="block_app_message">%1$s is blocked</string>
+
+    <!-- Why the cover is up. Built by service/BlockDecision.kt, which stays free of a Context and
+         resolves these through a lambda the caller supplies. -->
+    <string name="block_locked_title">Locked</string>
+    <plurals name="block_locked_word">
+        <item quantity="one">“%1$s” was found here. Locked for %2$s more min.</item>
+        <item quantity="other">“%1$s” was found here. Locked for %2$s more min.</item>
+    </plurals>
+    <plurals name="block_locked_generic">
+        <item quantity="one">A blocked word was found here. Locked for %1$s more min.</item>
+        <item quantity="other">A blocked word was found here. Locked for %1$s more min.</item>
+    </plurals>
+
+    <string name="block_strict_title">Strict Mode</string>
+    <string name="block_strict_message">Blocked until your Strict session ends.</string>
+    <string name="block_allowlist_message">Only your allowed apps work right now.</string>
+    <string name="block_quick_message">Quick Block is on for this app.</string>
+
+    <string name="block_limit_title">Daily limit reached</string>
+    <plurals name="block_limit_message">
+        <item quantity="one">You\'ve used your %1$s min for today.</item>
+        <item quantity="other">You\'ve used your %1$s min for today.</item>
+    </plurals>
+    <string name="block_limit_zero_message">This app is blocked for today.</string>
+
+    <string name="block_schedule_title">Blocked by schedule</string>
+    <string name="block_schedule_message">%1$s is on until %2$s.</string>
+    <plurals name="block_schedule_usage_message">
+        <item quantity="one">%1$s min used today — the limit set by %2$s.</item>
+        <item quantity="other">%1$s min used today — the limit set by %2$s.</item>
+    </plurals>
+    <string name="block_opens_title">Open limit reached</string>
+    <plurals name="block_opens_message">
+        <item quantity="one">Opened %1$s time today — the limit set by %2$s.</item>
+        <item quantity="other">Opened %1$s times today — the limit set by %2$s.</item>
+    </plurals>
+
+    <string name="block_wifi_title">Blocked on this Wi-Fi</string>
+    <string name="block_wifi_any_message">This app is blocked while you\'re on Wi-Fi.</string>
+    <string name="block_wifi_named_message">This app is blocked on “%1$s”.</string>
+    <string name="block_location_title">Blocked at this location</string>
+    <string name="block_location_message">This app is blocked here by %1$s.</string>
+
+    <string name="block_browser_title">Browser blocked</string>
+    <string name="block_browser_message">This browser can\'t be filtered, so it\'s blocked while word blocking is on.</string>
+
+    <string name="block_offswitch_title">This is your off-switch</string>
+    <string name="block_offswitch_message">Blocking guards this page. You can unlock it in AppBlocker — it takes %1$s.</string>
+    <string name="block_offswitch_strict_title">Locked during Strict Mode</string>
+    <string name="block_offswitch_strict_message">You can\'t change this while Strict Mode is active.</string>
+    <string name="block_purchase_title">Purchase blocked</string>
+    <string name="block_purchase_message">In-app purchases are blocked.</string>
+    <string name="block_shorts_title">Shorts blocked</string>
+    <string name="block_shorts_message">YouTube Shorts is blocked.</string>
+    <string name="block_shorts_web_message">YouTube Shorts is blocked. The rest of YouTube still works.</string>
+
+    <!-- What the web filter caught. -->
+    <string name="block_word_title">Blocked word</string>
+    <string name="block_word_message">“%1$s” is on your blocked list.</string>
+    <string name="block_adult_title">Adult content blocked</string>
+    <string name="block_adult_word_message">“%1$s” is a blocked adult word.</string>
+    <string name="block_adult_search_message">“%1$s” looks like adult content.</string>
+    <string name="block_adult_site_title">Adult site blocked</string>
+    <!-- The danger zone: three different adult words inside half an hour. -->
+    <string name="block_danger_title">Danger zone</string>
+    <plurals name="block_danger_message">
+        <item quantity="one">You hit three of these in a row. Browsers are closed for the next %1$s minute.</item>
+        <item quantity="other">You hit three of these in a row. Browsers are closed for the next %1$s minutes.</item>
+    </plurals>
+    <string name="block_danger_word_message">“%1$s” is blocked for the rest of the hour. It normally wouldn\'t be.</string>
+    <!-- A site the phone learned itself, by catching it in two different browsers. -->
+    <string name="block_learned_site_title">Blocked site</string>
+    <string name="block_learned_site_message">“%1$s” was caught in two different browsers, so it is blocked everywhere now.</string>
+    <string name="block_adult_site_message">“%1$s” is on the adult-content list.</string>
+
+    <!-- ===================== Shared words ===================== -->
+    <string name="common_cancel">Cancel</string>
+    <string name="common_next">Next</string>
+    <string name="common_save">Save</string>
+    <string name="common_delete">Delete</string>
+    <string name="common_done">Done</string>
+    <string name="common_open">Open</string>
+    <string name="day_today">Today</string>
+    <string name="day_yesterday">Yesterday</string>
+
+    <!-- A duration written the way a sentence would say it. Separate plurals per unit because
+         Arabic inflects each one differently and English does not inflect min/sec at all. -->
+    <plurals name="length_days">
+        <item quantity="one">%1$s day</item>
+        <item quantity="other">%1$s days</item>
+    </plurals>
+    <plurals name="length_hours">
+        <item quantity="one">%1$s hour</item>
+        <item quantity="other">%1$s hours</item>
+    </plurals>
+    <plurals name="length_minutes">
+        <item quantity="one">%1$s minute</item>
+        <item quantity="other">%1$s minutes</item>
+    </plurals>
+    <string name="length_moment">less than a minute</string>
+
+    <!-- ===================== Profile: Recovery ===================== -->
+    <string name="profile_section_recovery">Recovery</string>
+    <string name="profile_counter_title">Your counter</string>
+    <string name="profile_counter_subtitle">How long it has been since your last relapse — days, hours, minutes and seconds, counting.</string>
+    <string name="profile_journal_title">Journal</string>
+    <string name="profile_journal_subtitle">Write about any day — how it felt, what set it off, what helped. Stored on this phone only.</string>
+
+    <!-- ===================== The counter ===================== -->
+    <string name="counter_title">Your counter</string>
+    <string name="counter_hero_lead">You have held on for</string>
+    <plurals name="counter_unit_days">
+        <item quantity="one">day</item>
+        <item quantity="other">days</item>
+    </plurals>
+    <plurals name="counter_unit_hours">
+        <item quantity="one">hours</item>
+        <item quantity="other">hours</item>
+    </plurals>
+    <plurals name="counter_unit_minutes">
+        <item quantity="one">min</item>
+        <item quantity="other">min</item>
+    </plurals>
+    <plurals name="counter_unit_seconds">
+        <item quantity="one">sec</item>
+        <item quantity="other">sec</item>
+    </plurals>
+    <string name="counter_since">Since %1$s.</string>
+    <string name="counter_record">Your longest run so far was %1$s.</string>
+    <string name="counter_record_beaten">This is the longest you have ever gone.</string>
+    <string name="counter_fresh">It is running again from here. That is the whole of what today has to be.</string>
+    <string name="counter_not_started_title">Not counting yet</string>
+    <string name="counter_not_started_body">Start it and this screen shows exactly how long it has been — days, hours, minutes and seconds — from that moment on. If you have already been going a while, you can tell it when you really started.</string>
+    <string name="counter_start">Start the count</string>
+    <string name="counter_started_earlier">I started earlier than now</string>
+    <string name="counter_write_today">Write about today</string>
+    <string name="counter_undo_title">Reset by mistake?</string>
+    <string name="counter_undo_body">Undo puts the count back exactly where it was. Available for %1$s after a reset.</string>
+    <string name="counter_undo">Undo</string>
+    <string name="counter_change_start_title">Change the start time</string>
+    <string name="counter_change_start_body">If the count started before you told the app. This records nothing — it just corrects the date it is counting from.</string>
+    <string name="counter_relapse_title">It happened — start again</string>
+    <string name="counter_relapse_body">Records today and starts the count from zero. You can take this back for %1$s afterwards.</string>
+    <string name="counter_privacy">This count, and everything you write in the journal, is stored on this phone only. It is never sent anywhere — not in a bug report, and not to the AI Coach.</string>
+    <string name="counter_confirm_title">Start the count again?</string>
+    <string name="counter_confirm_body_after_run">The %1$s you have just done still happened. This records today and starts the clock from now.</string>
+    <string name="counter_confirm_body">This records today and starts the clock from now.</string>
+    <string name="counter_confirm_undo_note">You can undo it for the next %1$s.</string>
+    <string name="counter_confirm_earlier">It happened earlier — pick when</string>
+    <string name="counter_confirm_now">Start again from now</string>
+    <string name="counter_pick_start">When did it start?</string>
+    <string name="counter_pick_relapse">When did it happen?</string>
+    <string name="counter_pick_time">What time?</string>
+    <string name="undo_window">24 hours</string>
+
+    <!-- ===================== The journal ===================== -->
+    <string name="journal_title">Journal</string>
+    <string name="journal_index_title">Write it down</string>
+    <string name="journal_index_body">One entry for each day — how it felt, what set it off, what helped. Nothing here leaves your phone.</string>
+    <string name="journal_today">Today · %1$s</string>
+    <string name="journal_empty_today">Nothing written yet. Tap to start.</string>
+    <string name="journal_earlier">EARLIER</string>
+    <string name="journal_another_day">Write about another day</string>
+    <string name="journal_placeholder">How did the day go?</string>
+    <string name="journal_delete_cd">Delete this entry</string>
+    <string name="journal_delete_title">Delete this entry?</string>
+    <string name="journal_delete_body">What you wrote on %1$s is removed from this phone. There is no copy of it anywhere else.</string>
+    <string name="journal_prompt_what_happened">What happened</string>
+    <string name="journal_prompt_set_off">What set it off</string>
+    <string name="journal_prompt_helped">What helped</string>
+    <string name="journal_prompt_tomorrow">Tomorrow</string>
+
+    <!-- ===================== Profile ===================== -->
+    <string name="profile_section_you">You</string>
+    <string name="profile_section_protection">Protection</string>
+    <string name="profile_section_appearance">Appearance</string>
+    <string name="profile_section_permissions">Permissions</string>
+    <string name="profile_section_about">About</string>
+
+    <string name="profile_header_all_set">You\'re all set — protection can run fully.</string>
+    <string name="profile_strict_banner">🔒 Strict Mode is on — settings are locked until the timer ends.</string>
+    <string name="profile_tap_add_name">Tap to add your name</string>
+    <string name="profile_version_line">AppBlocker · v%1$s</string>
+    <string name="profile_stat_apps">apps blocked</string>
+    <plurals name="profile_stat_schedules">
+        <item quantity="one">schedule</item>
+        <item quantity="other">schedules</item>
+    </plurals>
+    <string name="profile_stat_blocks">blocks today</string>
+    <string name="profile_selected">Selected</string>
+
+    <string name="status_action_needed">Action needed — tap to fix</string>
+    <string name="status_active">Protection active</string>
+    <string name="status_stopped">Blocking has stopped — tap to fix</string>
+    <string name="status_paused">Paused after update — see Blocking tab</string>
+
+    <string name="profile_your_profile">Your profile</string>
+    <string name="profile_your_profile_set">You\'re set up as %1$s. Change your name, or run the setup walkthrough again.</string>
+    <string name="profile_your_profile_unset">Tell the app what to call you — it\'s stored on this phone and nowhere else.</string>
+
+    <plurals name="profile_health_errors_title">
+        <item quantity="one">Blocking hit %1$s error</item>
+        <item quantity="other">Blocking hit %1$s errors</item>
+    </plurals>
+    <string name="profile_health_reported">Blocking kept running. Reported automatically — tap to clear.</string>
+    <string name="profile_health_unreported">Blocking kept running. Tap to clear once you\'ve reported it.</string>
+
+    <string name="profile_report_title">Report a problem</string>
+    <string name="profile_report_subtitle">Describe what went wrong and it goes straight to the developer. Never includes your blocked words, sites or app names.</string>
+    <string name="profile_report_disabled">Reporting isn\'t set up in this build.</string>
+    <string name="profile_report_prompt">What happened? Anything helps — what you were doing, which app, whether a block screen appeared when it shouldn\'t have, or didn\'t when it should.</string>
+    <string name="profile_report_placeholder">Describe the problem</string>
+    <string name="profile_report_privacy">Sent with: app version, Android version, phone model, and your current settings — which block screen you use, whether blocking is running, and how many blocks happened today.\n\nNever sent: your blocked words, the sites you visit, or which apps you block.</string>
+    <string name="profile_report_send">Send</string>
+    <string name="profile_report_thanks">Sent — thank you</string>
+
+    <string name="profile_pin_change">Change PIN</string>
+    <string name="profile_pin_set">Set a PIN</string>
+    <string name="profile_pin_on">A PIN is set. It\'s needed to change your blocks.</string>
+    <string name="profile_pin_off">Lock your settings so blocks can\'t be removed on a whim.</string>
+    <string name="profile_pin_remove">Remove PIN</string>
+    <string name="profile_pin_remove_subtitle">Stop requiring a PIN to open settings.</string>
+
+    <string name="profile_uninstall_title">Prevent uninstall</string>
+    <string name="profile_uninstall_on">On. AppBlocker can\'t be uninstalled until you turn this off — and turning it off means typing a paragraph first.</string>
+    <string name="profile_uninstall_off">OFF — AppBlocker can be uninstalled right now. Turn this on; the guard only makes the page hard to reach, this is what actually stops removal.</string>
+
+    <string name="profile_guard_title">Guard the off-switch</string>
+    <string name="profile_guard_off">Off. Blocking can be switched off in Settings at any moment.</string>
+    <string name="profile_guard_waiting_strict">Unlocking in %1$s, but Strict Mode is running — the guard can\'t come down until the session ends.</string>
+    <string name="profile_guard_strict">On, and locked while Strict Mode is running. You can\'t lower it until the session ends.</string>
+    <string name="profile_guard_waiting">Unlocking in %1$s. The guard is still on.</string>
+    <string name="profile_guard_open">Unlocked — tap to turn the guard off. Closes again in %1$s.</string>
+    <string name="profile_guard_on">On. The Accessibility page is blocked, so blocking can\'t be switched off on a whim. Turning this off takes %1$s.</string>
+    <string name="profile_guard_cancel_title">Cancel the unlock</string>
+    <string name="profile_guard_cancel_subtitle">Change your mind — the guard stays on and the wait is dropped.</string>
+
+    <string name="gate_guard_title">Turn off the guard</string>
+    <string name="gate_guard_blurb">This is the switch that stops you switching blocking off in a bad moment. Type the paragraph below — you can\'t paste it — before the clock runs out.</string>
+    <string name="gate_guard_detail">Miss the clock and you get a fresh paragraph and a fresh clock, as many times as it takes. Even once you\'ve typed it, the guard stays on for another %1$s; after that you have %2$s to turn it off.</string>
+    <string name="gate_guard_confirm">Start the %1$s wait</string>
+
+    <string name="profile_appearance_title">Appearance</string>
+    <string name="profile_appearance_subtitle">Theme: %1$s.</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="theme_system">System default</string>
+    <string name="profile_icon_title">App icon</string>
+    <string name="profile_icon_subtitle">Current: %1$s. Choose from your icon collection.</string>
+    <string name="profile_blockscreen_title">Block screen</string>
+    <string name="profile_blockscreen_subtitle">Current: %1$s in %2$s. Change what\'s on the block screen and its colour.</string>
+
+    <string name="profile_permissions_title">Setup &amp; permissions</string>
+    <string name="profile_permissions_subtitle">Accessibility, overlay, usage access, battery &amp; auto-start — all in one place.</string>
+
+    <string name="profile_update_play">Updates arrive through Google Play.</string>
+    <string name="profile_update_checking">Checking for updates…</string>
+    <string name="profile_update_current">You\'re on the latest version.</string>
+    <string name="profile_update_available">Update available: v%1$s — tap to install</string>
+    <string name="profile_update_downloading">Downloading… %1$s%%</string>
+    <string name="profile_update_retry">%1$s Tap to retry.</string>
+    <string name="profile_update_check">Tap to check for updates</string>
+    <string name="profile_version_title">AppBlocker v%1$s</string>
+
+    <string name="profile_instructions_title">Instructions</string>
+    <string name="profile_instructions_subtitle">How every feature works, explained in detail.</string>
+    <string name="profile_diagnostics_title">What the blocker sees</string>
+    <string name="profile_diagnostics_subtitle">Why something isn\'t being blocked — browsers found, what it last looked at, and whether blocking is on.</string>
+    <string name="profile_detox_title">Dopamine detox guide</string>
+    <string name="profile_detox_subtitle">Clear rules to reset your brain\'s reward system.</string>
+    <string name="profile_scenarios_title">Scenarios</string>
+    <string name="profile_scenarios_subtitle">Guides for the hard moments — relapse, focus, sleep, and more.</string>
+    <string name="profile_steps_title">The Twelve Steps</string>
+    <string name="profile_steps_subtitle">The programme, in plain English — and where to find the real thing.</string>
+    <string name="profile_changelog_title">What\'s new</string>
+    <string name="profile_changelog_subtitle">Every version and what it changed.</string>
+    <string name="profile_autoupdate_title">Update automatically</string>
+    <string name="profile_autoupdate_on">On. New versions install by themselves, on Wi-Fi, without asking. Blocking keeps running throughout.</string>
+    <string name="profile_autoupdate_off">Off. You\'ll be told when an update is ready and install it yourself.</string>
+    <string name="profile_privacy_title">Privacy policy</string>
+    <string name="profile_privacy_subtitle">What the app stores, what it never sends, and what the AI Coach sees.</string>
+    <string name="profile_share_title">Share AppBlocker</string>
+    <string name="profile_share_subtitle">Send the install link to a friend.</string>
+    <string name="profile_share_text">Block distracting apps &amp; websites with AppBlocker:\n%1$s</string>
+    <string name="profile_sponsor_title">Support AppBlocker</string>
+    <string name="profile_sponsor_subtitle">It\'s free, has no ads, and collects nothing about you. If it\'s helped, you can chip in — everything works exactly the same either way.</string>
+    <string name="profile_status_on">On</string>
+    <string name="profile_status_off">Off</string>
+    <string name="profile_required">Required</string>
+    <string name="profile_optional">Optional</string>
+
+    <!-- ===================== First run &amp; permissions ===================== -->
+    <string name="onboarding_step">Step %1$s of %2$s</string>
+    <string name="onboarding_get_started">Get started</string>
+    <string name="onboarding_welcome_title">Welcome to AppBlocker</string>
+    <string name="onboarding_welcome_body">AppBlocker keeps you off distracting apps and sites. Two quick permissions and you\'re ready to block.</string>
+    <string name="onboarding_continue">Continue</string>
+    <string name="onboarding_continue_as">Continue as %1$s</string>
+    <string name="onboarding_skip">Skip</string>
+    <string name="onboarding_skip_for_now">Skip for now</string>
+    <string name="onboarding_name_title">What should we call you?</string>
+    <string name="onboarding_name_label">Your name</string>
+    <string name="onboarding_name_placeholder">Optional</string>
+    <string name="onboarding_name_body">A first name is plenty. It\'s only used to greet you on your profile and in the AI Coach — it stays on this phone, and you can change or remove it any time.</string>
+    <string name="onboarding_coach_title">Meet your AI Coach</string>
+    <string name="onboarding_coach_body">Not just a blocker — a coach in your pocket that helps you win back your time.</string>
+    <string name="onboarding_coach_numbers_title">Knows your real numbers</string>
+    <string name="onboarding_coach_numbers_body">Talks about your actual screen time and habits, never generic advice.</string>
+    <string name="onboarding_coach_knows_title">Gets to know you</string>
+    <string name="onboarding_coach_knows_body">Remembers why you\'re blocking and what tempts you. Ask it anything in chat.</string>
+    <string name="onboarding_coach_goals_title">Sets goals with you</string>
+    <string name="onboarding_coach_goals_body">Agree on targets together, track them live, and get fresh tips through the day.</string>
+    <string name="onboarding_coach_footer">Free, and works right out of the box — find it in Insights ▸ AI Coach.</string>
+    <string name="onboarding_try_again">Try again</string>
+    <string name="onboarding_turn_on_blocking">Turn on blocking</string>
+    <string name="onboarding_open_settings">Open Settings</string>
+    <string name="onboarding_done">That\'s it — it\'s on. Tap Continue.</string>
+    <string name="onboarding_steps_heading">What to do in Settings — %1$s steps</string>
+    <string name="onboarding_leaves_app">The button below leaves AppBlocker and opens your phone\'s own Settings. Do these, then come straight back here — this screen will tell you if it worked. The steps go with you: swipe down from the top of the screen to see them again while you\'re in Settings.</string>
+    <string name="onboarding_headline_accessibility">Blocking needs one switch</string>
+    <string name="onboarding_headline_overlay">Let the block screen show</string>
+    <string name="onboarding_stuck_title">Not switched on yet</string>
+
+    <string name="perm_accessibility_label">Accessibility (the blocker)</string>
+    <string name="perm_accessibility_desc">This is the one switch that makes blocking work. In your phone\'s Settings it is called “Accessibility”.</string>
+    <string name="perm_overlay_label">Display over other apps</string>
+    <string name="perm_overlay_desc">This lets the block screen appear on top of a blocked app. In Settings it is called “Display over other apps”.</string>
+    <string name="perm_usage_label">Usage access</string>
+    <string name="perm_usage_desc">Needed for daily limits and Insights.</string>
+    <string name="perm_notifications_label">Notification access</string>
+    <string name="perm_notifications_desc">Optional. Lets AppBlocker count your daily notifications for Insights.</string>
+    <string name="perm_battery_label">Disable battery optimization</string>
+    <string name="perm_battery_desc">Keeps the blocker running so it can\'t be killed in the background.</string>
+    <string name="perm_location_label">Location</string>
+    <string name="perm_location_desc">Only for Wi-Fi and Location schedules. Not needed otherwise.</string>
+    <string name="perm_deviceadmin_label">Prevent uninstall (Device admin)</string>
+    <string name="perm_deviceadmin_desc">Stops AppBlocker being uninstalled until you turn this off — extra friction against bypassing your blocks.</string>
+    <string name="perm_grant">Grant</string>
+
+    <string name="gate_uninstall_title">Allow uninstalling</string>
+    <string name="gate_uninstall_blurb">This is the switch that actually refuses an uninstall. Type the paragraph below — you can\'t paste it — before the clock runs out.</string>
+    <string name="gate_uninstall_detail">The guard only makes the Settings page hard to reach; this is the switch that refuses the uninstall itself. With it off, AppBlocker can be removed in a few taps, and every block goes with it. Miss the clock and you get a fresh paragraph and a fresh clock. Turning it back on is always one tap.</string>
+    <string name="gate_uninstall_confirm">Turn protection off</string>
+    <string name="admin_explanation">Lets AppBlocker resist being uninstalled until you turn this off.</string>
+
+    <string name="disclosure_topbar">How blocking works</string>
+    <string name="disclosure_title">What AppBlocker can see</string>
+    <string name="disclosure_intro">Blocking only works if the app can tell what\'s on your screen. Here is exactly what that means, before you\'re asked to allow it.</string>
+    <string name="disclosure_reads">What it reads</string>
+    <string name="disclosure_never">What never happens</string>
+    <string name="disclosure_front_title">Which app is in front</string>
+    <string name="disclosure_front_body">So the moment you open something you\'ve blocked, the block screen can cover it.</string>
+    <string name="disclosure_browser_title">In web browsers only — the address and the text on the page</string>
+    <string name="disclosure_browser_body">So a blocked site or a blocked word is caught in the browser too, not just in apps. Outside browsers, AppBlocker only looks at which app is open.</string>
+    <string name="disclosure_local_title">It never leaves your phone</string>
+    <string name="disclosure_local_body">Every check happens on this device. Screen content is never stored and never sent anywhere.</string>
+    <string name="disclosure_noaccount_title">There\'s no account and no server</string>
+    <string name="disclosure_coach_title">The AI Coach never sees your screen</string>
+    <string name="disclosure_coach_body">If you switch the coach on, it receives your screen-time numbers and your settings — never the pages you visit or the text on them.</string>
+    <string name="disclosure_onlyblocking_title">It\'s only used for blocking</string>
+    <string name="disclosure_onlyblocking_body">No ads, no analytics, no tracking. Turning the service off in Android\'s settings stops all of it immediately.</string>
+    <string name="disclosure_policy_link">Read the full privacy policy</string>
+    <string name="disclosure_footer">Tapping “Agree &amp; open Settings” takes you to Android\'s Accessibility settings, where you switch AppBlocker on yourself. Nothing is granted until you do.</string>
+    <string name="disclosure_agree">Agree &amp; open Settings</string>
+    <string name="disclosure_decline">Not now</string>
+
+    <string name="permissions_header">Grant these so AppBlocker can block reliably.</string>
+    <string name="permissions_brand_note">Note for %1$s phones</string>
+    <string name="permissions_clone_note">A copy of an app inside %1$s is a separate app that AppBlocker cannot see or block. Blocking the original doesn\'t cover the copy.</string>
+    <string name="permissions_spaces_title">Switching spaces or users</string>
+    <string name="permissions_alert_title">Protection alert</string>
+    <string name="permissions_alert_body">AppBlocker warns you with a notification if blocking ever stops — whether you switched it off or your phone shut it down while still showing it as on. Tap below to check the alert reaches your phone.</string>
+    <string name="permissions_alert_button">Send a test alert</string>
+    <string name="restricted_title">Accessibility toggle greyed out?</string>
+    <string name="restricted_body">This only matters if the switch is actually greyed out. Android 13 and newer block it for apps installed outside an app store, and say nothing about why. To unlock it: open Settings ▸ Apps ▸ AppBlocker, tap ⋮ in the top corner, and choose “Allow restricted settings”. Then come back and turn Accessibility on.</string>
+    <string name="restricted_android15">On Android 15 that ⋮ menu may not be there — Android redesigned the page. If you can\'t find it, go back and try the switch again: if it isn\'t greyed out, none of this applies to you.</string>
+
+    <string name="disclosure_noaccount_body">AppBlocker has no sign-in. Nobody — including the developer — can see what\'s on your screen or what you block.</string>
+    <string name="onboarding_stuck_accessibility">Nothing is broken — this screen is easy to miss. %1$s Tap “Try again” and follow the pictures below; the row you are looking for is called AppBlocker.</string>
+    <string name="onboarding_stuck_other">Nothing is broken — that list is easy to miss. Tap “Try again”, find AppBlocker in the list, and turn its switch on.</string>
+
+    <!-- ===================== Notifications ===================== -->
+    <string name="channel_protection_name">Protection alerts</string>
+    <string name="channel_protection_desc">Tells you if AppBlocker\'s blocking service gets turned off.</string>
+    <string name="channel_stalled_name">Blocking has stopped</string>
+    <string name="channel_stalled_desc">The alert that says blocking is switched on but not actually running. Keep this one loud.</string>
+    <string name="channel_setup_name">Setup help</string>
+    <string name="channel_setup_desc">While you\'re in Settings, this holds the steps for switching blocking on. It disappears as soon as you come back.</string>
+
+    <string name="notif_off_title">Protection is off</string>
+    <string name="notif_off_collapsed">Tap to turn blocking back on</string>
+    <string name="notif_off_headline">PROTECTION OFF</string>
+    <string name="notif_off_subtitle">Blocking has stopped</string>
+    <string name="notif_off_action">Turn on</string>
+
+    <string name="notif_stalled_title">Blocking has stopped</string>
+    <string name="notif_stalled_collapsed">Your phone shut it down — tap to switch it back on</string>
+    <string name="notif_stalled_headline">BLOCKING HAS STOPPED</string>
+    <string name="notif_stalled_subtitle">Nothing is being blocked</string>
+    <string name="notif_stalled_action">Fix it</string>
+
+    <string name="notif_paused_title">Blocking is paused after the update</string>
+    <string name="notif_paused_collapsed">Tap to turn it back on</string>
+    <string name="notif_paused_headline">BLOCKING IS OFF</string>
+    <string name="notif_paused_subtitle">Paused since the app updated</string>
+    <string name="notif_paused_action">Turn it back on</string>
+
+    <string name="notif_test_title">Notifications are on</string>
+    <string name="notif_test_collapsed">You\'ll be warned if protection stops</string>
+    <string name="notif_test_headline">NOTIFICATIONS ON</string>
+    <string name="notif_test_subtitle">Alerts are working</string>
+
+    <string name="tile_label">Quick Block</string>
+    <string name="tile_strict">Strict</string>
+    <string name="tile_setup">Set up</string>
+    <string name="tile_paused">Paused</string>
+
+    <!-- ===================== Strict Mode ===================== -->
+    <string name="strict_title">Strict Mode</string>
+    <string name="strict_locked">Your blocks are locked</string>
+    <string name="strict_unlocked">Your blocks are unlocked</string>
+    <string name="strict_no_stopping">No stopping early — that was the point. You can add time, never take it away.</string>
+    <string name="strict_whats_locked">What\'s locked when active:</string>
+    <string name="strict_locked_blocks">Changing or removing your blocks</string>
+    <string name="strict_locked_service">Turning off the blocker</string>
+    <string name="strict_locked_uninstall">Uninstalling the app</string>
+    <string name="strict_unlock_method">UNLOCK METHOD</string>
+    <string name="strict_timer">Timer</string>
+    <string name="strict_nothing_to_lock">Add something to block first — set up Quick Block or a schedule.</string>
+    <string name="strict_activate">Activate lock</string>
+    <string name="strict_set_timer">Set the timer</string>
+    <string name="strict_start_lock">Start lock</string>
+    <string name="strict_confirm_title">Start Strict Mode?</string>
+    <string name="strict_confirm_body">Your blocks will be locked for %1$s — until %2$s. You can add more time while it runs, but never cut it short.</string>
+    <string name="strict_add_time_header">ADD MORE TIME</string>
+    <string name="strict_ends_at">Ends %1$s. Adding time can\'t be undone.</string>
+    <string name="strict_add_more_time">Add more time</string>
+    <string name="strict_add_the_time">Add the time</string>
+    <string name="strict_add_confirm_title">Add %1$s?</string>
+    <string name="strict_add_confirm_body">Your blocks will stay locked until %1$s.</string>
+    <string name="strict_locks_summary">Locks %1$s.</string>
+    <string name="strict_adult_filter">adult filter</string>
+    <string name="strict_needs_admin">Strict Mode needs this so AppBlocker can\'t be uninstalled until the timer ends.</string>
+
+    <!-- ===================== The Blocking tab ===================== -->
+    <string name="blocking_back_on">Blocking is back on 💪</string>
+    <string name="quick_block">Quick Block</string>
+    <string name="quick_start">Start</string>
+    <string name="quick_paused">Paused — tap the card to edit your list.</string>
+    <string name="quick_active">Active</string>
+    <string name="quick_tap_to_edit">Tap to edit</string>
+    <string name="blocked_words">Blocked words</string>
+    <string name="blocked_words_none">Block words everywhere on your phone</string>
+    <plurals name="blocked_words_count">
+        <item quantity="one">%1$s word · blocked in every app</item>
+        <item quantity="other">%1$s words · blocked in every app</item>
+    </plurals>
+    <string name="new_schedule">New schedule</string>
+    <string name="new_schedule_first">Let\'s do this — schedule your first blocking!</string>
+    <string name="new_schedule_body">Block apps on a timetable or after too much use.</string>
+    <string name="schedule_time">Time</string>
+    <string name="schedule_usage_limit">Usage limit</string>
+    <string name="schedule_launch_count">Launch count</string>
+    <string name="schedule_wifi">Wi-Fi</string>
+    <string name="schedule_location">Location</string>
+    <string name="your_schedules">Your schedules</string>
+    <string name="templates">Templates</string>
+    <string name="templates_body">One tap to block a whole category.</string>
+    <string name="template_applied">Applied “%1$s”</string>
+    <string name="template_apply">Apply</string>
+    <string name="template_apply_title">Apply “%1$s”?</string>
+    <string name="timer_started">Timer started — blocks for %1$s</string>
+    <string name="pomodoro_started">Pomodoro started — %1$s min work · %2$s min break</string>
+    <string name="pomodoro">Pomodoro</string>
+    <string name="pomodoro_body">Block during work, free during breaks.</string>
+    <string name="timer">Timer</string>
+    <string name="quick_allowing">Allowing %1$s apps, blocking all others</string>
+    <string name="quick_allowed_pill">allowed · all others blocked</string>
+    <string name="quick_pill_desc">Blocking %1$s apps, %2$s words</string>
+    <string name="quick_pill_desc_adult">Blocking %1$s apps, %2$s words, adult filter on</string>
+
+    <string name="banner_finish_setup">Finish setup</string>
+    <plurals name="banner_steps_left">
+        <item quantity="one">%1$s required step left — tap to fix</item>
+        <item quantity="other">%1$s required steps left — tap to fix</item>
+    </plurals>
+    <string name="banner_stopped_title">Blocking has stopped</string>
+    <string name="banner_stopped_body">Your phone shut it down — tap to switch it back on</string>
+    <string name="banner_update_title">Update available — v%1$s</string>
+    <string name="banner_update_body">Tap to download &amp; install the latest version</string>
+    <string name="banner_paused_title">Blocking is paused after the update</string>
+    <string name="banner_paused_body">Nothing is blocked right now. Tap below when you\'re ready.</string>
+    <string name="banner_reactivate">Reactivate blocking</string>
+
+    <!-- ===================== The Insights tab ===================== -->
+    <string name="insights_title">Insights</string>
+    <string name="insights_settings">Settings</string>
+    <string name="insights_trending">Trending this week</string>
+    <string name="insights_trending_body">How each app changed vs last week.</string>
+    <string name="insights_savers">Top time-savers</string>
+    <string name="insights_savers_body">You spent less time here than last week.</string>
+    <string name="insights_increase">Top increase</string>
+    <string name="insights_increase_body">These took more of your time — worth a look.</string>
+    <string name="insights_most_used">Most used apps</string>
+    <string name="insights_no_usage">No usage recorded yet.</string>
+    <string name="insights_needs_usage_access">Needs Usage Access.</string>
+    <string name="insights_most_opened">Most opened apps</string>
+    <string name="insights_blocked_opens">Times you opened blocked apps</string>
+    <string name="insights_no_blocks">No blocks yet today.</string>
+    <string name="insights_focus">Focus</string>
+    <string name="insights_longest_focus">Longest focus</string>
+    <string name="insights_continuous_use">Continuous use</string>
+    <string name="insights_distractions">Distractions</string>
+    <string name="insights_notifications">Notifications</string>
+    <string name="insights_pickups">Pickups</string>
+    <string name="insights_vs_average">vs your 7-day average</string>
+    <string name="insights_vs_last_week">vs last week</string>
+    <string name="insights_30_day_average">30-DAY AVERAGE</string>
+    <string name="insights_screen_time">SCREEN TIME</string>
+    <string name="insights_unlocks_today">unlocks today</string>
+    <string name="insights_blocks_today">blocks today</string>
+    <string name="insights_strict_time">strict time</string>
+
+    <string name="coach_title">AI Coach</string>
+    <string name="coach_subtitle">Personalized tips from your data · Gemini</string>
+    <string name="coach_analyzing">Analyzing your day…</string>
+    <string name="coach_goal_one">Goal: %1$s</string>
+    <string name="coach_goal_many">Goals: %1$s</string>
+    <string name="coach_chat">Chat with coach</string>
+    <string name="coach_new_tips">New tips</string>
+    <string name="coach_offline">Couldn\'t reach Gemini — tips will return when you\'re online.</string>
+
+    <string name="insights_balance">Balance</string>
+    <string name="insights_peak_time">Peak time</string>
+    <string name="insights_usage">Usage</string>
+    <string name="insights_bucket_productive">Productive</string>
+    <string name="insights_bucket_distracting">Distracting</string>
+    <string name="insights_bucket_neutral">Neutral</string>
+    <string name="mood_title">Mood check-in</string>
+    <string name="mood_prompt">How did today feel?</string>
+    <string name="mood_tap">Tap to check in.</string>
+    <string name="mood_no_note">No note added…</string>
+    <string name="mood_edit">Edit</string>
+    <string name="mood_sheet_title">How did your phone use feel today?</string>
+    <string name="mood_very_distracted">Very distracted</string>
+    <string name="mood_in_control">In control</string>
+    <string name="mood_note_label">Add a short note (optional)</string>
+    <string name="mood_note_placeholder">Your thoughts…</string>
+    <string name="mood_save">Save check-in</string>
+    <string name="mood_mixed">Mixed</string>
+    <string name="mood_not_checked_in">Not checked in</string>
+
+    <string name="insights_summary">Summary</string>
+    <string name="insights_daily_average">Daily average (7 days)</string>
+    <string name="insights_busiest_day">Busiest day</string>
+    <string name="insights_unlocks_row">Phone unlocks today</string>
+    <string name="insights_vs_yesterday">Compared to yesterday</string>
+    <string name="insights_todays_usage">Today\'s usage</string>
+    <string name="insights_light">Light</string>
+    <string name="insights_moderate">Moderate</string>
+    <string name="insights_heavy">Heavy</string>
+    <string name="insights_very_heavy">Very heavy</string>
+    <string name="insights_patterns">Patterns</string>
+
+    <string name="goals_title">Goals</string>
+    <string name="goals_subtitle">Daily targets the app tracks for you</string>
+    <string name="goals_new">New goal</string>
+    <string name="goals_empty">No goals yet. Set one here, or agree on one with your coach — the app will track it against your real usage every day.</string>
+    <string name="goals_set_one">Set a goal</string>
+    <string name="goals_ask_coach">Ask the coach</string>
+    <string name="goals_remove_title">Remove goal?</string>
+    <string name="goals_remove">Remove</string>
+    <string name="goals_remove_cd">Remove goal</string>
+    <string name="goals_enforce">Enforce with a schedule</string>
+    <string name="goals_kind_screen_time">Screen time</string>
+    <string name="goals_kind_one_app">One app</string>
+    <string name="goals_kind_unlocks">Unlocks</string>
+    <string name="goals_unlocks_prompt">Stay under this many unlocks a day:</string>
+    <string name="goals_unlocks_unit">unlocks</string>
+    <string name="goals_which_app">Which app?</string>
+    <string name="goals_time_prompt">Stay under this much per day:</string>
+    <string name="goals_add">Add goal</string>
+
+    <!-- The block screen's quotes. Two arrays rather than one structured type because
+         Android has no such thing; Quotes.kt zips them and asserts they stay the same
+         length, which is what a translation dropping one would otherwise silently do. -->
+    <string-array name="quote_texts">
+        <item>You have power over your mind — not outside events. Realize this, and you will find strength.</item>
+        <item>Freedom is not procured by a full enjoyment of what is desired, but by controlling the desire.</item>
+        <item>It is not the man who has too little, but the man who craves more, that is poor.</item>
+        <item>Most powerful is he who has himself in his own power.</item>
+        <item>No man is free who is not master of himself.</item>
+        <item>Resist the beginnings; the remedy comes too late.</item>
+        <item>The first and greatest victory is to conquer yourself.</item>
+        <item>I count him braver who overcomes his desires than him who conquers his enemies.</item>
+        <item>He who conquers others is strong; he who conquers himself is mighty.</item>
+        <item>Though he conquer a thousand men, he who conquers himself is the greatest victor.</item>
+        <item>Would you have a great empire? Rule over yourself.</item>
+        <item>It is not that we have a short time to live, but that we waste a lot of it.</item>
+        <item>You could leave life right now. Let that determine what you do, say and think.</item>
+        <item>The impediment to action advances action. What stands in the way becomes the way.</item>
+        <item>While we are postponing, life speeds by.</item>
+        <item>First say to yourself what you would be; and then do what you have to do.</item>
+        <item>Concentrate every minute like a Roman on doing what\'s in front of you.</item>
+        <item>We suffer more often in imagination than in reality.</item>
+        <item>Waste no more time arguing about what a good man should be. Be one.</item>
+        <item>Nothing is ours, except time.</item>
+        <item>Do nothing which is of no use.</item>
+        <item>My experience is what I agree to attend to.</item>
+        <item>Attention is the beginning of devotion.</item>
+        <item>A wealth of information creates a poverty of attention.</item>
+        <item>How we spend our days is, of course, how we spend our lives.</item>
+        <item>All of humanity\'s problems stem from man\'s inability to sit quietly in a room alone.</item>
+        <item>The cost of a thing is the amount of life you exchange for it.</item>
+        <item>Everybody worships. The only choice we get is what to worship.</item>
+        <item>The modern devil is cheap dopamine.</item>
+        <item>If you love life, don\'t waste time, for time is what life is made up of.</item>
+        <item>Control of consciousness determines the quality of life.</item>
+        <item>Clarity about what matters provides clarity about what does not.</item>
+        <item>Tell me, what is it you plan to do with your one wild and precious life?</item>
+        <item>We are what we repeatedly do. Excellence, then, is not an act, but a habit.</item>
+        <item>Discipline equals freedom.</item>
+        <item>You do not rise to the level of your goals. You fall to the level of your systems.</item>
+        <item>Every action you take is a vote for the person you wish to become.</item>
+        <item>The pain of discipline weighs ounces. The pain of regret weighs tons.</item>
+        <item>Hard choices, easy life. Easy choices, hard life.</item>
+        <item>Discipline is choosing between what you want now and what you want most.</item>
+        <item>Self-control is strength. Right thought is mastery. Calmness is power.</item>
+        <item>The version of you who set this block knew something. Listen to him.</item>
+        <item>This craving passes in about ninety seconds. Outlast it.</item>
+        <item>In an hour you won\'t remember wanting this. You will remember beating it.</item>
+        <item>You are not being deprived. You are being protected — by yourself.</item>
+        <item>The urge is loud because it is losing.</item>
+        <item>You have done harder things than closing a screen.</item>
+        <item>Relapse starts with one negotiation. This is it. Say no here.</item>
+        <item>The feed never ends. Your time does.</item>
+        <item>Nothing on that app will matter in a week. What you do instead might.</item>
+        <item>Real life is happening right now, off this screen.</item>
+        <item>Boredom is where your best ideas are hiding. Let yourself be bored.</item>
+        <item>That app is engineered to hook you. You saw it coming — that\'s why you\'re here.</item>
+        <item>Every scroll you skip is a rep for your willpower.</item>
+        <item>Progress, not perfection. Closing this screen counts.</item>
+        <item>Your attention is the most valuable thing you own. Spend it on purpose.</item>
+        <item>Don\'t trade this evening for a dopamine hit.</item>
+        <item>Losing once does not mean losing today. Close this and keep the day.</item>
+    </string-array>
+    <string-array name="quote_authors">
+        <item>Marcus Aurelius</item>
+        <item>Epictetus</item>
+        <item>Seneca</item>
+        <item>Seneca</item>
+        <item>Epictetus</item>
+        <item>Ovid</item>
+        <item>Plato</item>
+        <item>Aristotle</item>
+        <item>Lao Tzu</item>
+        <item>The Dhammapada</item>
+        <item>Publilius Syrus</item>
+        <item>Seneca</item>
+        <item>Marcus Aurelius</item>
+        <item>Marcus Aurelius</item>
+        <item>Seneca</item>
+        <item>Epictetus</item>
+        <item>Marcus Aurelius</item>
+        <item>Seneca</item>
+        <item>Marcus Aurelius</item>
+        <item>Seneca</item>
+        <item>Miyamoto Musashi</item>
+        <item>William James</item>
+        <item>Mary Oliver</item>
+        <item>Herbert Simon</item>
+        <item>Annie Dillard</item>
+        <item>Blaise Pascal</item>
+        <item>Henry David Thoreau</item>
+        <item>David Foster Wallace</item>
+        <item>Naval Ravikant</item>
+        <item>Bruce Lee</item>
+        <item>Mihaly Csikszentmihalyi</item>
+        <item>Cal Newport</item>
+        <item>Mary Oliver</item>
+        <item>Will Durant</item>
+        <item>Jocko Willink</item>
+        <item>James Clear</item>
+        <item>James Clear</item>
+        <item>Jim Rohn</item>
+        <item>Jerzy Gregorek</item>
+        <item>Unknown</item>
+        <item>James Allen</item>
+        <item>Your coach</item>
+        <item>Your coach</item>
+        <item>Your coach</item>
+        <item>Your coach</item>
+        <item>Your coach</item>
+        <item>Your coach</item>
+        <item>Your coach</item>
+        <item>Your coach</item>
+        <item>Your coach</item>
+        <item>Your coach</item>
+        <item>Your coach</item>
+        <item>Your coach</item>
+        <item>Your coach</item>
+        <item>Your coach</item>
+        <item>Your coach</item>
+        <item>Your coach</item>
+        <item>Your coach</item>
+    </string-array>
+
+    <!-- ===================== Your profile / PIN / words ===================== -->
+    <string name="account_name_placeholder">First name is fine</string>
+    <string name="account_name_note">Only used to greet you. Leave it empty and the app just says \"You\".</string>
+    <string name="account_where_shows">Where your name shows up</string>
+    <string name="account_profile_page">The Profile page</string>
+    <string name="account_profile_page_body">The greeting and the circle of initials at the top.</string>
+    <string name="account_coach">The AI Coach</string>
+    <string name="account_coach_body">It uses your first name when it talks to you.</string>
+    <string name="account_on_this_phone">On this phone</string>
+    <string name="account_no_account">No account, no sign-in</string>
+    <string name="account_no_account_body">AppBlocker has no login and no online account. Your name, your blocks and your statistics are stored on this phone only, and uninstalling the app removes them.</string>
+    <string name="account_run_setup">Run setup again</string>
+    <string name="account_run_setup_body">Walk through the welcome and permission steps once more. Your blocks, schedules, words and PIN are left exactly as they are.</string>
+    <string name="account_clear_name">Clear my name</string>
+    <string name="account_greeted">This is how you\'ll be greeted</string>
+    <string name="account_add_name">Add your name and the app will greet you by it</string>
+
+    <string name="pin_locked_title">AppBlocker is locked</string>
+    <string name="pin_locked_subtitle">Enter your PIN to make changes.</string>
+    <string name="pin_incorrect">Incorrect PIN</string>
+    <string name="pin_unlock">Unlock</string>
+    <string name="pin_save">Save PIN</string>
+    <string name="pin_new">New PIN</string>
+    <string name="pin_confirm">Confirm PIN</string>
+
+    <string name="words_intro">Add words you never want to see. In your browser they block matching sites and searches; in any other app, the moment one shows up on screen it\'s blocked.</string>
+    <string name="words_add_placeholder">Add a word</string>
+    <string name="words_empty">No blocked words yet — add a word like “casino” or “betting”.</string>
+    <string name="words_adult_pack">Adult content pack</string>
+    <string name="words_adult_pack_desc">Hundreds of pornographic words — English and Arabic — blocked automatically, on top of your own list.</string>
+    <string name="words_pack_unlocked">You can turn the pack off now — tap the switch. This unlock expires in %1$s.</string>
+    <string name="words_pack_waiting">Turn-off requested. The pack keeps protecting you for another %1$s.</string>
+    <string name="words_everywhere">Block these words in every app</string>
+    <string name="words_everywhere_desc">Recommended. When off, words are only blocked in your browser.</string>
+    <string name="gate_adult_title">Turn off adult protection</string>
+    <string name="gate_adult_blurb">This lowers your guard. Type the paragraph below — you can\'t paste it — before the clock runs out.</string>
+    <string name="gate_adult_detail">Miss the clock and you get a fresh paragraph and a fresh clock, as many times as it takes. Even once you\'ve typed it, the pack stays on for another 24 hours; only after that can you flip the switch off.</string>
+    <string name="gate_adult_confirm">Start the 24-hour wait</string>
+
+    <string name="expand">Expand</string>
+    <string name="collapse">Collapse</string>
+    <string name="back">Back</string>
+
+    <!-- ===================== Schedule editor ===================== -->
+    <string name="sched_start_now">Start blocking straight away</string>
+    <string name="sched_create_off">Create it switched off</string>
+    <string name="sched_is_on">This schedule is on</string>
+    <string name="sched_is_off">This schedule is off</string>
+    <string name="sched_strict_note">Strict Mode is running. A schedule can be switched on while a session is active, but not off.</string>
+    <string name="sched_will_start">It\'ll start working as soon as you create it.</string>
+    <string name="sched_saved_off">It\'ll be saved in your list, ready to switch on later.</string>
+    <string name="sched_enforcing">It\'s being enforced right now.</string>
+    <string name="sched_kept">It\'s kept in your list, but it isn\'t blocking anything.</string>
+    <string name="sched_delete">Delete</string>
+    <string name="sched_create">Create schedule</string>
+    <string name="sched_name">Name</string>
+    <string name="sched_start">Start</string>
+    <string name="sched_days">Days</string>
+    <string name="sched_pick_a_day">Pick at least one day — otherwise this schedule would never run.</string>
+    <string name="sched_same_time">Start and end are the same, so this would never run. For a whole day, use 00:00 to 23:59.</string>
+    <string name="sched_daily_limit">Daily limit</string>
+    <string name="sched_open_limit">Block after how many opens / day</string>
+    <string name="sched_any_wifi">Any Wi-Fi network</string>
+    <string name="sched_wifi_name">Wi-Fi name (SSID)</string>
+    <string name="sched_wifi_needs_location">Reading a specific network\'s name needs the Location permission.</string>
+    <string name="sched_wont_work">This schedule won\'t work yet</string>
+    <string name="sched_location">Location</string>
+    <string name="sched_location_needed">Location access is needed to block by place.</string>
+    <string name="sched_grant_location">Grant location access</string>
+    <string name="sched_no_location">No location captured yet.</string>
+
+    <!-- ===================== Quick Block editor ===================== -->
+    <string name="editor_save">Save</string>
+    <string name="editor_allowlist_intro">Select apps you want to allow. All others will be blocked.</string>
+    <string name="editor_blocklist_intro">Select apps, sites or words you want to block.</string>
+    <string name="editor_apps">Apps</string>
+    <string name="editor_websites_words">Websites &amp; words</string>
+    <string name="editor_extra_options">Extra options</string>
+    <string name="editor_porn_title">Porn sites blocking</string>
+    <string name="editor_porn_desc">Detects and blocks adult sites in your browsers.</string>
+    <string name="editor_newapps_title">Add newly installed apps</string>
+    <string name="editor_newapps_desc">Newly installed apps are automatically blocked.</string>
+    <string name="editor_purchases_title">In-app purchases blocking</string>
+    <string name="editor_purchases_desc">Blocks the Google Play purchase prompt in games and apps.</string>
+    <string name="editor_browsers_title">Block unsupported browsers</string>
+    <string name="editor_browsers_desc">Blocks browsers we can\'t filter (e.g. Brave) so they can\'t bypass website blocking.</string>
+    <string name="editor_pick_allowed">Pick the apps that stay open. Everything else is blocked.</string>
+    <string name="editor_pick_blocked">Pick the apps to block.</string>
+    <string name="editor_search_apps">Search apps</string>
+    <string name="editor_loading">Loading apps…</string>
+    <string name="editor_hypothetical">Hypothetical apps</string>
+    <string name="editor_hypothetical_desc">Apps you don\'t have yet. Block them now and they\'ll be blocked the moment you install them.</string>
+    <string name="editor_not_installed">Not installed yet</string>
+    <string name="editor_words_intro">Any web address or search containing one of these is blocked. Also on the Blocked words screen (Blocking tab), where you can block them inside apps too.</string>
+    <string name="editor_add_word_site">Add a word or site</string>
+    <string name="editor_blocking">Blocking</string>
+    <string name="editor_allowlist">Allowlist</string>
+    <string name="editor_blocklist">Blocklist</string>
+
+    <!-- ===================== Coach chat ===================== -->
+    <string name="chat_knows">What your coach knows</string>
+    <string name="chat_clear">Clear chat</string>
+    <string name="chat_thinking">Thinking…</string>
+    <string name="chat_clear_title">Clear chat?</string>
+    <string name="chat_clear_confirm">Clear</string>
+    <string name="chat_nothing_yet">Nothing yet — the more you chat, the better your coach knows you.</string>
+    <string name="chat_close">Close</string>
+    <string name="chat_forget">Forget everything</string>
+    <string name="chat_your_goals">Your goals</string>
+    <string name="chat_placeholder">Message your coach…</string>
+    <string name="chat_send">Send</string>
+
+    <!-- ===================== Last stragglers ===================== -->
+    <string name="sched_wifi_needs_location_body">Android only reveals which Wi-Fi network you\'re on if AppBlocker has location access. Without it this schedule can never match. Use “Any Wi-Fi network” instead, or grant access below.</string>
+    <string name="sched_use_location">Use my current location</string>
+    <string name="sched_save_place">Save this place</string>
+    <string name="sched_longpress_tip">Tip: long-press a place to delete it.</string>
+    <string name="sched_name_place">Name this place</string>
+    <string name="sched_place_label">Name (e.g. UK)</string>
+    <string name="sched_delete_place">Delete place</string>
+    <string name="sched_delete_place_body">Remove \"%1$s\" from saved places?</string>
+    <string name="sched_needs_all_the_time">Location blocking needs “Allow all the time”</string>
+    <string name="sched_needs_all_the_time_body">Blocking runs in the background, so foreground-only location isn\'t enough.</string>
+
+    <string name="update_available">Update available</string>
+    <string name="update_now">Update now</string>
+    <string name="update_later">Later</string>
+    <string name="update_downloading">Downloading update</string>
+
+    <string name="gate_placeholder">Type the paragraph above</string>
+    <string name="gate_how_title">How this works</string>
+    <string name="gate_got_it">Got it</string>
+
+    <string name="word_remove_title">Remove “%1$s”?</string>
+    <string name="word_remove">Remove</string>
+    <string name="word_keep">Keep it</string>
+
+    <string name="editor_mode_title">Blocking mode</string>
+    <string name="editor_mode_body">Choose the variant that works best for you.</string>
+    <string name="editor_shorts">Shorts</string>
+    <string name="editor_protection_off">Protection is off</string>
+    <string name="editor_protection_off_body">Turn on the blocker so your choices actually block.</string>
+    <string name="editor_turn_on">Turn on protection</string>
+
+    <!-- The "blocking has stopped" repair screen. -->
+    <string name="repair_title">Blocking has stopped</string>
+    <string name="repair_what_title">What happened</string>
+    <string name="repair_what_body_1">Your phone shut AppBlocker down. On Xiaomi this usually happens when you switch between spaces — switching space stops every app in the space you left, and your phone doesn\'t always start the blocker again when you come back.</string>
+    <string name="repair_what_body_2">Android still shows the switch as on, which is why it looked fine and blocked nothing. That switch remembers what you chose — it doesn\'t check whether the blocker is actually running. Now the app checks, and tells you.</string>
+    <string name="repair_steps_title">Switch it back on</string>
+    <string name="repair_step_1">Tap the button below — it opens AppBlocker\'s own page.</string>
+    <string name="repair_step_2">Turn AppBlocker OFF.</string>
+    <string name="repair_step_3">Turn it ON again, and accept the prompt.</string>
+    <string name="repair_step_4">Come back here. This page turns green when blocking is running.</string>
+    <string name="repair_open_switch">Open the switch</string>
+    <string name="repair_floating_title">So you actually see this next time</string>
+    <string name="repair_floating_body">The alert that brought you here pops up over whatever you\'re doing and comes back every few minutes until blocking is running again. But your phone keeps “Floating notifications” as its own switch, and it\'s off by default for most apps — while it\'s off, the alert can only sit silently in the shade. This is the one thing AppBlocker can\'t switch on for you.</string>
+    <string name="repair_notification_settings">Notification settings</string>
+    <string name="repair_why_title">Why the app can\'t do this for you</string>
+    <string name="repair_why_body">Android doesn\'t let an app switch its own blocking back on. That rule is what stops a bad app from quietly switching itself on and watching your screen — and it\'s the same rule that stops this one from switching itself back. It has to be your tap.</string>
+    <string name="repair_shortcut_title">A much faster way to do it</string>
+    <string name="repair_shortcut_body">In Settings ▸ Accessibility ▸ AppBlocker there\'s a Shortcut option. Turn it on and pick the volume keys. After that, holding both volume keys for three seconds switches the blocker off, and holding them again switches it back on — from anywhere, without hunting through Settings.</string>
+    <string name="repair_vendor_title">Making it happen less often</string>
+    <string name="repair_status_on">Blocking is back on</string>
+    <string name="repair_status_off">Blocking is not running</string>
+    <string name="repair_status_on_body">The blocker is running and watching again. Nothing else to do.</string>
+    <string name="repair_status_off_body">It\'s switched on in Settings, but it isn\'t running — so nothing is being blocked right now.</string>
 </resources>

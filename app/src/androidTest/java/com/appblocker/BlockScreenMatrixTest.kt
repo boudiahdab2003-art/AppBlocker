@@ -120,7 +120,7 @@ class BlockScreenMatrixTest {
      * that wraps, and wrapping is what pushes the button off the bottom.
      */
     private fun fillWithRealContent(v: View, layout: BlockLayouts.BlockLayout) {
-        val quote = Quotes.longest()
+        val quote = Quotes.longest(InstrumentationRegistry.getInstrumentation().targetContext)
         v.findViewById<TextView>(R.id.overlay_title)?.text = "Blocked"
         // A real app name in the real sentence the cover shows.
         v.findViewById<TextView>(R.id.overlay_subtitle)?.text = "YouTube is blocked"

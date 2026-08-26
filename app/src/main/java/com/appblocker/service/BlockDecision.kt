@@ -1,10 +1,12 @@
 package com.appblocker.service
 
+import com.appblocker.R
 import com.appblocker.data.AppRule
 import com.appblocker.data.BlockMode
 import com.appblocker.data.DangerZone
 import com.appblocker.data.Schedule
 import com.appblocker.data.ScheduleType
+import com.appblocker.data.Words
 
 /**
  * Why a cover was raised, from a fixed vocabulary, so a bug report can say **which rule fired**
@@ -128,6 +130,8 @@ internal data class BlockInputs(
     val scheduleConditionMet: (Schedule) -> Boolean,
     val scheduleLabel: (Schedule) -> String,
     val hourMinuteLabel: (Int) -> String,
+    /** The cover's wording, in the app's language. See [Words]. */
+    val words: Words,
 )
 
 /**
@@ -146,8 +150,8 @@ internal fun decideBlock(i: BlockInputs): BlockReason? {
     // Settings or a banking app, so invariant 7 is not at risk and the phone stays usable.
     if (i.dangerZoneRemainingMs > 0L && i.isRealBrowser) {
         return BlockReason(
-            "Danger zone",
-            DangerZone.message(i.dangerZoneRemainingMs),
+            i.words.get(R.string.block_danger_title),
+            DangerZone.message(i.words, i.dangerZoneRemainingMs),
             why = BlockWhy.DANGER,
         )
     }
@@ -171,9 +175,9 @@ internal fun decideBlock(i: BlockInputs): BlockReason? {
         val mins = (i.lockoutRemainingMs + 59_999L) / 60_000L
         val w = i.lockoutWord
         return BlockReason(
-            "Locked",
-            if (w != null) "“$w” was found here. Locked for $mins more min."
-            else "A blocked word was found here. Locked for $mins more min.",
+            i.words.get(R.string.block_locked_title),
+            if (w != null) i.words.plural(R.plurals.block_locked_word, mins.toInt(), w, mins.toString())
+            else i.words.plural(R.plurals.block_locked_generic, mins.toInt(), mins.toString()),
             why = BlockWhy.LOCKOUT,
         )
     }
@@ -184,8 +188,8 @@ internal fun decideBlock(i: BlockInputs): BlockReason? {
         // keyboard from Settings, so asking twice per decision is worth avoiding.
         if (i.quickEnforcing && i.rule?.isAllowed != true) {
             return BlockReason(
-                if (i.strict) "Strict Mode" else "Blocked",
-                "Only your allowed apps work right now.",
+                i.words.get(if (i.strict) R.string.block_strict_title else R.string.block_title),
+                i.words.get(R.string.block_allowlist_message),
                 why = BlockWhy.ALLOWLIST,
             )
         }
@@ -193,23 +197,29 @@ internal fun decideBlock(i: BlockInputs): BlockReason? {
     } else if (i.rule != null && i.rule.isBlocked) {
         if (i.strict) { // Strict Mode blocks every chosen app outright.
             return BlockReason(
-                "Strict Mode", "Blocked until your Strict session ends.",
+                i.words.get(R.string.block_strict_title),
+                i.words.get(R.string.block_strict_message),
                 why = BlockWhy.STRICT,
             )
         }
         if (i.quickEnforcing) when (i.rule.mode) {
             BlockMode.HARD, BlockMode.SCHEDULE ->
                 return BlockReason(
-                    "Blocked", "Quick Block is on for this app.", why = BlockWhy.QUICK,
+                    i.words.get(R.string.block_title),
+                    i.words.get(R.string.block_quick_message),
+                    why = BlockWhy.QUICK,
                 )
             BlockMode.LIMIT ->
                 if (i.rule.dailyLimitMinutes >= 0 &&
                     i.usedMinutesToday(i.pkg) >= i.rule.dailyLimitMinutes
                 ) return BlockReason(
-                    "Daily limit reached",
+                    i.words.get(R.string.block_limit_title),
                     if (i.rule.dailyLimitMinutes > 0)
-                        "You've used your ${i.rule.dailyLimitMinutes} min for today."
-                    else "This app is blocked for today.",
+                        i.words.plural(
+                            R.plurals.block_limit_message,
+                            i.rule.dailyLimitMinutes, i.rule.dailyLimitMinutes.toString(),
+                        )
+                    else i.words.get(R.string.block_limit_zero_message),
                     why = BlockWhy.LIMIT,
                 )
         }
@@ -220,33 +230,42 @@ internal fun decideBlock(i: BlockInputs): BlockReason? {
         if (!s.enabled || i.pkg !in s.packages) continue
         val reason = when (s.type) {
             ScheduleType.TIME -> if (i.scheduleConditionMet(s)) BlockReason(
-                "Blocked by schedule",
-                "${i.scheduleLabel(s)} is on until ${i.hourMinuteLabel(s.endMinutes)}.",
+                i.words.get(R.string.block_schedule_title),
+                i.words.get(
+                    R.string.block_schedule_message,
+                    i.scheduleLabel(s), i.hourMinuteLabel(s.endMinutes),
+                ),
                 why = BlockWhy.SCHED_TIME,
             ) else null
             ScheduleType.USAGE_LIMIT -> if (
                 i.usedMinutesToday(i.pkg) >= s.limitMinutes
             ) BlockReason(
-                "Daily limit reached",
-                "${s.limitMinutes} min used today — the limit set by ${i.scheduleLabel(s)}.",
+                i.words.get(R.string.block_limit_title),
+                i.words.plural(
+                    R.plurals.block_schedule_usage_message,
+                    s.limitMinutes, s.limitMinutes.toString(), i.scheduleLabel(s),
+                ),
                 why = BlockWhy.SCHED_USAGE,
             ) else null
             ScheduleType.LAUNCH_COUNT -> if (
                 i.opensToday(i.pkg) >= s.limitCount
             ) BlockReason(
-                "Open limit reached",
-                "Opened ${s.limitCount} times today — the limit set by ${i.scheduleLabel(s)}.",
+                i.words.get(R.string.block_opens_title),
+                i.words.plural(
+                    R.plurals.block_opens_message,
+                    s.limitCount, s.limitCount.toString(), i.scheduleLabel(s),
+                ),
                 why = BlockWhy.SCHED_LAUNCH,
             ) else null
             ScheduleType.WIFI -> if (i.scheduleConditionMet(s)) BlockReason(
-                "Blocked on this Wi-Fi",
-                if (s.wifiSsid.isBlank()) "This app is blocked while you're on Wi-Fi."
-                else "This app is blocked on “${s.wifiSsid}”.",
+                i.words.get(R.string.block_wifi_title),
+                if (s.wifiSsid.isBlank()) i.words.get(R.string.block_wifi_any_message)
+                else i.words.get(R.string.block_wifi_named_message, s.wifiSsid),
                 why = BlockWhy.SCHED_WIFI,
             ) else null
             ScheduleType.LOCATION -> if (i.scheduleConditionMet(s)) BlockReason(
-                "Blocked at this location",
-                "This app is blocked here by ${i.scheduleLabel(s)}.",
+                i.words.get(R.string.block_location_title),
+                i.words.get(R.string.block_location_message, i.scheduleLabel(s)),
                 why = BlockWhy.SCHED_LOCATION,
             ) else null
         }
@@ -257,8 +276,8 @@ internal fun decideBlock(i: BlockInputs): BlockReason? {
     // can't be used to bypass website/keyword filtering (e.g. Brave). Chrome is filterable.
     if (i.isUnsupportedBrowser && i.unsupportedBrowserBlockingActive()) {
         return BlockReason(
-            "Browser blocked",
-            "This browser can't be filtered, so it's blocked while word blocking is on.",
+            i.words.get(R.string.block_browser_title),
+            i.words.get(R.string.block_browser_message),
             why = BlockWhy.BROWSER,
         )
     }

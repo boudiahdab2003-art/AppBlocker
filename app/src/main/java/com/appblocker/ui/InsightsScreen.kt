@@ -58,6 +58,8 @@ import com.appblocker.ui.theme.pageWidth
 import com.appblocker.ui.theme.softGlow
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import androidx.compose.ui.res.stringResource
+import com.appblocker.R
 
 @Composable
 fun InsightsScreen(
@@ -84,11 +86,11 @@ fun InsightsScreen(
                         .clickable { openUsageAccessSettings(context) },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Filled.Settings, contentDescription = "Settings",
+                    Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.insights_settings),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
                 }
                 Spacer(Modifier.weight(1f))
-                Text("Insights", style = MaterialTheme.typography.titleLarge,
+                Text(stringResource(R.string.insights_title), style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
                 Spacer(Modifier.weight(1f))
                 Spacer(Modifier.size(36.dp))
@@ -203,7 +205,9 @@ fun InsightsScreen(
         // Trending apps (week over week)
         if (state.appTrends.isNotEmpty()) {
             item {
-                SectionCard("Trending this week", "How each app changed vs last week.",
+                SectionCard(
+                    stringResource(R.string.insights_trending),
+                    stringResource(R.string.insights_trending_body),
                     icon = Icons.AutoMirrored.Filled.TrendingUp) {
                     StatRows(state.appTrends, vm)
                 }
@@ -214,7 +218,9 @@ fun InsightsScreen(
         // Trend podiums: apps that lost / gained the most time vs last week.
         if (tab == 2 && state.biggestDrops.isNotEmpty()) {
             item {
-                SectionCard("Top time-savers", "You spent less time here than last week.",
+                SectionCard(
+                    stringResource(R.string.insights_savers),
+                    stringResource(R.string.insights_savers_body),
                     icon = Icons.AutoMirrored.Filled.TrendingDown) {
                     StatRows(state.biggestDrops, vm)
                 }
@@ -223,7 +229,9 @@ fun InsightsScreen(
         }
         if (tab == 2 && state.biggestIncreases.isNotEmpty()) {
             item {
-                SectionCard("Top increase", "These took more of your time — worth a look.",
+                SectionCard(
+                    stringResource(R.string.insights_increase),
+                    stringResource(R.string.insights_increase_body),
                     icon = Icons.AutoMirrored.Filled.TrendingUp) {
                     StatRows(state.biggestIncreases, vm)
                 }
@@ -241,9 +249,13 @@ fun InsightsScreen(
 
         // Most used apps
         item {
-            SectionCard("Most used apps", icon = Icons.Filled.BarChart) {
+            SectionCard(stringResource(R.string.insights_most_used), icon = Icons.Filled.BarChart) {
                 if (state.topApps.isEmpty()) {
-                    Text(if (state.usageAccess) "No usage recorded yet." else "Needs Usage Access.",
+                    Text(
+                        stringResource(
+                            if (state.usageAccess) R.string.insights_no_usage
+                            else R.string.insights_needs_usage_access,
+                        ),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(vertical = 12.dp))
@@ -257,7 +269,7 @@ fun InsightsScreen(
         if (state.topOpens.isNotEmpty()) {
             item {
                 Spacer(Modifier.padding(top = 24.dp))
-                SectionCard("Most opened apps",
+                SectionCard(stringResource(R.string.insights_most_opened),
                     "${state.totalOpens} app opens today · tap an app for details",
                     icon = Icons.Filled.TouchApp) {
                     StatRows(state.topOpens, vm)
@@ -268,9 +280,9 @@ fun InsightsScreen(
         // Blocked-app attempts
         item {
             Spacer(Modifier.padding(top = 24.dp))
-            SectionCard("Times you opened blocked apps", icon = Icons.Filled.Block) {
+            SectionCard(stringResource(R.string.insights_blocked_opens), icon = Icons.Filled.Block) {
                 if (state.attempts.isEmpty()) {
-                    Text("No blocks yet today.", style = MaterialTheme.typography.bodyMedium,
+                    Text(stringResource(R.string.insights_no_blocks), style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(vertical = 12.dp))
                 } else {
@@ -293,30 +305,36 @@ fun InsightsScreen(
         if (tab == 0 && state.usageAccess) {
             item {
                 Spacer(Modifier.padding(top = 24.dp))
-                Text("Focus", style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-                Spacer(Modifier.padding(top = 8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    StatTile("Longest focus", InsightsViewModel.fmt(state.longestFocusMin),
-                        Icons.Filled.CenterFocusStrong, Modifier.weight(1f))
-                    StatTile("Continuous use", InsightsViewModel.fmt(state.continuousUseMin),
-                        Icons.Filled.Smartphone, Modifier.weight(1f))
-                }
-                Spacer(Modifier.padding(top = 24.dp))
-
-                Text("Distractions", style = MaterialTheme.typography.titleLarge,
+                Text(stringResource(R.string.insights_focus), style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
                 Spacer(Modifier.padding(top = 8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     StatTile(
-                        "Notifications",
+                        stringResource(R.string.insights_longest_focus),
+                        InsightsViewModel.fmt(state.longestFocusMin),
+                        Icons.Filled.CenterFocusStrong, Modifier.weight(1f))
+                    StatTile(
+                        stringResource(R.string.insights_continuous_use),
+                        InsightsViewModel.fmt(state.continuousUseMin),
+                        Icons.Filled.Smartphone, Modifier.weight(1f))
+                }
+                Spacer(Modifier.padding(top = 24.dp))
+
+                Text(stringResource(R.string.insights_distractions), style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                Spacer(Modifier.padding(top = 8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    StatTile(
+                        stringResource(R.string.insights_notifications),
                         if (state.notificationAccess) "${state.notificationsToday}×" else "—",
                         Icons.Filled.Notifications, Modifier.weight(1f),
                         onClick = if (state.notificationAccess) null else {
                             { openNotificationAccess(context) }
                         },
                     )
-                    StatTile("Pickups", "${state.unlocksToday}×",
+                    StatTile(
+                        stringResource(R.string.insights_pickups),
+                        "${state.unlocksToday}×",
                         Icons.Filled.PhoneAndroid, Modifier.weight(1f))
                 }
                 Spacer(Modifier.padding(top = 24.dp))
@@ -355,8 +373,8 @@ internal fun InsightsHero(tab: Int, state: InsightsState) {
     // Comparison baseline per tab: Day vs the 7-day average, Week/Trend vs last week.
     val (baseline, baselineLabel) = when (tab) {
         0 -> (if (state.weekly.isNotEmpty()) state.weekly.sum() / state.weekly.size else 0) to
-            "vs your 7-day average"
-        else -> state.lastWeekMin to "vs last week"
+            stringResource(R.string.insights_vs_average)
+        else -> state.lastWeekMin to stringResource(R.string.insights_vs_last_week)
     }
     val compared = if (tab == 0) state.screenMinutes else state.thisWeekMin
     Column(
@@ -369,7 +387,11 @@ internal fun InsightsHero(tab: Int, state: InsightsState) {
     ) {
         Text(InsightsViewModel.fmt(minutes), fontSize = 52.sp, fontWeight = FontWeight.Bold,
             color = Color.White)
-        Text(if (tab == 2) "30-DAY AVERAGE" else "SCREEN TIME",
+        Text(
+            stringResource(
+                if (tab == 2) R.string.insights_30_day_average
+                else R.string.insights_screen_time,
+            ),
             style = MaterialTheme.typography.labelLarge, color = Color.White.copy(alpha = 0.8f))
         if (baseline > 0) {
             val pct = ((compared - baseline) * 100f / baseline).roundToInt()
@@ -389,9 +411,18 @@ internal fun InsightsHero(tab: Int, state: InsightsState) {
         }
         Spacer(Modifier.height(14.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            HeroChip("${state.unlocksToday}", "unlocks today", Modifier.weight(1f))
-            HeroChip("${state.attemptsTodayTotal}", "blocks today", Modifier.weight(1f))
-            HeroChip(InsightsViewModel.fmt(state.strictMinutes), "strict time", Modifier.weight(1f))
+            HeroChip(
+                "${state.unlocksToday}",
+                stringResource(R.string.insights_unlocks_today), Modifier.weight(1f),
+            )
+            HeroChip(
+                "${state.attemptsTodayTotal}",
+                stringResource(R.string.insights_blocks_today), Modifier.weight(1f),
+            )
+            HeroChip(
+                InsightsViewModel.fmt(state.strictMinutes),
+                stringResource(R.string.insights_strict_time), Modifier.weight(1f),
+            )
         }
     }
 }

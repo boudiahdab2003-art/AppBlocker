@@ -45,11 +45,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.appblocker.data.CleanStreak
+import com.appblocker.R
 import com.appblocker.data.dayStampOf
 import com.appblocker.data.todayStamp
+import com.appblocker.data.Words
 import com.appblocker.ui.theme.AppCard
 import com.appblocker.ui.theme.AppGradients
 import com.appblocker.ui.theme.Radius
@@ -109,6 +113,7 @@ fun CleanCounterScreen(
     val startedAt = remember(version, resumeTick) { CleanStreak.startedAt(context) }
     val best = remember(version, resumeTick) { CleanStreak.bestMs(context) }
     val undoAt = remember(version, resumeTick) { CleanStreak.undoAt(context) }
+    val words = remember(context) { Words.of(context) }
     val running = startedAt > 0L
     val elapsed = CleanStreak.elapsed(startedAt, now)
     val undoable = CleanStreak.canUndo(undoAt, now)
@@ -119,7 +124,7 @@ fun CleanCounterScreen(
 
     Scaffold(
         containerColor = Color.Transparent,
-        topBar = { EditorTopBar("Your counter", onBack) },
+        topBar = { EditorTopBar(stringResource(R.string.counter_title), onBack) },
     ) { padding ->
         Column(
             Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState())
@@ -129,7 +134,7 @@ fun CleanCounterScreen(
                 CounterHero(elapsed)
                 Spacer(Modifier.height(14.dp))
                 Text(
-                    "Since ${fullMoment(startedAt)}.",
+                    stringResource(R.string.counter_since, fullMoment(startedAt)),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -137,7 +142,7 @@ fun CleanCounterScreen(
                 if (elapsed >= DAY_MS && best > elapsed) {
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        "Your longest run so far was ${plainLength(best)}.",
+                        stringResource(R.string.counter_record, plainLength(best, words)),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -148,7 +153,7 @@ fun CleanCounterScreen(
                 if (elapsed >= DAY_MS && best in 1 until elapsed) {
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        "This is the longest you have ever gone.",
+                        stringResource(R.string.counter_record_beaten),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.primary,
@@ -157,7 +162,7 @@ fun CleanCounterScreen(
                 if (elapsed < DAY_MS) {
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        "It is running again from here. That is the whole of what today has to be.",
+                        stringResource(R.string.counter_fresh),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -170,17 +175,17 @@ fun CleanCounterScreen(
 
             if (!running) {
                 GradientButton(
-                    text = "Start the count",
+                    text = stringResource(R.string.counter_start),
                     onClick = { CleanStreak.setStart(context, System.currentTimeMillis()); version++ },
                 )
                 Spacer(Modifier.height(10.dp))
                 TextButton(
                     onClick = { picking = MomentPurpose.START },
                     modifier = Modifier.align(Alignment.CenterHorizontally),
-                ) { Text("I started earlier than now") }
+                ) { Text(stringResource(R.string.counter_started_earlier)) }
             } else {
                 GradientButton(
-                    text = "Write about today",
+                    text = stringResource(R.string.counter_write_today),
                     onClick = { onOpenJournal(todayStamp()) },
                 )
             }
@@ -197,17 +202,17 @@ fun CleanCounterScreen(
                 AppCard(elevation = 4.dp) {
                     ActionRow(
                         icon = Icons.Filled.EditCalendar,
-                        title = "Change the start time",
-                        subtitle = "If the count started before you told the app. This records " +
-                            "nothing — it just corrects the date it is counting from.",
+                        title = stringResource(R.string.counter_change_start_title),
+                        subtitle = stringResource(R.string.counter_change_start_body),
                         onClick = { picking = MomentPurpose.START },
                     )
                     Spacer(Modifier.height(4.dp))
                     ActionRow(
                         icon = Icons.Filled.RestartAlt,
-                        title = "It happened — start again",
-                        subtitle = "Records today and starts the count from zero. You can take " +
-                            "this back for ${CleanStreak.UNDO_WINDOW_LABEL} afterwards.",
+                        title = stringResource(R.string.counter_relapse_title),
+                        subtitle = stringResource(
+                            R.string.counter_relapse_body, stringResource(R.string.undo_window),
+                        ),
                         destructive = true,
                         modifier = Modifier.testTag(COUNTER_RESET_TAG),
                         onClick = { confirmRelapse = true },
@@ -217,9 +222,7 @@ fun CleanCounterScreen(
 
             Spacer(Modifier.height(20.dp))
             Text(
-                "This count, and everything you write in the journal, is stored on this phone " +
-                    "only. It is never sent anywhere — not in a bug report, and not to the AI " +
-                    "Coach.",
+                stringResource(R.string.counter_privacy),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -245,7 +248,10 @@ fun CleanCounterScreen(
 
     picking?.let { purpose ->
         MomentPicker(
-            title = if (purpose == MomentPurpose.START) "When did it start?" else "When did it happen?",
+            title = stringResource(
+                if (purpose == MomentPurpose.START) R.string.counter_pick_start
+                else R.string.counter_pick_relapse,
+            ),
             initial = if (running) startedAt else System.currentTimeMillis(),
             onDismiss = { picking = null },
             onPicked = { chosen ->
@@ -276,7 +282,7 @@ private fun CounterHero(elapsedMs: Long) {
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
             Text(
-                "You have held on for",
+                stringResource(R.string.counter_hero_lead),
                 style = MaterialTheme.typography.titleMedium,
                 color = Color.White.copy(alpha = 0.9f),
             )
@@ -285,10 +291,26 @@ private fun CounterHero(elapsedMs: Long) {
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                UnitBlock(e.days.toString(), if (e.days == 1L) "day" else "days", Modifier.weight(1f))
-                UnitBlock("%02d".format(e.hours), "hours", Modifier.weight(1f))
-                UnitBlock("%02d".format(e.minutes), "min", Modifier.weight(1f))
-                UnitBlock("%02d".format(e.seconds), "sec", Modifier.weight(1f))
+                UnitBlock(
+                    e.days.toString(),
+                    pluralStringResource(R.plurals.counter_unit_days, e.days.toInt()),
+                    Modifier.weight(1f),
+                )
+                UnitBlock(
+                    "%02d".format(e.hours),
+                    pluralStringResource(R.plurals.counter_unit_hours, e.hours.toInt()),
+                    Modifier.weight(1f),
+                )
+                UnitBlock(
+                    "%02d".format(e.minutes),
+                    pluralStringResource(R.plurals.counter_unit_minutes, e.minutes.toInt()),
+                    Modifier.weight(1f),
+                )
+                UnitBlock(
+                    "%02d".format(e.seconds),
+                    pluralStringResource(R.plurals.counter_unit_seconds, e.seconds.toInt()),
+                    Modifier.weight(1f),
+                )
             }
         }
     }
@@ -326,16 +348,14 @@ private fun NotStartedHero() {
     ) {
         Column {
             Text(
-                "Not counting yet",
+                stringResource(R.string.counter_not_started_title),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                "Start it and this screen shows exactly how long it has been — days, hours, " +
-                    "minutes and seconds — from that moment on. If you have already been going a " +
-                    "while, you can tell it when you really started.",
+                stringResource(R.string.counter_not_started_body),
                 style = MaterialTheme.typography.bodyMedium,
                 color = Color.White.copy(alpha = 0.9f),
             )
@@ -360,19 +380,20 @@ private fun UndoCard(onUndo: () -> Unit) {
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    "Reset by mistake?",
+                    stringResource(R.string.counter_undo_title),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
-                    "Undo puts the count back exactly where it was. Available for " +
-                        "${CleanStreak.UNDO_WINDOW_LABEL} after a reset.",
+                    stringResource(
+                        R.string.counter_undo_body, stringResource(R.string.undo_window),
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            TextButton(onClick = onUndo) { Text("Undo") }
+            TextButton(onClick = onUndo) { Text(stringResource(R.string.counter_undo)) }
         }
     }
 }
@@ -428,32 +449,40 @@ private fun RelapseDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Start the count again?") },
+        title = { Text(stringResource(R.string.counter_confirm_title)) },
         text = {
             Column {
                 Text(
                     if (elapsed >= DAY_MS) {
-                        "The ${plainLength(elapsed)} you have just done still happened. This " +
-                            "records today and starts the clock from now."
+                        stringResource(
+                            R.string.counter_confirm_body_after_run,
+                            plainLength(elapsed, Words.of(LocalContext.current)),
+                        )
                     } else {
-                        "This records today and starts the clock from now."
+                        stringResource(R.string.counter_confirm_body)
                     },
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    "You can undo it for the next ${CleanStreak.UNDO_WINDOW_LABEL}.",
+                    stringResource(
+                        R.string.counter_confirm_undo_note, stringResource(R.string.undo_window),
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(6.dp))
                 TextButton(onClick = onEarlier, modifier = Modifier.padding(0.dp)) {
-                    Text("It happened earlier — pick when")
+                    Text(stringResource(R.string.counter_confirm_earlier))
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onNow) { Text("Start again from now") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = {
+            TextButton(onClick = onNow) { Text(stringResource(R.string.counter_confirm_now)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) }
+        },
     )
 }
 
@@ -483,9 +512,11 @@ private fun MomentPicker(
                 TextButton(
                     enabled = state.selectedDateMillis != null,
                     onClick = { chosenDate = state.selectedDateMillis },
-                ) { Text("Next") }
+                ) { Text(stringResource(R.string.common_next)) }
             },
-            dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+            dismissButton = {
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) }
+            },
         ) {
             Text(
                 title,
@@ -501,14 +532,16 @@ private fun MomentPicker(
         )
         AlertDialog(
             onDismissRequest = onDismiss,
-            title = { Text("What time?") },
+            title = { Text(stringResource(R.string.counter_pick_time)) },
             text = { TimePicker(state = state) },
             confirmButton = {
                 TextButton(
                     onClick = { onPicked(combine(chosenDate!!, state.hour, state.minute)) },
-                ) { Text("Save") }
+                ) { Text(stringResource(R.string.common_save)) }
             },
-            dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+            dismissButton = {
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) }
+            },
         )
     }
 }
@@ -549,12 +582,13 @@ private fun fullMoment(millis: Long): String =
     SimpleDateFormat("EEEE, d MMMM yyyy 'at' h:mm a", Locale.getDefault()).format(Date(millis))
 
 /** A duration as a sentence would say it: "12 days", "1 day", "9 hours". Never a bare number. */
-internal fun plainLength(ms: Long): String {
+internal fun plainLength(ms: Long, words: Words): String {
     val e = CleanStreak.breakdown(ms)
     return when {
-        e.days > 0L -> if (e.days == 1L) "1 day" else "${e.days} days"
-        e.hours > 0L -> if (e.hours == 1L) "1 hour" else "${e.hours} hours"
-        e.minutes > 0L -> if (e.minutes == 1L) "1 minute" else "${e.minutes} minutes"
-        else -> "less than a minute"
+        e.days > 0L -> words.plural(R.plurals.length_days, e.days.toInt(), e.days.toString())
+        e.hours > 0L -> words.plural(R.plurals.length_hours, e.hours.toInt(), e.hours.toString())
+        e.minutes > 0L ->
+            words.plural(R.plurals.length_minutes, e.minutes.toInt(), e.minutes.toString())
+        else -> words.get(R.string.length_moment)
     }
 }

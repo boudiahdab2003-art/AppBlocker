@@ -2,7 +2,9 @@ package com.appblocker.service
 
 import android.content.Context
 import android.os.SystemClock
+import com.appblocker.R
 import com.appblocker.data.ServiceHealth
+import com.appblocker.data.Words
 
 /**
  * What the browser's address bar says — three answers, not two.
@@ -57,6 +59,17 @@ class WebContentFilter internal constructor(
     /** The wider net, matched ONLY while the danger zone is armed — see `danger_words.txt` for
      *  the curation rule, which is deliberately the opposite of the pack's. */
     private val dangerWords: List<String> = emptyList(),
+
+    /**
+     * The cover's wording, in the app's language.
+     *
+     * A constructor parameter rather than a lookup, so the unit tests — which build this
+     * directly — can hand it the shipped English resources and keep asserting on real wording.
+     * Production passes [Words.of], backed by [com.appblocker.data.AppLocale.wrap]: a filter
+     * that formatted its hits with the *phone's* locale would put an English line on an otherwise
+     * Arabic block screen.
+     */
+    private val words: Words,
 ) {
     /** [site] = matched because the user blocked an app and this is that app's WEBSITE (not a
      *  typed word). Callers treat site hits more gently (cover the page, but don't lock the
@@ -139,7 +152,10 @@ class WebContentFilter internal constructor(
                 // loose UI text that merely contains it ("instagrammer", icon labels).
                 val kw = k.trim().lowercase()
                 if (kw.isNotEmpty() && containsWord(lower, kw)) {
-                    return Hit("Blocked word", "“$kw” is on your blocked list.", kw)
+                    return Hit(
+                        words.get(R.string.block_word_title),
+                        words.get(R.string.block_word_message, kw), kw,
+                    )
                 }
             }
             // Site keywords are deliberately skipped with no URL: "block the website, not the
@@ -155,7 +171,10 @@ class WebContentFilter internal constructor(
             val norm = normalizeArabic(lower)
             for (w in packWords) {
                 if (containsWord(norm, w)) {
-                    return Hit("Adult content blocked", "“$w” is a blocked adult word.", w, adult = true)
+                    return Hit(
+                        words.get(R.string.block_adult_title),
+                        words.get(R.string.block_adult_word_message, w), w, adult = true,
+                    )
                 }
             }
         }
@@ -206,8 +225,8 @@ class WebContentFilter internal constructor(
      *  only because of the hour — so an ordinary word being blocked can be understood rather
      *  than read as the app breaking. */
     private fun dangerHit(word: String) = Hit(
-        "Danger zone",
-        "“$word” is blocked for the rest of the hour. It normally wouldn't be.",
+        words.get(R.string.block_danger_title),
+        words.get(R.string.block_danger_word_message, word),
         word,
         adult = true,
     )
@@ -219,17 +238,23 @@ class WebContentFilter internal constructor(
      *  could not be argued with, and the report could not be acted on. The word stays on the
      *  device: [com.appblocker.data.BlockLog] and the bug report still carry no subjects. */
     private fun adultSiteHit(domain: String) =
-        Hit("Adult site blocked", "“$domain” is on the adult-content list.", domain, adult = true)
+        Hit(
+            words.get(R.string.block_adult_site_title),
+            words.get(R.string.block_adult_site_message, domain), domain, adult = true,
+        )
 
     private fun adultSearchHit(word: String) =
-        Hit("Adult content blocked", "“$word” looks like adult content.", word, adult = true)
+        Hit(
+            words.get(R.string.block_adult_title),
+            words.get(R.string.block_adult_search_message, word), word, adult = true,
+        )
 
     /** A site the phone learned by catching it in two different browsers. Says so, because a
      *  block the user cannot account for is one they argue with — and this is the only list in
      *  the app that the app wrote itself. */
     private fun learnedSiteHit(domain: String) = Hit(
-        "Blocked site",
-        "“$domain” was caught in two different browsers, so it is blocked everywhere now.",
+        words.get(R.string.block_learned_site_title),
+        words.get(R.string.block_learned_site_message, domain),
         domain,
         adult = true,
     )
@@ -245,13 +270,16 @@ class WebContentFilter internal constructor(
      * retrying. Nothing here reads the page, so being early costs nothing.
      */
     fun checkUrl(url: String, userKeywords: List<String>, siteKeywords: List<String>): Hit? {
-        val host = url.lowercase().takeIf { it.isNotBlank() } ?: return null
+        val host = spacedUrl(url.lowercase()).takeIf { it.isNotBlank() } ?: return null
         for (k in userKeywords) {
             // '.' and '/' are word boundaries, so a bare "instagram" still matches inside
             // "instagram.com/reels" while "instagrammer" doesn't.
             val kw = k.trim().lowercase()
             if (kw.isNotEmpty() && containsWord(host, kw)) {
-                return Hit("Blocked word", "“$kw” is on your blocked list.", kw)
+                return Hit(
+                        words.get(R.string.block_word_title),
+                        words.get(R.string.block_word_message, kw), kw,
+                    )
             }
         }
         for (k in siteKeywords) {
@@ -286,7 +314,7 @@ class WebContentFilter internal constructor(
          *  from two different browsers, not a guess. */
         learnedDomains: Set<String> = emptySet(),
     ): Hit? {
-        val lower = url.lowercase().takeIf { it.isNotBlank() } ?: return null
+        val lower = spacedUrl(url.lowercase()).takeIf { it.isNotBlank() } ?: return null
         // Before the switchable layers: a site caught in two different browsers was established
         // by this phone rather than shipped by me, and turning the adult lists off should not
         // quietly discard what it learned.
@@ -297,7 +325,10 @@ class WebContentFilter internal constructor(
             val norm = normalizeArabic(lower)
             for (w in packWords) {
                 if (containsWord(norm, w)) {
-                    return Hit("Adult content blocked", "“$w” is a blocked adult word.", w, adult = true)
+                    return Hit(
+                        words.get(R.string.block_adult_title),
+                        words.get(R.string.block_adult_word_message, w), w, adult = true,
+                    )
                 }
             }
         }
@@ -357,6 +388,7 @@ class WebContentFilter internal constructor(
                         danger != null
                     WebContentFilter(
                         domains.orEmpty(), keywords.orEmpty(), pack.orEmpty(), danger.orEmpty(),
+                        words = Words.of(context),
                     ).also {
                         if (loaded) {
                             INSTANCE = it
@@ -391,6 +423,17 @@ class WebContentFilter internal constructor(
                     ServiceHealth.recordError(context, "assets/$asset", it)
                 }
             }.getOrNull()
+
+        /** A typed search arrives at the address bar as a URL, where the spaces he typed have
+         *  become "+" or "%20". Over half of `adult_words_pack.txt` is multi-word ("big black
+         *  cock", "cuckold stories", "hot wife porn"), and [containsWord] matches whole-word —
+         *  so without this none of them can fire on the address, only on the slower page-text
+         *  walk the address path exists to beat.
+         *
+         *  This cannot widen what matches: it restores the word boundary that was there when he
+         *  typed it, and never removes one. Glued hostnames ("cuckoldplace.com") are untouched
+         *  and still refuse, which is the guard that keeps "anal" out of "analytics.com". */
+        internal fun spacedUrl(url: String): String = url.replace('+', ' ').replace("%20", " ")
 
         /** Whole-word substring search: a match only counts when it isn't glued to another
          *  letter/digit on either side (works for Latin and Arabic alike).

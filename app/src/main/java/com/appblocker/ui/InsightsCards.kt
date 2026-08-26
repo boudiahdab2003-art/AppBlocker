@@ -68,6 +68,8 @@ import com.appblocker.ui.theme.AppGradients
 import com.appblocker.ui.theme.softGlow
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import androidx.compose.ui.res.stringResource
+import com.appblocker.R
 
 /**
  * The cards that make up the Insights tab — coach, balance, peak time, rollup, mood, summary,
@@ -93,9 +95,9 @@ internal fun CoachCard(
         }
         Spacer(Modifier.width(10.dp))
         Column {
-            Text("AI Coach", style = MaterialTheme.typography.titleLarge,
+            Text(stringResource(R.string.coach_title), style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-            Text("Personalized tips from your data · Gemini",
+            Text(stringResource(R.string.coach_subtitle),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -114,7 +116,7 @@ internal fun CoachCard(
                 Row(Modifier.padding(vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                     Spacer(Modifier.width(10.dp))
-                    Text("Analyzing your day…", style = MaterialTheme.typography.bodyMedium,
+                    Text(stringResource(R.string.coach_analyzing), style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface)
                 }
             }
@@ -145,30 +147,32 @@ internal fun CoachCard(
                             tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            if (goals.size == 1) "Goal: ${goals[0]}"
-                            else "Goals: ${goals.joinToString(" · ")}",
+                            if (goals.size == 1) stringResource(R.string.coach_goal_one, goals[0])
+                            else stringResource(
+                                R.string.coach_goal_many, goals.joinToString(" · "),
+                            ),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
-                GradientButton("Chat with coach", onClick = onChat,
+                GradientButton(stringResource(R.string.coach_chat), onClick = onChat,
                     modifier = Modifier.padding(top = 12.dp))
                 Row {
-                    TextButton(onClick = onNewTips) { Text("New tips") }
+                    TextButton(onClick = onNewTips) { Text(stringResource(R.string.coach_new_tips)) }
                 }
             }
             CoachState.Unavailable -> {
                 Text(
-                    "Couldn't reach Gemini — tips will return when you're online.",
+                    stringResource(R.string.coach_offline),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(top = 12.dp),
                 )
-                GradientButton("Chat with coach", onClick = onChat,
+                GradientButton(stringResource(R.string.coach_chat), onClick = onChat,
                     modifier = Modifier.padding(top = 12.dp))
                 Row {
-                    TextButton(onClick = onNewTips) { Text("Try again") }
+                    TextButton(onClick = onNewTips) { Text(stringResource(R.string.onboarding_try_again)) }
                 }
             }
         }
@@ -189,7 +193,7 @@ internal fun BalanceCard(tab: Int, state: InsightsState) {
         else -> state.monthAvg
     }
     val pct = (minutes * 100 / AWAKE_MIN).coerceIn(0, 100)
-    SectionCard("Balance", icon = Icons.Filled.Balance) {
+    SectionCard(stringResource(R.string.insights_balance), icon = Icons.Filled.Balance) {
         Spacer(Modifier.padding(top = 4.dp))
         Text("$pct % of awake time", style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
@@ -227,7 +231,7 @@ internal fun BalanceCard(tab: Int, state: InsightsState) {
 @Composable
 internal fun PeakTimeCard(state: InsightsState) {
     val peakIdx = state.hourly.indices.maxByOrNull { state.hourly[it] } ?: return
-    SectionCard("Peak time", icon = Icons.Filled.Schedule) {
+    SectionCard(stringResource(R.string.insights_peak_time), icon = Icons.Filled.Schedule) {
         Spacer(Modifier.padding(top = 4.dp))
         Text("${hourLabel(peakIdx)} – ${hourLabel((peakIdx + 1) % 24)}",
             style = MaterialTheme.typography.titleLarge,
@@ -256,11 +260,11 @@ internal fun UsageRollupCard(state: InsightsState) {
     val total = productive + distracting + neutral
     if (total <= 0) return
     fun pct(m: Int) = (m * 100f / total).roundToInt()
-    SectionCard("Usage", icon = Icons.Filled.PieChart) {
+    SectionCard(stringResource(R.string.insights_usage), icon = Icons.Filled.PieChart) {
         Spacer(Modifier.padding(top = 4.dp))
-        UsageBucketRow("Productive", pct(productive), Color(0xFF22C55E))
-        UsageBucketRow("Distracting", pct(distracting), Color(0xFF7C5CFF))
-        UsageBucketRow("Neutral", pct(neutral), Color(0xFF3B82F6))
+        UsageBucketRow(stringResource(R.string.insights_bucket_productive), pct(productive), Color(0xFF22C55E))
+        UsageBucketRow(stringResource(R.string.insights_bucket_distracting), pct(distracting), Color(0xFF7C5CFF))
+        UsageBucketRow(stringResource(R.string.insights_bucket_neutral), pct(neutral), Color(0xFF3B82F6))
         Spacer(Modifier.padding(top = 4.dp))
     }
 }
@@ -325,26 +329,26 @@ internal fun StatTile(
 @Composable
 internal fun MoodCard(state: InsightsState, onOpen: () -> Unit) {
     val (label, color) = moodLabel(state.moodRating)
-    SectionCard("Mood check-in", icon = Icons.Filled.Mood) {
+    SectionCard(stringResource(R.string.mood_title), icon = Icons.Filled.Mood) {
         Row(
             Modifier.fillMaxWidth().clickable { onOpen() }.padding(vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                Text(if (state.moodRating < 0) "How did today feel?" else label,
+                Text(if (state.moodRating < 0) stringResource(R.string.mood_prompt) else label,
                     style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
                     color = if (state.moodRating < 0) MaterialTheme.colorScheme.onSurface else color)
                 Text(
                     when {
-                        state.moodRating < 0 -> "Tap to check in."
-                        state.moodNote.isBlank() -> "No note added…"
+                        state.moodRating < 0 -> stringResource(R.string.mood_tap)
+                        state.moodNote.isBlank() -> stringResource(R.string.mood_no_note)
                         else -> state.moodNote
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2,
                 )
             }
-            Icon(Icons.Filled.Edit, contentDescription = "Edit",
+            Icon(Icons.Filled.Edit, contentDescription = stringResource(R.string.mood_edit),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
         }
     }
@@ -366,7 +370,7 @@ internal fun MoodSheet(
     val (label, color) = moodLabel(rating.roundToInt())
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface) {
         Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 28.dp)) {
-            Text("How did your phone use feel today?", style = MaterialTheme.typography.titleLarge,
+            Text(stringResource(R.string.mood_sheet_title), style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
             Spacer(Modifier.padding(top = 12.dp))
             Text(label, style = MaterialTheme.typography.titleMedium,
@@ -393,24 +397,24 @@ internal fun MoodSheet(
                 )
             }
             Row(Modifier.fillMaxWidth()) {
-                Text("Very distracted", style = MaterialTheme.typography.labelMedium,
+                Text(stringResource(R.string.mood_very_distracted), style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.weight(1f))
-                Text("In control", style = MaterialTheme.typography.labelMedium,
+                Text(stringResource(R.string.mood_in_control), style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Spacer(Modifier.padding(top = 16.dp))
-            Text("Add a short note (optional)", style = MaterialTheme.typography.labelLarge,
+            Text(stringResource(R.string.mood_note_label), style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.padding(top = 6.dp))
             OutlinedTextField(
                 value = note, onValueChange = { note = it },
-                placeholder = { Text("Your thoughts…") },
+                placeholder = { Text(stringResource(R.string.mood_note_placeholder)) },
                 modifier = Modifier.fillMaxWidth(), minLines = 2,
                 shape = RoundedCornerShape(16.dp),
             )
             Spacer(Modifier.padding(top = 16.dp))
-            GradientButton(text = "Save check-in",
+            GradientButton(text = stringResource(R.string.mood_save),
                 onClick = { onSave(rating.roundToInt(), note) })
         }
     }
@@ -434,21 +438,21 @@ internal fun SummaryStats(state: InsightsState) {
     val busiestIdx = state.weekly.indices.maxByOrNull { state.weekly[it] } ?: 6
     val rating = rateUsage(today)
 
-    SectionCard("Summary", icon = Icons.Filled.Assessment) {
-        SummaryRow("Daily average (7 days)") {
+    SectionCard(stringResource(R.string.insights_summary), icon = Icons.Filled.Assessment) {
+        SummaryRow(stringResource(R.string.insights_daily_average)) {
             Text(InsightsViewModel.fmt(avg), style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
         }
-        SummaryRow("Busiest day") {
+        SummaryRow(stringResource(R.string.insights_busiest_day)) {
             Text(weekdayLabel(daysAgo = 6 - busiestIdx, short = true),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
         }
-        SummaryRow("Phone unlocks today") {
+        SummaryRow(stringResource(R.string.insights_unlocks_row)) {
             Text("${state.unlocksToday}", style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
         }
-        SummaryRow("Compared to yesterday") {
+        SummaryRow(stringResource(R.string.insights_vs_yesterday)) {
             if (yesterday > 0) {
                 val pct = ((today - yesterday) * 100f / yesterday).roundToInt()
                 val up = pct >= 0
@@ -461,7 +465,7 @@ internal fun SummaryStats(state: InsightsState) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        SummaryRow("Today's usage") {
+        SummaryRow(stringResource(R.string.insights_todays_usage)) {
             Box(Modifier.clip(RoundedCornerShape(50)).background(rating.second.copy(alpha = 0.18f))
                 .padding(horizontal = 12.dp, vertical = 4.dp)) {
                 Text(rating.first, style = MaterialTheme.typography.labelLarge,
@@ -497,7 +501,7 @@ internal fun rateUsage(totalMinutes: Int): Pair<String, Color> = when {
 
 @Composable
 internal fun PatternsCard(state: InsightsState) {
-    SectionCard("Patterns", icon = Icons.Filled.CalendarMonth) {
+    SectionCard(stringResource(R.string.insights_patterns), icon = Icons.Filled.CalendarMonth) {
         SummaryRow("Weekday average") {
             Text(InsightsViewModel.fmt(state.weekdayAvg), style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)

@@ -34,7 +34,7 @@ class WebContentFilterTest {
         adultKeywords: List<String> = emptyList(),
         pack: List<String> = emptyList(),
         danger: List<String> = emptyList(),
-    ) = WebContentFilter(domains, adultKeywords, pack, danger)
+    ) = WebContentFilter(domains, adultKeywords, pack, danger, EnglishStrings)
 
     // The three answers the address bar can give, short enough to read at a glance in a call.
     private fun at(url: String) = BrowserAddress.At(url)
@@ -952,6 +952,86 @@ class WebContentFilterTest {
             filter(adultKeywords = listOf("porn"))
                 .checkUrlAdult("https://freeporntube.test/x", adultPack = false, blockAdult = true),
         )
+    }
+
+
+    /**
+     * **A search query is not a sentence — it is a URL, and the separator is "+".**
+     *
+     * More than half the always-on pack is multi-word ("big black cock", "cuckold stories",
+     * "hot wife porn"). Every one of them is matched whole-word against the raw address, where
+     * the space he typed has become "+" or "%20" — so the entry never fires on the fast
+     * address-bar path, and the block falls back to the page-text walk it was written to beat.
+     */
+    @Test fun `a multi word entry matches a search url where the space became a plus`() {
+        val f = filter(pack = listOf("big black cock"))
+        assertNotNull(f.checkUrlAdult("https://google.com/search?q=big+black+cock", true, false))
+        assertNotNull(f.checkUrlAdult("https://google.com/search?q=big%20black%20cock", true, false))
+    }
+
+    @Test fun `a user keyword matches a search url where the space became a plus`() {
+        val f = filter()
+        assertNotNull(f.checkUrl("google.com/search?q=hot+wife", listOf("hot wife"), emptyList()))
+    }
+
+
+    // ---- the widened site list (26 Aug 2026) ----------------------------------------------
+
+    private fun shipped(name: String) = File("src/main/assets/$name").readLines()
+        .map { it.substringBefore('#').trim() }.filter { it.isNotEmpty() }
+
+    /**
+     * **Every domain entry must carry a dot.**
+     *
+     * Domains are matched as a plain SUBSTRING, and when no address can be read at all they
+     * fall back to the page text (see [check]). A bare "kink" or "fux" would then fire inside
+     * ordinary words on any screen. The dot is what keeps an entry meaning "this site" rather
+     * than "this string" — it is the whole reason the list can be matched loosely and safely.
+     */
+    @Test fun `every adult domain is a hostname, not a bare word`() {
+        val bare = shipped("adult_domains.txt").filter { "." !in it }
+        assertEquals("domain entries without a dot", emptyList<String>(), bare)
+    }
+
+    /**
+     * The widening, proved against the REAL shipped files rather than a hand-made list — the
+     * point of the change was the sites whose names give nothing away, so a test built from
+     * invented entries would prove nothing about what actually ships.
+     */
+    @Test fun `the shipped lists block the sites that do not name themselves`() {
+        val f = WebContentFilter(
+            shipped("adult_domains.txt"), shipped("adult_keywords.txt"),
+            shipped("adult_words_pack.txt"), shipped("danger_words.txt"), EnglishStrings,
+        )
+        for (url in listOf(
+            "https://spankbang.com/x", "https://coomer.su/user/1", "https://erome.com/a/x",
+            "https://jable.tv/videos/x", "https://camsoda.com/x", "https://literotica.com/s/x",
+            "https://e621.net/posts", "https://cuckoldplace.com/forum", "https://fansly.com/x",
+            "https://mrdeepfakes.com/x", "https://sxyprn.com/x", "https://4tube.com/x",
+        )) {
+            assertNotNull("$url must be blocked", f.checkUrlAdult(url, true, true))
+        }
+    }
+
+    /**
+     * The other half, and the one this file exists for: widening the site list must not have
+     * cost a single ordinary page. Run against the owner's own start page, a bank, a news site
+     * and — the case v1.88 was about — material that argues AGAINST porn.
+     */
+    @Test fun `widening the site list blocked nothing ordinary`() {
+        val f = WebContentFilter(
+            shipped("adult_domains.txt"), shipped("adult_keywords.txt"),
+            shipped("adult_words_pack.txt"), shipped("danger_words.txt"), EnglishStrings,
+        )
+        for (url in listOf(
+            "https://www.google.com/", "https://github.com/boudiahdab2003-art/AppBlocker",
+            "https://en.wikipedia.org/wiki/Nifty_Fifty", "https://www.thinking.com/",
+            "https://analytics.google.com/", "https://developer.android.com/reference",
+            "https://www.bbc.com/news", "https://nofap.com/", "https://www.java.com/en/",
+            "https://fightthenewdrug.org/", "https://www.womenshealth.gov/",
+        )) {
+            assertNull("$url must NOT be blocked", f.checkUrlAdult(url, true, true))
+        }
     }
 
 }

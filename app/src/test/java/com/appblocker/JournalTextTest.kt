@@ -51,23 +51,23 @@ class JournalTextTest {
 
     @Test
     fun `one of anything is singular`() {
-        assertEquals("1 day", plainLength(day))
-        assertEquals("1 hour", plainLength(hour))
-        assertEquals("1 minute", plainLength(60_000L))
+        assertEquals("1 day", plainLength(day, EnglishStrings))
+        assertEquals("1 hour", plainLength(hour, EnglishStrings))
+        assertEquals("1 minute", plainLength(60_000L, EnglishStrings))
     }
 
     @Test
     fun `the largest unit that fits is the one used`() {
-        assertEquals("12 days", plainLength(12 * day + 5 * hour))
-        assertEquals("5 hours", plainLength(5 * hour + 30 * 60_000L))
-        assertEquals("30 minutes", plainLength(30 * 60_000L))
+        assertEquals("12 days", plainLength(12 * day + 5 * hour, EnglishStrings))
+        assertEquals("5 hours", plainLength(5 * hour + 30 * 60_000L, EnglishStrings))
+        assertEquals("30 minutes", plainLength(30 * 60_000L, EnglishStrings))
     }
 
     /** A run of seconds still has to read as something. "0 minutes" would be the app telling
      *  somebody their effort rounds to nothing. */
     @Test
     fun `a run of seconds is described, not rounded to zero`() {
-        assertEquals("less than a minute", plainLength(9_000L))
-        assertEquals("less than a minute", plainLength(0L))
+        assertEquals("less than a minute", plainLength(9_000L, EnglishStrings))
+        assertEquals("less than a minute", plainLength(0L, EnglishStrings))
     }
 }

@@ -45,6 +45,9 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import com.appblocker.R
 
 /** Premium Pomodoro picker: rich selectable preset cards + Start. */
 @Composable
@@ -54,16 +57,18 @@ internal fun PomodoroPickerDialog(onStart: (Int, Int, Int) -> Unit, onDismiss: (
     var selected by remember { mutableStateOf(presets.first()) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) }
+        },
         confirmButton = {
             TextButton(onClick = { onStart(selected.first, selected.second, selected.third); onDismiss() }) {
-                Text("Start")
+                Text(stringResource(R.string.quick_start))
             }
         },
-        title = { Text("Pomodoro") },
+        title = { Text(stringResource(R.string.pomodoro)) },
         text = {
             Column {
-                Text("Block during work, free during breaks.",
+                Text(stringResource(R.string.pomodoro_body),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.padding(top = 12.dp))
@@ -113,8 +118,14 @@ private fun PomodoroOption(p: Triple<Int, Int, Int>, selected: Boolean, onClick:
 @Composable
 internal fun TimerPomoRow(enabled: Boolean, onTimer: () -> Unit, onPomo: () -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        NeutralButton(Modifier.weight(1f), Icons.Filled.Timer, "Timer", enabled, compact = true, onClick = onTimer)
-        NeutralButton(Modifier.weight(1f), Icons.Filled.Spa, "Pomodoro", enabled, compact = true, onClick = onPomo)
+        NeutralButton(
+            Modifier.weight(1f), Icons.Filled.Timer, stringResource(R.string.timer),
+            enabled, compact = true, onClick = onTimer,
+        )
+        NeutralButton(
+            Modifier.weight(1f), Icons.Filled.Spa, stringResource(R.string.pomodoro),
+            enabled, compact = true, onClick = onPomo,
+        )
     }
 }
 
@@ -127,7 +138,7 @@ internal fun QuickBlockPill(
     val baseTint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (dimmed) 0.45f else 1f)
     if (allowlist) {
         // Allowlist mode: only allowed apps run; everything else is blocked.
-        val desc = "Allowing $allowed apps, blocking all others"
+        val desc = stringResource(R.string.quick_allowing, allowed.toString())
         Row(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(50))
                 .background(MaterialTheme.colorScheme.background.copy(alpha = 0.55f))
@@ -138,13 +149,16 @@ internal fun QuickBlockPill(
         ) {
             Icon(Icons.Filled.Star, null, tint = baseTint, modifier = Modifier.size(18.dp))
             PillCount(Icons.Filled.PhoneAndroid, allowed, baseTint)
-            Text("allowed · all others blocked",
+            Text(stringResource(R.string.quick_allowed_pill),
                 style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold,
                 color = baseTint)
         }
         return
     }
-    val pillDescription = "Blocking $apps apps, $words words" + if (adultOn) ", adult filter on" else ""
+    val pillDescription = stringResource(
+        if (adultOn) R.string.quick_pill_desc_adult else R.string.quick_pill_desc,
+        apps.toString(), words.toString(),
+    )
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(50))
             .background(MaterialTheme.colorScheme.background.copy(alpha = 0.55f))

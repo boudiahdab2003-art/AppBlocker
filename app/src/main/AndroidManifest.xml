@@ -96,6 +96,8 @@
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
+        android:localeConfig="@xml/locales_config"
+        android:supportsRtl="true"
         android:theme="@style/Theme.AppBlocker">
         <!-- The launcher entry lives on exactly ONE of the icon aliases below (Profile ▸ App icon
              switches them via PackageManager). MainActivity itself stays enabled so explicit

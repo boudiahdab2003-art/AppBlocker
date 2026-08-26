@@ -1,6 +1,7 @@
 package com.appblocker.ui
 
 import android.content.Context
+import android.app.Activity
 import android.content.Intent
 import android.provider.Settings
 import android.widget.Toast
@@ -41,6 +42,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Timelapse
@@ -74,12 +76,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.appblocker.Dist
+import com.appblocker.R
 import com.appblocker.data.AppIcons
+import com.appblocker.data.AppLocale
 import com.appblocker.data.AttemptCounter
 import com.appblocker.data.BlockLayouts
 import com.appblocker.data.BlockThemes
@@ -105,15 +111,13 @@ import kotlinx.coroutines.delay
  * A function rather than a constant only because the copy names the guard's own delays, which are
  * read off [OffSwitchGuard]. Confirming it starts the wait; it does not lower the guard.
  */
-private fun guardOffGate() = GateCopy(
-    title = "Turn off the guard",
-    blurb = "This is the switch that stops you switching blocking off in a bad moment. " +
-        "Type the paragraph below — you can't paste it — before the clock runs out.",
-    detail = "Miss the clock and you get a fresh paragraph and a fresh clock, as many " +
-        "times as it takes. Even once you've typed it, the guard stays on for another " +
-        "${OffSwitchGuard.DELAY_LABEL}; after that you have " +
-        "${OffSwitchGuard.WINDOW_LABEL} to turn it off.",
-    confirmLabel = "Start the ${OffSwitchGuard.DELAY_LABEL} wait",
+private fun guardOffGate(ctx: Context) = GateCopy(
+    title = ctx.getString(R.string.gate_guard_title),
+    blurb = ctx.getString(R.string.gate_guard_blurb),
+    detail = ctx.getString(
+        R.string.gate_guard_detail, OffSwitchGuard.DELAY_LABEL, OffSwitchGuard.WINDOW_LABEL,
+    ),
+    confirmLabel = ctx.getString(R.string.gate_guard_confirm, OffSwitchGuard.DELAY_LABEL),
 )
 
 /**
@@ -177,6 +181,8 @@ fun ProfileScreen(
     // re-runs this `remember` and picks the new name up. resumeTick covers the rest.
     val userName = remember(resumeTick) { SettingsStore.userName(context) }
     var showTheme by remember { mutableStateOf(false) }
+    var showLanguage by remember { mutableStateOf(false) }
+    val languageTag = remember(resumeTick) { AppLocale.tag(context) }
     var currentIcon by remember { mutableStateOf(AppIcons.current(context)) }
     // resumeTick so the row updates after returning from the picker.
     val currentBlockTheme = remember(resumeTick) { BlockThemes.current(context) }
@@ -256,22 +262,21 @@ fun ProfileScreen(
                     .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)).padding(14.dp)
             ) {
                 Text(
-                    "🔒 Strict Mode is on — settings are locked until the timer ends.",
+                    stringResource(R.string.profile_strict_banner),
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary,
                 )
             }
         }
 
-        SectionTitle("You")
+        SectionTitle(stringResource(R.string.profile_section_you))
         SettingCard {
             ProfileRow(
                 icon = Icons.Filled.Person,
-                title = "Your profile",
+                title = stringResource(R.string.profile_your_profile),
                 subtitle = if (DisplayName.isSet(userName)) {
-                    "You're set up as ${DisplayName.display(userName)}. Change your name, or run " +
-                        "the setup walkthrough again."
+                    stringResource(R.string.profile_your_profile_set, DisplayName.display(userName))
                 } else {
-                    "Tell the app what to call you — it's stored on this phone and nowhere else."
+                    stringResource(R.string.profile_your_profile_unset)
                 },
                 chevron = true,
                 // A name is not a protection setting, so Strict Mode has no reason to freeze it.
@@ -280,16 +285,15 @@ fun ProfileScreen(
             )
         }
 
-        SectionTitle("Recovery")
+        SectionTitle(stringResource(R.string.profile_section_recovery))
         SettingCard {
             ProfileRow(
                 icon = Icons.Filled.Timelapse,
-                title = "Your counter",
+                title = stringResource(R.string.profile_counter_title),
                 // Deliberately does NOT print the number. The owner asked for it to live on its
                 // own screen and nowhere else — he goes and looks at it, it does not come and
                 // find him on a bad day.
-                subtitle = "How long it has been since your last relapse — days, hours, " +
-                    "minutes and seconds, counting.",
+                subtitle = stringResource(R.string.profile_counter_subtitle),
                 chevron = true,
                 // Not locked during Strict. Nothing here makes blocking weaker: the count is an
                 // honest record, and refusing to let someone keep it honest protects nothing.
@@ -299,16 +303,15 @@ fun ProfileScreen(
             Divider()
             ProfileRow(
                 icon = Icons.Filled.Create,
-                title = "Journal",
-                subtitle = "Write about any day — how it felt, what set it off, what helped. " +
-                    "Stored on this phone only.",
+                title = stringResource(R.string.profile_journal_title),
+                subtitle = stringResource(R.string.profile_journal_subtitle),
                 chevron = true,
                 enabled = true,
                 onClick = onOpenJournal,
             )
         }
 
-        SectionTitle("Protection")
+        SectionTitle(stringResource(R.string.profile_section_protection))
         // Only appears when the blocker has actually swallowed something. These errors were being
         // recorded and never read by anything, which is how a broken blocker could look perfectly
         // healthy — blocking carries on by design when one goes wrong, so without a row like this
@@ -317,12 +320,15 @@ fun ProfileScreen(
             SettingCard {
                 ProfileRow(
                     icon = Icons.Filled.Warning,
-                    title = if (healthErrors == 1) "Blocking hit 1 error" else "Blocking hit $healthErrors errors",
+                    title = pluralStringResource(
+                        R.plurals.profile_health_errors_title,
+                        healthErrors, healthErrors.toString(),
+                    ),
                     subtitle = (healthError ?: "Unknown") + "\n" + (
                         if (BugReportSender.enabled()) {
-                            "Blocking kept running. Reported automatically — tap to clear."
+                            stringResource(R.string.profile_health_reported)
                         } else {
-                            "Blocking kept running. Tap to clear once you've reported it."
+                            stringResource(R.string.profile_health_unreported)
                         }
                         ),
                     chevron = true,
@@ -334,12 +340,11 @@ fun ProfileScreen(
         SettingCard {
             ProfileRow(
                 icon = Icons.Filled.BugReport,
-                title = "Report a problem",
+                title = stringResource(R.string.profile_report_title),
                 subtitle = if (BugReportSender.enabled()) {
-                    "Describe what went wrong and it goes straight to the developer. " +
-                        "Never includes your blocked words, sites or app names."
+                    stringResource(R.string.profile_report_subtitle)
                 } else {
-                    "Reporting isn't set up in this build."
+                    stringResource(R.string.profile_report_disabled)
                 },
                 chevron = true,
                 // Deliberately allowed during Strict: reporting a bug changes no protection, and
@@ -351,9 +356,12 @@ fun ProfileScreen(
         SettingCard {
             ProfileRow(
                 icon = Icons.Filled.Lock,
-                title = if (pinSet) "Change PIN" else "Set a PIN",
-                subtitle = if (pinSet) "A PIN is set. It's needed to change your blocks."
-                else "Lock your settings so blocks can't be removed on a whim.",
+                title = stringResource(
+                    if (pinSet) R.string.profile_pin_change else R.string.profile_pin_set,
+                ),
+                subtitle = stringResource(
+                    if (pinSet) R.string.profile_pin_on else R.string.profile_pin_off,
+                ),
                 badge = pinSet,
                 chevron = true,
                 enabled = !locked,
@@ -363,8 +371,8 @@ fun ProfileScreen(
                 Divider()
                 ProfileRow(
                     icon = Icons.Filled.Delete,
-                    title = "Remove PIN",
-                    subtitle = "Stop requiring a PIN to open settings.",
+                    title = stringResource(R.string.profile_pin_remove),
+                    subtitle = stringResource(R.string.profile_pin_remove_subtitle),
                     chevron = true,
                     destructive = true,
                     enabled = !locked,
@@ -374,17 +382,13 @@ fun ProfileScreen(
             Divider()
             ProfileRow(
                 icon = Icons.Filled.Shield,
-                title = "Prevent uninstall",
+                title = stringResource(R.string.profile_uninstall_title),
                 // Says so out loud when it's off. The guard makes the *page* hard to reach, but
                 // the actual "you cannot uninstall this" comes from device admin — and the two
                 // being separate switches means the app can look protected while it isn't.
-                subtitle = if (adminOn) {
-                    "On. AppBlocker can't be uninstalled until you turn this off — and turning it " +
-                        "off means typing a paragraph first."
-                } else {
-                    "OFF — AppBlocker can be uninstalled right now. Turn this on; the guard only " +
-                        "makes the page hard to reach, this is what actually stops removal."
-                },
+                subtitle = stringResource(
+                    if (adminOn) R.string.profile_uninstall_on else R.string.profile_uninstall_off,
+                ),
                 badge = adminOn,
                 enabled = !locked,
                 // On is one tap. Off goes through the typed gate below — this switch is the only
@@ -392,7 +396,7 @@ fun ProfileScreen(
                 // every protection in the app.
                 onClick = {
                     if (isDeviceAdminActive(context)) {
-                        onRequestGate(PREVENT_UNINSTALL_GATE) {
+                        onRequestGate(preventUninstallGate(context)) {
                             // removeActiveAdmin completes asynchronously, so flip the badge
                             // ourselves rather than re-reading a state that hasn't changed yet.
                             disableDeviceAdmin(context)
@@ -407,26 +411,25 @@ fun ProfileScreen(
             Divider()
             ProfileRow(
                 icon = Icons.Filled.Key,
-                title = "Guard the off-switch",
+                title = stringResource(R.string.profile_guard_title),
                 subtitle = when {
-                    !guardOn -> "Off. Blocking can be switched off in Settings at any moment."
+                    !guardOn -> stringResource(R.string.profile_guard_off)
                     // A wait started before the session keeps running, so it keeps its countdown —
                     // hiding it behind the Strict line would look like the request was dropped.
                     guardTap == OffSwitchGuard.Tap.REFUSED_STRICT &&
                         guardPhase == OffSwitchGuard.Phase.WAITING ->
-                        "Unlocking in ${fmtCountdown(guardUntilUnlock)}, but Strict Mode is " +
-                            "running — the guard can't come down until the session ends."
+                        stringResource(
+                            R.string.profile_guard_waiting_strict,
+                            fmtCountdown(guardUntilUnlock),
+                        )
                     guardTap == OffSwitchGuard.Tap.REFUSED_STRICT ->
-                        "On, and locked while Strict Mode is running. You can't lower it until " +
-                            "the session ends."
+                        stringResource(R.string.profile_guard_strict)
                     guardPhase == OffSwitchGuard.Phase.WAITING ->
-                        "Unlocking in ${fmtCountdown(guardUntilUnlock)}. The guard is still on."
+                        stringResource(R.string.profile_guard_waiting, fmtCountdown(guardUntilUnlock))
                     guardPhase == OffSwitchGuard.Phase.OPEN ->
-                        "Unlocked — tap to turn the guard off. Closes again in " +
-                            "${fmtCountdown(guardUntilExpiry)}."
-                    else -> "On. The Accessibility page is blocked, so blocking can't be " +
-                        "switched off on a whim. Turning this off takes " +
-                        "${OffSwitchGuard.DELAY_LABEL}."
+                        stringResource(R.string.profile_guard_open, fmtCountdown(guardUntilExpiry))
+                    else ->
+                        stringResource(R.string.profile_guard_on, OffSwitchGuard.DELAY_LABEL)
                 },
                 badge = guardOn,
                 // Strict refuses the two weakening taps and nothing else — arming the guard stays
@@ -452,7 +455,7 @@ fun ProfileScreen(
                         }
                         // Nothing pending: turning it off starts at the type-and-wait gate.
                         OffSwitchGuard.Tap.START_WAIT ->
-                            onRequestGate(guardOffGate()) {
+                            onRequestGate(guardOffGate(context)) {
                                 // Passing the gate does NOT lower the guard — it starts the wait.
                                 // The guard keeps standing until that is served and the owner acts
                                 // inside the window.
@@ -471,8 +474,8 @@ fun ProfileScreen(
                 Divider()
                 ProfileRow(
                     icon = Icons.Filled.Close,
-                    title = "Cancel the unlock",
-                    subtitle = "Change your mind — the guard stays on and the wait is dropped.",
+                    title = stringResource(R.string.profile_guard_cancel_title),
+                    subtitle = stringResource(R.string.profile_guard_cancel_subtitle),
                     chevron = true,
                     // Backing out of lowering your guard is always instant, exactly like the
                     // adult pack's cancel. Nothing protective is lost by allowing it.
@@ -485,12 +488,30 @@ fun ProfileScreen(
             }
         }
 
-        SectionTitle("Appearance")
+        SectionTitle(stringResource(R.string.profile_section_appearance))
         SettingCard {
             ProfileRow(
+                icon = Icons.Filled.Language,
+                title = stringResource(R.string.language),
+                subtitle = stringResource(
+                    R.string.language_subtitle,
+                    if (languageTag.isEmpty()) stringResource(R.string.language_system)
+                    else AppLocale.label(languageTag),
+                ),
+                chevron = true,
+                // Never locked by Strict Mode. Reading the app in a language you understand is
+                // not a protection you can weaken.
+                enabled = true,
+                onClick = { showLanguage = true },
+            )
+            Divider()
+            ProfileRow(
                 icon = Icons.Filled.DarkMode,
-                title = "Appearance",
-                subtitle = "Theme: ${themeModeLabel(themeController.mode)}.",
+                title = stringResource(R.string.profile_appearance_title),
+                subtitle = stringResource(
+                    R.string.profile_appearance_subtitle,
+                    stringResource(themeModeLabel(themeController.mode)),
+                ),
                 chevron = true,
                 enabled = true, // cosmetic — allowed even during Strict
                 onClick = { showTheme = true },
@@ -498,8 +519,8 @@ fun ProfileScreen(
             Divider()
             ProfileRow(
                 icon = Icons.Filled.Palette,
-                title = "App icon",
-                subtitle = "Current: ${currentIcon.label}. Choose from your icon collection.",
+                title = stringResource(R.string.profile_icon_title),
+                subtitle = stringResource(R.string.profile_icon_subtitle, currentIcon.label),
                 chevron = true,
                 enabled = true, // cosmetic — allowed even during Strict
                 onClick = onOpenIconPicker,
@@ -507,8 +528,11 @@ fun ProfileScreen(
             Divider()
             ProfileRow(
                 icon = Icons.Filled.Wallpaper,
-                title = "Block screen",
-                subtitle = "Current: ${currentBlockLayout.label} in ${currentBlockTheme.label}. Change what's on the block screen and its colour.",
+                title = stringResource(R.string.profile_blockscreen_title),
+                subtitle = stringResource(
+                    R.string.profile_blockscreen_subtitle,
+                    currentBlockLayout.label, currentBlockTheme.label,
+                ),
                 chevron = true,
                 // No longer purely cosmetic: hiding the pieces that make the screen
                 // persuasive belongs with everything else Strict Mode freezes.
@@ -517,34 +541,36 @@ fun ProfileScreen(
             )
         }
 
-        SectionTitle("Permissions")
+        SectionTitle(stringResource(R.string.profile_section_permissions))
         SettingCard {
             ProfileRow(
                 icon = Icons.Filled.Tune,
-                title = "Setup & permissions",
-                subtitle = "Accessibility, overlay, usage access, battery & auto-start — all in one place.",
+                title = stringResource(R.string.profile_permissions_title),
+                subtitle = stringResource(R.string.profile_permissions_subtitle),
                 chevron = true,
                 enabled = !locked,
                 onClick = onOpenPermissions,
             )
         }
 
-        SectionTitle("About")
+        SectionTitle(stringResource(R.string.profile_section_about))
         SettingCard {
             val sub = when {
-                !Dist.SELF_UPDATE -> "Updates arrive through Google Play."
+                !Dist.SELF_UPDATE -> stringResource(R.string.profile_update_play)
                 else -> when (val s = updateState) {
-                    is UpdateState.Checking -> "Checking for updates…"
-                    is UpdateState.UpToDate -> "You're on the latest version."
-                    is UpdateState.Available -> "Update available: v${s.release.version} — tap to install"
-                    is UpdateState.Downloading -> "Downloading… ${s.percent}%"
-                    is UpdateState.Error -> s.message + " Tap to retry."
-                    else -> "Tap to check for updates"
+                    is UpdateState.Checking -> stringResource(R.string.profile_update_checking)
+                    is UpdateState.UpToDate -> stringResource(R.string.profile_update_current)
+                    is UpdateState.Available ->
+                        stringResource(R.string.profile_update_available, s.release.version)
+                    is UpdateState.Downloading ->
+                        stringResource(R.string.profile_update_downloading, s.percent.toString())
+                    is UpdateState.Error -> stringResource(R.string.profile_update_retry, s.message)
+                    else -> stringResource(R.string.profile_update_check)
                 }
             }
             ProfileRow(
                 icon = Icons.Filled.Info,
-                title = "AppBlocker v${appVersion(context)}",
+                title = stringResource(R.string.profile_version_title, appVersion(context)),
                 subtitle = sub,
                 enabled = Dist.SELF_UPDATE && updateState !is UpdateState.Downloading,
                 onClick = {
@@ -557,8 +583,8 @@ fun ProfileScreen(
             Divider()
             ProfileRow(
                 icon = Icons.AutoMirrored.Filled.MenuBook,
-                title = "Instructions",
-                subtitle = "How every feature works, explained in detail.",
+                title = stringResource(R.string.profile_instructions_title),
+                subtitle = stringResource(R.string.profile_instructions_subtitle),
                 chevron = true,
                 enabled = true,
                 onClick = onOpenInstructions,
@@ -566,9 +592,8 @@ fun ProfileScreen(
             Divider()
             ProfileRow(
                 icon = Icons.Filled.BugReport,
-                title = "What the blocker sees",
-                subtitle = "Why something isn't being blocked — browsers found, what it last " +
-                    "looked at, and whether blocking is on.",
+                title = stringResource(R.string.profile_diagnostics_title),
+                subtitle = stringResource(R.string.profile_diagnostics_subtitle),
                 chevron = true,
                 enabled = true,
                 onClick = onOpenDiagnostics,
@@ -576,8 +601,8 @@ fun ProfileScreen(
             Divider()
             ProfileRow(
                 icon = Icons.Filled.SelfImprovement,
-                title = "Dopamine detox guide",
-                subtitle = "Clear rules to reset your brain's reward system.",
+                title = stringResource(R.string.profile_detox_title),
+                subtitle = stringResource(R.string.profile_detox_subtitle),
                 chevron = true,
                 enabled = true,
                 onClick = onOpenDetox,
@@ -585,8 +610,8 @@ fun ProfileScreen(
             Divider()
             ProfileRow(
                 icon = Icons.Filled.Bolt,
-                title = "Scenarios",
-                subtitle = "Guides for the hard moments — relapse, focus, sleep, and more.",
+                title = stringResource(R.string.profile_scenarios_title),
+                subtitle = stringResource(R.string.profile_scenarios_subtitle),
                 chevron = true,
                 enabled = true,
                 onClick = onOpenScenarios,
@@ -594,8 +619,8 @@ fun ProfileScreen(
             Divider()
             ProfileRow(
                 icon = Icons.Filled.Diversity3,
-                title = "The Twelve Steps",
-                subtitle = "The programme, in plain English — and where to find the real thing.",
+                title = stringResource(R.string.profile_steps_title),
+                subtitle = stringResource(R.string.profile_steps_subtitle),
                 chevron = true,
                 enabled = true,
                 onClick = onOpenSteps,
@@ -603,8 +628,8 @@ fun ProfileScreen(
             Divider()
             ProfileRow(
                 icon = Icons.Filled.History,
-                title = "What's new",
-                subtitle = "Every version and what it changed.",
+                title = stringResource(R.string.profile_changelog_title),
+                subtitle = stringResource(R.string.profile_changelog_subtitle),
                 chevron = true,
                 enabled = true,
                 onClick = onOpenChangelog,
@@ -613,13 +638,11 @@ fun ProfileScreen(
                 Divider()
                 ProfileRow(
                     icon = Icons.Filled.SystemUpdate,
-                    title = "Update automatically",
-                    subtitle = if (autoUpdate) {
-                        "On. New versions install by themselves, on Wi-Fi, without asking. " +
-                            "Blocking keeps running throughout."
-                    } else {
-                        "Off. You'll be told when an update is ready and install it yourself."
-                    },
+                    title = stringResource(R.string.profile_autoupdate_title),
+                    subtitle = stringResource(
+                        if (autoUpdate) R.string.profile_autoupdate_on
+                        else R.string.profile_autoupdate_off,
+                    ),
                     badge = autoUpdate,
                     // Not locked during Strict: this only decides how a NEW version arrives, and
                     // every version enforces Strict identically. Locking it would be theatre.
@@ -636,8 +659,8 @@ fun ProfileScreen(
             // promises, so it belongs somewhere a suspicious person can find it.
             ProfileRow(
                 icon = Icons.Filled.PrivacyTip,
-                title = "Privacy policy",
-                subtitle = "What the app stores, what it never sends, and what the AI Coach sees.",
+                title = stringResource(R.string.profile_privacy_title),
+                subtitle = stringResource(R.string.profile_privacy_subtitle),
                 chevron = true,
                 enabled = true,
                 onClick = { openUrl(context, PRIVACY_POLICY_URL) },
@@ -645,8 +668,8 @@ fun ProfileScreen(
             Divider()
             ProfileRow(
                 icon = Icons.Filled.Share,
-                title = "Share AppBlocker",
-                subtitle = "Send the install link to a friend.",
+                title = stringResource(R.string.profile_share_title),
+                subtitle = stringResource(R.string.profile_share_subtitle),
                 chevron = true,
                 enabled = true,
                 onClick = { shareApp(context) },
@@ -666,9 +689,8 @@ fun ProfileScreen(
                 Divider()
                 ProfileRow(
                     icon = Icons.Filled.Favorite,
-                    title = "Support AppBlocker",
-                    subtitle = "It's free, has no ads, and collects nothing about you. If it's " +
-                        "helped, you can chip in — everything works exactly the same either way.",
+                    title = stringResource(R.string.profile_sponsor_title),
+                    subtitle = stringResource(R.string.profile_sponsor_subtitle),
                     chevron = true,
                     enabled = true,
                     onClick = { openUrl(context, SPONSOR_URL) },
@@ -678,7 +700,7 @@ fun ProfileScreen(
 
         Spacer(Modifier.height(20.dp))
         Text(
-            "AppBlocker · v${appVersion(context)}",
+            stringResource(R.string.profile_version_line, appVersion(context)),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
@@ -699,8 +721,23 @@ fun ProfileScreen(
             onSend = { note ->
                 BugReportSender.reportNote(context, note)
                 showReport = false
-                Toast.makeText(context, "Sent — thank you", Toast.LENGTH_SHORT).show()
+                Toast.makeText(
+                    context, R.string.profile_report_thanks, Toast.LENGTH_SHORT,
+                ).show()
             },
+        )
+    }
+    if (showLanguage) {
+        LanguageDialog(
+            current = languageTag,
+            onSelect = { tag ->
+                AppLocale.set(context, tag)
+                showLanguage = false
+                // The whole window has to be laid out again: every string on screen was resolved
+                // at composition, and on an Arabic phone the layout direction flips too.
+                (context as? Activity)?.recreate()
+            },
+            onDismiss = { showLanguage = false },
         )
     }
     if (showTheme) {
@@ -712,10 +749,55 @@ fun ProfileScreen(
     }
 }
 
-private fun themeModeLabel(mode: String): String = when (mode) {
-    "light" -> "Light"
-    "dark" -> "Dark"
-    else -> "System default"
+/** The resource, not the text: the caller is composable and resolves it in the app's language. */
+private fun themeModeLabel(mode: String): Int = when (mode) {
+    "light" -> R.string.theme_light
+    "dark" -> R.string.theme_dark
+    else -> R.string.theme_system
+}
+
+/**
+ * The language picker.
+ *
+ * **Each language names itself.** "Arabic" written in English is no help to the person most likely
+ * to be looking for this row — they are looking for it precisely because they cannot read the
+ * screen it is on. Only the "follow your phone" row is translated, because it is the only one whose
+ * meaning is about the phone rather than about a language.
+ */
+@Composable
+private fun LanguageDialog(current: String, onSelect: (String) -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } },
+        title = { Text(stringResource(R.string.language)) },
+        text = {
+            Column {
+                AppLocale.CHOICES.forEach { tag ->
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                            .clickable { onSelect(tag) }
+                            .padding(vertical = 14.dp, horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            if (tag.isEmpty()) stringResource(R.string.language_system)
+                            else AppLocale.label(tag),
+                            Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        if (tag == current) {
+                            Icon(
+                                Icons.Filled.Check, contentDescription = stringResource(R.string.profile_selected),
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+                }
+            }
+        },
+    )
 }
 
 /** Three-way theme picker: follow the phone, or force Light / Dark. */
@@ -724,28 +806,28 @@ private fun ThemeDialog(current: String, onSelect: (String) -> Unit, onDismiss: 
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-        title = { Text("Appearance") },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } },
+        title = { Text(stringResource(R.string.profile_appearance_title)) },
         text = {
             Column {
                 listOf(
-                    "system" to "System default",
-                    "light" to "Light",
-                    "dark" to "Dark",
-                ).forEach { (mode, label) ->
+                    "system" to R.string.theme_system,
+                    "light" to R.string.theme_light,
+                    "dark" to R.string.theme_dark,
+                ).forEach { (mode, labelRes) ->
                     Row(
                         Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
                             .clickable { onSelect(mode) }.padding(vertical = 14.dp, horizontal = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            label, Modifier.weight(1f),
+                            stringResource(labelRes), Modifier.weight(1f),
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                         if (mode == current) {
                             Icon(
-                                Icons.Filled.Check, contentDescription = "Selected",
+                                Icons.Filled.Check, contentDescription = stringResource(R.string.profile_selected),
                                 tint = MaterialTheme.colorScheme.primary,
                             )
                         }
@@ -789,14 +871,19 @@ private fun ProfileHeader(
                     Text(DisplayName.display(name), style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
                     Text(
-                        if (DisplayName.isSet(name)) "AppBlocker · v$version"
-                        else "Tap to add your name",
+                        if (DisplayName.isSet(name))
+                            stringResource(R.string.profile_version_line, version)
+                        else stringResource(R.string.profile_tap_add_name),
                         style = MaterialTheme.typography.bodySmall,
                         color = Color.White.copy(alpha = 0.8f),
                     )
                 }
                 IconButton(onClick = onEditName) {
-                    Icon(Icons.Filled.Edit, contentDescription = "Your profile", tint = Color.White)
+                    Icon(
+                        Icons.Filled.Edit,
+                        contentDescription = stringResource(R.string.profile_your_profile),
+                        tint = Color.White,
+                    )
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -816,9 +903,18 @@ private fun ProfileHeader(
             }
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                HeroStat("$appsBlocked", "apps blocked", Modifier.weight(1f))
-                HeroStat("$schedules", if (schedules == 1) "schedule" else "schedules", Modifier.weight(1f))
-                HeroStat("$blocksToday", "blocks today", Modifier.weight(1f))
+                HeroStat(
+                    "$appsBlocked", stringResource(R.string.profile_stat_apps), Modifier.weight(1f),
+                )
+                HeroStat(
+                    "$schedules",
+                    pluralStringResource(R.plurals.profile_stat_schedules, schedules),
+                    Modifier.weight(1f),
+                )
+                HeroStat(
+                    "$blocksToday", stringResource(R.string.profile_stat_blocks),
+                    Modifier.weight(1f),
+                )
             }
         }
     }
@@ -861,19 +957,28 @@ private data class ProtectionStatus(
  */
 private fun protectionStatus(context: Context): ProtectionStatus {
     if (!AccessibilityUtil.isEnabled(context) || !Settings.canDrawOverlays(context)) {
-        return ProtectionStatus(false, "Action needed — tap to fix", fixable = true)
+        return ProtectionStatus(
+            false, context.getString(R.string.status_action_needed), fixable = true,
+        )
     }
     return when (ProtectionWatchdog.state(context)) {
-        ProtectionState.OK -> ProtectionStatus(true, "Protection active", fixable = false)
-        ProtectionState.OFF -> ProtectionStatus(false, "Action needed — tap to fix", fixable = true)
+        ProtectionState.OK ->
+            ProtectionStatus(true, context.getString(R.string.status_active), fixable = false)
+        ProtectionState.OFF ->
+            ProtectionStatus(
+                false, context.getString(R.string.status_action_needed), fixable = true,
+            )
         ProtectionState.STALLED ->
             ProtectionStatus(
-                false, "Blocking has stopped — tap to fix", fixable = true, repair = true,
+                false, context.getString(R.string.status_stopped),
+                fixable = true, repair = true,
             )
         // Reactivating lives on the Blocking tab, which this screen can't navigate to, so the
         // text carries the instruction instead of pretending a tap here would help.
         ProtectionState.PAUSED ->
-            ProtectionStatus(false, "Paused after update — see Blocking tab", fixable = false)
+            ProtectionStatus(
+                false, context.getString(R.string.status_paused), fixable = false,
+            )
     }
 }
 
@@ -885,15 +990,18 @@ private fun openUrl(context: Context, url: String) {
 }
 
 private fun shareApp(context: Context) {
-    val text = "Block distracting apps & websites with AppBlocker:\n" +
-        "https://github.com/boudiahdab2003-art/AppBlocker/releases/latest"
+    val text = context.getString(
+        R.string.profile_share_text,
+        "https://github.com/boudiahdab2003-art/AppBlocker/releases/latest",
+    )
     val send = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"
         putExtra(Intent.EXTRA_SUBJECT, "AppBlocker")
         putExtra(Intent.EXTRA_TEXT, text)
     }
     runCatching {
-        context.startActivity(Intent.createChooser(send, "Share AppBlocker")
+        context.startActivity(
+            Intent.createChooser(send, context.getString(R.string.profile_share_title))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 }
@@ -970,7 +1078,8 @@ private fun StatusPill(on: Boolean) {
         Modifier.clip(RoundedCornerShape(50)).background(color.copy(alpha = 0.16f))
             .padding(horizontal = 10.dp, vertical = 3.dp),
     ) {
-        Text(if (on) "On" else "Off", style = MaterialTheme.typography.labelMedium,
+        Text(stringResource(if (on) R.string.profile_status_on else R.string.profile_status_off),
+            style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold, color = color)
     }
 }
@@ -1003,13 +1112,12 @@ private fun ReportProblemSheet(onDismiss: () -> Unit, onSend: (String) -> Unit) 
         Modifier.fillMaxSize().background(com.appblocker.ui.theme.appBackground())
             .safeDrawingPadding(),
     ) {
-        EditorTopBar("Report a problem", onBack = onDismiss)
+        EditorTopBar(stringResource(R.string.profile_report_title), onBack = onDismiss)
         Column(
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
         ) {
             Text(
-                "What happened? Anything helps — what you were doing, which app, whether a " +
-                    "block screen appeared when it shouldn't have, or didn't when it should.",
+                stringResource(R.string.profile_report_prompt),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -1017,24 +1125,20 @@ private fun ReportProblemSheet(onDismiss: () -> Unit, onSend: (String) -> Unit) 
             OutlinedTextField(
                 value = text,
                 onValueChange = { text = it },
-                placeholder = { Text("Describe the problem") },
+                placeholder = { Text(stringResource(R.string.profile_report_placeholder)) },
                 singleLine = false,
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth().heightIn(min = 140.dp),
             )
             Spacer(Modifier.height(12.dp))
             Text(
-                "Sent with: app version, Android version, phone model, and your current " +
-                    "settings — which block screen you use, whether blocking is running, and " +
-                    "how many blocks happened today.\n\n" +
-                    "Never sent: your blocked words, the sites you visit, or which apps you " +
-                    "block.",
+                stringResource(R.string.profile_report_privacy),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         GradientButton(
-            text = "Send",
+            text = stringResource(R.string.profile_report_send),
             enabled = text.isNotBlank(),
             onClick = { onSend(text) },
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 8.dp),

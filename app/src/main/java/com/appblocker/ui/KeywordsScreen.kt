@@ -43,6 +43,8 @@ import com.appblocker.data.OffSwitchGuard
 import com.appblocker.data.SettingsStore
 import com.appblocker.data.StrictEdits
 import kotlinx.coroutines.delay
+import androidx.compose.ui.res.stringResource
+import com.appblocker.R
 
 /**
  * A dedicated home for blocked words: add/remove words instantly (no Save). Words are matched
@@ -108,16 +110,14 @@ fun KeywordsScreen(
     Box(Modifier.fillMaxSize().background(com.appblocker.ui.theme.appBackground())) {
         Scaffold(
             containerColor = Color.Transparent,
-            topBar = { EditorTopBar("Blocked words", onBack) },
+            topBar = { EditorTopBar(stringResource(R.string.blocked_words), onBack) },
         ) { padding ->
             LazyColumn(
                 Modifier.padding(padding).fillMaxSize().padding(horizontal = 16.dp),
             ) {
                 item {
                     Text(
-                        "Add words you never want to see. In your browser they block matching " +
-                            "sites and searches; in any other app, the moment one shows up " +
-                            "on screen it's blocked.",
+                        stringResource(R.string.words_intro),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 8.dp, bottom = 12.dp),
@@ -125,7 +125,7 @@ fun KeywordsScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         OutlinedTextField(
                             value = newWord, onValueChange = { newWord = it },
-                            placeholder = { Text("Add a word") },
+                            placeholder = { Text(stringResource(R.string.words_add_placeholder)) },
                             singleLine = true,
                             shape = RoundedCornerShape(28.dp),
                             modifier = Modifier.weight(1f),
@@ -151,7 +151,7 @@ fun KeywordsScreen(
                                 .background(MaterialTheme.colorScheme.surface)
                                 .padding(16.dp),
                         ) {
-                            Text("No blocked words yet — add a word like “casino” or “betting”.",
+                            Text(stringResource(R.string.words_empty),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
@@ -175,9 +175,8 @@ fun KeywordsScreen(
                     // locked during Strict Mode. Turning them back ON is always allowed.
                     ToggleRow(
                         icon = Icons.Filled.NoAdultContent,
-                        title = "Adult content pack",
-                        desc = "Hundreds of pornographic words — English and Arabic — blocked " +
-                            "automatically, on top of your own list.",
+                        title = stringResource(R.string.words_adult_pack),
+                        desc = stringResource(R.string.words_adult_pack_desc),
                         checked = adultPack,
                         enabled = ed || !adultPack,
                         onChange = { turnOn ->
@@ -210,11 +209,15 @@ fun KeywordsScreen(
                         ) {
                             Text(
                                 if (offReady) {
-                                    "You can turn the pack off now — tap the switch. This " +
-                                        "unlock expires in ${fmtHoursMinutes(untilExpiry)}."
+                                    stringResource(
+                                        R.string.words_pack_unlocked,
+                                        fmtHoursMinutes(untilExpiry),
+                                    )
                                 } else {
-                                    "Turn-off requested. The pack keeps protecting you for " +
-                                        "another ${fmtHoursMinutes(untilUnlock)}."
+                                    stringResource(
+                                        R.string.words_pack_waiting,
+                                        fmtHoursMinutes(untilUnlock),
+                                    )
                                 },
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -223,14 +226,14 @@ fun KeywordsScreen(
                             TextButton(onClick = {
                                 offRequest = null
                                 SettingsStore.clearAdultPackOffRequest(context)
-                            }) { Text("Cancel") }
+                            }) { Text(stringResource(R.string.common_cancel)) }
                         }
                     }
                     Spacer(Modifier.padding(top = 8.dp))
                     ToggleRow(
                         icon = Icons.Filled.Apps,
-                        title = "Block these words in every app",
-                        desc = "Recommended. When off, words are only blocked in your browser.",
+                        title = stringResource(R.string.words_everywhere),
+                        desc = stringResource(R.string.words_everywhere_desc),
                         checked = everywhere,
                         enabled = ed || !everywhere,
                         onChange = {
@@ -249,13 +252,10 @@ fun KeywordsScreen(
         // safeDrawingPadding keeps the field above the keyboard (CoachChatScreen pattern).
         if (showDisableGate) {
             FrictionGate(
-                title = "Turn off adult protection",
-                blurb = "This lowers your guard. Type the paragraph below — you can't paste " +
-                    "it — before the clock runs out.",
-                detail = "Miss the clock and you get a fresh paragraph and a fresh clock, as " +
-                    "many times as it takes. Even once you've typed it, the pack stays on for " +
-                    "another 24 hours; only after that can you flip the switch off.",
-                confirmLabel = "Start the 24-hour wait",
+                title = context.getString(R.string.gate_adult_title),
+                blurb = context.getString(R.string.gate_adult_blurb),
+                detail = context.getString(R.string.gate_adult_detail),
+                confirmLabel = context.getString(R.string.gate_adult_confirm),
                 onDismiss = { showDisableGate = false },
                 onConfirm = {
                     // Passing the gate does NOT turn the pack off — it starts the 24-hour

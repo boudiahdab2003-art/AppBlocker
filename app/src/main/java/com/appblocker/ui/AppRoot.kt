@@ -50,6 +50,8 @@ import com.appblocker.data.SettingsStore
 import com.appblocker.service.ProtectionWatchdog
 import com.appblocker.ui.theme.AppGradients
 import com.appblocker.ui.theme.appBackground
+import androidx.compose.ui.res.stringResource
+import com.appblocker.R
 
 private data class Tab(val label: String, val icon: ImageVector)
 
@@ -193,20 +195,23 @@ fun AppRoot(
                 )
             is Overlay.CoachChat ->
                 CoachChatScreen(onBack = { overlay = null })
+            // Wrapped in EnglishOnly: these six are the long-form reading material the owner
+            // chose to leave in English, and English text inside a right-to-left layout puts its
+            // punctuation at the wrong end. See [EnglishOnly].
             is Overlay.Changelog ->
-                ChangelogScreen(onBack = { overlay = null })
+                EnglishOnly { ChangelogScreen(onBack = { overlay = null }) }
             is Overlay.Instructions ->
-                InstructionsScreen(onBack = { overlay = null })
+                EnglishOnly { InstructionsScreen(onBack = { overlay = null }) }
             is Overlay.Diagnostics ->
-                DiagnosticsScreen(onBack = { overlay = null })
+                EnglishOnly { DiagnosticsScreen(onBack = { overlay = null }) }
             is Overlay.Repair ->
                 RepairScreen(onBack = { overlay = null })
             is Overlay.DetoxGuide ->
-                DopamineDetoxScreen(onBack = { overlay = null })
+                EnglishOnly { DopamineDetoxScreen(onBack = { overlay = null }) }
             is Overlay.Scenarios ->
-                ScenariosScreen(onBack = { overlay = null })
+                EnglishOnly { ScenariosScreen(onBack = { overlay = null }) }
             is Overlay.TwelveSteps ->
-                TwelveStepsScreen(onBack = { overlay = null })
+                EnglishOnly { TwelveStepsScreen(onBack = { overlay = null }) }
             is Overlay.IconPicker ->
                 IconPickerScreen(onBack = { overlay = null })
             is Overlay.CleanCounter ->
@@ -318,7 +323,7 @@ fun AppRoot(
     updatePrompt?.let { release ->
         AlertDialog(
             onDismissRequest = { updateVm.dismissPrompt() },
-            title = { Text("Update available") },
+            title = { Text(stringResource(R.string.update_available)) },
             text = {
                 Text(
                     "Version ${release.version} is ready." +
@@ -331,12 +336,12 @@ fun AppRoot(
                         updateVm.dismissPrompt()
                         updateVm.downloadAndInstall(release)
                     }
-                ) { Text("Update now") }
+                ) { Text(stringResource(R.string.update_now)) }
             },
             dismissButton = {
                 TextButton(
                     onClick = { updateVm.dismissPrompt() }
-                ) { Text("Later") }
+                ) { Text(stringResource(R.string.update_later)) }
             },
         )
     }
@@ -349,9 +354,11 @@ fun AppRoot(
             // it a stalled transfer leaves nothing to tap.
             onDismissRequest = {},
             confirmButton = {
-                TextButton(onClick = { updateVm.cancelDownload() }) { Text("Cancel") }
+                TextButton(onClick = { updateVm.cancelDownload() }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
             },
-            title = { Text("Downloading update") },
+            title = { Text(stringResource(R.string.update_downloading)) },
             text = { Text("${dl.percent}%") },
         )
     }

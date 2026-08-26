@@ -1,6 +1,7 @@
 package com.appblocker
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -17,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
+import com.appblocker.data.AppLocale
 import com.appblocker.data.InstalledAppsRepository
 import com.appblocker.data.OwnUi
 import com.appblocker.data.SettingsStore
@@ -32,6 +34,17 @@ import com.appblocker.ui.theme.ThemeController
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+    /**
+     * The chosen language, applied before anything is laid out.
+     *
+     * One line per Activity is the whole of it here; the half that needs remembering is everything
+     * the accessibility service draws, which never passes through this and has to be wrapped by
+     * hand. See [com.appblocker.data.AppLocale].
+     */
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(AppLocale.wrap(newBase))
+    }
+
     private var openPermissions by mutableStateOf(false)
     private var openRepair by mutableStateOf(false)
 

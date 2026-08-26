@@ -30,8 +30,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.appblocker.R
 import com.appblocker.data.DeviceVendor
 import com.appblocker.service.BlockerAccessibilityService
 import com.appblocker.service.ProtectionState
@@ -100,7 +102,7 @@ fun RepairScreen(
     val vendor = remember { DeviceVendor.advice() }
 
     Column(Modifier.fillMaxSize().background(appBackground()).safeDrawingPadding()) {
-        EditorTopBar(title = "Blocking has stopped", onBack = onBack)
+        EditorTopBar(title = stringResource(R.string.repair_title), onBack = onBack)
         LazyColumn(
             Modifier.fillMaxHeight().pageWidth().padding(horizontal = 20.dp)
                 .testTag(REPAIR_LIST_TAG),
@@ -112,26 +114,20 @@ fun RepairScreen(
                 item {
                     AppCard {
                         Text(
-                            "What happened",
+                            stringResource(R.string.repair_what_title),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                         Spacer(Modifier.height(Space.sm))
                         Text(
-                            "Your phone shut AppBlocker down. On Xiaomi this usually happens " +
-                                "when you switch between spaces — switching space stops every " +
-                                "app in the space you left, and your phone doesn't always start " +
-                                "the blocker again when you come back.",
+                            stringResource(R.string.repair_what_body_1),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Spacer(Modifier.height(Space.sm))
                         Text(
-                            "Android still shows the switch as on, which is why it looked fine " +
-                                "and blocked nothing. That switch remembers what you chose — it " +
-                                "doesn't check whether the blocker is actually running. Now the " +
-                                "app checks, and tells you.",
+                            stringResource(R.string.repair_what_body_2),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -141,19 +137,19 @@ fun RepairScreen(
                 item {
                     AppCard(modifier = Modifier.testTag(REPAIR_STEPS_TAG)) {
                         Text(
-                            "Switch it back on",
+                            stringResource(R.string.repair_steps_title),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                         Spacer(Modifier.height(Space.sm))
-                        Step(1, "Tap the button below — it opens AppBlocker's own page.")
-                        Step(2, "Turn AppBlocker OFF.")
-                        Step(3, "Turn it ON again, and accept the prompt.")
-                        Step(4, "Come back here. This page turns green when blocking is running.")
+                        Step(1, stringResource(R.string.repair_step_1))
+                        Step(2, stringResource(R.string.repair_step_2))
+                        Step(3, stringResource(R.string.repair_step_3))
+                        Step(4, stringResource(R.string.repair_step_4))
                         Spacer(Modifier.height(Space.md))
                         GradientButton(
-                            text = "Open the switch",
+                            text = stringResource(R.string.repair_open_switch),
                             onClick = { openOurAccessibilityPage(context) },
                             modifier = Modifier.testTag(REPAIR_BUTTON_TAG),
                         )
@@ -163,25 +159,20 @@ fun RepairScreen(
                 item {
                     AppCard {
                         Text(
-                            "So you actually see this next time",
+                            stringResource(R.string.repair_floating_title),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                         Spacer(Modifier.height(Space.sm))
                         Text(
-                            "The alert that brought you here pops up over whatever you're doing " +
-                                "and comes back every few minutes until blocking is running " +
-                                "again. But your phone keeps “Floating notifications” as its own " +
-                                "switch, and it's off by default for most apps — while it's off, " +
-                                "the alert can only sit silently in the shade. This is the one " +
-                                "thing AppBlocker can't switch on for you.",
+                            stringResource(R.string.repair_floating_body),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Spacer(Modifier.height(Space.md))
                         GradientButton(
-                            text = "Notification settings",
+                            text = stringResource(R.string.repair_notification_settings),
                             onClick = { openOurNotificationSettings(context) },
                             modifier = Modifier.testTag(REPAIR_NOTIFS_TAG),
                         )
@@ -191,17 +182,14 @@ fun RepairScreen(
                 item {
                     AppCard {
                         Text(
-                            "Why the app can't do this for you",
+                            stringResource(R.string.repair_why_title),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                         Spacer(Modifier.height(Space.sm))
                         Text(
-                            "Android doesn't let an app switch its own blocking back on. That " +
-                                "rule is what stops a bad app from quietly switching itself on " +
-                                "and watching your screen — and it's the same rule that stops " +
-                                "this one from switching itself back. It has to be your tap.",
+                            stringResource(R.string.repair_why_body),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -212,18 +200,14 @@ fun RepairScreen(
             item {
                 AppCard {
                     Text(
-                        "A much faster way to do it",
+                        stringResource(R.string.repair_shortcut_title),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                     Spacer(Modifier.height(Space.sm))
                     Text(
-                        "In Settings ▸ Accessibility ▸ AppBlocker there's a Shortcut option. " +
-                            "Turn it on and pick the volume keys. After that, holding both " +
-                            "volume keys for three seconds switches the blocker off, and " +
-                            "holding them again switches it back on — from anywhere, without " +
-                            "hunting through Settings.",
+                        stringResource(R.string.repair_shortcut_body),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -234,7 +218,7 @@ fun RepairScreen(
                 item {
                     AppCard {
                         Text(
-                            "Making it happen less often",
+                            stringResource(R.string.repair_vendor_title),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
@@ -272,18 +256,18 @@ private fun StatusCard(healthy: Boolean) {
             Spacer(Modifier.width(Space.md))
             Column(Modifier.weight(1f)) {
                 Text(
-                    if (healthy) "Blocking is back on" else "Blocking is not running",
+                    stringResource(
+                        if (healthy) R.string.repair_status_on else R.string.repair_status_off,
+                    ),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
-                    if (healthy) {
-                        "The blocker is running and watching again. Nothing else to do."
-                    } else {
-                        "It's switched on in Settings, but it isn't running — so nothing is " +
-                            "being blocked right now."
-                    },
+                    stringResource(
+                        if (healthy) R.string.repair_status_on_body
+                        else R.string.repair_status_off_body,
+                    ),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

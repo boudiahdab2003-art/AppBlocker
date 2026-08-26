@@ -63,6 +63,8 @@ import com.appblocker.data.CoachError
 import com.appblocker.data.Goal
 import com.appblocker.ui.theme.AppGradients
 import com.appblocker.ui.theme.softGlow
+import androidx.compose.ui.res.stringResource
+import com.appblocker.R
 
 /** Full-screen chat with the AI Coach: goal chips up top, message bubbles, and an input bar. */
 @OptIn(ExperimentalLayoutApi::class)
@@ -88,12 +90,12 @@ fun CoachChatScreen(onBack: () -> Unit, vm: CoachChatViewModel = viewModel()) {
     // targetSdk 35 forces edge-to-edge on Android 15+ (imePadding alone left the top bar under
     // the status bar there).
     Column(Modifier.fillMaxSize().safeDrawingPadding()) {
-        EditorTopBar(title = "AI Coach", onBack = onBack) {
+        EditorTopBar(title = stringResource(R.string.coach_title), onBack = onBack) {
             IconButton(onClick = { showProfile = true }) {
-                Icon(Icons.Filled.Person, contentDescription = "What your coach knows")
+                Icon(Icons.Filled.Person, contentDescription = stringResource(R.string.chat_knows))
             }
             IconButton(onClick = { confirmClear = true }) {
-                Icon(Icons.Filled.DeleteOutline, contentDescription = "Clear chat")
+                Icon(Icons.Filled.DeleteOutline, contentDescription = stringResource(R.string.chat_clear))
             }
         }
 
@@ -115,7 +117,7 @@ fun CoachChatScreen(onBack: () -> Unit, vm: CoachChatViewModel = viewModel()) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
                             Spacer(Modifier.width(8.dp))
-                            Text("Thinking…", style = MaterialTheme.typography.bodyMedium,
+                            Text(stringResource(R.string.chat_thinking), style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
@@ -138,13 +140,19 @@ fun CoachChatScreen(onBack: () -> Unit, vm: CoachChatViewModel = viewModel()) {
     if (confirmClear) {
         AlertDialog(
             onDismissRequest = { confirmClear = false },
-            title = { Text("Clear chat?") },
+            title = { Text(stringResource(R.string.chat_clear_title)) },
             text = { Text("The conversation is deleted from this device. Your goals and what " +
                 "your coach knows about you are kept.") },
             confirmButton = {
-                TextButton(onClick = { vm.clearChat(); confirmClear = false }) { Text("Clear") }
+                TextButton(onClick = { vm.clearChat(); confirmClear = false }) {
+                Text(stringResource(R.string.chat_clear_confirm))
+            }
             },
-            dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Cancel") } },
+            dismissButton = {
+            TextButton(onClick = { confirmClear = false }) {
+                Text(stringResource(R.string.common_cancel))
+            }
+        },
         )
     }
 
@@ -176,14 +184,14 @@ private fun ProfileDialog(
 ) {
     AlertDialog(
         onDismissRequest = onClose,
-        title = { Text("What your coach knows") },
+        title = { Text(stringResource(R.string.chat_knows)) },
         text = {
             Column(
                 Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 if (profile.isEmpty()) {
-                    Text("Nothing yet — the more you chat, the better your coach knows you.")
+                    Text(stringResource(R.string.chat_nothing_yet))
                 } else {
                     profile.forEach { (key, value) ->
                         Column {
@@ -211,11 +219,13 @@ private fun ProfileDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onClose) { Text("Close") } },
+        confirmButton = {
+            TextButton(onClick = onClose) { Text(stringResource(R.string.chat_close)) }
+        },
         dismissButton = {
             if (profile.isNotEmpty()) {
                 TextButton(onClick = onForget) {
-                    Text("Forget everything", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.chat_forget), color = MaterialTheme.colorScheme.error)
                 }
             }
         },
@@ -230,7 +240,7 @@ private fun GoalChips(goals: List<Goal>, onRemove: (Goal) -> Unit) {
             Icon(Icons.Filled.Flag, contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
             Spacer(Modifier.width(6.dp))
-            Text("Your goals", style = MaterialTheme.typography.labelMedium,
+            Text(stringResource(R.string.chat_your_goals), style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Spacer(Modifier.padding(top = 6.dp))
@@ -249,7 +259,7 @@ private fun GoalChips(goals: List<Goal>, onRemove: (Goal) -> Unit) {
                     Text(goal.label(), style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurface)
                     Spacer(Modifier.width(4.dp))
-                    Icon(Icons.Filled.Close, contentDescription = "Remove goal",
+                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.goals_remove_cd),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(16.dp).clip(CircleShape)
                             .clickable { onRemove(goal) })
@@ -420,7 +430,7 @@ private fun InputBar(
             value = value,
             onValueChange = onChange,
             modifier = Modifier.weight(1f),
-            placeholder = { Text("Message your coach…") },
+            placeholder = { Text(stringResource(R.string.chat_placeholder)) },
             shape = RoundedCornerShape(24.dp),
             maxLines = 4,
             colors = OutlinedTextFieldDefaults.colors(
@@ -440,7 +450,7 @@ private fun InputBar(
                 .clickable(enabled = sendEnabled) { onSend() },
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send",
+            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.chat_send),
                 tint = if (sendEnabled) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp))
         }

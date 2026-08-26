@@ -1,0 +1,971 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  العربية.
+
+  Written to match the English in register, not just in meaning. This app's English is deliberately
+  personal — it speaks to one person, plainly, and never like a form. The Arabic is فصحى so anyone
+  can read it, but second-person and unadorned for the same reason.
+
+  Three rules:
+
+  1. Every key in values/strings.xml must exist here. StringResourcesTest fails the build otherwise
+     — a missing key does not error at runtime, it silently drops one English sentence into the
+     middle of an Arabic screen.
+  2. Every <plurals> carries all six Arabic forms: zero one two few many other. Arabic changes the
+     noun at 1, 2, 3-10, 11-99 and 100+, which is the whole reason counts are not concatenated.
+  3. Placeholders are copied exactly (%1$s, %2$s) and never reordered by hand — the numbering is
+     what keeps them attached to the right value when the sentence order changes.
+
+  Numbers stay Western (1, 2, 3) rather than ٠١٢٣: the counter draws its big figures from Kotlin,
+  which is always Western, and two systems on one screen reads as a bug.
+-->
+<resources>
+    <string name="accessibility_description">يستخدم AppBlocker هذا لمعرفة متى يُفتح تطبيق محظور، وللتحقق — في المتصفحات فقط — من عنوان الصفحة أو نص البحث الظاهر أمامك مقابل الكلمات والمواقع التي حظرتها، حتى يستطيع إيقافها. كل هذا الفحص يجري على هاتفك وحده؛ لا يُخزَّن ما يظهر على الشاشة ولا يُرسل إلى أي مكان. راجع سياسة الخصوصية داخل التطبيق لمعرفة ما يراه المدرّب الذكي الاختياري.</string>
+
+    <!-- ===================== اللغة ===================== -->
+    <string name="language">اللغة</string>
+    <string name="language_system">لغة هاتفك</string>
+    <string name="language_subtitle">الحالية: %1$s. يتحدّث AppBlocker العربية والإنجليزية.</string>
+
+    <!-- ===================== شاشة الحظر ===================== -->
+    <string name="block_title">محظور</string>
+    <string name="block_got_it">فهمت</string>
+    <string name="block_minutes_reclaimed">دقائق استرجعتها اليوم</string>
+    <string name="block_generic_message">هذا محظور الآن.</string>
+    <string name="block_app_message">%1$s محظور</string>
+
+    <string name="block_locked_title">مُقفل</string>
+    <plurals name="block_locked_word">
+        <item quantity="zero">ظهرت «%1$s» هنا. الإقفال ينتهي الآن.</item>
+        <item quantity="one">ظهرت «%1$s» هنا. مُقفل لدقيقة أخرى.</item>
+        <item quantity="two">ظهرت «%1$s» هنا. مُقفل لدقيقتين أخريين.</item>
+        <item quantity="few">ظهرت «%1$s» هنا. مُقفل لـ%2$s دقائق أخرى.</item>
+        <item quantity="many">ظهرت «%1$s» هنا. مُقفل لـ%2$s دقيقة أخرى.</item>
+        <item quantity="other">ظهرت «%1$s» هنا. مُقفل لـ%2$s دقيقة أخرى.</item>
+    </plurals>
+    <plurals name="block_locked_generic">
+        <item quantity="zero">ظهرت هنا كلمة محظورة. الإقفال ينتهي الآن.</item>
+        <item quantity="one">ظهرت هنا كلمة محظورة. مُقفل لدقيقة أخرى.</item>
+        <item quantity="two">ظهرت هنا كلمة محظورة. مُقفل لدقيقتين أخريين.</item>
+        <item quantity="few">ظهرت هنا كلمة محظورة. مُقفل لـ%1$s دقائق أخرى.</item>
+        <item quantity="many">ظهرت هنا كلمة محظورة. مُقفل لـ%1$s دقيقة أخرى.</item>
+        <item quantity="other">ظهرت هنا كلمة محظورة. مُقفل لـ%1$s دقيقة أخرى.</item>
+    </plurals>
+
+    <string name="block_strict_title">الوضع الصارم</string>
+    <string name="block_strict_message">محظور حتى تنتهي جلستك الصارمة.</string>
+    <string name="block_allowlist_message">التطبيقات المسموح بها فقط تعمل الآن.</string>
+    <string name="block_quick_message">الحظر السريع مُفعَّل على هذا التطبيق.</string>
+
+    <string name="block_limit_title">بلغتَ حدّ اليوم</string>
+    <plurals name="block_limit_message">
+        <item quantity="zero">لم تعُد لديك دقائق اليوم.</item>
+        <item quantity="one">استهلكت دقيقتك المخصّصة لليوم.</item>
+        <item quantity="two">استهلكت دقيقتيك المخصّصتين لليوم.</item>
+        <item quantity="few">استهلكت الـ%1$s دقائق المخصّصة لليوم.</item>
+        <item quantity="many">استهلكت الـ%1$s دقيقة المخصّصة لليوم.</item>
+        <item quantity="other">استهلكت الـ%1$s دقيقة المخصّصة لليوم.</item>
+    </plurals>
+    <string name="block_limit_zero_message">هذا التطبيق محظور لبقية اليوم.</string>
+
+    <string name="block_schedule_title">محظور بجدول</string>
+    <string name="block_schedule_message">%1$s مُفعَّل حتى %2$s.</string>
+    <plurals name="block_schedule_usage_message">
+        <item quantity="zero">لا وقت متبقٍ اليوم — الحدّ الذي وضعه %2$s.</item>
+        <item quantity="one">استُهلكت دقيقة واحدة اليوم — الحدّ الذي وضعه %2$s.</item>
+        <item quantity="two">استُهلكت دقيقتان اليوم — الحدّ الذي وضعه %2$s.</item>
+        <item quantity="few">استُهلكت %1$s دقائق اليوم — الحدّ الذي وضعه %2$s.</item>
+        <item quantity="many">استُهلكت %1$s دقيقة اليوم — الحدّ الذي وضعه %2$s.</item>
+        <item quantity="other">استُهلكت %1$s دقيقة اليوم — الحدّ الذي وضعه %2$s.</item>
+    </plurals>
+    <string name="block_opens_title">بلغتَ حدّ الفتحات</string>
+    <plurals name="block_opens_message">
+        <item quantity="zero">لم يُفتح اليوم — الحدّ الذي وضعه %2$s.</item>
+        <item quantity="one">فُتح مرة واحدة اليوم — الحدّ الذي وضعه %2$s.</item>
+        <item quantity="two">فُتح مرتين اليوم — الحدّ الذي وضعه %2$s.</item>
+        <item quantity="few">فُتح %1$s مرات اليوم — الحدّ الذي وضعه %2$s.</item>
+        <item quantity="many">فُتح %1$s مرة اليوم — الحدّ الذي وضعه %2$s.</item>
+        <item quantity="other">فُتح %1$s مرة اليوم — الحدّ الذي وضعه %2$s.</item>
+    </plurals>
+
+    <string name="block_wifi_title">محظور على هذه الشبكة</string>
+    <string name="block_wifi_any_message">هذا التطبيق محظور ما دمتَ على شبكة Wi-Fi.</string>
+    <string name="block_wifi_named_message">هذا التطبيق محظور على «%1$s».</string>
+    <string name="block_location_title">محظور في هذا المكان</string>
+    <string name="block_location_message">هذا التطبيق محظور هنا بواسطة %1$s.</string>
+
+    <string name="block_browser_title">متصفّح محظور</string>
+    <string name="block_browser_message">لا يمكن فلترة هذا المتصفّح، لذلك يُحظر ما دام حظر الكلمات مُفعَّلًا.</string>
+
+    <string name="block_offswitch_title">هذا هو مفتاح إيقافك</string>
+    <string name="block_offswitch_message">الحظر يحرس هذه الصفحة. يمكنك فتحها من داخل AppBlocker — ويستغرق ذلك %1$s.</string>
+    <string name="block_offswitch_strict_title">مُقفل أثناء الوضع الصارم</string>
+    <string name="block_offswitch_strict_message">لا يمكنك تغيير هذا بينما الوضع الصارم يعمل.</string>
+    <string name="block_purchase_title">شراء محظور</string>
+    <string name="block_purchase_message">عمليات الشراء داخل التطبيقات محظورة.</string>
+    <string name="block_shorts_title">Shorts محظور</string>
+    <string name="block_shorts_message">مقاطع YouTube Shorts محظورة.</string>
+    <string name="block_shorts_web_message">مقاطع YouTube Shorts محظورة. أما بقية YouTube فتعمل كالمعتاد.</string>
+
+    <string name="block_word_title">كلمة محظورة</string>
+    <string name="block_word_message">«%1$s» ضمن قائمتك المحظورة.</string>
+    <string name="block_adult_title">محتوى للبالغين محظور</string>
+    <string name="block_adult_word_message">«%1$s» كلمة محظورة ضمن محتوى البالغين.</string>
+    <string name="block_adult_search_message">«%1$s» يبدو محتوى للبالغين.</string>
+    <string name="block_adult_site_title">موقع للبالغين محظور</string>
+    <!-- منطقة الخطر: ثلاث كلمات مختلفة خلال نصف ساعة. -->
+    <string name="block_danger_title">منطقة خطر</string>
+    <plurals name="block_danger_message">
+        <item quantity="zero">وصلت إلى ثلاث كلمات متتالية. المتصفحات مقفلة الآن.</item>
+        <item quantity="one">وصلت إلى ثلاث كلمات متتالية. المتصفحات مقفلة لدقيقة واحدة.</item>
+        <item quantity="two">وصلت إلى ثلاث كلمات متتالية. المتصفحات مقفلة لدقيقتين.</item>
+        <item quantity="few">وصلت إلى ثلاث كلمات متتالية. المتصفحات مقفلة لـ%1$s دقائق.</item>
+        <item quantity="many">وصلت إلى ثلاث كلمات متتالية. المتصفحات مقفلة لـ%1$s دقيقة.</item>
+        <item quantity="other">وصلت إلى ثلاث كلمات متتالية. المتصفحات مقفلة لـ%1$s دقيقة.</item>
+    </plurals>
+    <string name="block_danger_word_message">«%1$s» محظورة لبقية الساعة. عادةً لا تكون كذلك.</string>
+    <!-- موقع تعرّف عليه الهاتف بنفسه بعد ضبطه في متصفحين مختلفين. -->
+    <string name="block_learned_site_title">موقع محظور</string>
+    <string name="block_learned_site_message">«%1$s» ظهر في متصفحين مختلفين، لذلك صار محظورًا في كل مكان.</string>
+    <string name="block_adult_site_message">«%1$s» ضمن قائمة مواقع البالغين.</string>
+
+    <!-- ===================== كلمات مشتركة ===================== -->
+    <string name="common_cancel">إلغاء</string>
+    <string name="common_next">التالي</string>
+    <string name="common_save">حفظ</string>
+    <string name="common_delete">حذف</string>
+    <string name="common_done">تم</string>
+    <string name="common_open">فتح</string>
+    <string name="day_today">اليوم</string>
+    <string name="day_yesterday">أمس</string>
+
+    <plurals name="length_days">
+        <item quantity="zero">أقل من يوم</item>
+        <item quantity="one">يوم واحد</item>
+        <item quantity="two">يومين</item>
+        <item quantity="few">%1$s أيام</item>
+        <item quantity="many">%1$s يومًا</item>
+        <item quantity="other">%1$s يوم</item>
+    </plurals>
+    <plurals name="length_hours">
+        <item quantity="zero">أقل من ساعة</item>
+        <item quantity="one">ساعة واحدة</item>
+        <item quantity="two">ساعتين</item>
+        <item quantity="few">%1$s ساعات</item>
+        <item quantity="many">%1$s ساعة</item>
+        <item quantity="other">%1$s ساعة</item>
+    </plurals>
+    <plurals name="length_minutes">
+        <item quantity="zero">أقل من دقيقة</item>
+        <item quantity="one">دقيقة واحدة</item>
+        <item quantity="two">دقيقتين</item>
+        <item quantity="few">%1$s دقائق</item>
+        <item quantity="many">%1$s دقيقة</item>
+        <item quantity="other">%1$s دقيقة</item>
+    </plurals>
+    <string name="length_moment">أقل من دقيقة</string>
+
+    <!-- ===================== الملف الشخصي: التعافي ===================== -->
+    <string name="profile_section_recovery">التعافي</string>
+    <string name="profile_counter_title">عدّادك</string>
+    <string name="profile_counter_subtitle">كم مضى منذ انتكاستك الأخيرة — أيام وساعات ودقائق وثوانٍ، تمضي الآن.</string>
+    <string name="profile_journal_title">اليوميات</string>
+    <string name="profile_journal_subtitle">اكتب عن أي يوم — كيف كان شعورك، وما الذي أشعل الرغبة، وما الذي ساعدك. محفوظ على هذا الهاتف وحده.</string>
+
+    <!-- ===================== العدّاد ===================== -->
+    <string name="counter_title">عدّادك</string>
+    <string name="counter_hero_lead">صمدتَ منذ</string>
+    <plurals name="counter_unit_days">
+        <item quantity="zero">أيام</item>
+        <item quantity="one">يوم</item>
+        <item quantity="two">يومان</item>
+        <item quantity="few">أيام</item>
+        <item quantity="many">يومًا</item>
+        <item quantity="other">يوم</item>
+    </plurals>
+    <plurals name="counter_unit_hours">
+        <item quantity="zero">ساعات</item>
+        <item quantity="one">ساعة</item>
+        <item quantity="two">ساعتان</item>
+        <item quantity="few">ساعات</item>
+        <item quantity="many">ساعة</item>
+        <item quantity="other">ساعة</item>
+    </plurals>
+    <plurals name="counter_unit_minutes">
+        <item quantity="zero">دقائق</item>
+        <item quantity="one">دقيقة</item>
+        <item quantity="two">دقيقتان</item>
+        <item quantity="few">دقائق</item>
+        <item quantity="many">دقيقة</item>
+        <item quantity="other">دقيقة</item>
+    </plurals>
+    <plurals name="counter_unit_seconds">
+        <item quantity="zero">ثوانٍ</item>
+        <item quantity="one">ثانية</item>
+        <item quantity="two">ثانيتان</item>
+        <item quantity="few">ثوانٍ</item>
+        <item quantity="many">ثانية</item>
+        <item quantity="other">ثانية</item>
+    </plurals>
+    <string name="counter_since">منذ %1$s.</string>
+    <string name="counter_record">أطول فترة صمدتها حتى الآن كانت %1$s.</string>
+    <string name="counter_record_beaten">هذه أطول فترة قطعتها في حياتك.</string>
+    <string name="counter_fresh">العدّاد يمضي من هنا من جديد. هذا كل ما على اليوم أن يكونه.</string>
+    <string name="counter_not_started_title">لم يبدأ العدّ بعد</string>
+    <string name="counter_not_started_body">ابدأه وستُظهر لك هذه الشاشة كم مضى بالضبط — أيامًا وساعات ودقائق وثوانٍ — من تلك اللحظة فصاعدًا. وإن كنتَ صامدًا منذ فترة بالفعل، فبإمكانك أن تخبره متى بدأت حقًا.</string>
+    <string name="counter_start">ابدأ العدّ</string>
+    <string name="counter_started_earlier">بدأتُ قبل الآن</string>
+    <string name="counter_write_today">اكتب عن اليوم</string>
+    <string name="counter_undo_title">ضغطتَ عليه بالخطأ؟</string>
+    <string name="counter_undo_body">التراجع يُعيد العدّاد إلى ما كان عليه تمامًا. متاح لمدة %1$s بعد إعادة التصفير.</string>
+    <string name="counter_undo">تراجع</string>
+    <string name="counter_change_start_title">تعديل وقت البداية</string>
+    <string name="counter_change_start_body">إن كان العدّ قد بدأ قبل أن تخبر التطبيق. هذا لا يسجّل شيئًا — إنما يصحّح التاريخ الذي يَعُدّ منه.</string>
+    <string name="counter_relapse_title">حدث الأمر — ابدأ من جديد</string>
+    <string name="counter_relapse_body">يسجّل اليوم ويبدأ العدّ من الصفر. يمكنك التراجع عن ذلك خلال %1$s بعدها.</string>
+    <string name="counter_privacy">هذا العدّاد، وكل ما تكتبه في اليوميات، محفوظ على هذا الهاتف وحده. لا يُرسل إلى أي مكان — لا في تقرير خلل، ولا إلى المدرّب الذكي.</string>
+    <string name="counter_confirm_title">هل نبدأ العدّ من جديد؟</string>
+    <string name="counter_confirm_body_after_run">الـ%1$s التي قطعتها للتو حدثت فعلًا ولن تُمحى. هذا يسجّل اليوم ويبدأ الساعة من الآن.</string>
+    <string name="counter_confirm_body">هذا يسجّل اليوم ويبدأ الساعة من الآن.</string>
+    <string name="counter_confirm_undo_note">يمكنك التراجع عنه خلال %1$s القادمة.</string>
+    <string name="counter_confirm_earlier">حدث الأمر قبل الآن — اختر متى</string>
+    <string name="counter_confirm_now">ابدأ من جديد الآن</string>
+    <string name="counter_pick_start">متى بدأ؟</string>
+    <string name="counter_pick_relapse">متى حدث؟</string>
+    <string name="counter_pick_time">في أي وقت؟</string>
+    <string name="undo_window">24 ساعة</string>
+
+    <!-- ===================== اليوميات ===================== -->
+    <string name="journal_title">اليوميات</string>
+    <string name="journal_index_title">اكتبه</string>
+    <string name="journal_index_body">صفحة واحدة لكل يوم — كيف كان شعورك، وما الذي أشعل الرغبة، وما الذي ساعدك. لا شيء هنا يغادر هاتفك.</string>
+    <string name="journal_today">اليوم · %1$s</string>
+    <string name="journal_empty_today">لم تكتب شيئًا بعد. اضغط لتبدأ.</string>
+    <string name="journal_earlier">أيام سابقة</string>
+    <string name="journal_another_day">اكتب عن يوم آخر</string>
+    <string name="journal_placeholder">كيف كان يومك؟</string>
+    <string name="journal_delete_cd">حذف هذه الصفحة</string>
+    <string name="journal_delete_title">حذف هذه الصفحة؟</string>
+    <string name="journal_delete_body">ما كتبته في %1$s سيُحذف من هذا الهاتف. لا توجد نسخة منه في أي مكان آخر.</string>
+    <string name="journal_prompt_what_happened">ما الذي حدث</string>
+    <string name="journal_prompt_set_off">ما الذي أشعله</string>
+    <string name="journal_prompt_helped">ما الذي ساعد</string>
+    <string name="journal_prompt_tomorrow">غدًا</string>
+
+    <!-- ===================== الملف الشخصي ===================== -->
+    <string name="profile_section_you">أنت</string>
+    <string name="profile_section_protection">الحماية</string>
+    <string name="profile_section_appearance">المظهر</string>
+    <string name="profile_section_permissions">الأذونات</string>
+    <string name="profile_section_about">حول التطبيق</string>
+
+    <string name="profile_header_all_set">كل شيء جاهز — الحماية تستطيع العمل بالكامل.</string>
+    <string name="profile_strict_banner">🔒 الوضع الصارم مُفعَّل — الإعدادات مُقفلة حتى ينتهي المؤقّت.</string>
+    <string name="profile_tap_add_name">اضغط لإضافة اسمك</string>
+    <string name="profile_version_line">AppBlocker · إصدار %1$s</string>
+    <string name="profile_stat_apps">تطبيقًا محظورًا</string>
+    <plurals name="profile_stat_schedules">
+        <item quantity="zero">جداول</item>
+        <item quantity="one">جدول</item>
+        <item quantity="two">جدولان</item>
+        <item quantity="few">جداول</item>
+        <item quantity="many">جدولًا</item>
+        <item quantity="other">جدول</item>
+    </plurals>
+    <string name="profile_stat_blocks">حظرًا اليوم</string>
+    <string name="profile_selected">مُختار</string>
+
+    <string name="status_action_needed">مطلوب إجراء — اضغط للإصلاح</string>
+    <string name="status_active">الحماية تعمل</string>
+    <string name="status_stopped">الحظر توقّف — اضغط للإصلاح</string>
+    <string name="status_paused">متوقّف مؤقتًا بعد التحديث — راجع تبويب الحظر</string>
+
+    <string name="profile_your_profile">ملفك الشخصي</string>
+    <string name="profile_your_profile_set">أنت مُسجَّل باسم %1$s. غيّر اسمك، أو أعِد تشغيل خطوات الإعداد.</string>
+    <string name="profile_your_profile_unset">أخبر التطبيق بما يناديك به — يُحفظ على هذا الهاتف ولا مكان سواه.</string>
+
+    <plurals name="profile_health_errors_title">
+        <item quantity="zero">لم يصادف الحظر أي خلل</item>
+        <item quantity="one">صادف الحظر خللًا واحدًا</item>
+        <item quantity="two">صادف الحظر خللين</item>
+        <item quantity="few">صادف الحظر %1$s أخلال</item>
+        <item quantity="many">صادف الحظر %1$s خللًا</item>
+        <item quantity="other">صادف الحظر %1$s خلل</item>
+    </plurals>
+    <string name="profile_health_reported">استمر الحظر في العمل. أُرسل التقرير تلقائيًا — اضغط للمسح.</string>
+    <string name="profile_health_unreported">استمر الحظر في العمل. اضغط للمسح بعد أن تُبلّغ عنه.</string>
+
+    <string name="profile_report_title">أبلغ عن مشكلة</string>
+    <string name="profile_report_subtitle">اشرح ما الذي حدث ويصل مباشرة إلى المطوّر. لا يتضمّن أبدًا كلماتك المحظورة ولا مواقعك ولا أسماء تطبيقاتك.</string>
+    <string name="profile_report_disabled">الإبلاغ غير مُفعَّل في هذه النسخة.</string>
+    <string name="profile_report_prompt">ما الذي حدث؟ أي تفصيل يفيد — ماذا كنت تفعل، وفي أي تطبيق، وهل ظهرت شاشة حظر في غير موضعها، أو لم تظهر حين كان ينبغي أن تظهر.</string>
+    <string name="profile_report_placeholder">اشرح المشكلة</string>
+    <string name="profile_report_privacy">يُرسَل معه: إصدار التطبيق، وإصدار أندرويد، وطراز الهاتف، وإعداداتك الحالية — أي شاشة حظر تستخدم، وهل الحظر يعمل، وكم مرة حدث حظر اليوم.\n\nلا يُرسَل أبدًا: كلماتك المحظورة، ولا المواقع التي تزورها، ولا التطبيقات التي تحظرها.</string>
+    <string name="profile_report_send">إرسال</string>
+    <string name="profile_report_thanks">أُرسل — شكرًا لك</string>
+
+    <string name="profile_pin_change">تغيير رمز PIN</string>
+    <string name="profile_pin_set">ضع رمز PIN</string>
+    <string name="profile_pin_on">رمز PIN مضبوط. يلزم لتغيير قوائم الحظر.</string>
+    <string name="profile_pin_off">اقفل إعداداتك حتى لا تُزال قوائم الحظر في لحظة ضعف.</string>
+    <string name="profile_pin_remove">إزالة رمز PIN</string>
+    <string name="profile_pin_remove_subtitle">أوقف طلب الرمز عند فتح الإعدادات.</string>
+
+    <string name="profile_uninstall_title">منع إلغاء التثبيت</string>
+    <string name="profile_uninstall_on">مُفعَّل. لا يمكن إلغاء تثبيت AppBlocker حتى توقف هذا — وإيقافه يتطلّب كتابة فقرة كاملة أولًا.</string>
+    <string name="profile_uninstall_off">مُعطَّل — يمكن إلغاء تثبيت AppBlocker في هذه اللحظة. فعّله؛ فالحارس يجعل الصفحة صعبة الوصول فقط، أما هذا فهو ما يمنع الإزالة فعلًا.</string>
+
+    <string name="profile_guard_title">احرس مفتاح الإيقاف</string>
+    <string name="profile_guard_off">مُعطَّل. يمكن إيقاف الحظر من الإعدادات في أي لحظة.</string>
+    <string name="profile_guard_waiting_strict">سيُفتح خلال %1$s، لكن الوضع الصارم يعمل — لا يمكن للحارس أن ينزل قبل انتهاء الجلسة.</string>
+    <string name="profile_guard_strict">مُفعَّل، ومُقفل ما دام الوضع الصارم يعمل. لا يمكنك خفضه قبل انتهاء الجلسة.</string>
+    <string name="profile_guard_waiting">سيُفتح خلال %1$s. الحارس ما زال قائمًا.</string>
+    <string name="profile_guard_open">مفتوح — اضغط لإيقاف الحارس. يُغلق مجددًا خلال %1$s.</string>
+    <string name="profile_guard_on">مُفعَّل. صفحة إمكانية الوصول محظورة، فلا يمكن إيقاف الحظر في لحظة اندفاع. إيقاف هذا يستغرق %1$s.</string>
+    <string name="profile_guard_cancel_title">إلغاء طلب الفتح</string>
+    <string name="profile_guard_cancel_subtitle">غيّرت رأيك — يبقى الحارس قائمًا ويُلغى الطلب.</string>
+
+    <string name="gate_guard_title">إيقاف الحارس</string>
+    <string name="gate_guard_blurb">هذا هو المفتاح الذي يمنعك من إيقاف الحظر في لحظة سيئة. اكتب الفقرة أدناه — لا يمكنك لصقها — قبل أن ينفد الوقت.</string>
+    <string name="gate_guard_detail">إن فاتك الوقت حصلت على فقرة جديدة ومؤقّت جديد، مهما تكرّر ذلك. وحتى بعد أن تكتبها، يبقى الحارس قائمًا %1$s أخرى؛ بعدها أمامك %2$s لإيقافه.</string>
+    <string name="gate_guard_confirm">ابدأ انتظار %1$s</string>
+
+    <string name="profile_appearance_title">المظهر</string>
+    <string name="profile_appearance_subtitle">السمة: %1$s.</string>
+    <string name="theme_light">فاتح</string>
+    <string name="theme_dark">داكن</string>
+    <string name="theme_system">حسب النظام</string>
+    <string name="profile_icon_title">أيقونة التطبيق</string>
+    <string name="profile_icon_subtitle">الحالية: %1$s. اختر من مجموعة أيقوناتك.</string>
+    <string name="profile_blockscreen_title">شاشة الحظر</string>
+    <string name="profile_blockscreen_subtitle">الحالية: %1$s بألوان %2$s. غيّر ما يظهر على شاشة الحظر ولونها.</string>
+
+    <string name="profile_permissions_title">الإعداد والأذونات</string>
+    <string name="profile_permissions_subtitle">إمكانية الوصول، والعرض فوق التطبيقات، وإحصاءات الاستخدام، والبطارية، والتشغيل التلقائي — كلها في مكان واحد.</string>
+
+    <string name="profile_update_play">التحديثات تصل عبر Google Play.</string>
+    <string name="profile_update_checking">جارٍ البحث عن تحديثات…</string>
+    <string name="profile_update_current">أنت على أحدث إصدار.</string>
+    <string name="profile_update_available">يتوفّر تحديث: الإصدار %1$s — اضغط للتثبيت</string>
+    <string name="profile_update_downloading">جارٍ التنزيل… %1$s%%</string>
+    <string name="profile_update_retry">%1$s اضغط للمحاولة مجددًا.</string>
+    <string name="profile_update_check">اضغط للبحث عن تحديثات</string>
+    <string name="profile_version_title">AppBlocker إصدار %1$s</string>
+
+    <string name="profile_instructions_title">الشرح</string>
+    <string name="profile_instructions_subtitle">كيف تعمل كل ميزة، مشروحة بالتفصيل.</string>
+    <string name="profile_diagnostics_title">ما الذي يراه الحاظر</string>
+    <string name="profile_diagnostics_subtitle">لماذا لا يُحظر شيء ما — المتصفحات التي عُثر عليها، وآخر ما قرأه، وهل الحظر يعمل.</string>
+    <string name="profile_detox_title">دليل تنظيف الدوبامين</string>
+    <string name="profile_detox_subtitle">قواعد واضحة لإعادة ضبط نظام المكافأة في دماغك.</string>
+    <string name="profile_scenarios_title">مواقف</string>
+    <string name="profile_scenarios_subtitle">أدلّة للحظات الصعبة — الانتكاسة، والتركيز، والنوم، وغيرها.</string>
+    <string name="profile_steps_title">الخطوات الاثنتا عشرة</string>
+    <string name="profile_steps_subtitle">البرنامج بلغة بسيطة — وأين تجد الأصل.</string>
+    <string name="profile_changelog_title">الجديد</string>
+    <string name="profile_changelog_subtitle">كل إصدار وما الذي غيّره.</string>
+    <string name="profile_autoupdate_title">التحديث تلقائيًا</string>
+    <string name="profile_autoupdate_on">مُفعَّل. تُثبَّت الإصدارات الجديدة من تلقاء نفسها، عبر Wi-Fi، دون سؤال. ويستمر الحظر في العمل طوال ذلك.</string>
+    <string name="profile_autoupdate_off">مُعطَّل. ستُخبَر عندما يجهز تحديث وتُثبّته بنفسك.</string>
+    <string name="profile_privacy_title">سياسة الخصوصية</string>
+    <string name="profile_privacy_subtitle">ما الذي يحفظه التطبيق، وما الذي لا يرسله أبدًا، وما الذي يراه المدرّب الذكي.</string>
+    <string name="profile_share_title">شارك AppBlocker</string>
+    <string name="profile_share_subtitle">أرسل رابط التثبيت إلى صديق.</string>
+    <string name="profile_share_text">احظر التطبيقات والمواقع المشتِّتة مع AppBlocker:\n%1$s</string>
+    <string name="profile_sponsor_title">ادعم AppBlocker</string>
+    <string name="profile_sponsor_subtitle">مجاني، بلا إعلانات، ولا يجمع عنك شيئًا. إن كان قد ساعدك فبإمكانك المساهمة — وكل شيء يعمل بالضبط كما هو في الحالتين.</string>
+    <string name="profile_status_on">مُفعَّل</string>
+    <string name="profile_status_off">مُعطَّل</string>
+    <string name="profile_required">مطلوب</string>
+    <string name="profile_optional">اختياري</string>
+
+    <!-- ===================== التشغيل الأول والأذونات ===================== -->
+    <string name="onboarding_step">الخطوة %1$s من %2$s</string>
+    <string name="onboarding_get_started">لنبدأ</string>
+    <string name="onboarding_welcome_title">أهلًا بك في AppBlocker</string>
+    <string name="onboarding_welcome_body">يُبعدك AppBlocker عن التطبيقات والمواقع التي تشتّتك. إذنان سريعان وتصبح جاهزًا للحظر.</string>
+    <string name="onboarding_continue">متابعة</string>
+    <string name="onboarding_continue_as">تابع باسم %1$s</string>
+    <string name="onboarding_skip">تخطٍّ</string>
+    <string name="onboarding_skip_for_now">تخطَّ الآن</string>
+    <string name="onboarding_name_title">بماذا نناديك؟</string>
+    <string name="onboarding_name_label">اسمك</string>
+    <string name="onboarding_name_placeholder">اختياري</string>
+    <string name="onboarding_name_body">الاسم الأول يكفي. يُستخدم فقط لتحيّتك في ملفك الشخصي ومع المدرّب الذكي — يبقى على هذا الهاتف، ويمكنك تغييره أو حذفه في أي وقت.</string>
+    <string name="onboarding_coach_title">تعرّف على مدرّبك الذكي</string>
+    <string name="onboarding_coach_body">ليس مجرد حاجب — بل مدرّب في جيبك يساعدك على استعادة وقتك.</string>
+    <string name="onboarding_coach_numbers_title">يعرف أرقامك الحقيقية</string>
+    <string name="onboarding_coach_numbers_body">يتحدث عن وقت شاشتك وعاداتك أنت، لا نصائح عامة.</string>
+    <string name="onboarding_coach_knows_title">يتعرّف عليك</string>
+    <string name="onboarding_coach_knows_body">يتذكّر لماذا تحظر وما الذي يغريك. اسأله ما شئت في المحادثة.</string>
+    <string name="onboarding_coach_goals_title">يضع الأهداف معك</string>
+    <string name="onboarding_coach_goals_body">تتفقان على أهداف، وتتابعها مباشرة، وتصلك نصائح جديدة خلال اليوم.</string>
+    <string name="onboarding_coach_footer">مجاني، ويعمل فور تشغيله — تجده في الإحصاءات ▸ المدرّب الذكي.</string>
+    <string name="onboarding_try_again">حاول مجددًا</string>
+    <string name="onboarding_turn_on_blocking">شغّل الحظر</string>
+    <string name="onboarding_open_settings">افتح الإعدادات</string>
+    <string name="onboarding_done">هذا كل شيء — إنه يعمل. اضغط متابعة.</string>
+    <string name="onboarding_steps_heading">ما عليك فعله في الإعدادات — %1$s خطوات</string>
+    <string name="onboarding_leaves_app">الزر أدناه يخرجك من AppBlocker ويفتح إعدادات هاتفك. نفّذ هذه الخطوات ثم عُد إلى هنا مباشرة — وستخبرك هذه الشاشة إن نجح الأمر. والخطوات تأتي معك: اسحب من أعلى الشاشة لتراها مجددًا وأنت داخل الإعدادات.</string>
+    <string name="onboarding_headline_accessibility">الحظر يحتاج مفتاحًا واحدًا</string>
+    <string name="onboarding_headline_overlay">دع شاشة الحظر تظهر</string>
+    <string name="onboarding_stuck_title">لم يُشغَّل بعد</string>
+
+    <string name="perm_accessibility_label">إمكانية الوصول (الحاظر)</string>
+    <string name="perm_accessibility_desc">هذا هو المفتاح الوحيد الذي يجعل الحظر يعمل. في إعدادات هاتفك يُسمّى «إمكانية الوصول».</string>
+    <string name="perm_overlay_label">العرض فوق التطبيقات الأخرى</string>
+    <string name="perm_overlay_desc">هذا يسمح لشاشة الحظر بالظهور فوق التطبيق المحظور. في الإعدادات يُسمّى «العرض فوق التطبيقات الأخرى».</string>
+    <string name="perm_usage_label">الوصول إلى بيانات الاستخدام</string>
+    <string name="perm_usage_desc">لازم للحدود اليومية وللإحصاءات.</string>
+    <string name="perm_notifications_label">الوصول إلى الإشعارات</string>
+    <string name="perm_notifications_desc">اختياري. يتيح لـAppBlocker عدّ إشعاراتك اليومية من أجل الإحصاءات.</string>
+    <string name="perm_battery_label">إيقاف تحسين البطارية</string>
+    <string name="perm_battery_desc">يُبقي الحاظر يعمل حتى لا يُقتل في الخلفية.</string>
+    <string name="perm_location_label">الموقع</string>
+    <string name="perm_location_desc">فقط لجداول Wi-Fi والموقع. غير لازم فيما عدا ذلك.</string>
+    <string name="perm_deviceadmin_label">منع إلغاء التثبيت (مسؤول الجهاز)</string>
+    <string name="perm_deviceadmin_desc">يمنع إلغاء تثبيت AppBlocker حتى توقف هذا — عائق إضافي أمام الالتفاف على قوائم حظرك.</string>
+    <string name="perm_grant">امنح</string>
+
+    <string name="gate_uninstall_title">السماح بإلغاء التثبيت</string>
+    <string name="gate_uninstall_blurb">هذا هو المفتاح الذي يرفض إلغاء التثبيت فعلًا. اكتب الفقرة أدناه — لا يمكنك لصقها — قبل أن ينفد الوقت.</string>
+    <string name="gate_uninstall_detail">الحارس يجعل صفحة الإعدادات صعبة الوصول فقط؛ أما هذا فهو المفتاح الذي يرفض الإزالة نفسها. بإيقافه يمكن حذف AppBlocker في بضع نقرات، وتذهب معه كل قوائم حظرك. وإن فاتك الوقت حصلت على فقرة جديدة ومؤقّت جديد. أما إعادة تشغيله فنقرة واحدة دائمًا.</string>
+    <string name="gate_uninstall_confirm">أوقف الحماية</string>
+    <string name="admin_explanation">يتيح لـAppBlocker مقاومة إلغاء التثبيت حتى توقف هذا.</string>
+
+    <string name="disclosure_topbar">كيف يعمل الحظر</string>
+    <string name="disclosure_title">ما الذي يستطيع AppBlocker رؤيته</string>
+    <string name="disclosure_intro">لا يعمل الحظر إلا إذا استطاع التطبيق معرفة ما على شاشتك. وهذا بالضبط ما يعنيه ذلك، قبل أن يُطلب منك السماح به.</string>
+    <string name="disclosure_reads">ما الذي يقرأه</string>
+    <string name="disclosure_never">ما الذي لا يحدث أبدًا</string>
+    <string name="disclosure_front_title">أي تطبيق في المقدمة</string>
+    <string name="disclosure_front_body">حتى إذا فتحتَ شيئًا حظرته، تستطيع شاشة الحظر أن تغطّيه في اللحظة نفسها.</string>
+    <string name="disclosure_browser_title">في المتصفحات فقط — العنوان والنص الظاهر على الصفحة</string>
+    <string name="disclosure_browser_body">حتى يُلتقط الموقع المحظور أو الكلمة المحظورة داخل المتصفح أيضًا، لا في التطبيقات وحدها. أما خارج المتصفحات فلا ينظر AppBlocker إلا إلى أي تطبيق مفتوح.</string>
+    <string name="disclosure_local_title">لا يغادر هاتفك أبدًا</string>
+    <string name="disclosure_local_body">كل فحص يجري على هذا الجهاز. لا يُخزَّن ما يظهر على الشاشة ولا يُرسل إلى أي مكان.</string>
+    <string name="disclosure_noaccount_title">لا حساب ولا خادم</string>
+    <string name="disclosure_coach_title">المدرّب الذكي لا يرى شاشتك أبدًا</string>
+    <string name="disclosure_coach_body">إن شغّلت المدرّب فهو يتلقّى أرقام وقت شاشتك وإعداداتك — لا الصفحات التي تزورها ولا النص الذي عليها.</string>
+    <string name="disclosure_onlyblocking_title">يُستخدم للحظر فقط</string>
+    <string name="disclosure_onlyblocking_body">لا إعلانات، ولا تحليلات، ولا تتبّع. وإيقاف الخدمة من إعدادات أندرويد يوقف كل ذلك فورًا.</string>
+    <string name="disclosure_policy_link">اقرأ سياسة الخصوصية كاملة</string>
+    <string name="disclosure_footer">الضغط على «أوافق وافتح الإعدادات» ينقلك إلى إعدادات إمكانية الوصول في أندرويد، حيث تُشغّل AppBlocker بنفسك. لا يُمنح شيء قبل أن تفعل ذلك.</string>
+    <string name="disclosure_agree">أوافق وافتح الإعدادات</string>
+    <string name="disclosure_decline">ليس الآن</string>
+
+    <string name="permissions_header">امنح هذه الأذونات ليحظر AppBlocker بثبات.</string>
+    <string name="permissions_brand_note">ملاحظة لهواتف %1$s</string>
+    <string name="permissions_clone_note">نسخة التطبيق داخل %1$s هي تطبيق منفصل لا يستطيع AppBlocker رؤيته ولا حظره. وحظر الأصل لا يشمل النسخة.</string>
+    <string name="permissions_spaces_title">تبديل المساحات أو المستخدمين</string>
+    <string name="permissions_alert_title">تنبيه الحماية</string>
+    <string name="permissions_alert_body">ينبّهك AppBlocker بإشعار إذا توقّف الحظر يومًا — سواء أوقفته أنت أو أغلقه هاتفك بينما ما زال يُظهره مُفعَّلًا. اضغط أدناه للتأكد من وصول التنبيه إلى هاتفك.</string>
+    <string name="permissions_alert_button">أرسل تنبيهًا تجريبيًا</string>
+    <string name="restricted_title">مفتاح إمكانية الوصول باهت ولا يعمل؟</string>
+    <string name="restricted_body">هذا يهمّك فقط إن كان المفتاح باهتًا فعلًا. أندرويد 13 وما بعده يحجبه عن التطبيقات المثبَّتة من خارج متجر، دون أن يوضّح السبب. لفتحه: افتح الإعدادات ▸ التطبيقات ▸ AppBlocker، اضغط ⋮ في الزاوية العلوية، واختر «السماح بالإعدادات المقيّدة». ثم عُد وشغّل إمكانية الوصول.</string>
+    <string name="restricted_android15">في أندرويد 15 قد لا تجد قائمة ⋮ تلك — فقد أعاد أندرويد تصميم الصفحة. إن لم تجدها، فعُد وجرّب المفتاح مرة أخرى: إن لم يكن باهتًا فلا شيء من هذا يعنيك.</string>
+
+    <string name="disclosure_noaccount_body">لا يوجد تسجيل دخول في AppBlocker. لا أحد — بمن فيهم المطوّر — يستطيع رؤية ما على شاشتك ولا ما تحظره.</string>
+    <string name="onboarding_stuck_accessibility">لا شيء معطّل — هذه الشاشة يسهل تفويتها. %1$s اضغط «حاول مجددًا» واتبع الصور أدناه؛ السطر الذي تبحث عنه اسمه AppBlocker.</string>
+    <string name="onboarding_stuck_other">لا شيء معطّل — تلك القائمة يسهل تفويتها. اضغط «حاول مجددًا»، وابحث عن AppBlocker في القائمة، وشغّل مفتاحه.</string>
+
+    <!-- ===================== الإشعارات ===================== -->
+    <string name="channel_protection_name">تنبيهات الحماية</string>
+    <string name="channel_protection_desc">تخبرك إن توقّفت خدمة الحظر في AppBlocker.</string>
+    <string name="channel_stalled_name">الحظر توقّف</string>
+    <string name="channel_stalled_desc">التنبيه الذي يقول إن الحظر مُفعَّل لكنه لا يعمل فعليًا. أبقِ صوته مرتفعًا.</string>
+    <string name="channel_setup_name">مساعدة الإعداد</string>
+    <string name="channel_setup_desc">بينما أنت داخل الإعدادات، يحتفظ هذا بخطوات تشغيل الحظر. ويختفي بمجرد عودتك.</string>
+
+    <string name="notif_off_title">الحماية متوقّفة</string>
+    <string name="notif_off_collapsed">اضغط لإعادة تشغيل الحظر</string>
+    <string name="notif_off_headline">الحماية متوقّفة</string>
+    <string name="notif_off_subtitle">الحظر توقّف</string>
+    <string name="notif_off_action">شغّل</string>
+
+    <string name="notif_stalled_title">الحظر توقّف</string>
+    <string name="notif_stalled_collapsed">هاتفك أغلقه — اضغط لإعادة تشغيله</string>
+    <string name="notif_stalled_headline">الحظر توقّف</string>
+    <string name="notif_stalled_subtitle">لا شيء يُحظر الآن</string>
+    <string name="notif_stalled_action">أصلحه</string>
+
+    <string name="notif_paused_title">الحظر متوقّف مؤقتًا بعد التحديث</string>
+    <string name="notif_paused_collapsed">اضغط لإعادة تشغيله</string>
+    <string name="notif_paused_headline">الحظر متوقّف</string>
+    <string name="notif_paused_subtitle">متوقّف منذ تحديث التطبيق</string>
+    <string name="notif_paused_action">أعد تشغيله</string>
+
+    <string name="notif_test_title">الإشعارات تعمل</string>
+    <string name="notif_test_collapsed">سنحذّرك إن توقّفت الحماية</string>
+    <string name="notif_test_headline">الإشعارات تعمل</string>
+    <string name="notif_test_subtitle">التنبيهات تصل</string>
+
+    <string name="tile_label">الحظر السريع</string>
+    <string name="tile_strict">صارم</string>
+    <string name="tile_setup">إعداد</string>
+    <string name="tile_paused">متوقّف</string>
+
+    <!-- ===================== الوضع الصارم ===================== -->
+    <string name="strict_title">الوضع الصارم</string>
+    <string name="strict_locked">قوائم حظرك مُقفلة</string>
+    <string name="strict_unlocked">قوائم حظرك غير مُقفلة</string>
+    <string name="strict_no_stopping">لا توقّف مبكرًا — هذا هو المقصود. تستطيع إضافة وقت، لا أن تنقص منه.</string>
+    <string name="strict_whats_locked">ما الذي يُقفل عند التفعيل:</string>
+    <string name="strict_locked_blocks">تغيير قوائم حظرك أو إزالتها</string>
+    <string name="strict_locked_service">إيقاف الحاظر</string>
+    <string name="strict_locked_uninstall">إلغاء تثبيت التطبيق</string>
+    <string name="strict_unlock_method">طريقة الفتح</string>
+    <string name="strict_timer">مؤقّت</string>
+    <string name="strict_nothing_to_lock">أضِف ما تريد حظره أولًا — أعِدّ الحظر السريع أو جدولًا.</string>
+    <string name="strict_activate">فعّل القفل</string>
+    <string name="strict_set_timer">اضبط المؤقّت</string>
+    <string name="strict_start_lock">ابدأ القفل</string>
+    <string name="strict_confirm_title">هل نبدأ الوضع الصارم؟</string>
+    <string name="strict_confirm_body">ستُقفل قوائم حظرك لمدة %1$s — حتى %2$s. تستطيع إضافة وقت أثناء عمله، لكن لا تستطيع تقصيره أبدًا.</string>
+    <string name="strict_add_time_header">أضِف مزيدًا من الوقت</string>
+    <string name="strict_ends_at">ينتهي %1$s. وإضافة الوقت لا يمكن التراجع عنها.</string>
+    <string name="strict_add_more_time">أضِف مزيدًا من الوقت</string>
+    <string name="strict_add_the_time">أضِف الوقت</string>
+    <string name="strict_add_confirm_title">أتضيف %1$s؟</string>
+    <string name="strict_add_confirm_body">ستبقى قوائم حظرك مُقفلة حتى %1$s.</string>
+    <string name="strict_locks_summary">يقفل %1$s.</string>
+    <string name="strict_adult_filter">فلتر البالغين</string>
+    <string name="strict_needs_admin">يحتاج الوضع الصارم هذا حتى لا يمكن إلغاء تثبيت AppBlocker قبل انتهاء المؤقّت.</string>
+
+    <!-- ===================== تبويب الحظر ===================== -->
+    <string name="blocking_back_on">عاد الحظر يعمل 💪</string>
+    <string name="quick_block">الحظر السريع</string>
+    <string name="quick_start">ابدأ</string>
+    <string name="quick_paused">متوقّف مؤقتًا — اضغط البطاقة لتعديل قائمتك.</string>
+    <string name="quick_active">يعمل</string>
+    <string name="quick_tap_to_edit">اضغط للتعديل</string>
+    <string name="blocked_words">الكلمات المحظورة</string>
+    <string name="blocked_words_none">احظر كلمات في كل مكان على هاتفك</string>
+    <plurals name="blocked_words_count">
+        <item quantity="zero">لا كلمات · محظورة في كل تطبيق</item>
+        <item quantity="one">كلمة واحدة · محظورة في كل تطبيق</item>
+        <item quantity="two">كلمتان · محظورتان في كل تطبيق</item>
+        <item quantity="few">%1$s كلمات · محظورة في كل تطبيق</item>
+        <item quantity="many">%1$s كلمة · محظورة في كل تطبيق</item>
+        <item quantity="other">%1$s كلمة · محظورة في كل تطبيق</item>
+    </plurals>
+    <string name="new_schedule">جدول جديد</string>
+    <string name="new_schedule_first">هيا بنا — جدوِل أول حظر لك!</string>
+    <string name="new_schedule_body">احظر التطبيقات وفق جدول زمني أو بعد استخدام مفرط.</string>
+    <string name="schedule_time">وقت</string>
+    <string name="schedule_usage_limit">حدّ الاستخدام</string>
+    <string name="schedule_launch_count">عدد الفتحات</string>
+    <string name="schedule_wifi">Wi-Fi</string>
+    <string name="schedule_location">الموقع</string>
+    <string name="your_schedules">جداولك</string>
+    <string name="templates">القوالب</string>
+    <string name="templates_body">نقرة واحدة لحظر فئة كاملة.</string>
+    <string name="template_applied">طُبِّق «%1$s»</string>
+    <string name="template_apply">طبّق</string>
+    <string name="template_apply_title">أتطبّق «%1$s»؟</string>
+    <string name="timer_started">بدأ المؤقّت — يحظر لمدة %1$s</string>
+    <string name="pomodoro_started">بدأت بومودورو — %1$s دقيقة عمل · %2$s دقيقة راحة</string>
+    <string name="pomodoro">بومودورو</string>
+    <string name="pomodoro_body">احظر أثناء العمل، وتحرّر أثناء الراحة.</string>
+    <string name="timer">مؤقّت</string>
+    <string name="quick_allowing">يسمح بـ%1$s تطبيقات، ويحظر ما عداها</string>
+    <string name="quick_allowed_pill">مسموح · وكل ما عداه محظور</string>
+    <string name="quick_pill_desc">يحظر %1$s تطبيقًا و%2$s كلمة</string>
+    <string name="quick_pill_desc_adult">يحظر %1$s تطبيقًا و%2$s كلمة، وفلتر البالغين مُفعَّل</string>
+
+    <string name="banner_finish_setup">أكمِل الإعداد</string>
+    <plurals name="banner_steps_left">
+        <item quantity="zero">لا خطوات متبقية</item>
+        <item quantity="one">بقيت خطوة مطلوبة — اضغط للإصلاح</item>
+        <item quantity="two">بقيت خطوتان مطلوبتان — اضغط للإصلاح</item>
+        <item quantity="few">بقيت %1$s خطوات مطلوبة — اضغط للإصلاح</item>
+        <item quantity="many">بقيت %1$s خطوة مطلوبة — اضغط للإصلاح</item>
+        <item quantity="other">بقيت %1$s خطوة مطلوبة — اضغط للإصلاح</item>
+    </plurals>
+    <string name="banner_stopped_title">الحظر توقّف</string>
+    <string name="banner_stopped_body">هاتفك أغلقه — اضغط لإعادة تشغيله</string>
+    <string name="banner_update_title">يتوفّر تحديث — الإصدار %1$s</string>
+    <string name="banner_update_body">اضغط لتنزيل أحدث إصدار وتثبيته</string>
+    <string name="banner_paused_title">الحظر متوقّف مؤقتًا بعد التحديث</string>
+    <string name="banner_paused_body">لا شيء محظور الآن. اضغط أدناه عندما تكون مستعدًا.</string>
+    <string name="banner_reactivate">أعِد تفعيل الحظر</string>
+
+    <!-- ===================== تبويب الإحصاءات ===================== -->
+    <string name="insights_title">الإحصاءات</string>
+    <string name="insights_settings">الإعدادات</string>
+    <string name="insights_trending">اتجاه هذا الأسبوع</string>
+    <string name="insights_trending_body">كيف تغيّر كل تطبيق مقارنةً بالأسبوع الماضي.</string>
+    <string name="insights_savers">الأكثر توفيرًا لوقتك</string>
+    <string name="insights_savers_body">قضيتَ هنا وقتًا أقل من الأسبوع الماضي.</string>
+    <string name="insights_increase">الأكثر ارتفاعًا</string>
+    <string name="insights_increase_body">هذه أخذت من وقتك أكثر — تستحق النظر.</string>
+    <string name="insights_most_used">التطبيقات الأكثر استخدامًا</string>
+    <string name="insights_no_usage">لم يُسجَّل أي استخدام بعد.</string>
+    <string name="insights_needs_usage_access">يحتاج إذن بيانات الاستخدام.</string>
+    <string name="insights_most_opened">التطبيقات الأكثر فتحًا</string>
+    <string name="insights_blocked_opens">مرات فتحك لتطبيقات محظورة</string>
+    <string name="insights_no_blocks">لا حظر اليوم حتى الآن.</string>
+    <string name="insights_focus">التركيز</string>
+    <string name="insights_longest_focus">أطول تركيز</string>
+    <string name="insights_continuous_use">استخدام متواصل</string>
+    <string name="insights_distractions">المشتّتات</string>
+    <string name="insights_notifications">الإشعارات</string>
+    <string name="insights_pickups">مرات الالتقاط</string>
+    <string name="insights_vs_average">مقارنةً بمتوسط 7 أيام</string>
+    <string name="insights_vs_last_week">مقارنةً بالأسبوع الماضي</string>
+    <string name="insights_30_day_average">متوسط 30 يومًا</string>
+    <string name="insights_screen_time">وقت الشاشة</string>
+    <string name="insights_unlocks_today">فتحة قفل اليوم</string>
+    <string name="insights_blocks_today">حظرًا اليوم</string>
+    <string name="insights_strict_time">وقت صارم</string>
+
+    <string name="coach_title">المدرّب الذكي</string>
+    <string name="coach_subtitle">نصائح مخصّصة من بياناتك · Gemini</string>
+    <string name="coach_analyzing">يحلّل يومك…</string>
+    <string name="coach_goal_one">الهدف: %1$s</string>
+    <string name="coach_goal_many">الأهداف: %1$s</string>
+    <string name="coach_chat">تحدّث مع المدرّب</string>
+    <string name="coach_new_tips">نصائح جديدة</string>
+    <string name="coach_offline">تعذّر الوصول إلى Gemini — ستعود النصائح عندما تتصل بالإنترنت.</string>
+
+    <string name="insights_balance">التوازن</string>
+    <string name="insights_peak_time">وقت الذروة</string>
+    <string name="insights_usage">الاستخدام</string>
+    <string name="insights_bucket_productive">مُنتِج</string>
+    <string name="insights_bucket_distracting">مُشتِّت</string>
+    <string name="insights_bucket_neutral">محايد</string>
+    <string name="mood_title">تسجيل الحالة</string>
+    <string name="mood_prompt">كيف كان شعورك اليوم؟</string>
+    <string name="mood_tap">اضغط لتسجّل حالتك.</string>
+    <string name="mood_no_note">لا ملاحظة…</string>
+    <string name="mood_edit">تعديل</string>
+    <string name="mood_sheet_title">كيف كان شعورك تجاه استخدامك للهاتف اليوم؟</string>
+    <string name="mood_very_distracted">مشتَّت جدًا</string>
+    <string name="mood_in_control">مُمسِك بزمام الأمر</string>
+    <string name="mood_note_label">أضِف ملاحظة قصيرة (اختياري)</string>
+    <string name="mood_note_placeholder">ما يدور في بالك…</string>
+    <string name="mood_save">احفظ التسجيل</string>
+    <string name="mood_mixed">بين بين</string>
+    <string name="mood_not_checked_in">لم تسجّل بعد</string>
+
+    <string name="insights_summary">الملخّص</string>
+    <string name="insights_daily_average">المتوسط اليومي (7 أيام)</string>
+    <string name="insights_busiest_day">أكثر الأيام ازدحامًا</string>
+    <string name="insights_unlocks_row">فتحات قفل الهاتف اليوم</string>
+    <string name="insights_vs_yesterday">مقارنةً بالأمس</string>
+    <string name="insights_todays_usage">استخدام اليوم</string>
+    <string name="insights_light">خفيف</string>
+    <string name="insights_moderate">معتدل</string>
+    <string name="insights_heavy">كثيف</string>
+    <string name="insights_very_heavy">كثيف جدًا</string>
+    <string name="insights_patterns">الأنماط</string>
+
+    <string name="goals_title">الأهداف</string>
+    <string name="goals_subtitle">أهداف يومية يتابعها التطبيق نيابةً عنك</string>
+    <string name="goals_new">هدف جديد</string>
+    <string name="goals_empty">لا أهداف بعد. ضع هدفًا هنا، أو اتفق على واحد مع مدرّبك — وسيتابعه التطبيق مقابل استخدامك الحقيقي كل يوم.</string>
+    <string name="goals_set_one">ضع هدفًا</string>
+    <string name="goals_ask_coach">اسأل المدرّب</string>
+    <string name="goals_remove_title">أتزيل الهدف؟</string>
+    <string name="goals_remove">أزِل</string>
+    <string name="goals_remove_cd">إزالة الهدف</string>
+    <string name="goals_enforce">افرضه بجدول</string>
+    <string name="goals_kind_screen_time">وقت الشاشة</string>
+    <string name="goals_kind_one_app">تطبيق واحد</string>
+    <string name="goals_kind_unlocks">فتحات القفل</string>
+    <string name="goals_unlocks_prompt">ابقَ تحت هذا العدد من فتحات القفل يوميًا:</string>
+    <string name="goals_unlocks_unit">فتحة</string>
+    <string name="goals_which_app">أي تطبيق؟</string>
+    <string name="goals_time_prompt">ابقَ تحت هذه المدة يوميًا:</string>
+    <string name="goals_add">أضِف الهدف</string>
+
+    <!-- اقتباسات شاشة الحظر. -->
+    <string-array name="quote_texts">
+        <item>أنت تملك سلطانًا على عقلك — لا على ما يجري خارجك. أدرك هذا تجد القوة.</item>
+        <item>الحرية لا تُنال بإشباع الرغبة، بل بالسيطرة عليها.</item>
+        <item>ليس الفقير من قلّ ما يملك، بل من كثر ما يشتهي.</item>
+        <item>أقوى الناس من ملك نفسه.</item>
+        <item>لا حرّ لمن لم يملك نفسه.</item>
+        <item>قاوم البدايات؛ فالدواء بعدها يأتي متأخرًا.</item>
+        <item>أول الانتصارات وأعظمها أن تنتصر على نفسك.</item>
+        <item>من غلب شهواته أشجع عندي ممن غلب أعداءه.</item>
+        <item>من غلب غيره فهو قوي، ومن غلب نفسه فهو جبار.</item>
+        <item>وإن غلب ألف رجل، فالغالب نفسه هو أعظم منتصر.</item>
+        <item>أتريد مُلكًا عظيمًا؟ فامْلِك نفسك.</item>
+        <item>ليست المشكلة أن العمر قصير، بل أننا نضيّع كثيرًا منه.</item>
+        <item>قد تفارق الحياة في هذه اللحظة. فليحكم ذلك ما تفعل وما تقول وما تفكر فيه.</item>
+        <item>ما يعترض طريقك يصير هو الطريق.</item>
+        <item>بينما نحن نؤجّل، تمضي الحياة مسرعة.</item>
+        <item>قل لنفسك أولًا ما تريد أن تكون، ثم افعل ما عليك فعله.</item>
+        <item>ركّز في كل دقيقة على ما بين يديك.</item>
+        <item>نتألم في خيالنا أكثر مما نتألم في الواقع.</item>
+        <item>لا تضيّع وقتك في الجدال حول صفات الرجل الصالح. كُن واحدًا.</item>
+        <item>لا شيء نملكه حقًا سوى الوقت.</item>
+        <item>لا تفعل شيئًا لا نفع فيه.</item>
+        <item>تجربتي هي ما أختار أن أنتبه إليه.</item>
+        <item>الانتباه هو أول التفاني.</item>
+        <item>وفرة المعلومات تُورث فقرًا في الانتباه.</item>
+        <item>الطريقة التي نقضي بها أيامنا هي، بالطبع، الطريقة التي نقضي بها حياتنا.</item>
+        <item>كل مشكلات البشر تنبع من عجز المرء عن الجلوس وحده في غرفة بهدوء.</item>
+        <item>ثمن الشيء هو مقدار الحياة الذي تبادله به.</item>
+        <item>كل إنسان يعبد شيئًا. الاختيار الوحيد المتاح لنا هو ماذا نعبد.</item>
+        <item>شيطان هذا العصر هو الدوبامين الرخيص.</item>
+        <item>إن كنت تحب الحياة فلا تضيّع الوقت، فالوقت هو ما تُصنع منه الحياة.</item>
+        <item>التحكم في الوعي هو ما يحدّد جودة الحياة.</item>
+        <item>الوضوح في ما يهم يمنحك وضوحًا في ما لا يهم.</item>
+        <item>قل لي، ماذا تنوي أن تفعل بحياتك الواحدة الجامحة الثمينة؟</item>
+        <item>نحن ما نفعله مرارًا. فالتميّز إذن ليس فعلًا، بل عادة.</item>
+        <item>الانضباط هو الحرية.</item>
+        <item>أنت لا ترتقي إلى مستوى أهدافك، بل تهبط إلى مستوى أنظمتك.</item>
+        <item>كل فعل تقوم به صوتٌ تمنحه للشخص الذي تريد أن تصير إليه.</item>
+        <item>ألم الانضباط يزن أوقيّات. أما ألم الندم فيزن أطنانًا.</item>
+        <item>خيارات صعبة، حياة سهلة. خيارات سهلة، حياة صعبة.</item>
+        <item>الانضباط أن تختار بين ما تريده الآن وما تريده أكثر من كل شيء.</item>
+        <item>ضبط النفس قوة. وصواب الفكر سيادة. والسكينة سلطان.</item>
+        <item>النسخة منك التي وضعت هذا الحظر كانت تعرف شيئًا. أنصت إليها.</item>
+        <item>هذه الرغبة تمرّ في تسعين ثانية تقريبًا. اصمد بعدها.</item>
+        <item>بعد ساعة لن تتذكّر أنك أردت هذا. لكنك ستتذكّر أنك انتصرت عليه.</item>
+        <item>أنت لا تُحرَم من شيء. أنت تحمي نفسك — بنفسك.</item>
+        <item>الرغبة تعلو صوتها لأنها تخسر.</item>
+        <item>لقد فعلتَ ما هو أصعب من إغلاق شاشة.</item>
+        <item>الانتكاسة تبدأ بمساومة واحدة. وهذه هي. قل لا هنا.</item>
+        <item>التغذية لا تنتهي أبدًا. أما وقتك فينتهي.</item>
+        <item>لا شيء في ذلك التطبيق سيهمّ بعد أسبوع. أما ما تفعله بدلًا منه فقد يهم.</item>
+        <item>الحياة الحقيقية تجري الآن، خارج هذه الشاشة.</item>
+        <item>الملل هو حيث تختبئ أفضل أفكارك. اسمح لنفسك أن تملّ.</item>
+        <item>ذلك التطبيق مصمَّم ليعلّقك. وأنت رأيت ذلك قادمًا — ولهذا أنت هنا.</item>
+        <item>كل تمرير تتجاوزه تمرينٌ لإرادتك.</item>
+        <item>تقدّم، لا كمال. وإغلاق هذه الشاشة يُحسب لك.</item>
+        <item>انتباهك أثمن ما تملك. أنفقه عن قصد.</item>
+        <item>لا تبادل هذه الأمسية بجرعة دوبامين.</item>
+        <item>الخسارة مرة لا تعني خسارة اليوم. أغلق هذا واحتفظ بيومك.</item>
+    </string-array>
+    <string-array name="quote_authors">
+        <item>ماركوس أوريليوس</item>
+        <item>إبكتيتوس</item>
+        <item>سينيكا</item>
+        <item>سينيكا</item>
+        <item>إبكتيتوس</item>
+        <item>أوفيد</item>
+        <item>أفلاطون</item>
+        <item>أرسطو</item>
+        <item>لاوتزو</item>
+        <item>الدَّهَمَّبادا</item>
+        <item>بوبليليوس سيروس</item>
+        <item>سينيكا</item>
+        <item>ماركوس أوريليوس</item>
+        <item>ماركوس أوريليوس</item>
+        <item>سينيكا</item>
+        <item>إبكتيتوس</item>
+        <item>ماركوس أوريليوس</item>
+        <item>سينيكا</item>
+        <item>ماركوس أوريليوس</item>
+        <item>سينيكا</item>
+        <item>مياموتو موساشي</item>
+        <item>وليام جيمس</item>
+        <item>ماري أوليفر</item>
+        <item>هربرت سايمون</item>
+        <item>آني ديلارد</item>
+        <item>بليز باسكال</item>
+        <item>هنري ديفيد ثورو</item>
+        <item>ديفيد فوستر والاس</item>
+        <item>نافال رافيكانت</item>
+        <item>بروس لي</item>
+        <item>ميهاي تشيكسنتميهاي</item>
+        <item>كال نيوبورت</item>
+        <item>ماري أوليفر</item>
+        <item>ويل ديورانت</item>
+        <item>جوكو ويلينك</item>
+        <item>جيمس كلير</item>
+        <item>جيمس كلير</item>
+        <item>جيم رون</item>
+        <item>يرزي غريغوريك</item>
+        <item>غير معروف</item>
+        <item>جيمس آلن</item>
+        <item>مدرّبك</item>
+        <item>مدرّبك</item>
+        <item>مدرّبك</item>
+        <item>مدرّبك</item>
+        <item>مدرّبك</item>
+        <item>مدرّبك</item>
+        <item>مدرّبك</item>
+        <item>مدرّبك</item>
+        <item>مدرّبك</item>
+        <item>مدرّبك</item>
+        <item>مدرّبك</item>
+        <item>مدرّبك</item>
+        <item>مدرّبك</item>
+        <item>مدرّبك</item>
+        <item>مدرّبك</item>
+        <item>مدرّبك</item>
+        <item>مدرّبك</item>
+    </string-array>
+
+    <!-- ===================== ملفك / الرمز / الكلمات ===================== -->
+    <string name="account_name_placeholder">الاسم الأول يكفي</string>
+    <string name="account_name_note">يُستخدم فقط لتحيّتك. اتركه فارغًا وسيقول التطبيق «أنت» ببساطة.</string>
+    <string name="account_where_shows">أين يظهر اسمك</string>
+    <string name="account_profile_page">صفحة الملف الشخصي</string>
+    <string name="account_profile_page_body">التحية ودائرة الأحرف الأولى في الأعلى.</string>
+    <string name="account_coach">المدرّب الذكي</string>
+    <string name="account_coach_body">يستخدم اسمك الأول حين يخاطبك.</string>
+    <string name="account_on_this_phone">على هذا الهاتف</string>
+    <string name="account_no_account">لا حساب ولا تسجيل دخول</string>
+    <string name="account_no_account_body">لا يوجد في AppBlocker تسجيل دخول ولا حساب على الإنترنت. اسمك وقوائم حظرك وإحصاءاتك محفوظة على هذا الهاتف وحده، وإلغاء تثبيت التطبيق يمحوها.</string>
+    <string name="account_run_setup">أعِد تشغيل الإعداد</string>
+    <string name="account_run_setup_body">امشِ في خطوات الترحيب والأذونات مرة أخرى. أما قوائم حظرك وجداولك وكلماتك ورمزك فتبقى كما هي تمامًا.</string>
+    <string name="account_clear_name">امسح اسمي</string>
+    <string name="account_greeted">هكذا ستُحيّا</string>
+    <string name="account_add_name">أضِف اسمك وسيحيّيك التطبيق به</string>
+
+    <string name="pin_locked_title">AppBlocker مُقفل</string>
+    <string name="pin_locked_subtitle">أدخل رمزك لإجراء التغييرات.</string>
+    <string name="pin_incorrect">رمز غير صحيح</string>
+    <string name="pin_unlock">افتح</string>
+    <string name="pin_save">احفظ الرمز</string>
+    <string name="pin_new">رمز جديد</string>
+    <string name="pin_confirm">أكّد الرمز</string>
+
+    <string name="words_intro">أضِف كلمات لا تريد أن تراها أبدًا. في متصفحك تحظر المواقع وعمليات البحث المطابقة؛ وفي أي تطبيق آخر، تُحظر لحظة ظهورها على الشاشة.</string>
+    <string name="words_add_placeholder">أضِف كلمة</string>
+    <string name="words_empty">لا كلمات محظورة بعد — أضِف كلمة مثل «كازينو» أو «مراهنات».</string>
+    <string name="words_adult_pack">حزمة محتوى البالغين</string>
+    <string name="words_adult_pack_desc">مئات الكلمات الإباحية — بالعربية والإنجليزية — تُحظر تلقائيًا، فوق قائمتك الخاصة.</string>
+    <string name="words_pack_unlocked">تستطيع إيقاف الحزمة الآن — اضغط المفتاح. ينتهي هذا الفتح خلال %1$s.</string>
+    <string name="words_pack_waiting">طُلب الإيقاف. وتبقى الحزمة تحميك %1$s أخرى.</string>
+    <string name="words_everywhere">احظر هذه الكلمات في كل تطبيق</string>
+    <string name="words_everywhere_desc">موصى به. عند إيقافه تُحظر الكلمات في متصفحك فقط.</string>
+    <string name="gate_adult_title">إيقاف حماية البالغين</string>
+    <string name="gate_adult_blurb">هذا يخفض حارسك. اكتب الفقرة أدناه — لا يمكنك لصقها — قبل أن ينفد الوقت.</string>
+    <string name="gate_adult_detail">إن فاتك الوقت حصلت على فقرة جديدة ومؤقّت جديد، مهما تكرّر ذلك. وحتى بعد أن تكتبها، تبقى الحزمة مُفعَّلة 24 ساعة أخرى؛ وبعدها فقط تستطيع إيقاف المفتاح.</string>
+    <string name="gate_adult_confirm">ابدأ انتظار الـ24 ساعة</string>
+
+    <string name="expand">توسيع</string>
+    <string name="collapse">طيّ</string>
+    <string name="back">رجوع</string>
+
+    <!-- ===================== محرّر الجداول ===================== -->
+    <string name="sched_start_now">ابدأ الحظر فورًا</string>
+    <string name="sched_create_off">أنشئه متوقّفًا</string>
+    <string name="sched_is_on">هذا الجدول مُفعَّل</string>
+    <string name="sched_is_off">هذا الجدول متوقّف</string>
+    <string name="sched_strict_note">الوضع الصارم يعمل. يمكن تشغيل جدول أثناء الجلسة، لكن لا يمكن إيقافه.</string>
+    <string name="sched_will_start">سيبدأ العمل بمجرد إنشائه.</string>
+    <string name="sched_saved_off">سيُحفظ في قائمتك، جاهزًا لتشغيله لاحقًا.</string>
+    <string name="sched_enforcing">يُطبَّق الآن.</string>
+    <string name="sched_kept">محفوظ في قائمتك، لكنه لا يحظر شيئًا.</string>
+    <string name="sched_delete">حذف</string>
+    <string name="sched_create">أنشئ الجدول</string>
+    <string name="sched_name">الاسم</string>
+    <string name="sched_start">البداية</string>
+    <string name="sched_days">الأيام</string>
+    <string name="sched_pick_a_day">اختر يومًا واحدًا على الأقل — وإلا فلن يعمل هذا الجدول أبدًا.</string>
+    <string name="sched_same_time">البداية والنهاية متطابقتان، فلن يعمل هذا أبدًا. لليوم كامل استخدم 00:00 إلى 23:59.</string>
+    <string name="sched_daily_limit">الحدّ اليومي</string>
+    <string name="sched_open_limit">احظر بعد كم فتحة في اليوم</string>
+    <string name="sched_any_wifi">أي شبكة Wi-Fi</string>
+    <string name="sched_wifi_name">اسم شبكة Wi-Fi (SSID)</string>
+    <string name="sched_wifi_needs_location">قراءة اسم شبكة بعينها تحتاج إذن الموقع.</string>
+    <string name="sched_wont_work">هذا الجدول لن يعمل بعد</string>
+    <string name="sched_location">الموقع</string>
+    <string name="sched_location_needed">إذن الموقع لازم للحظر حسب المكان.</string>
+    <string name="sched_grant_location">امنح إذن الموقع</string>
+    <string name="sched_no_location">لم يُلتقط أي موقع بعد.</string>
+
+    <!-- ===================== محرّر الحظر السريع ===================== -->
+    <string name="editor_save">حفظ</string>
+    <string name="editor_allowlist_intro">اختر التطبيقات التي تريد السماح بها. وسيُحظر كل ما عداها.</string>
+    <string name="editor_blocklist_intro">اختر التطبيقات أو المواقع أو الكلمات التي تريد حظرها.</string>
+    <string name="editor_apps">التطبيقات</string>
+    <string name="editor_websites_words">المواقع والكلمات</string>
+    <string name="editor_extra_options">خيارات إضافية</string>
+    <string name="editor_porn_title">حظر المواقع الإباحية</string>
+    <string name="editor_porn_desc">يكتشف مواقع البالغين في متصفحاتك ويحظرها.</string>
+    <string name="editor_newapps_title">أضِف التطبيقات المثبَّتة حديثًا</string>
+    <string name="editor_newapps_desc">تُحظر التطبيقات المثبَّتة حديثًا تلقائيًا.</string>
+    <string name="editor_purchases_title">حظر عمليات الشراء داخل التطبيقات</string>
+    <string name="editor_purchases_desc">يحظر نافذة الشراء من Google Play في الألعاب والتطبيقات.</string>
+    <string name="editor_browsers_title">احظر المتصفحات غير المدعومة</string>
+    <string name="editor_browsers_desc">يحظر المتصفحات التي لا نستطيع فلترتها (مثل Brave) حتى لا تلتفّ على حظر المواقع.</string>
+    <string name="editor_pick_allowed">اختر التطبيقات التي تبقى مفتوحة. وكل ما عداها محظور.</string>
+    <string name="editor_pick_blocked">اختر التطبيقات التي تريد حظرها.</string>
+    <string name="editor_search_apps">ابحث في التطبيقات</string>
+    <string name="editor_loading">يحمّل التطبيقات…</string>
+    <string name="editor_hypothetical">تطبيقات افتراضية</string>
+    <string name="editor_hypothetical_desc">تطبيقات لا تملكها بعد. احظرها الآن وستُحظر لحظة تثبيتها.</string>
+    <string name="editor_not_installed">غير مثبَّت بعد</string>
+    <string name="editor_words_intro">أي عنوان ويب أو بحث يحتوي على واحدة من هذه يُحظر. وهي أيضًا في شاشة الكلمات المحظورة (تبويب الحظر)، حيث تستطيع حظرها داخل التطبيقات كذلك.</string>
+    <string name="editor_add_word_site">أضِف كلمة أو موقعًا</string>
+    <string name="editor_blocking">الحظر</string>
+    <string name="editor_allowlist">قائمة السماح</string>
+    <string name="editor_blocklist">قائمة الحظر</string>
+
+    <!-- ===================== محادثة المدرّب ===================== -->
+    <string name="chat_knows">ما الذي يعرفه مدرّبك</string>
+    <string name="chat_clear">امسح المحادثة</string>
+    <string name="chat_thinking">يفكّر…</string>
+    <string name="chat_clear_title">أتمسح المحادثة؟</string>
+    <string name="chat_clear_confirm">امسح</string>
+    <string name="chat_nothing_yet">لا شيء بعد — كلما تحدثت أكثر، عرفك مدرّبك أفضل.</string>
+    <string name="chat_close">إغلاق</string>
+    <string name="chat_forget">انسَ كل شيء</string>
+    <string name="chat_your_goals">أهدافك</string>
+    <string name="chat_placeholder">راسل مدرّبك…</string>
+    <string name="chat_send">إرسال</string>
+
+    <!-- ===================== ما تبقّى ===================== -->
+    <string name="sched_wifi_needs_location_body">لا يكشف أندرويد أي شبكة Wi-Fi أنت عليها إلا إذا كان لدى AppBlocker إذن الموقع. وبدونه لن يتطابق هذا الجدول أبدًا. استخدم «أي شبكة Wi-Fi» بدلاً من ذلك، أو امنح الإذن أدناه.</string>
+    <string name="sched_use_location">استخدم موقعي الحالي</string>
+    <string name="sched_save_place">احفظ هذا المكان</string>
+    <string name="sched_longpress_tip">تلميح: اضغط مطوّلًا على مكان لحذفه.</string>
+    <string name="sched_name_place">سمِّ هذا المكان</string>
+    <string name="sched_place_label">الاسم (مثلًا: البيت)</string>
+    <string name="sched_delete_place">حذف المكان</string>
+    <string name="sched_delete_place_body">أتزيل «%1$s» من الأماكن المحفوظة؟</string>
+    <string name="sched_needs_all_the_time">الحظر حسب المكان يحتاج «السماح طوال الوقت»</string>
+    <string name="sched_needs_all_the_time_body">الحظر يعمل في الخلفية، فإذن الموقع أثناء الاستخدام فقط لا يكفي.</string>
+
+    <string name="update_available">يتوفّر تحديث</string>
+    <string name="update_now">حدّث الآن</string>
+    <string name="update_later">لاحقًا</string>
+    <string name="update_downloading">جارٍ تنزيل التحديث</string>
+
+    <string name="gate_placeholder">اكتب الفقرة أعلاه</string>
+    <string name="gate_how_title">كيف يعمل هذا</string>
+    <string name="gate_got_it">فهمت</string>
+
+    <string name="word_remove_title">أتزيل «%1$s»؟</string>
+    <string name="word_remove">أزِل</string>
+    <string name="word_keep">أبقِها</string>
+
+    <string name="editor_mode_title">نمط الحظر</string>
+    <string name="editor_mode_body">اختر النمط الذي يناسبك أكثر.</string>
+    <string name="editor_shorts">Shorts</string>
+    <string name="editor_protection_off">الحماية متوقّفة</string>
+    <string name="editor_protection_off_body">شغّل الحاظر حتى تحظر اختياراتك فعلًا.</string>
+    <string name="editor_turn_on">شغّل الحماية</string>
+
+    <!-- شاشة الإصلاح عند توقف الحظر. -->
+    <string name="repair_title">توقّف الحظر</string>
+    <string name="repair_what_title">ما الذي حدث</string>
+    <string name="repair_what_body_1">أوقف هاتفك AppBlocker. على شياومي يحدث هذا عادةً عند التنقل بين المساحات — فالانتقال يوقف كل تطبيق في المساحة التي تركتها، وهاتفك لا يعيد تشغيل الحاظر دائمًا عند عودتك.</string>
+    <string name="repair_what_body_2">ما زال أندرويد يعرض المفتاح مفتوحًا، ولهذا بدا كل شيء سليمًا بينما لم يُحظر شيء. ذلك المفتاح يتذكر ما اخترته — لا يتحقق مما إذا كان الحاظر يعمل فعلًا. الآن التطبيق يتحقق، ويخبرك.</string>
+    <string name="repair_steps_title">أعد تشغيله</string>
+    <string name="repair_step_1">اضغط الزر بالأسفل — يفتح صفحة AppBlocker نفسها.</string>
+    <string name="repair_step_2">أوقف AppBlocker.</string>
+    <string name="repair_step_3">شغّله مرة أخرى، ووافق على الرسالة.</string>
+    <string name="repair_step_4">عُد إلى هنا. تتحول هذه الصفحة إلى الأخضر عندما يعمل الحظر.</string>
+    <string name="repair_open_switch">افتح المفتاح</string>
+    <string name="repair_floating_title">لترى هذا فعلًا في المرة القادمة</string>
+    <string name="repair_floating_body">التنبيه الذي أحضرك إلى هنا يظهر فوق ما تفعله ويعود كل بضع دقائق حتى يعود الحظر للعمل. لكن هاتفك يحتفظ بـ«الإشعارات العائمة» كمفتاح مستقل، وهو مُطفأ افتراضيًا لمعظم التطبيقات — وما دام مُطفأ، لن يستطيع التنبيه إلا الجلوس صامتًا في الشريط. هذا هو الشيء الوحيد الذي لا يستطيع AppBlocker تشغيله نيابةً عنك.</string>
+    <string name="repair_notification_settings">إعدادات الإشعارات</string>
+    <string name="repair_why_title">لماذا لا يستطيع التطبيق فعل ذلك نيابةً عنك</string>
+    <string name="repair_why_body">لا يسمح أندرويد لتطبيق بإعادة تشغيل حظره بنفسه. هذه القاعدة هي ما يمنع تطبيقًا سيئًا من تشغيل نفسه بصمت ومراقبة شاشتك — وهي نفسها التي تمنع هذا التطبيق من إعادة تشغيل نفسه. لا بد أن تكون لمستك أنت.</string>
+    <string name="repair_shortcut_title">طريقة أسرع بكثير</string>
+    <string name="repair_shortcut_body">في الإعدادات ▸ إمكانية الوصول ▸ AppBlocker يوجد خيار «اختصار». شغّله واختر مفاتيح الصوت. بعد ذلك، الضغط على مفتاحي الصوت معًا ثلاث ثوانٍ يوقف الحاظر، والضغط عليهما مرة أخرى يعيد تشغيله — من أي مكان، دون البحث داخل الإعدادات.</string>
+    <string name="repair_vendor_title">لتقليل تكرار المشكلة</string>
+    <string name="repair_status_on">الحظر يعمل مجددًا</string>
+    <string name="repair_status_off">الحظر لا يعمل</string>
+    <string name="repair_status_on_body">الحاظر يعمل ويراقب من جديد. لا شيء آخر عليك فعله.</string>
+    <string name="repair_status_off_body">هو مُفعّل في الإعدادات، لكنه لا يعمل — لذا لا شيء يُحظر الآن.</string>
+</resources>

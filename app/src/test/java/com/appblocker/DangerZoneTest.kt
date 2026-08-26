@@ -98,14 +98,16 @@ class DangerZoneTest {
 
     @Test
     fun `the block screen names it and counts down, and says nothing else`() {
-        val msg = DangerZone.message(47 * 60_000L)
+        // EnglishStrings reads the shipped values/strings.xml, so these assertions now guard the
+        // resource itself rather than a copy of it — see EnglishStrings.
+        val msg = DangerZone.message(EnglishStrings, 47 * 60_000L)
         assertTrue(msg.contains("three"))
         assertTrue(msg.contains("47"))
         // No scoreboard: this screen arrives uninvited at the worst moment.
         assertFalse(msg.contains("total"))
         assertFalse(msg.contains("times"))
         // Never "0 minutes" while the zone is still running.
-        assertTrue(DangerZone.message(1L).contains("1 minute."))
+        assertTrue(DangerZone.message(EnglishStrings, 1L).contains("1 minute."))
     }
     // ---- a site caught in two different browsers ------------------------------------------
 

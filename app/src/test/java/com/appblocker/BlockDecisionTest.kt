@@ -60,6 +60,8 @@ class BlockDecisionTest {
         scheduleConditionMet = { conditionMet },
         scheduleLabel = { "your “Focus” schedule" },
         hourMinuteLabel = { "17:00" },
+        // The shipped English resources, not a copy of them — see EnglishStrings.
+        words = EnglishStrings,
     )
 
     private fun rule(

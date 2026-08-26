@@ -47,6 +47,8 @@ import com.appblocker.data.Goals
 import com.appblocker.data.InstalledAppsRepository
 import com.appblocker.ui.theme.AppGradients
 import com.appblocker.ui.theme.softGlow
+import androidx.compose.ui.res.stringResource
+import com.appblocker.R
 
 private val HitGreen = Color(0xFF22C55E)
 private val MissRed = Color(0xFFEF4444)
@@ -74,16 +76,16 @@ fun GoalsCard(
         }
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
-            Text("Goals", style = MaterialTheme.typography.titleLarge,
+            Text(stringResource(R.string.goals_title), style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-            Text("Daily targets the app tracks for you",
+            Text(stringResource(R.string.goals_subtitle),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         TextButton(onClick = { showAdd = true }) {
             Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(4.dp))
-            Text("New goal")
+            Text(stringResource(R.string.goals_new))
         }
     }
     Spacer(Modifier.padding(top = 8.dp))
@@ -98,15 +100,14 @@ fun GoalsCard(
     ) {
         if (goals.isEmpty()) {
             Text(
-                "No goals yet. Set one here, or agree on one with your coach — the app " +
-                    "will track it against your real usage every day.",
+                stringResource(R.string.goals_empty),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Row {
-                TextButton(onClick = { showAdd = true }) { Text("Set a goal") }
+                TextButton(onClick = { showAdd = true }) { Text(stringResource(R.string.goals_set_one)) }
                 Spacer(Modifier.weight(1f))
-                TextButton(onClick = onOpenCoach) { Text("Ask the coach") }
+                TextButton(onClick = onOpenCoach) { Text(stringResource(R.string.goals_ask_coach)) }
             }
         } else {
             goals.forEachIndexed { i, gp ->
@@ -125,15 +126,15 @@ fun GoalsCard(
     confirmRemove?.let { goal ->
         AlertDialog(
             onDismissRequest = { confirmRemove = null },
-            title = { Text("Remove goal?") },
+            title = { Text(stringResource(R.string.goals_remove_title)) },
             text = { Text("\"${goal.label()}\" and its history will be removed.") },
             confirmButton = {
                 TextButton(onClick = { onRemoveGoal(goal); confirmRemove = null }) {
-                    Text("Remove")
+                    Text(stringResource(R.string.goals_remove))
                 }
             },
             dismissButton = {
-                TextButton(onClick = { confirmRemove = null }) { Text("Cancel") }
+                TextButton(onClick = { confirmRemove = null }) { Text(stringResource(R.string.common_cancel)) }
             },
         )
     }
@@ -156,7 +157,7 @@ private fun GoalRow(gp: GoalProgress, onRemove: () -> Unit, onEnforce: () -> Uni
                     fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                 Spacer(Modifier.width(8.dp))
             }
-            Icon(Icons.Filled.Close, contentDescription = "Remove goal",
+            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.goals_remove_cd),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(16.dp).clip(CircleShape).clickable { onRemove() })
         }
@@ -196,7 +197,7 @@ private fun GoalRow(gp: GoalProgress, onRemove: () -> Unit, onEnforce: () -> Uni
                 Spacer(Modifier.weight(1f))
                 TextButton(onClick = onEnforce, contentPadding =
                     androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp)) {
-                    Text("Enforce with a schedule",
+                    Text(stringResource(R.string.goals_enforce),
                         style = MaterialTheme.typography.labelMedium)
                 }
             }
@@ -230,27 +231,27 @@ private fun AddGoalDialog(onAdd: (Goal) -> Unit, onDismiss: () -> Unit) {
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("New goal") },
+        title = { Text(stringResource(R.string.goals_new)) },
         text = {
             Column {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    KindChip("Screen time", kind == GoalKind.SCREEN_TIME) {
+                    KindChip(stringResource(R.string.goals_kind_screen_time), kind == GoalKind.SCREEN_TIME) {
                         kind = GoalKind.SCREEN_TIME
                     }
-                    KindChip("One app", kind == GoalKind.APP_LIMIT) { kind = GoalKind.APP_LIMIT }
-                    KindChip("Unlocks", kind == GoalKind.UNLOCKS) { kind = GoalKind.UNLOCKS }
+                    KindChip(stringResource(R.string.goals_kind_one_app), kind == GoalKind.APP_LIMIT) { kind = GoalKind.APP_LIMIT }
+                    KindChip(stringResource(R.string.goals_kind_unlocks), kind == GoalKind.UNLOCKS) { kind = GoalKind.UNLOCKS }
                 }
                 Spacer(Modifier.height(14.dp))
                 when (kind) {
                     GoalKind.UNLOCKS -> {
-                        Text("Stay under this many unlocks a day:",
+                        Text(stringResource(R.string.goals_unlocks_prompt),
                             style = MaterialTheme.typography.bodyMedium)
                         Spacer(Modifier.height(8.dp))
-                        Stepper(unlocks, "unlocks", min = 5, step = 5) { unlocks = it }
+                        Stepper(unlocks, stringResource(R.string.goals_unlocks_unit), min = 5, step = 5) { unlocks = it }
                     }
                     else -> {
                         if (kind == GoalKind.APP_LIMIT) {
-                            Text("Which app?", style = MaterialTheme.typography.bodyMedium)
+                            Text(stringResource(R.string.goals_which_app), style = MaterialTheme.typography.bodyMedium)
                             Spacer(Modifier.height(6.dp))
                             Column(Modifier.height(150.dp).verticalScroll(rememberScrollState())) {
                                 topApps.forEach { app ->
@@ -278,7 +279,7 @@ private fun AddGoalDialog(onAdd: (Goal) -> Unit, onDismiss: () -> Unit) {
                             }
                             Spacer(Modifier.height(10.dp))
                         }
-                        Text("Stay under this much per day:",
+                        Text(stringResource(R.string.goals_time_prompt),
                             style = MaterialTheme.typography.bodyMedium)
                         Spacer(Modifier.height(8.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -299,9 +300,11 @@ private fun AddGoalDialog(onAdd: (Goal) -> Unit, onDismiss: () -> Unit) {
                     GoalKind.UNLOCKS -> Goal(Goals.newId(), kind, unlocks)
                 }
                 onAdd(goal)
-            }) { Text("Add goal") }
+            }) { Text(stringResource(R.string.goals_add)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) }
+        },
     )
 }
 

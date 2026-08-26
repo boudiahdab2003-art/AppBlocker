@@ -56,6 +56,8 @@ import com.appblocker.ui.theme.AppCard
 import com.appblocker.ui.theme.AppGradients
 import com.appblocker.ui.theme.appBackground
 import com.appblocker.ui.theme.pageWidth
+import androidx.compose.ui.res.stringResource
+import com.appblocker.R
 
 /** Test tags for the rendering test — the field and the way out of the screen. */
 const val ACCOUNT_NAME_FIELD_TAG = "account_name_field"
@@ -108,7 +110,7 @@ fun AccountScreen(
     // background BEFORE safeDrawingPadding so the app colour still paints behind the system bars
     // (targetSdk 35 = forced edge-to-edge on Android 15+), same as every other full-screen page.
     Column(Modifier.fillMaxSize().background(appBackground()).safeDrawingPadding()) {
-        EditorTopBar("Your profile", onBack = onBack)
+        EditorTopBar(stringResource(R.string.profile_your_profile), onBack = onBack)
         Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) {
             Column(
                 Modifier.pageWidth()
@@ -120,8 +122,8 @@ fun AccountScreen(
                 OutlinedTextField(
                     value = text,
                     onValueChange = { text = it.take(DisplayName.MAX_LENGTH) },
-                    label = { Text("Your name") },
-                    placeholder = { Text("First name is fine") },
+                    label = { Text(stringResource(R.string.onboarding_name_label)) },
+                    placeholder = { Text(stringResource(R.string.account_name_placeholder)) },
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
@@ -130,43 +132,40 @@ fun AccountScreen(
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Only used to greet you. Leave it empty and the app just says \"You\".",
+                    stringResource(R.string.account_name_note),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
 
                 Spacer(Modifier.height(24.dp))
-                SectionLabel("Where your name shows up")
+                SectionLabel(stringResource(R.string.account_where_shows))
                 AppCard(elevation = 4.dp, contentPadding = PaddingValues(0.dp)) {
                     InfoRow(
                         icon = Icons.Filled.Person,
-                        title = "The Profile page",
-                        subtitle = "The greeting and the circle of initials at the top.",
+                        title = stringResource(R.string.account_profile_page),
+                        subtitle = stringResource(R.string.account_profile_page_body),
                     )
                     RowDivider()
                     InfoRow(
                         icon = Icons.Filled.AutoAwesome,
-                        title = "The AI Coach",
-                        subtitle = "It uses your first name when it talks to you.",
+                        title = stringResource(R.string.account_coach),
+                        subtitle = stringResource(R.string.account_coach_body),
                     )
                 }
 
                 Spacer(Modifier.height(24.dp))
-                SectionLabel("On this phone")
+                SectionLabel(stringResource(R.string.account_on_this_phone))
                 AppCard(elevation = 4.dp, contentPadding = PaddingValues(0.dp)) {
                     InfoRow(
                         icon = Icons.Filled.PhoneAndroid,
-                        title = "No account, no sign-in",
-                        subtitle = "AppBlocker has no login and no online account. Your name, " +
-                            "your blocks and your statistics are stored on this phone only, and " +
-                            "uninstalling the app removes them.",
+                        title = stringResource(R.string.account_no_account),
+                        subtitle = stringResource(R.string.account_no_account_body),
                     )
                     RowDivider()
                     InfoRow(
                         icon = Icons.Filled.Restore,
-                        title = "Run setup again",
-                        subtitle = "Walk through the welcome and permission steps once more. " +
-                            "Your blocks, schedules, words and PIN are left exactly as they are.",
+                        title = stringResource(R.string.account_run_setup),
+                        subtitle = stringResource(R.string.account_run_setup_body),
                         chevron = true,
                         onClick = onRunSetupAgain,
                     )
@@ -183,7 +182,7 @@ fun AccountScreen(
         // while the Save button ran the full width of the screen underneath it.
         Column(Modifier.pageWidth().padding(horizontal = 16.dp)) {
             GradientButton(
-                text = "Save",
+                text = stringResource(R.string.common_save),
                 enabled = dirty,
                 onClick = { save() },
                 modifier = Modifier.testTag(ACCOUNT_SAVE_TAG),
@@ -193,7 +192,10 @@ fun AccountScreen(
                     onClick = { text = "" },
                     modifier = Modifier.align(Alignment.CenterHorizontally),
                 ) {
-                    Text("Clear my name", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        stringResource(R.string.account_clear_name),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             } else {
                 Spacer(Modifier.height(12.dp))

@@ -17,6 +17,8 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.appblocker.data.Words
+import com.appblocker.R
 
 /**
  * Quick Settings tile to turn Quick Block on/off from the pull-down shade without opening the
@@ -81,15 +83,20 @@ class QuickBlockTileService : TileService() {
         return State(active = strict || (configured && !paused), strict, configured, paused)
     }
 
+    private val words get() = Words.of(this)
+
     private suspend fun render(s: State) = withContext(Dispatchers.Main) {
         val tile = qsTile ?: return@withContext
+        // Resolved outside the lambda: `this` inside withContext is the coroutine scope, not the
+        // service, and the tile has to speak the app's language rather than the phone's.
+        val w = words
         tile.state = if (s.active) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
-        tile.label = "Quick Block"
+        tile.label = w.get(R.string.tile_label)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             tile.subtitle = when {
-                s.strict -> "Strict"
-                !s.configured -> "Set up"
-                s.paused -> "Paused"
+                s.strict -> w.get(R.string.tile_strict)
+                !s.configured -> w.get(R.string.tile_setup)
+                s.paused -> w.get(R.string.tile_paused)
                 else -> "On"
             }
         }
