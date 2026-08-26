@@ -2382,41 +2382,38 @@ class BlockerAccessibilityService : AccessibilityService() {
             lastCountedOffence = offenceKey
             lastCountedAt = now
         }
-        // Diagnostic breadcrumb, recorded at the one place every cover passes through. Shape
-        // only — which path raised it, whether our own UI was in front, whether the window on
-        // screen actually matched what we were blocking. Never the app, word or page: see
-        // BlockLog. `ownUi=true` or `rootOk=false` here is what identifies a cover landing
-        // somewhere it shouldn't, which is otherwise invisible after the milliseconds it lasts.
-        runCatching {
-            BlockLog.record(
-                context = applicationContext,
-                kind = when {
-                    counterKey == "strict_guard" -> "guard"
-                    // `why` as well as the key: the browser Shorts cover is *counted* as a web
-                    // block (it is a page block, and must not wear the player scan's key — see
-                    // scanWebContent), but in a report it is still a Shorts block and reading it
-                    // as "word" would send the next reader looking for a keyword that never
-                    // existed. Invariant 17: an instrument must mean one thing.
-                    counterKey == CoverGate.SHORTS_KEY || why == BlockWhy.SHORTS -> "shorts"
-                    packageName != null -> "app"
-                    else -> "word"
-                },
-                ownUi = OwnUi.visible,
-                // Three-way, because the boolean this replaces meant two opposite things at once:
-                // "the cover landed on the wrong app" (a bug) and "the tree was unreadable, so we
-                // blocked anyway" (deliberate, invariant 1) both read as false. Report #5 turned
-                // on exactly that distinction and the log could not answer it.
-                window = when {
-                    packageName == null -> BlockLog.Window.NA
-                    else -> when (rootInActiveWindow?.packageName?.toString()) {
-                        null -> BlockLog.Window.BLIND
-                        packageName -> BlockLog.Window.MATCH
-                        else -> BlockLog.Window.OTHER
-                    }
-                },
-                why = why,
-                counted = fresh,
-            )
+        // What the breadcrumb will say, worked out here but *written* after the cover is up —
+        // see the record below. Both of these have to be read now: `OwnUi.visible` and the window
+        // tree describe the moment of the decision, and our own cover is about to become part of
+        // both (the overlay is non-focusable and can itself report as the active window, which is
+        // exactly the quirk ExitView exists for). Reading them afterwards would describe the
+        // cover instead of what it covered.
+        val logKind = when {
+            counterKey == "strict_guard" -> "guard"
+            // `why` as well as the key: the browser Shorts cover is *counted* as a web
+            // block (it is a page block, and must not wear the player scan's key — see
+            // scanWebContent), but in a report it is still a Shorts block and reading it
+            // as "word" would send the next reader looking for a keyword that never
+            // existed. Invariant 17: an instrument must mean one thing.
+            counterKey == CoverGate.SHORTS_KEY || why == BlockWhy.SHORTS -> "shorts"
+            packageName != null -> "app"
+            else -> "word"
+        }
+        val logOwnUi = OwnUi.visible
+        // Three-way, because the boolean this replaces meant two opposite things at once:
+        // "the cover landed on the wrong app" (a bug) and "the tree was unreadable, so we
+        // blocked anyway" (deliberate, invariant 1) both read as false. Report #5 turned
+        // on exactly that distinction and the log could not answer it.
+        //
+        // Costs a look into the window tree, and only for a whole-app block: a page or word cover
+        // passes no package, answers NA, and asks the system nothing at all.
+        val logWindow = when {
+            packageName == null -> BlockLog.Window.NA
+            else -> when (rootInActiveWindow?.packageName?.toString()) {
+                null -> BlockLog.Window.BLIND
+                packageName -> BlockLog.Window.MATCH
+                else -> BlockLog.Window.OTHER
+            }
         }
         val label = packageName?.let { loadLabel(it) }
         val msg = message ?: label?.let { "$it is blocked" } ?: "This is blocked right now."
@@ -2449,6 +2446,28 @@ class BlockerAccessibilityService : AccessibilityService() {
                     if (packageName != null) putExtra(BlockScreenActivity.EXTRA_PACKAGE, packageName)
                 }
             )
+        }
+        // Diagnostic breadcrumb, recorded at the one place every cover passes through. Shape
+        // only — which path raised it, whether our own UI was in front, whether the window on
+        // screen actually matched what we were blocking. Never the app, word or page: see
+        // BlockLog. `ownUi=true` or a non-matching window here is what identifies a cover landing
+        // somewhere it shouldn't, which is otherwise invisible after the milliseconds it lasts.
+        //
+        // **Written after the cover, not in front of it.** Recording an entry means reading the
+        // stored log, splitting up to sixty entries, rebuilding the list and writing it back —
+        // none of which changes a pixel of what is drawn. It used to sit between the decision and
+        // the frame; it now goes on the next message, like the blocked app's icon.
+        handler.post {
+            runCatching {
+                BlockLog.record(
+                    context = applicationContext,
+                    kind = logKind,
+                    ownUi = logOwnUi,
+                    window = logWindow,
+                    why = why,
+                    counted = fresh,
+                )
+            }
         }
         // (Re)arm the mid-use re-check whenever a cover goes up: after a dismissal it
         // re-blocks a locked-out app even when the page is static and emits no events.

@@ -31,9 +31,26 @@ object AttemptCounter {
             .sortedByDescending { it.total }
     }
 
-    /** Sum of today's attempts across every blocked target — the block screen's
-     *  "minutes reclaimed" masthead multiplies this by an average session estimate. */
-    fun totalToday(context: Context): Int = summary(context).sumOf { it.today }
+    /**
+     * Sum of today's attempts across every blocked target — the block screen's "minutes
+     * reclaimed" masthead multiplies this by an average session estimate.
+     *
+     * Counted directly rather than through [summary], which builds an object per target and
+     * sorts them: this one runs on the way to the cover's first frame, and it needs a total,
+     * not a ranking. Same numbers, same single source of truth — just none of the shaping the
+     * Insights page wants and this does not.
+     */
+    fun totalToday(context: Context): Int {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val today = todayStamp()
+        var sum = 0
+        for ((name, value) in prefs.all) {
+            if (!name.startsWith("today_") || value !is Int) continue
+            val key = name.removePrefix("today_")
+            if (prefs.getInt("day_$key", -1) == today) sum += value
+        }
+        return sum
+    }
 
     /** Records one open attempt for [key] and returns (todayCount, totalCount). */
     fun record(context: Context, key: String): Pair<Int, Int> {
