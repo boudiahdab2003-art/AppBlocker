@@ -33,7 +33,8 @@ class WebContentFilterTest {
         domains: List<String> = emptyList(),
         adultKeywords: List<String> = emptyList(),
         pack: List<String> = emptyList(),
-    ) = WebContentFilter(domains, adultKeywords, pack)
+        danger: List<String> = emptyList(),
+    ) = WebContentFilter(domains, adultKeywords, pack, danger)
 
     // The three answers the address bar can give, short enough to read at a glance in a call.
     private fun at(url: String) = BrowserAddress.At(url)
@@ -729,4 +730,91 @@ class WebContentFilterTest {
             .map { it.substringBefore('#').trim() }.filter { it.isNotEmpty() }
         assertTrue("onlyfans.com must stay on the domain list", "onlyfans.com" in domains)
     }
+    // ---- the danger zone's wider net ------------------------------------------------------
+
+    @Test
+    fun `an ordinary word is not blocked on an ordinary day`() {
+        // The half that makes the feature honest. These words are ORDINARY - blocking them all
+        // the time would be the false-positive era this file's header is a monument to.
+        assertNull(
+            filter(danger = listOf("bikini")).check(
+                text = "she wore a bikini to the beach",
+                address = BrowserAddress.Unreadable,
+                userKeywords = emptyList(), siteKeywords = emptyList(),
+                adultPack = true, blockAdult = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `the same ordinary word is blocked inside the hour`() {
+        val hit = filter(danger = listOf("bikini")).check(
+            text = "she wore a bikini to the beach",
+            address = BrowserAddress.Unreadable,
+            userKeywords = emptyList(), siteKeywords = emptyList(),
+            adultPack = true, blockAdult = true,
+            inDangerZone = true,
+        )
+        assertNotNull(hit)
+        assertEquals("Danger zone", hit!!.title)
+        // Says WHY an ordinary word blocked, so it reads as the hour rather than as a bug.
+        assertTrue(hit.message.contains("normally wouldn't be"))
+    }
+
+    @Test
+    fun `the wider net is whole-word, never a substring`() {
+        // "cam" inside "came", "leak" inside "leakage". A substring match on ordinary words is
+        // exactly the kind of block that would discredit the whole idea on its first day.
+        for (text in listOf("he came home", "there was a leakage", "the scampi was good")) {
+            assertNull(
+                text,
+                filter(danger = listOf("cam", "leak", "camp")).check(
+                    text = text,
+                    address = BrowserAddress.Unreadable,
+                    userKeywords = emptyList(), siteKeywords = emptyList(),
+                    adultPack = true, blockAdult = true,
+                    inDangerZone = true,
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun `the shipped list keeps help-seeking words out`() {
+        // The rule stated at the top of danger_words.txt, checked against the file rather than
+        // trusted. Blocking these in the exact hour someone might reach for them would be the
+        // worst thing this app could do.
+        val file = File("src/main/assets/danger_words.txt")
+        assertTrue("danger_words.txt is missing", file.exists())
+        val words = file.readLines()
+            .map { it.trim().lowercase() }
+            .filter { it.isNotEmpty() && !it.startsWith("#") }
+        assertTrue("the list should not be empty", words.isNotEmpty())
+        for (w in listOf("recovery", "quit", "addiction", "therapy", "support", "help", "counsel")) {
+            assertFalse("a help-seeking word must never be in danger_words.txt: $w", w in words)
+        }
+        for (w in words) {
+            assertFalse("a danger word must not contain a comment marker: $w", w.contains("#"))
+        }
+    }
+
+    @Test
+    fun `a learned site is blocked even with the adult lists switched off`() {
+        // It was established by this phone catching it in two different browsers, not shipped by
+        // me as a guess - so turning the adult switches off must not quietly discard it.
+        val hit = filter().checkUrlAdult(
+            "https://example-adult.test/page",
+            adultPack = false, blockAdult = false,
+            learnedDomains = setOf("example-adult.test"),
+        )
+        assertNotNull(hit)
+        assertEquals("Blocked site", hit!!.title)
+        assertTrue(hit.message.contains("two different browsers"))
+    }
+
+    @Test
+    fun `nothing is learned by default`() {
+        assertNull(filter().checkUrlAdult("https://example.com", adultPack = false, blockAdult = false))
+    }
+
 }

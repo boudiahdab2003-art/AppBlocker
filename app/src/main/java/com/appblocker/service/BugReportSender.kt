@@ -15,6 +15,9 @@ import com.appblocker.data.BlockThemes
 import com.appblocker.data.BugReportQueue
 import com.appblocker.data.DeviceProfile
 import com.appblocker.data.ServiceHealth
+import com.appblocker.data.DeviceBoot
+import com.appblocker.data.PinStore
+import com.appblocker.data.QuickSession
 import com.appblocker.data.SettingsStore
 import com.appblocker.data.SilenceLog
 import com.appblocker.ui.hasUsageAccess
@@ -137,6 +140,32 @@ object BugReportSender {
         // Only when the coach has actually failed — absent means it has never failed on this
         // install, which is different from "we didn't look".
         AiCoach.lastError(ctx)?.let { (error, _) -> field("coachError") { error.name } }
+        // ---- What this phone is actually set up to block -------------------------------------
+        // Added 26 Aug 2026: "i want the report to include a lot more than the last report".
+        // Every one is a COUNT or a named setting, never a subject — no app name, no word, no
+        // host — so the contract in BugReport is unchanged. All read from prefs rather than Room,
+        // because this runs on whatever thread the failure happened on and a database query there
+        // would turn a bug report into a crash.
+        //
+        // These answer the question every "it didn't block X" report actually poses, which is not
+        // "is the service on" but "was there anything for it to block". A report showing
+        // blockedApps 0 next to a complaint about Instagram answers itself.
+        field("updatePaused") { SettingsStore.updatePaused(ctx).toString() }
+        field("ruleCount") { SettingsStore.blockedSnapshot(ctx).size.toString() }
+        field("lockouts") { SettingsStore.keywordLockouts(ctx).size.toString() }
+        field("browsersRead") { SettingsStore.readableBrowsers(ctx).size.toString() }
+        field("autoBlockNew") { SettingsStore.addNewApps(ctx).toString() }
+        field("pinSet") { PinStore.isSet(ctx).toString() }
+        field("quickSession") { QuickSession.state(ctx).let { if (it.blockingNow) "on" else "off" } }
+        // The danger zone and what it has learned. An armed zone changes what every other layer
+        // does — every browser shut, a wider word list, scanning in apps that are normally left
+        // alone — so a report sent during one is describing a different app.
+        field("dangerZone") {
+            val left = SettingsStore.dangerZone(ctx)?.remaining(DeviceBoot.count(ctx)) ?: 0L
+            if (left > 0L) "on ${(left + 59_999L) / 60_000L}min" else "off"
+        }
+        field("dangerStrikes") { SettingsStore.dangerStrikes(ctx).size.toString() }
+        field("learnedCount") { SettingsStore.learnedDomains(ctx).size.toString() }
         // Reported rather than hidden: a bare report and a healthy one must never look alike.
         if (failed > 0) out["fieldErrors"] = failed.toString()
         return out

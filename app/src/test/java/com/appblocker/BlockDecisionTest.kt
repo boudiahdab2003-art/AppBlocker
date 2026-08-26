@@ -38,12 +38,16 @@ class BlockDecisionTest {
         usedMinutes: Int = 0,
         opens: Int = 0,
         conditionMet: Boolean = false,
+        dangerZoneRemainingMs: Long = 0L,
+        isRealBrowser: Boolean = false,
     ) = BlockInputs(
         pkg = pkg,
         updatePaused = updatePaused,
         lockoutRemainingMs = lockoutRemainingMs,
         lockoutWord = lockoutWord,
         strict = strict,
+        dangerZoneRemainingMs = dangerZoneRemainingMs,
+        isRealBrowser = isRealBrowser,
         quickEnforcing = quickEnforcing,
         rule = rule,
         allowlistMode = allowlistMode,
@@ -86,6 +90,58 @@ class BlockDecisionTest {
 
     @Test fun updatePauseBlocksNothing() {
         assertNull(decideBlock(inputs(updatePaused = true, strict = true, rule = rule())))
+    }
+
+    // ---- danger zone --------------------------------------------------------------------
+
+    @Test fun dangerZoneClosesBrowsers() {
+        val hit = decideBlock(inputs(dangerZoneRemainingMs = 47 * 60_000L, isRealBrowser = true, rule = null))
+        assertEquals("Danger zone", hit?.title)
+        assertEquals(BlockWhy.DANGER, hit?.why)
+        // Named honestly, with the countdown - his choice out of three.
+        assertTrue(hit!!.message.contains("three"))
+        assertTrue(hit.message.contains("47"))
+    }
+
+    /**
+     * His exact words when asked whether the hour should have an escape hatch: *"just the browsers
+     * not the apps not the maps not the bank app"*. That answer is only safe if this holds - it is
+     * what makes having NO way out survivable.
+     */
+    @Test fun dangerZoneTouchesNothingButBrowsers() {
+        assertNull(decideBlock(inputs(dangerZoneRemainingMs = 47 * 60_000L, isRealBrowser = false, rule = null)))
+        // Including in Allowlist mode, where the essentials rule already protects the phone.
+        assertNull(
+            decideBlock(
+                inputs(
+                    dangerZoneRemainingMs = 47 * 60_000L, isRealBrowser = false,
+                    allowlistMode = true, isEssential = true, rule = null,
+                ),
+            ),
+        )
+    }
+
+    /** Not armed is not blocked - a browser is an ordinary app the rest of the time. */
+    @Test fun anUnarmedZoneBlocksNothing() {
+        assertNull(decideBlock(inputs(dangerZoneRemainingMs = 0L, isRealBrowser = true, rule = null)))
+    }
+
+    /**
+     * Ahead of the update pause on purpose. The adult layer deliberately keeps scanning through
+     * an update ("an update must not become the easy one"), and this is armed only by that layer -
+     * so pausing here would make installing an update the cheapest way out of the hour.
+     */
+    @Test fun anUpdateIsNotAWayOutOfTheHour() {
+        val hit = decideBlock(
+            inputs(updatePaused = true, dangerZoneRemainingMs = 47 * 60_000L, isRealBrowser = true),
+        )
+        assertEquals("Danger zone", hit?.title)
+    }
+
+    /** Never "0 minutes" while it is still running. */
+    @Test fun dangerZoneMinutesRoundUp() {
+        val hit = decideBlock(inputs(dangerZoneRemainingMs = 1_000L, isRealBrowser = true, rule = null))
+        assertTrue(hit!!.message.contains("1 minute."))
     }
 
     // ---- keyword lockout ----------------------------------------------------------------

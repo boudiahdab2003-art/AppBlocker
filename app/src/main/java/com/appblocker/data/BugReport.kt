@@ -260,6 +260,17 @@ data class BugReport(
             // What the blocker DECLINED to do (SilenceLog) — plain counts, no package, no host,
             // no word. The report already carries what it blocked; without these it can say
             // nothing at all about the half the owner cannot see for himself.
+            // What this phone is set up to block — counts and named settings only.
+            "updatePaused",
+            "ruleCount",
+            "lockouts",
+            "browsersRead",
+            "autoBlockNew",
+            "pinSet",
+            "quickSession",
+            "dangerZone",
+            "dangerStrikes",
+            "learnedCount",
             "deafSpells",
             "lateSkips",
             "unreadyDecisions",

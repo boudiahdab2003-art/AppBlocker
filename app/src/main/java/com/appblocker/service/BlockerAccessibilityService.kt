@@ -34,6 +34,7 @@ import com.appblocker.data.BlockMode
 import com.appblocker.data.BlockLog
 import com.appblocker.data.BlockedKeyword
 import com.appblocker.data.BlockerDatabase
+import com.appblocker.data.DangerZone
 import com.appblocker.data.DeviceBoot
 import com.appblocker.data.FocusState
 import com.appblocker.data.GuardedDeadline
@@ -102,6 +103,11 @@ class BlockerAccessibilityService : AccessibilityService() {
     // update, revive, Second Space switch) enforces from the first event rather than from the
     // first emission.
     @Volatile private var blockedSnapshot: Set<String> = emptySet()
+    // The armed danger-zone hour, or null. Held in memory so a block decision never costs a
+    // prefs read; the deadline itself is what decides whether it is still running.
+    @Volatile private var dangerZone: GuardedDeadline? = null
+    /** Hosts this phone caught in two different browsers — see [DangerZone.learns]. */
+    @Volatile private var learnedDomains: Set<String> = emptySet()
     // Strict/Focus deadline anchored to the monotonic clock (clock-change-proof) with a
     // wall-clock fallback. See SessionClock.
     @Volatile private var focusRealtimeStart: Long = 0L
@@ -592,6 +598,9 @@ class BlockerAccessibilityService : AccessibilityService() {
     /** Millis left on [pkg]'s keyword lockout, or 0 when it isn't locked. Uses the same
      *  clock-change-proof reckoning as sessions, so winding the device clock forward can no
      *  longer lift the lockout early — see [GuardedDeadline]. */
+    /** Adult words caught recently, keyed by [DangerZone.key] — a hash, never the word. */
+    private val dangerStrikes = mutableMapOf<String, GuardedDeadline>()
+
     private fun keywordLockoutRemaining(pkg: String): Long = synchronized(keywordLockouts) {
         keywordLockouts[pkg]?.remaining(DeviceBoot.count(applicationContext)) ?: 0L
     }
@@ -611,6 +620,73 @@ class BlockerAccessibilityService : AccessibilityService() {
             SettingsStore.setKeywordLockouts(applicationContext, keywordLockouts.toMap(), boot)
         }
     }
+
+    /** Millis left on the danger zone, 0 when it is not armed. */
+    private fun dangerZoneRemaining(): Long =
+        dangerZone?.remaining(DeviceBoot.count(applicationContext)) ?: 0L
+
+    /**
+     * The adult layer caught [word]. Three DIFFERENT ones inside half an hour close every browser
+     * for an hour — see [DangerZone] for the owner's choices and why they are not to be re-asked.
+     *
+     * Called for adult-pack hits only, never for his own blocked words: this is meant to fire when
+     * the *content* says he is hunting, not when a word he added for his own reasons turns up.
+     */
+    private fun recordDangerStrike(word: String?) {
+        if (word.isNullOrBlank()) return
+        // Not while the hour is already running. He chose a FLAT hour over one that doubles, and
+        // the zone's own widened word list would otherwise feed itself a fresh set of strikes and
+        // roll the hour over indefinitely — escalation by the back door, which is not what he
+        // picked. After it lifts, three fresh words are needed.
+        if (dangerZoneRemaining() > 0L) return
+        val boot = DeviceBoot.count(applicationContext)
+        synchronized(dangerStrikes) {
+            val live = DangerZone.prunedAt(
+                dangerStrikes, boot, stopwatchNow(), System.currentTimeMillis(),
+            ).toMutableMap()
+            // Keyed by hash, so the same word again refreshes its own strike rather than adding
+            // a second one. That IS the "three different words" rule.
+            live[DangerZone.key(word)] =
+                GuardedDeadline.starting(DangerZone.STRIKE_WINDOW_MS, boot)
+            dangerStrikes.clear()
+            dangerStrikes.putAll(live)
+            val trips = DangerZone.tripsAt(
+                live, boot, stopwatchNow(), System.currentTimeMillis(),
+            )
+            if (trips && dangerZoneRemaining() <= 0L) {
+                // Arm the hour and wipe the board, so the next zone needs three fresh words
+                // rather than trailing this one's.
+                dangerZone = GuardedDeadline.starting(DangerZone.LOCKDOWN_MS, boot)
+                dangerStrikes.clear()
+                SettingsStore.setDangerZone(applicationContext, dangerZone)
+            }
+            SettingsStore.setDangerStrikes(applicationContext, dangerStrikes.toMap(), boot)
+        }
+    }
+
+    /**
+     * An adult hit landed on [host] in browser [pkg]. Two DIFFERENT browsers and the site is
+     * blocked outright from then on — his idea and his condition, see [DangerZone.learns].
+     */
+    private fun recordSiteEvidence(pkg: String, host: String?) {
+        val h = host?.lowercase()?.takeIf { it.isNotBlank() } ?: return
+        if (pkg !in browserPackages) return
+        if (h in learnedDomains) return
+        synchronized(learnedLock) {
+            val evidence = SettingsStore.siteEvidence(applicationContext).toMutableMap()
+            val browsers = evidence[h].orEmpty() + pkg
+            if (DangerZone.learns(browsers)) {
+                learnedDomains = learnedDomains + h
+                SettingsStore.setLearnedDomains(applicationContext, learnedDomains)
+                evidence.remove(h) // graduated; the evidence has done its job
+            } else {
+                evidence[h] = browsers
+            }
+            SettingsStore.setSiteEvidence(applicationContext, evidence)
+        }
+    }
+
+    private val learnedLock = Any()
 
     /** One-shot: templates used to inject app-name words (e.g. "youtube", "twitter") into the
      *  blocked-words table, where innocent mentions tripped blocks everywhere. Templates no
@@ -658,6 +734,15 @@ class BlockerAccessibilityService : AccessibilityService() {
                 SettingsStore.keywordLockouts(this).filterValues { it.remaining(boot) > 0L }
             )
         }
+        // The danger zone survives a restart for the same reason the lockouts do: an hour that a
+        // reboot, an update or a Second Space switch could end is not an hour.
+        synchronized(dangerStrikes) {
+            dangerStrikes.putAll(
+                SettingsStore.dangerStrikes(this).filterValues { it.remaining(boot) > 0L }
+            )
+        }
+        dangerZone = SettingsStore.dangerZone(this)?.takeIf { it.remaining(boot) > 0L }
+        learnedDomains = SettingsStore.learnedDomains(this)
         // React to the user flipping the toggles on the Blocked-words screen without a restart.
         val sp = getSharedPreferences("appblocker_prefs", Context.MODE_PRIVATE)
         prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
@@ -966,7 +1051,13 @@ class BlockerAccessibilityService : AccessibilityService() {
             return pkg in browserPackages && (adultPackOn || SettingsStore.blockAdult(this))
         }
         if (pkg in browserPackages) return true
-        if ((userKeywords.isEmpty() && !adultPackOn) || !keywordsEverywhere) return false
+        // While the danger zone is armed, every app is scanned whether or not "check every app"
+        // is on the rest of the time. Browsers are already shut outright for that hour, so this
+        // is where the widened word list actually does its work — and an hour that only watched
+        // the browsers he cannot reach would be watching nothing.
+        if (dangerZoneRemaining() <= 0L &&
+            ((userKeywords.isEmpty() && !adultPackOn) || !keywordsEverywhere)
+        ) return false
         return !isLauncherPkg(pkg) && pkg !in KEYWORD_SCAN_EXCLUDED
     }
 
@@ -1420,6 +1511,8 @@ class BlockerAccessibilityService : AccessibilityService() {
                 pkg = pkg,
                 updatePaused = updatePauseActive(),
                 lockoutRemainingMs = keywordLockoutRemaining(pkg),
+                dangerZoneRemainingMs = dangerZoneRemaining(),
+                isRealBrowser = pkg in realBrowserPackages,
                 lockoutWord = keywordLockoutWord(pkg),
                 strict = strict,
                 // Enforcing when Strict, or a running Timer/Pomodoro says "block now", or
@@ -1835,7 +1928,9 @@ class BlockerAccessibilityService : AccessibilityService() {
         // adult layer deliberately does not, since an update must not become the easy way out.
         val ownWords = if (updatePauseActive()) emptyList() else userKeywords
         val hit = filter.checkUrl(url, ownWords, autoSocialKeywords())
-            ?: filter.checkUrlAdult(url, adultPackOn, SettingsStore.blockAdult(applicationContext))
+            ?: filter.checkUrlAdult(
+                url, adultPackOn, SettingsStore.blockAdult(applicationContext), learnedDomains,
+            )
             ?: return
         if (DEBUG) Log.d(TAG, "URL BLOCK[$url]: ${hit.title}")
         withContext(Dispatchers.Main) {
@@ -1844,6 +1939,10 @@ class BlockerAccessibilityService : AccessibilityService() {
                 // locks the app so "Got it" isn't a free pass back in, a blocked WEBSITE still
                 // just covers the page. Arriving sooner must not change what happens.
                 if (!hit.site) addKeywordLockout(pkg, hit.word)
+                if (hit.adult) {
+                    recordDangerStrike(hit.word)
+                    recordSiteEvidence(pkg, lastBrowserHost)
+                }
                 showBlockScreen(
                     title = hit.title, message = hit.message, packageName = null,
                     counterKey = CoverGate.WEB_KEY, offenceKey = pkg, why = BlockWhy.ofWebHit(hit.site, hit.adult),
@@ -2005,11 +2104,16 @@ class BlockerAccessibilityService : AccessibilityService() {
         // adult layer (pack + adult sites) keeps matching.
         val ownWords = if (updatePauseActive()) emptyList() else userKeywords
         val hit = if (isBrowser) {
-            filter.check(text, address, ownWords, autoSocialKeywords(), adultPackOn, SettingsStore.blockAdult(applicationContext))
+            filter.check(
+                text, address, ownWords, autoSocialKeywords(), adultPackOn,
+                SettingsStore.blockAdult(applicationContext),
+                inDangerZone = dangerZoneRemaining() > 0L,
+            )
         } else {
             filter.check(
                 text, BrowserAddress.Unreadable, ownWords, siteKeywords = emptyList(),
                 adultPackOn, blockAdult = false,
+                inDangerZone = dangerZoneRemaining() > 0L,
             )
         }
         if (hit == null) {
@@ -2030,6 +2134,10 @@ class BlockerAccessibilityService : AccessibilityService() {
                 // must not be a free pass back in. A blocked WEBSITE is gentler: cover the page
                 // so the site stays blocked every visit, but don't lock the whole browser.
                 if (!hit.site) addKeywordLockout(pkg, hit.word)
+                if (hit.adult) {
+                    recordDangerStrike(hit.word)
+                    recordSiteEvidence(pkg, lastBrowserHost)
+                }
                 // Recorded under "web" (Insights shows one "Websites" row), but the OFFENCE is
                 // this app: the lockout just added makes handleAppBlock raise a second,
                 // package-keyed "Locked" cover moments from now, and one blocked word must not

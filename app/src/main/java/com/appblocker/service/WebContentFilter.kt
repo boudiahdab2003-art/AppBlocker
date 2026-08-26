@@ -53,6 +53,9 @@ class WebContentFilter internal constructor(
     private val adultDomains: List<String>,
     private val adultKeywords: List<String>,
     private val packWords: List<String>,
+    /** The wider net, matched ONLY while the danger zone is armed — see `danger_words.txt` for
+     *  the curation rule, which is deliberately the opposite of the pack's. */
+    private val dangerWords: List<String> = emptyList(),
 ) {
     /** [site] = matched because the user blocked an app and this is that app's WEBSITE (not a
      *  typed word). Callers treat site hits more gently (cover the page, but don't lock the
@@ -82,6 +85,9 @@ class WebContentFilter internal constructor(
         siteKeywords: List<String>,
         adultPack: Boolean,
         blockAdult: Boolean,
+        /** Three different adult words were caught in the last half hour. Widens the net for the
+         *  hour that follows — see [com.appblocker.data.DangerZone]. */
+        inDangerZone: Boolean = false,
     ): Hit? {
         // **A blank address bar is a start page, and a start page is not a page.**
         //
@@ -157,8 +163,38 @@ class WebContentFilter internal constructor(
                 if (lower.contains(k)) return adultSearchHit(k)
             }
         }
+
+        // The danger zone's wider net. Everything above is what runs on an ordinary day; this
+        // runs only in the hour after three different adult words inside thirty minutes.
+        //
+        // **It matters in apps rather than browsers.** Every browser is already shut outright for
+        // that hour (decideBlock), so the point of widening is everything else — and the watcher
+        // scans every app while the zone is armed, whether or not "check every app" is switched
+        // on the rest of the time.
+        if (inDangerZone) {
+            // The adult keyword list is address-only on an ordinary day, because matching it
+            // against page text is too broad to live with all the time. For this hour it is not.
+            for (k in adultKeywords) {
+                if (lower.contains(k)) return adultSearchHit(k)
+            }
+            // Whole-word, never substring: these are ORDINARY words, and "cam" inside "came" or
+            // "leak" inside "leakage" would be the kind of block that discredits the whole idea.
+            for (w in dangerWords) {
+                if (containsWord(lower, w)) return dangerHit(w)
+            }
+        }
         return null
     }
+
+    /** Names the word like every other layer does, and says plainly that this one is blocked
+     *  only because of the hour — so an ordinary word being blocked can be understood rather
+     *  than read as the app breaking. */
+    private fun dangerHit(word: String) = Hit(
+        "Danger zone",
+        "“$word” is blocked for the rest of the hour. It normally wouldn't be.",
+        word,
+        adult = true,
+    )
 
     /** Both adult-list messages name what they found, the way the pack's already does.
      *
@@ -171,6 +207,16 @@ class WebContentFilter internal constructor(
 
     private fun adultSearchHit(word: String) =
         Hit("Adult content blocked", "“$word” looks like adult content.", word, adult = true)
+
+    /** A site the phone learned by catching it in two different browsers. Says so, because a
+     *  block the user cannot account for is one they argue with — and this is the only list in
+     *  the app that the app wrote itself. */
+    private fun learnedSiteHit(domain: String) = Hit(
+        "Blocked site",
+        "“$domain” was caught in two different browsers, so it is blocked everywhere now.",
+        domain,
+        adult = true,
+    )
 
     /**
      * The two layers that need nothing but the address bar: the user's own words, then the
@@ -215,8 +261,22 @@ class WebContentFilter internal constructor(
      * what it blocks. So this is purely additive — the address-bar check gets the adult pack at
      * the same speed as everything else, and [check] keeps reading the page exactly as before.
      */
-    fun checkUrlAdult(url: String, adultPack: Boolean, blockAdult: Boolean): Hit? {
+    fun checkUrlAdult(
+        url: String,
+        adultPack: Boolean,
+        blockAdult: Boolean,
+        /** Hosts this phone worked out for itself — see [com.appblocker.data.DangerZone] and
+         *  `learnedDomains`. Treated exactly like the shipped adult domains: they are evidence
+         *  from two different browsers, not a guess. */
+        learnedDomains: Set<String> = emptySet(),
+    ): Hit? {
         val lower = url.lowercase().takeIf { it.isNotBlank() } ?: return null
+        // Before the switchable layers: a site caught in two different browsers was established
+        // by this phone rather than shipped by me, and turning the adult lists off should not
+        // quietly discard what it learned.
+        for (d in learnedDomains) {
+            if (lower.contains(d)) return learnedSiteHit(d)
+        }
         if (adultPack && packWords.isNotEmpty()) {
             val norm = normalizeArabic(lower)
             for (w in packWords) {
@@ -267,9 +327,12 @@ class WebContentFilter internal constructor(
                     val domains = readLines(context, "adult_domains.txt")
                     val keywords = readLines(context, "adult_keywords.txt")
                     val pack = readLines(context, "adult_words_pack.txt")?.map(::normalizeArabic)
-                    val loaded = domains != null && keywords != null && pack != null
-                    WebContentFilter(domains.orEmpty(), keywords.orEmpty(), pack.orEmpty())
-                        .also { if (loaded) INSTANCE = it }
+                    val danger = readLines(context, "danger_words.txt")?.map(::normalizeArabic)
+                    val loaded = domains != null && keywords != null && pack != null &&
+                        danger != null
+                    WebContentFilter(
+                        domains.orEmpty(), keywords.orEmpty(), pack.orEmpty(), danger.orEmpty(),
+                    ).also { if (loaded) INSTANCE = it }
                 }
             }
         }
