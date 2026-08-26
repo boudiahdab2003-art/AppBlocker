@@ -270,6 +270,13 @@ data class BugReport(
             "quickSession",
             "dangerZone",
             "dangerStrikes",
+            // The family DNS filter's STATE only — filtering / on-but-not-filtering / off /
+            // can't-tell, and whether the guard is armed. Never the resolver's hostname and
+            // never a thing it resolved: this layer sees every lookup the phone makes, so the
+            // report says whether it is running and nothing whatsoever about what went through
+            // it. (The key is "dnsFilter" and not something clearer on purpose - the allow-list
+            // above rejects any key containing "name", which "privateDnsServerName" does.)
+            "dnsFilter",
             "learnedCount",
             "deafSpells",
             "lateSkips",

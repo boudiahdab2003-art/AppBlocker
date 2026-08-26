@@ -905,4 +905,52 @@
     <string name="repair_status_off">Blocking is not running</string>
     <string name="repair_status_on_body">The blocker is running and watching again. Nothing else to do.</string>
     <string name="repair_status_off_body">It\'s switched on in Settings, but it isn\'t running — so nothing is being blocked right now.</string>
+
+    <!-- The cover raised when the family DNS filter has stopped. -->
+    <string name="block_netdns_title">Family filter is off</string>
+    <string name="block_netdns_message">Your phone\'s family DNS filter is not running, so nothing is being filtered at the network level. Browsers stay closed until it is back on — everything else on your phone still works. Open AppBlocker to switch it back on.</string>
+
+    <!-- The family DNS filter screen. -->
+    <string name="netdns_title">Family filter</string>
+    <string name="netdns_status_on">Filtering is on</string>
+    <string name="netdns_status_on_body">Your phone is sending every lookup to the family filter. Adult sites are blocked before they load, in every app — not just the ones the blocker can read.</string>
+    <string name="netdns_status_off">Filtering is off</string>
+    <string name="netdns_status_off_body">Nothing is being filtered at the network level. The blocker still watches your screen, but anything it cannot read gets through.</string>
+    <string name="netdns_status_unknown">Private DNS is on, but it isn\'t filtering</string>
+    <string name="netdns_status_unknown_body">Your phone is using an encrypted lookup, which is good — but the server it uses doesn\'t block anything. Encrypted is not the same as filtered. Paste the address below instead.</string>
+    <string name="netdns_status_unknown_device">This phone is too old for it</string>
+    <string name="netdns_status_unknown_device_body">This needs Android 9 or newer. Everything else in the app works as normal.</string>
+    <string name="netdns_what_title">What this does</string>
+    <string name="netdns_what_body">Before your phone can open any site, it has to ask where that site is. This filter answers that question — and refuses to answer it for adult sites. It works underneath everything: every app, every browser, pictures inside an app, and pages the blocker can\'t read a word of.</string>
+    <string name="netdns_what_body_2">It also can\'t be killed by your phone\'s battery manager, because it isn\'t an app — it\'s a setting. That is the one thing the rest of the blocker cannot promise you.</string>
+    <string name="netdns_steps_title">Switch it on — once</string>
+    <string name="netdns_step_1">Tap Copy the address below.</string>
+    <string name="netdns_step_2">Tap Open settings.</string>
+    <string name="netdns_step_3">Find Private DNS. It is usually under Network and internet; on Xiaomi it is under Connection and sharing.</string>
+    <string name="netdns_step_4">Choose Private DNS provider hostname and paste the address.</string>
+    <string name="netdns_step_5">Save, then come back here. This page turns green when the app can see it working.</string>
+    <string name="netdns_address_label">The address to paste</string>
+    <string name="netdns_copy">Copy the address</string>
+    <string name="netdns_copied">Copied — now paste it into Private DNS</string>
+    <string name="netdns_open_settings">Open settings</string>
+    <string name="netdns_why_title">Why the app can\'t switch it on for you</string>
+    <string name="netdns_why_body">Android doesn\'t let an app change this setting — the same rule that stops a bad app from quietly redirecting everything you look up. It has to be your tap. The app can see it, and defend it, but it cannot set it.</string>
+    <string name="netdns_cost_title">What happens if it stops</string>
+    <string name="netdns_cost_body">You asked for a filter you couldn\'t switch off. No app on Android can be that — so switching it off costs you the browsers instead. Every browser closes until the filter is back on. Maps, your bank, messages and everything else keep working, and the app waits a minute before acting so a normal network change never costs you anything.</string>
+    <string name="netdns_cost_body_2">That only starts once the app has seen the filter working at least once. Until then it just asks.</string>
+    <string name="profile_netdns_title">Family filter</string>
+    <string name="profile_netdns_subtitle_on">On — blocking adult sites for every app</string>
+    <string name="profile_netdns_subtitle_off">Not set up — the strongest block you can add</string>
+    <string name="netdns_off_title">Switching this off</string>
+    <string name="netdns_off_body">You asked not to be able to turn this off, so it works the way the adult word list does: asking starts a 24-hour wait, and the filter keeps being defended for the whole of it. It is here so a genuine problem has a way out — not so a bad evening does.</string>
+    <string name="netdns_off_start">Ask to switch it off</string>
+    <string name="netdns_off_waiting">You can switch it off in %s</string>
+    <string name="netdns_off_now">Switch it off now</string>
+    <string name="netdns_off_cancel">Cancel the request</string>
+    <string name="netdns_off_done">Off — the browsers stay open whatever the filter does</string>
+    <string name="netdns_off_back_on">Defend it again</string>
+    <string name="gate_netdns_title">Switch off the family filter guard?</string>
+    <string name="gate_netdns_blurb">This starts a 24-hour wait. Nothing changes until it is served.</string>
+    <string name="gate_netdns_detail">After that the browsers will stay open even when the filter is off.</string>
+    <string name="gate_netdns_confirm">Start the 24 hours</string>
 </resources>

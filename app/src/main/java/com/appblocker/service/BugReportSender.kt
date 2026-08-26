@@ -17,6 +17,8 @@ import com.appblocker.data.BugReportQueue
 import com.appblocker.data.DeviceProfile
 import com.appblocker.data.ServiceHealth
 import com.appblocker.data.DeviceBoot
+import com.appblocker.data.FilterState
+import com.appblocker.data.NetworkFilter
 import com.appblocker.data.PinStore
 import com.appblocker.data.QuickSession
 import com.appblocker.data.SettingsStore
@@ -176,6 +178,18 @@ object BugReportSender {
             if (left > 0L) "on ${(left + 59_999L) / 60_000L}min" else "off"
         }
         field("dangerStrikes") { SettingsStore.dangerStrikes(ctx).size.toString() }
+        // Whether the network-level filter is running, and whether it is being defended. A report
+        // sent while the browsers are shut over this would otherwise be inexplicable.
+        field("dnsFilter") {
+            val state = when (NetworkFilter.read(ctx).state) {
+                FilterState.FILTERING -> "filtering"
+                FilterState.ON_BUT_UNKNOWN -> "encrypted-only"
+                FilterState.OFF -> "off"
+                FilterState.CANT_TELL -> "unknown"
+            }
+            val armed = SettingsStore.netFilterSeen(ctx) && SettingsStore.netFilterGuard(ctx)
+            "$state${if (armed) " armed" else ""}"
+        }
         field("learnedCount") { SettingsStore.learnedDomains(ctx).size.toString() }
         // Reported rather than hidden: a bare report and a healthy one must never look alike.
         if (failed > 0) out["fieldErrors"] = failed.toString()
