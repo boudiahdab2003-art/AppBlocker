@@ -894,7 +894,10 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (pkg != null && className != null) lastWindowClass = className
         if (dismissedKey != null &&
             CoverGate.graceSpentBy(pkg, dismissedPkg, currentDest(), dismissedDest)
-        ) clearDismissState()
+        ) {
+            if (DEBUG) Log.d(TAG, "grace spent (foreground): $dismissedDest -> ${currentDest()}")
+            clearDismissState()
+        }
         // Keep the location fix current (and recover after a late permission grant).
         if (schedules.any { it.enabled && it.type == ScheduleType.LOCATION }) {
             ensureLocationUpdates()
@@ -1790,7 +1793,10 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (host != null) lastBrowserHost = host
         if (dismissedKey != null &&
             CoverGate.graceSpentBy(pkg, dismissedPkg, host, dismissedDest)
-        ) clearDismissState()
+        ) {
+            if (DEBUG) Log.d(TAG, "grace spent (new host): $dismissedDest -> $host")
+            clearDismissState()
+        }
         // Mid-dismissal: the page is still on screen for the step back or the trip Home.
         if (dismissedKey != null && withinDismissWindow()) {
             if (DEBUG) Log.d(TAG, "urlScan[$pkg]: suppressed by dismiss grace")
@@ -2293,6 +2299,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         dismissedPkg = lastForegroundPkg
         // Read AFTER dismissedKey, which is what decides which unit this cover thinks in.
         dismissedDest = currentDest()
+        if (DEBUG) Log.d(TAG, "dismissed: key=$dismissedKey pkg=$dismissedPkg dest=$dismissedDest")
         dismissedAt = stopwatchNow()
         lastBlockedPkg = null
         // Re-arm word detection: coming back to the page that was just blocked must
