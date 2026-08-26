@@ -602,6 +602,29 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     (`ProtectionState.STALLED`) and the `soleHost` rule that refuses when candidates disagree:
     **the app must read the thing, not the claim about the thing.**
 
+29. **A value cached behind a conditional tick is not refreshed — it is frozen.** `netFilterDown`
+    was recomputed inside `recheckRunnable`, which looked like a 30-second poll and is not one:
+    that runnable only re-arms while `recheckMatters` holds — a rule, a lockout, a schedule or a
+    cover on the current app. On a plain browser with no rule on it, it never runs. So switching
+    Private DNS off in Settings and opening a browser would have cost nothing at all, which is the
+    single case the whole feature exists for. The code read as a poll, the tests were green, and
+    the feature was inert.
+
+    Found by the owner asking the right question — *"so how do you know if i turned it off if i
+    wont turn it from the app"* — rather than by anything in the suite, and the suite could not
+    have found it: every pure function was correct, and what was wrong was **where they were
+    called from**. Same family as invariant 20's silent windows and the deaf-watcher problem: the
+    defect is not a wrong answer, it is an answer that stopped being asked for.
+
+    Now a `registerDefaultNetworkCallback` — changing Private DNS *is* a link-properties change, so
+    it arrives as an event within moments and costs nothing while nothing changes — plus a
+    throttled read on the `blockReason` path so a **missed** callback costs a minute rather than a
+    reboot. OEM connectivity stacks drop callbacks, and this layer's failure is silent by nature:
+    nothing looks wrong, the browsers simply stop being defended.
+
+    **The shape to grep for: a field described as "refreshed periodically" whose refresh sits
+    inside a callback that is itself conditional.**
+
 ## Device quirks these invariants exist for
 
 - Gesture-nav Home on HyperOS often emits **no accessibility event at all**, so the foreground
