@@ -48,6 +48,26 @@ internal object DangerZone {
     /** How long every browser stays shut. Flat — never doubled, by his choice. */
     const val LOCKDOWN_MS = 60 * 60_000L
 
+    /** Different words that keep the wider word list running for a day. */
+    const val WIDE_LIST_STRIKES = 5
+
+    /**
+     * How long `danger_words.txt` stays in force after five different words.
+     *
+     * *"after 5 violations the big list the 1 hr list should stay active for the next 24 hrs"* —
+     * 26 Aug 2026. The second tier, and it is deliberately a **different kind of thing** from the
+     * first: the hour is about ending a session, this is about the rest of the day, once the
+     * browsers are back and the ordinary list is all that would otherwise be watching.
+     *
+     * **Browsers reopen after the hour regardless** — he was offered a 24-hour lockdown and turned
+     * it down. A whole day without a browser is the sort of thing that eventually gets the app
+     * switched off, and an app that is switched off protects nobody.
+     *
+     * **Fixed, never rolling.** Being caught again inside the day does not extend it, for the same
+     * reason the hour never doubles: a cost you can predict is one you can trust.
+     */
+    const val WIDE_LIST_MS = 24 * 60 * 60_000L
+
     /**
      * The storage key for a word: stable across restarts, and not the word.
      *
@@ -84,6 +104,22 @@ internal object DangerZone {
         nowRt: Long,
         nowWall: Long,
     ): Boolean = liveStrikesAt(strikes, bootCount, nowRt, nowWall) >= STRIKES_TO_TRIP
+
+    /**
+     * Whether the board now keeps the wider list running for a day.
+     *
+     * **The same board as [tripsAt], read at a higher mark.** Two thresholds, one set of strikes:
+     * the three words that shut the browsers are the first three of the five, not a separate
+     * count. A second board would be two sources of truth for one question, and would also mean
+     * the hour's own strikes stopped counting toward the day, which is not what "after 5
+     * violations" says.
+     */
+    fun widensAt(
+        strikes: Map<String, GuardedDeadline>,
+        bootCount: Int,
+        nowRt: Long,
+        nowWall: Long,
+    ): Boolean = liveStrikesAt(strikes, bootCount, nowRt, nowWall) >= WIDE_LIST_STRIKES
 
     /** Different browsers a site must be caught in before the phone blocks it outright. */
     const val BROWSERS_TO_LEARN = 2

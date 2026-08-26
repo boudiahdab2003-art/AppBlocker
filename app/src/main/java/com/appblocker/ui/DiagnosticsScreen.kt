@@ -297,6 +297,7 @@ private fun readSnapshot(context: Context): Snapshot {
     val boot = DeviceBoot.count(context)
     val zoneLeft = SettingsStore.dangerZone(context)?.remaining(boot) ?: 0L
     val learned = SettingsStore.learnedDomains(context)
+    val wideLeft = SettingsStore.dangerWideList(context)?.remaining(boot) ?: 0L
     val danger = buildList {
         add(
             if (zoneLeft > 0L) {
@@ -312,6 +313,25 @@ private fun readSnapshot(context: Context): Snapshot {
                     "It switches itself on if three different adult words come up within half " +
                         "an hour, and closes every browser for an hour. Nothing else is touched " +
                         "— not your maps, not your bank, not any other app.",
+                    good = true,
+                )
+            },
+        )
+        add(
+            if (wideLeft > 0L) {
+                Fact(
+                    "Wider word list is on — ${(wideLeft + 59_999L) / 3_600_000L}h left",
+                    "Five different adult words came up, so the wider list keeps running for a " +
+                        "day. Browsers are NOT shut for that day — only the first hour does " +
+                        "that. This is the list still watching once they are back.",
+                    good = null,
+                )
+            } else {
+                Fact(
+                    "Wider word list is off",
+                    "It switches on for 24 hours after five different adult words, and keeps " +
+                        "the bigger list running once the browsers reopen. It only widens what " +
+                        "counts as a blocked word; it never shuts anything by itself.",
                     good = true,
                 )
             },

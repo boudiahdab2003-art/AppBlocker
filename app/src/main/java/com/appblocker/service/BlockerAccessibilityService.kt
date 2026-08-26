@@ -106,6 +106,8 @@ class BlockerAccessibilityService : AccessibilityService() {
     // The armed danger-zone hour, or null. Held in memory so a block decision never costs a
     // prefs read; the deadline itself is what decides whether it is still running.
     @Volatile private var dangerZone: GuardedDeadline? = null
+    /** The 24-hour wider-list window. Outlives [dangerZone] by design. */
+    @Volatile private var dangerWideList: GuardedDeadline? = null
     /** Hosts this phone caught in two different browsers — see [DangerZone.learns]. */
     @Volatile private var learnedDomains: Set<String> = emptySet()
     // Strict/Focus deadline anchored to the monotonic clock (clock-change-proof) with a
@@ -625,6 +627,13 @@ class BlockerAccessibilityService : AccessibilityService() {
     private fun dangerZoneRemaining(): Long =
         dangerZone?.remaining(DeviceBoot.count(applicationContext)) ?: 0L
 
+    /** Millis left on the 24-hour wider-list window, 0 when it is not armed. */
+    private fun wideListRemaining(): Long =
+        dangerWideList?.remaining(DeviceBoot.count(applicationContext)) ?: 0L
+
+    /** Whether `danger_words.txt` should be matched right now — either window does it. */
+    private fun wideListOn(): Boolean = dangerZoneRemaining() > 0L || wideListRemaining() > 0L
+
     /**
      * The adult layer caught [word]. Three DIFFERENT ones inside half an hour close every browser
      * for an hour — see [DangerZone] for the owner's choices and why they are not to be re-asked.
@@ -634,11 +643,6 @@ class BlockerAccessibilityService : AccessibilityService() {
      */
     private fun recordDangerStrike(word: String?) {
         if (word.isNullOrBlank()) return
-        // Not while the hour is already running. He chose a FLAT hour over one that doubles, and
-        // the zone's own widened word list would otherwise feed itself a fresh set of strikes and
-        // roll the hour over indefinitely — escalation by the back door, which is not what he
-        // picked. After it lifts, three fresh words are needed.
-        if (dangerZoneRemaining() > 0L) return
         val boot = DeviceBoot.count(applicationContext)
         synchronized(dangerStrikes) {
             val live = DangerZone.prunedAt(
@@ -653,12 +657,26 @@ class BlockerAccessibilityService : AccessibilityService() {
             val trips = DangerZone.tripsAt(
                 live, boot, stopwatchNow(), System.currentTimeMillis(),
             )
+            // **The flat hour is protected here rather than by refusing to count.** Strikes have
+            // to keep accumulating past three or the fifth could never arrive — but re-arming the
+            // lockdown while one is running would roll it over forever, which is the escalation
+            // he explicitly turned down. So the refusal sits on the arming, not on the counting.
             if (trips && dangerZoneRemaining() <= 0L) {
-                // Arm the hour and wipe the board, so the next zone needs three fresh words
-                // rather than trailing this one's.
                 dangerZone = GuardedDeadline.starting(DangerZone.LOCKDOWN_MS, boot)
-                dangerStrikes.clear()
                 SettingsStore.setDangerZone(applicationContext, dangerZone)
+            }
+            // Five different words: the wider list stays for a day. Fixed, not rolling — being
+            // caught again inside the day does not extend it.
+            //
+            // The board is deliberately NOT wiped when either tier arms. It used to be, which
+            // made a fifth strike unreachable. Nothing is needed in its place: every strike is a
+            // 30-minute GuardedDeadline and the lockdown is 60, so by the time an hour ends the
+            // strikes that armed it have already expired on their own.
+            if (DangerZone.widensAt(live, boot, stopwatchNow(), System.currentTimeMillis()) &&
+                wideListRemaining() <= 0L
+            ) {
+                dangerWideList = GuardedDeadline.starting(DangerZone.WIDE_LIST_MS, boot)
+                SettingsStore.setDangerWideList(applicationContext, dangerWideList)
             }
             SettingsStore.setDangerStrikes(applicationContext, dangerStrikes.toMap(), boot)
         }
@@ -742,6 +760,7 @@ class BlockerAccessibilityService : AccessibilityService() {
             )
         }
         dangerZone = SettingsStore.dangerZone(this)?.takeIf { it.remaining(boot) > 0L }
+        dangerWideList = SettingsStore.dangerWideList(this)?.takeIf { it.remaining(boot) > 0L }
         learnedDomains = SettingsStore.learnedDomains(this)
         // React to the user flipping the toggles on the Blocked-words screen without a restart.
         val sp = getSharedPreferences("appblocker_prefs", Context.MODE_PRIVATE)
@@ -2107,13 +2126,13 @@ class BlockerAccessibilityService : AccessibilityService() {
             filter.check(
                 text, address, ownWords, autoSocialKeywords(), adultPackOn,
                 SettingsStore.blockAdult(applicationContext),
-                inDangerZone = dangerZoneRemaining() > 0L,
+                wideList = wideListOn(),
             )
         } else {
             filter.check(
                 text, BrowserAddress.Unreadable, ownWords, siteKeywords = emptyList(),
                 adultPackOn, blockAdult = false,
-                inDangerZone = dangerZoneRemaining() > 0L,
+                wideList = wideListOn(),
             )
         }
         if (hit == null) {

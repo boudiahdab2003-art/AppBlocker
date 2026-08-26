@@ -85,9 +85,16 @@ class WebContentFilter internal constructor(
         siteKeywords: List<String>,
         adultPack: Boolean,
         blockAdult: Boolean,
-        /** Three different adult words were caught in the last half hour. Widens the net for the
-         *  hour that follows — see [com.appblocker.data.DangerZone]. */
-        inDangerZone: Boolean = false,
+        /**
+         * Match `danger_words.txt` as well.
+         *
+         * **Named for what it does, not for why it is on.** It was `inDangerZone`, and then a
+         * second window started setting it — five different words keep the wider list running for
+         * 24 hours after the browser lockdown has ended, so "in the danger zone" became false for
+         * half the cases that switch it on. A flag whose name and meaning drift apart is
+         * invariant 17's bug, and the last one cost a whole report.
+         */
+        wideList: Boolean = false,
     ): Hit? {
         // **A blank address bar is a start page, and a start page is not a page.**
         //
@@ -171,7 +178,7 @@ class WebContentFilter internal constructor(
         // that hour (decideBlock), so the point of widening is everything else — and the watcher
         // scans every app while the zone is armed, whether or not "check every app" is switched
         // on the rest of the time.
-        if (inDangerZone) {
+        if (wideList) {
             // **[dangerWords] ONLY, and adult_keywords.txt deliberately NOT.** That list is
             // matched as a plain substring, and its own header says every entry must be
             // unambiguous inside innocent text — a promise made about a URL, where "porn" only
