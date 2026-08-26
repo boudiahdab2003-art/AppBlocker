@@ -259,6 +259,12 @@ class BlockerAccessibilityService : AccessibilityService() {
     @Volatile private var lastBackExitAt: Long = 0L
     @Volatile private var dismissedAt = 0L
 
+    /** Whether the last dismissal stepped BACK inside the app rather than asking the phone to go
+     *  Home — which decides how long the grace after it runs. See [CoverGate.inGrace]. Recorded
+     *  from the branch that actually fired, not derived from the key: a page cover falls back to
+     *  HOME once BACK has failed, and then it needs the long window like any other trip Home. */
+    @Volatile private var dismissedViaBack = false
+
     // The app the user is being taken out of after "Got it", or null when we're not mid-exit.
     // "Got it" does not mean "take the cover away", it means "get me out of here": the cover
     // stays up until the phone is really off the blocked app. It used to come down immediately
@@ -2291,7 +2297,7 @@ class BlockerAccessibilityService : AccessibilityService() {
     private fun dismissSuppressed(counterKey: String): Boolean {
         val since = stopwatchNow() - dismissedAt
         val suppressed = CoverGate.suppressed(
-            counterKey, dismissedKey, dismissedPkg, lastForegroundPkg, since,
+            counterKey, dismissedKey, dismissedPkg, lastForegroundPkg, since, dismissedViaBack,
         )
         if (suppressed) recordDecline(since)
         return suppressed
@@ -2323,6 +2329,7 @@ class BlockerAccessibilityService : AccessibilityService() {
     /** Forget the dismissed cover, so the next block lands immediately. */
     private fun clearDismissState() {
         dismissalCountedDeaf = false
+        dismissedViaBack = false
         dismissedKey = null
         dismissedPkg = null
         dismissedDest = null
@@ -2336,7 +2343,7 @@ class BlockerAccessibilityService : AccessibilityService() {
     /** The key-agnostic timing half, for the web scan. */
     private fun withinDismissWindow(): Boolean {
         val since = stopwatchNow() - dismissedAt
-        val inGrace = CoverGate.inGrace(dismissedPkg, lastForegroundPkg, since)
+        val inGrace = CoverGate.inGrace(dismissedPkg, lastForegroundPkg, since, dismissedViaBack)
         if (inGrace) recordDecline(since)
         return inGrace
     }
@@ -2490,6 +2497,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         dismissalCountedDeaf = false
         if (DEBUG) Log.d(TAG, "dismissed: key=$dismissedKey pkg=$dismissedPkg dest=$dismissedDest")
         dismissedAt = stopwatchNow()
+        dismissedViaBack = false
         lastBlockedPkg = null
         // Re-arm word detection: coming back to the page that was just blocked must
         // block again, not read as "already handled" via the text dedup.
@@ -2525,8 +2533,24 @@ class BlockerAccessibilityService : AccessibilityService() {
             // exactly as it already does for the trip Home.
             lastBackExitPkg = dismissedPkg
             lastBackExitAt = stopwatchNow()
+            dismissedViaBack = true
             overlay.remove()
             performGlobalAction(GLOBAL_ACTION_BACK)
+            // **A blocked word locks the whole app, and nothing was raising that lock's cover.**
+            // The lockout is recorded the instant the word is caught, but the "Locked" screen it
+            // calls for waits for [handleAppBlock] to run again — and the only things that run it
+            // are a foreground change and the thirty-second re-check tick. BACK keeps him in the
+            // same app, and the page it lands on is static and emits nothing, so an app he had
+            // just been locked out of sat there usable for up to half a minute.
+            //
+            // Re-decide the moment the grace ends instead. No scan and no reading of the screen:
+            // the lockout is already recorded, so this is a decision whose inputs are all in hand.
+            lastForegroundPkg?.let { pkg ->
+                if (keywordLockoutRemaining(pkg) > 0L) {
+                    handler.removeCallbacks(recheckRunnable)
+                    handler.postDelayed(recheckRunnable, CoverGate.DISMISS_GRACE_MS + 150L)
+                }
+            }
         } else {
             // Everything else — a whole app, the purchase sheet, a Settings page we bounced out
             // of, and a page whose BACK has already been tried — is held until the user is really

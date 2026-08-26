@@ -121,11 +121,13 @@ internal object CoverGate {
         dismissedPkg: String?,
         currentPkg: String?,
         sinceDismissMs: Long,
+        /** See [inGrace]. */
+        viaBack: Boolean,
     ): Boolean {
         if (counterKey == SHORTS_KEY) return false
         if (dismissedKey == null) return false
         if (counterKey != dismissedKey && counterKey != dismissedPkg) return false
-        return inGrace(dismissedPkg, currentPkg, sinceDismissMs)
+        return inGrace(dismissedPkg, currentPkg, sinceDismissMs, viaBack)
     }
 
     /**
@@ -134,8 +136,32 @@ internal object CoverGate {
      * cover was over. The web scan uses this directly — any dismissal suppresses it, because
      * the page stays on screen for the trip Home whatever the cover was keyed to.
      */
-    fun inGrace(dismissedPkg: String?, currentPkg: String?, sinceDismissMs: Long): Boolean {
+    fun inGrace(
+        dismissedPkg: String?,
+        currentPkg: String?,
+        sinceDismissMs: Long,
+        /** Whether that dismissal left via BACK rather than HOME — see [Exit] and [exitFor].
+         *  Passed rather than derived from the key, because a page cover falls back to HOME when
+         *  BACK has already failed once ([backExitFailed]), and then it needs the long window
+         *  like any other trip Home. What matters is the move that was actually made. */
+        viaBack: Boolean,
+    ): Boolean {
         if (sinceDismissMs < DISMISS_GRACE_MS) return true
+        // **No extension for a cover dismissed with BACK**, and staying in the app is exactly why.
+        //
+        // The long window exists for one thing: HOME landing slowly or being swallowed whole
+        // (HyperOS, split-screen), leaving the blocked app genuinely still on screen with its
+        // stragglers still arriving. BACK does not make that trip. It is a move *inside* the app,
+        // it lands at once, and "the same app is still in front" is not a symptom of it — it is
+        // the expected outcome of it. So the condition below is true from the first instant of
+        // every page dismissal, and the eight seconds ran in full every time.
+        //
+        // That is invariant 20 read the other way round. The fix there was to release the grace
+        // when the destination changes; this is the half that release cannot reach — stepping BACK
+        // onto another page of the same site, or onto one whose address cannot be read at all.
+        // The short window above still absorbs the departing page's stragglers, which is the only
+        // thing this ever had to absorb.
+        if (viaBack) return false
         return sinceDismissMs < DISMISS_GRACE_STUCK_MS && currentPkg != null &&
             currentPkg == dismissedPkg
     }
