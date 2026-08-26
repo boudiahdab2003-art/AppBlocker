@@ -139,6 +139,93 @@ class CoverGateTest {
         assertFalse(CoverGate.inGrace(null, app, backInsideTheOldWindow))
     }
 
+    // --- Releasing the grace when the user moves on inside the same app ---
+
+    @Test
+    fun `opening another page in the same app spends the grace`() {
+        // The reported relapse. "Got it" on Instagram fires HOME, HyperOS swallows it, and the
+        // user simply carries on to the next screen - same package throughout, so the package
+        // rule above never fires and the cover stayed suppressed for the full eight seconds.
+        // A different destination inside the app is the user moving on, not the app leaving.
+        assertTrue(
+            CoverGate.graceSpentBy(
+                newPkg = app, dismissedPkg = app,
+                newDest = "ReelsActivity", dismissedDest = "FeedActivity",
+            ),
+        )
+    }
+
+    @Test
+    fun `a new site in the same browser spends the grace`() {
+        // The same rule with a host as the destination, which is the browser half of the bug:
+        // since v1.135 a website block sends the user BACK rather than Home, so staying in the
+        // browser is the NORMAL outcome and the long grace applied to every website block.
+        assertTrue(
+            CoverGate.graceSpentBy(
+                newPkg = app, dismissedPkg = app,
+                newDest = "other.example", dismissedDest = "blocked.example",
+            ),
+        )
+    }
+
+    @Test
+    fun `the stragglers from the page that was just covered do not spend the grace`() {
+        // Same destination = the events the covered screen is still emitting on its way out.
+        // Absorbing those is the entire reason the grace exists; releasing here would put the
+        // flashing cover of v1.131 straight back.
+        assertFalse(
+            CoverGate.graceSpentBy(
+                newPkg = app, dismissedPkg = app,
+                newDest = "FeedActivity", dismissedDest = "FeedActivity",
+            ),
+        )
+    }
+
+    @Test
+    fun `an unknown destination never spends the grace`() {
+        // Both directions of "we could not tell", and both must leave the grace alone - the
+        // same rule as the null package above. If not knowing released it, the first event
+        // carrying no class name would cancel the protection outright.
+        assertFalse(
+            CoverGate.graceSpentBy(
+                newPkg = app, dismissedPkg = app,
+                newDest = null, dismissedDest = "FeedActivity",
+            ),
+        )
+        assertFalse(
+            CoverGate.graceSpentBy(
+                newPkg = app, dismissedPkg = app,
+                newDest = "FeedActivity", dismissedDest = null,
+            ),
+        )
+    }
+
+    @Test
+    fun `the stuck case still holds the full grace when nothing has moved`() {
+        // The protection this fix must not delete. Home was swallowed, the user has not moved,
+        // and the app is genuinely still on screen: that is what the eight seconds are for, and
+        // it is still eight seconds.
+        assertFalse(
+            CoverGate.graceSpentBy(
+                newPkg = app, dismissedPkg = app,
+                newDest = "FeedActivity", dismissedDest = "FeedActivity",
+            ),
+        )
+        assertTrue(CoverGate.inGrace(app, app, CoverGate.DISMISS_GRACE_STUCK_MS - 1))
+    }
+
+    @Test
+    fun `leaving for another app spends the grace whatever the destinations say`() {
+        // The original rule keeps priority: a different package is already proof the user left,
+        // and the destination is then irrelevant (a launcher class name means nothing here).
+        assertTrue(
+            CoverGate.graceSpentBy(
+                newPkg = other, dismissedPkg = app,
+                newDest = "FeedActivity", dismissedDest = "FeedActivity",
+            ),
+        )
+    }
+
     // --- Attempt counting ---
 
     @Test

@@ -356,6 +356,18 @@ object SettingsStore {
             .map { (pkg, lockout) -> lockout.encode(pkg) }.toSet(),
     ).apply()
 
+    private const val KEY_BLOCKED_SNAPSHOT = "blocked_snapshot"
+
+    /** The blocked packages as of the last time Room told us, so a freshly bound service can
+     *  enforce something before the database answers. See [RuleSnapshot] for why an empty rule
+     *  map is not "nothing is blocked". Read synchronously on the connect path — a plain string
+     *  set, deliberately cheap enough for that. */
+    internal fun blockedSnapshot(context: Context): Set<String> =
+        prefs(context).getStringSet(KEY_BLOCKED_SNAPSHOT, emptySet()).orEmpty()
+
+    internal fun setBlockedSnapshot(context: Context, value: Set<String>) =
+        prefs(context).edit().putStringSet(KEY_BLOCKED_SNAPSHOT, value).apply()
+
     private const val KEY_GUARD_OFF_SWITCH = "guard_off_switch"
 
     /**

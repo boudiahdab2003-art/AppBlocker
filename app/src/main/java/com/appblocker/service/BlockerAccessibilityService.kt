@@ -47,6 +47,7 @@ import com.appblocker.data.Schedule
 import com.appblocker.data.ScheduleType
 import com.appblocker.data.ServiceHealth
 import com.appblocker.data.SessionClock
+import com.appblocker.data.RuleSnapshot
 import com.appblocker.data.SettingsStore
 import com.appblocker.data.StrictEdits
 import com.appblocker.data.UnlockCounter
@@ -93,6 +94,13 @@ class BlockerAccessibilityService : AccessibilityService() {
     private val filter: WebContentFilter get() = WebContentFilter.get(applicationContext)
 
     @Volatile private var rules: Map<String, AppRule> = emptyMap()
+    // Whether [rules] has heard from Room yet. Until it has, the empty map means "not told", not
+    // "nothing is blocked" — see RuleSnapshot, and invariant 11.
+    @Volatile private var rulesLoaded = false
+    // What was blocked last time Room spoke, read synchronously on connect so a rebind (boot,
+    // update, revive, Second Space switch) enforces from the first event rather than from the
+    // first emission.
+    @Volatile private var blockedSnapshot: Set<String> = emptySet()
     // Strict/Focus deadline anchored to the monotonic clock (clock-change-proof) with a
     // wall-clock fallback. See SessionClock.
     @Volatile private var focusRealtimeStart: Long = 0L
@@ -219,6 +227,16 @@ class BlockerAccessibilityService : AccessibilityService() {
     // The app that was BEHIND the dismissed cover, so its lockout re-show (keyed by package,
     // not by the dismissed counterKey) is suppressed for the same transition window.
     @Volatile private var dismissedPkg: String? = null
+    // WHERE inside that app the dismissed cover was — the window class name for an app cover,
+    // the host for a page cover. The grace is released when the user is demonstrably somewhere
+    // else in the same app, which is the only evidence available when HOME is swallowed (or,
+    // for a page cover, when "Got it" deliberately keeps them in the browser). See
+    // CoverGate.graceSpentBy; [currentDest] picks the matching half so a class name is never
+    // compared against a host.
+    @Volatile private var dismissedDest: String? = null
+    // The current destination, tracked in the two units the covers use.
+    @Volatile private var lastWindowClass: String? = null
+    @Volatile private var lastBrowserHost: String? = null
 
     /** The app a page cover's BACK exit was last fired in, and when — so a second "Got it" there
      *  leaves instead of pressing back again. See [CoverGate.backExitFailed]. */
@@ -557,10 +575,10 @@ class BlockerAccessibilityService : AccessibilityService() {
     private fun recheckMatters(pkg: String): Boolean =
         overlay.isShowing ||
             keywordLockoutRemaining(pkg) > 0L ||
-            rules[pkg]?.isBlocked == true ||
+            ruleFor(pkg)?.isBlocked == true ||
             // Allowlist mode: any non-allowed app can flip (e.g. a Pomodoro break ending), so
             // keep re-checking while Quick Block is enforcing.
-            (allowlistMode && quickBlockActive() && rules[pkg]?.isAllowed != true) ||
+            (allowlistMode && quickBlockActive() && ruleFor(pkg)?.isAllowed != true) ||
             QuickSession.state(this).active ||
             schedules.any { it.enabled && pkg in it.packages }
 
@@ -621,6 +639,8 @@ class BlockerAccessibilityService : AccessibilityService() {
         updatePaused = SettingsStore.updatePaused(this)
         allowlistMode = SettingsStore.quickBlockAllowlist(this)
         essentialPackages = findEssentialPackages(this)
+        // Before the rule flow below has emitted anything. Cheap by design: one string set.
+        blockedSnapshot = SettingsStore.blockedSnapshot(this)
         // Restore unexpired keyword lockouts — a service rebind must not unlock an app early.
         // Filtered on the same reckoning that decides whether one is running, not on the wall
         // clock, or a clock change could drop a live lockout here instead of at the check.
@@ -655,6 +675,14 @@ class BlockerAccessibilityService : AccessibilityService() {
             db.scheduleDao().getAll(),
         ) { ruleList, focus, keywords, scheduleList ->
             rules = ruleList.associateBy { it.packageName }
+            rulesLoaded = true
+            // Keep the pre-connect fallback current. Off the main thread already (this flow runs
+            // on Dispatchers.Default), and only written when it actually changed.
+            val snapshot = RuleSnapshot.encode(ruleList)
+            if (snapshot != blockedSnapshot) {
+                blockedSnapshot = snapshot
+                runCatching { SettingsStore.setBlockedSnapshot(applicationContext, snapshot) }
+            }
             focusRealtimeStart = focus?.realtimeStartMillis ?: 0L
             focusRealtimeEnd = focus?.realtimeEndMillis ?: 0L
             focusWallStart = focus?.startTimeMillis ?: 0L
@@ -855,15 +883,18 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (pkg != null && pkg != lastForegroundPkg) {
             lastForegroundPkg = pkg
             LaunchCounter.recordOpen(applicationContext, pkg) // for LAUNCH_COUNT
-            // A different app is genuinely in front now, so the app the cover was over is off
-            // screen and the dismiss grace has done its job — see CoverGate.graceSpentBy for
-            // why this is the releasing event and the exit watcher is not.
-            if (dismissedKey != null && CoverGate.graceSpentBy(pkg, dismissedPkg)) {
-                dismissedKey = null
-                dismissedPkg = null
-                dismissedAt = 0L
-            }
+            // A host read in the app we just left says nothing about where we are now.
+            lastBrowserHost = null
         }
+        // The dismiss grace is released the moment the user has demonstrably moved on: a
+        // different app, OR a different screen inside the same one. Deliberately OUTSIDE the
+        // package check above — the case the owner relapsed through never changes package
+        // (HOME swallowed on HyperOS, he simply opens the next screen), and that is precisely
+        // the case the package-only rule could not see. See CoverGate.graceSpentBy.
+        if (pkg != null && className != null) lastWindowClass = className
+        if (dismissedKey != null &&
+            CoverGate.graceSpentBy(pkg, dismissedPkg, currentDest(), dismissedDest)
+        ) clearDismissState()
         // Keep the location fix current (and recover after a late permission grant).
         if (schedules.any { it.enabled && it.type == ScheduleType.LOCATION }) {
             ensureLocationUpdates()
@@ -998,6 +1029,13 @@ class BlockerAccessibilityService : AccessibilityService() {
     private fun handleAppBlock(pkg: String) {
         val reason = blockReason(pkg)
         if (reason == null) {
+            // "No reason" is only an answer once we have been told the rules. Before Room's first
+            // emission it means "we do not know yet", and taking a live cover down on it is how a
+            // Second Space switch used to uncover a blocked app (RuleSnapshot, invariant 11). The
+            // snapshot above usually answers, but it carries only HARD blocks — a schedule or a
+            // limit still reads as null here, so hold what is up and re-decide when the flow
+            // lands. Nothing is stranded: the ordinary re-check tick re-runs this.
+            if (!rulesLoaded && overlay.isShowing) return
             lastBlockedPkg = null
             // Not this path's cover to remove. It answers one question — is this whole app
             // blocked? — and a "no" used to tear down whatever was up, including a cover raised by
@@ -1368,7 +1406,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                 // (no session) when not paused. Same gate in Blocklist and Allowlist mode.
                 quickEnforcing = strict ||
                     if (session.active) session.blockingNow else !SettingsStore.quickBlockPaused(this),
-                rule = rules[pkg],
+                rule = ruleFor(pkg),
                 allowlistMode = allowlistMode,
                 isEssential = { isEssentialAllowed(pkg) },
                 schedules = schedules,
@@ -1736,21 +1774,33 @@ class BlockerAccessibilityService : AccessibilityService() {
         // A cover is already up, so everything under it is unreachable and there is nothing
         // new to block.
         if (overlay.isShowing && !shortsCovering) return
-        // Mid-dismissal: the page is still on screen for the trip Home. The grace is released
-        // as soon as another app is really in front, so a deliberate re-open is caught at once.
+        // Settled addresses only: acting on half-typed omnibox text would cover the screen
+        // mid-word, and the owner asked for the block to wait until he has actually gone to the
+        // site. Typing a blocked word is still caught by the page scan, at its usual speed.
+        //
+        // **Read BEFORE the dismiss grace is consulted**, which is the fix for the browser half
+        // of the eight-second hole. On a page cover "Got it" steps BACK and deliberately leaves
+        // the user in the browser (v1.135), so the package never changes and the only evidence
+        // that they have moved on is a different host — evidence this function used to return
+        // before ever looking for. Every website block therefore bought a browser nobody was
+        // watching until the grace lapsed. One omnibox lookup during the grace is the price of
+        // not being deaf; the full page scan still waits, as it always did.
+        val url = extractSettledBrowserUrl(pkg)
+        val host = WatcherDiagnostics.hostOf(url)
+        if (host != null) lastBrowserHost = host
+        if (dismissedKey != null &&
+            CoverGate.graceSpentBy(pkg, dismissedPkg, host, dismissedDest)
+        ) clearDismissState()
+        // Mid-dismissal: the page is still on screen for the step back or the trip Home.
         if (dismissedKey != null && withinDismissWindow()) {
             if (DEBUG) Log.d(TAG, "urlScan[$pkg]: suppressed by dismiss grace")
             return
         }
-        // Settled addresses only: acting on half-typed omnibox text would cover the screen
-        // mid-word, and the owner asked for the block to wait until he has actually gone to the
-        // site. Typing a blocked word is still caught by the page scan, at its usual speed.
         // No settled address: a start page, an empty bar, a toolbar behind a fullscreen video.
         // Forget what was last checked here — the dedup below is keyed on the address alone, so
         // leaving it set means coming back to the same blocked site without leaving the browser
         // reads as "already handled" and this path skips it. The debounced scan still catches
         // that, a beat later; an under-block is the half he never sees.
-        val url = extractSettledBrowserUrl(pkg)
         if (url == null) {
             lastCheckedUrl = null
             return
@@ -2093,6 +2143,24 @@ class BlockerAccessibilityService : AccessibilityService() {
         stopwatchNow() - dismissedAt,
     )
 
+    /** Where the user is now, in the same unit the dismissed cover recorded — a host for a page
+     *  cover, a window class for an app cover. Comparing the two kinds against each other would
+     *  read as "moved" on the very first event and release the grace outright. */
+    private fun currentDest(): String? =
+        if (dismissedKey == CoverGate.WEB_KEY) lastBrowserHost else lastWindowClass
+
+    /** Forget the dismissed cover, so the next block lands immediately. */
+    private fun clearDismissState() {
+        dismissedKey = null
+        dismissedPkg = null
+        dismissedDest = null
+        dismissedAt = 0L
+    }
+
+    /** The rule for [pkg], falling back to the pre-connect snapshot until Room has answered. */
+    private fun ruleFor(pkg: String) =
+        RuleSnapshot.ruleFor(pkg, rules, rulesLoaded, blockedSnapshot)
+
     /** The key-agnostic timing half, for the web scan. */
     private fun withinDismissWindow(): Boolean = CoverGate.inGrace(
         dismissedPkg, lastForegroundPkg, stopwatchNow() - dismissedAt,
@@ -2223,6 +2291,8 @@ class BlockerAccessibilityService : AccessibilityService() {
         val wasShorts = overlay.counterKey == CoverGate.SHORTS_KEY
         dismissedKey = overlay.counterKey
         dismissedPkg = lastForegroundPkg
+        // Read AFTER dismissedKey, which is what decides which unit this cover thinks in.
+        dismissedDest = currentDest()
         dismissedAt = stopwatchNow()
         lastBlockedPkg = null
         // Re-arm word detection: coming back to the page that was just blocked must
@@ -2304,9 +2374,7 @@ class BlockerAccessibilityService : AccessibilityService() {
             // is most of the time on gesture nav, and relying on it left the grace running in
             // exactly the case that mattered. onForegroundChanged owns the release; see
             // CoverGate.graceSpentBy.
-            dismissedKey = null
-            dismissedPkg = null
-            dismissedAt = 0L
+            clearDismissState()
         } else if (confirmed) {
             // HOME never landed and the user IS still in the blocked app. The cover has to come
             // down (never trap anyone), so schedule the re-check for just after the dismiss
