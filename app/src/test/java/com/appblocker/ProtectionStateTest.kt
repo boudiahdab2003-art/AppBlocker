@@ -211,16 +211,36 @@ class ProtectionStateTest {
         )
 
     /**
-     * Paused outranks it too. After an update the watcher genuinely is unbound for a moment while
-     * it rebinds, and "Reactivate on the Blocking tab" is the answer to that — not "your phone
-     * killed the blocker".
+     * ⚠️ **Not running outranks paused — the reverse of what this file used to assert**, and the
+     * reversal is the point rather than a side effect.
+     *
+     * The old test said "after an update the watcher genuinely is unbound for a moment while it
+     * rebinds, so say Reactivate, not 'your phone killed the blocker'". The moment is real; ranking
+     * PAUSED first was the wrong way to cover it. An update *is* Android killing our process
+     * (invariant 21), so the pause covers exactly the window in which the watcher is most likely
+     * never to come back — and with PAUSED winning, the watchdog could not reach STALLED there,
+     * `recordFoundDead` never fired and no `OutageLog` episode ever opened. The leading hypothesis
+     * for his outages was the one case the instrument was blind to.
+     *
+     * The moment is covered by [SERVICE_BIND_GRACE_MS] and by `bindPending`'s deferrals instead —
+     * by waiting for a real answer rather than by preferring a comfortable one.
      */
-    @Test fun pausedOutranksNotRunning() =
+    @Test fun notRunningOutranksPaused() =
+        assertEquals(
+            ProtectionState.STALLED,
+            protectionState(
+                true, lastEventAt = now - 60_000L, now = now, usedMinutesSinceLastEvent = 1,
+                updatePaused = true, serviceConnected = false, msSinceProcessStart = upFor,
+            ),
+        )
+
+    /** Inside the grace it is still PAUSED: nothing is known yet, and the pause is what he can act on. */
+    @Test fun insideTheGraceAPausedWatcherIsStillPaused() =
         assertEquals(
             ProtectionState.PAUSED,
             protectionState(
                 true, lastEventAt = now - 60_000L, now = now, usedMinutesSinceLastEvent = 1,
-                updatePaused = true, serviceConnected = false, msSinceProcessStart = upFor,
+                updatePaused = true, serviceConnected = false, msSinceProcessStart = 2_000L,
             ),
         )
 
@@ -244,7 +264,7 @@ class ProtectionStateTest {
         )
         assertTrue(
             bindPending(
-                enabled = true, updatePaused = false,
+                enabled = true,
                 serviceConnected = false, msSinceProcessStart = justStarted,
             ),
         )
@@ -254,7 +274,7 @@ class ProtectionStateTest {
     @Test fun pastTheGraceIsAnAnswerNotAPendingBind() =
         assertFalse(
             bindPending(
-                enabled = true, updatePaused = false,
+                enabled = true,
                 serviceConnected = false, msSinceProcessStart = SERVICE_BIND_GRACE_MS,
             ),
         )
@@ -263,7 +283,7 @@ class ProtectionStateTest {
     @Test fun connectedIsNeverPending() =
         assertFalse(
             bindPending(
-                enabled = true, updatePaused = false,
+                enabled = true,
                 serviceConnected = true, msSinceProcessStart = 0L,
             ),
         )
@@ -275,27 +295,38 @@ class ProtectionStateTest {
     @Test fun cannotTellIsNotPending() =
         assertFalse(
             bindPending(
-                enabled = true, updatePaused = false,
+                enabled = true,
                 serviceConnected = null, msSinceProcessStart = 0L,
             ),
         )
 
     /**
-     * Switched off, and paused after an update, outrank a pending bind exactly as they outrank
-     * STALLED: both have their own answer on screen, and neither is waiting for a bind.
+     * Switched off outranks a pending bind exactly as it outranks STALLED: he has his own answer
+     * on screen, and nothing is waiting for a bind.
      */
-    @Test fun disabledOrPausedAreNotPending() {
+    @Test fun disabledIsNotPending() =
         assertFalse(
             bindPending(
-                enabled = false, updatePaused = false,
+                enabled = false,
                 serviceConnected = false, msSinceProcessStart = 2_000L,
             ),
         )
-        assertFalse(
+
+    /**
+     * **An update pause IS a pending bind now** — the deliberate reversal that makes ranking
+     * STALLED above PAUSED safe.
+     *
+     * The pause is armed by an install, and an install is Android killing our process, so this is
+     * precisely the moment a rebind is legitimately in flight. Excluding it used to be harmless
+     * because a paused watcher could never be called STALLED anyway; now that it can be, the
+     * deferral is the only thing standing between "the update just landed" and "your phone killed
+     * the blocker". Without this the reorder would cry wolf after every release he installs.
+     */
+    @Test fun pausedIsPendingWhileTheBindIsInFlight() =
+        assertTrue(
             bindPending(
-                enabled = true, updatePaused = true,
+                enabled = true,
                 serviceConnected = false, msSinceProcessStart = 2_000L,
             ),
         )
-    }
 }

@@ -139,6 +139,15 @@ object BugReportSender {
         // between "he switched it off" and "his phone shut it down and told him it was on".
         field("serviceRunning") { BlockerAccessibilityService.isConnected().toString() }
         field("foundDead") { ServiceHealth.foundDeadCount(ctx).toString() }
+        // The inside view of aliveButDeaf: how often the heartbeat found the watcher silent for
+        // three minutes and re-posted its event mask, and how often that re-post itself threw.
+        // "12/2" reads as twelve nudges, two of which found the binding already gone.
+        field("revives") {
+            "${ServiceHealth.reviveCount(ctx)}/${ServiceHealth.reviveFailCount(ctx)}"
+        }
+        // onInterrupt, which used to be an empty body. Not a failure by itself; a number that
+        // moves either side of an outage is the first description anyone has of what precedes one.
+        field("interrupts") { ServiceHealth.interruptCount(ctx).toString() }
         field("healthErrors") { ServiceHealth.errorCount(ctx).toString() }
         // The tag only. ServiceHealth's full line contains the exception message, which is where
         // a blocked word gets quoted back — see BugReport's contract.
@@ -258,11 +267,15 @@ object BugReportSender {
      * [report] never fires, and a note only exists if the owner happens to be looking. The failure
      * that costs the most was the one least able to report itself.
      *
-     * Called from the watchdog's OK branch, which usually runs in a background worker, so there is
-     * no flush here. It goes out on the next app open — which after an outage is soon, because
+     * Called from the watchdog on any exit from STALLED, usually in a background worker, so there
+     * is no flush here. It goes out on the next app open — which after an outage is soon, because
      * opening the app is how he fixes it.
+     *
+     * @param endedBy how the outage stopped — `recovered`, `switched-off` or `paused`. Only the
+     *   first means blocking came back. Without it the other two read as recoveries, which would
+     *   overstate how well the app repairs itself in exactly the log built to measure that.
      */
-    fun reportOutage(context: Context, episode: OutageLog.Episode) {
+    fun reportOutage(context: Context, episode: OutageLog.Episode, endedBy: String) {
         if (!enabled()) return
         runCatching {
             BugReportQueue.enqueue(
@@ -280,6 +293,7 @@ object BugReportSender {
                         "outageDetectMin" to minutesOrUnknown(episode.detectedAfterMs),
                         "outageDeaf" to "${episode.aliveButDeaf}",
                         "outagePreceded" to episode.precededBy,
+                        "outageEnded" to endedBy,
                         "outageCount" to "${OutageLog.totals(context).count}",
                     ),
                     recentBlocks = BlockLog.recent(context),

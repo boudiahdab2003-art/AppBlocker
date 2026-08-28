@@ -213,6 +213,34 @@ object SettingsStore {
             .remove("strict_clear_pending") // retired; an update no longer ends a Strict session
             .apply()
 
+    /** Both flags as one value, so a decision is made about the pair rather than about one of them. */
+    fun updatePauseState(context: Context): UpdatePause.PauseState = UpdatePause.PauseState(
+        paused = updatePaused(context),
+        pending = updatePausePending(context),
+    )
+
+    /**
+     * Writes **both** update-pause flags in one transaction — the only supported way to move them
+     * together.
+     *
+     * They used to be two separate `apply()` calls with a Room database open in between
+     * ([UpdatePause] reads the Strict row before deciding), running from a broadcast receiver whose
+     * process Android may kill the moment `onReceive` returns. Half-applied, that stranded
+     * `pending` true — and since `checkVersionChange` runs on **every** service connect, every
+     * later boot, update, space switch or revive re-read that intent and switched blocking off
+     * again, including immediately after the owner had tapped Reactivate.
+     *
+     * `commit()` rather than `apply()`, for the reason [setAutoInstalled] gives: this runs in a
+     * process that is about to be killed, and it runs once per install.
+     */
+    fun writeUpdatePause(context: Context, state: UpdatePause.PauseState) {
+        prefs(context).edit()
+            .putBoolean(KEY_UPDATE_PAUSED, state.paused)
+            .putBoolean(KEY_UPDATE_PAUSE_PENDING, state.pending)
+            .remove("strict_clear_pending") // retired; an update no longer ends a Strict session
+            .commit()
+    }
+
     private const val KEY_UPDATE_PAUSE_PENDING = "update_pause_pending"
 
     /** Which launcher icon is active (Profile ▸ App icon). Ids defined in [AppIcons]. */

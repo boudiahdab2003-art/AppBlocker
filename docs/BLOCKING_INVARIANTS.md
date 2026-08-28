@@ -669,6 +669,65 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     the process was killed and never rebound, or it was alive the whole time and stopped being
     delivered to.
 
+32. **An instruction must not outlive the decision it asked for.** Invariant 21 said state that
+    must outlive the process may not live in the process. This is its mirror, and it cost the
+    same feature twice.
+
+    `UpdatePause` writes a durable *intent* (`updatePausePending`) and later turns it into a
+    *decision* (`updatePaused`). Those were two `apply()` calls with a Room database open between
+    them — `strictSessionRunning` reads the focus row — running from a broadcast receiver, whose
+    process Android may kill the moment `onReceive` returns. Surviving half-applied left the
+    intent armed after the decision had landed.
+
+    On its own that is harmless. What made it a bug is that **the Reactivate tap cleared only the
+    decision**, and `checkVersionChange` re-reads the intent on *every* `onServiceConnected` — so
+    the next boot, update, space switch or revive re-armed the pause. Blocking switched itself off
+    again, minutes or days after the owner had switched it back on, with the accessibility switch
+    still reading ON and nothing on screen having changed. It is the best match in the codebase
+    for "it stops working, just like that".
+
+    Both flags now move in one `commit()` ([SettingsStore.writeUpdatePause]) and the tap goes
+    through `UpdatePause.reactivate`, which clears the pair. **The shape to grep for: a persisted
+    intent with more than one writer, where one of the writers only knows about half of it.**
+
+33. **The end of a window has to be wired to something.** A rebind — boot, update, Second Space,
+    revive — spends a moment with no rules, and invariant 11's update made that window survivable
+    for HARD blocks via `RuleSnapshot`. **Nothing was wired to the moment it closed.** The rule
+    flow's first emission set `rules`, `schedules` and `rulesLoaded` and stopped; no re-check tick
+    could be waiting either, because `recheckMatters` decides by reading the very state that had
+    not arrived. So a schedule or a daily limit on an app opened inside the window did not fire
+    until the user left the app and came back — which for a scheduled app is the whole block.
+
+    Same family as 29 (an answer that stopped being asked for) and 30 (a grace measured against a
+    clock the measuring resets): not a wrong answer, a question nobody asked a second time. Closed
+    by `redecideAfterRulesArrived`, with `pkgToRedecide` pure and tested.
+
+    **Grep for: a flag that flips from "not ready" to "ready" with no handler on the transition.**
+
+34. **A rule that fails safe for one caller may fail open for the next one.** `refreshPackageSets`
+    let `realBrowserPackages` be empty deliberately, and said why: an empty set "costs only the
+    blunt block, never filtering". True when it was written. Since v1.139 and v1.142 that same set
+    gates the **danger-zone hour** and the **DNS-filter browser shutdown** — `BlockDecision`'s two
+    top layers, both requiring `isRealBrowser`. One swallowed PackageManager failure at connect
+    therefore switched off two whole protections for the life of the service, silently.
+
+    The set may still legitimately be empty. It may no longer be *assumed* empty on the strength
+    of one reading: `isRealBrowserPkg` re-detects, throttled, the way `isLauncherPkg` has since
+    v1.96. **Grep for: a comment justifying a permissive default by naming its cost, where the
+    list of callers has grown since.**
+
+35. **A loop that re-arms itself from inside its own error handler is one throw from gone.**
+    `recheckRunnable` re-posted itself as the last line inside `guarded("recheck")`;
+    `heartbeatRunnable`, forty lines away, re-posts *outside* its guard. One swallowed throw and
+    the 30-second mid-use loop ended for good, taking limit crossings, schedule starts, Pomodoro
+    flips and stale-cover releases with it — until the next foreground change happened to re-arm
+    it. The re-post now lives outside the guard, and a swallowed error re-arms rather than stops:
+    a repeating error costs a wake every 30 seconds and is reported on the way past, where the
+    alternative was mid-use blocking silently ending.
+
+    **Grep for: `postDelayed(this` inside a `guarded {` or `runCatching {` block.**
+
+
 ## Device quirks these invariants exist for
 
 - Gesture-nav Home on HyperOS often emits **no accessibility event at all**, so the foreground
@@ -1528,6 +1587,49 @@ Three of the four are the same sentence: *the thing that knew was not the thing 
 
 Neither came out of a sweep. Both were predicted in spirit by entries already in this file, which is
 the argument for working the list below rather than admiring it.
+
+### Swept (29 Aug 2026) — the liveness layer, asked for by name
+
+The owner's question was specific: *"why dont you check one more time about bugs that could make
+the app stop automatically after the phone was off or spaces switched or just like that?"* — asked
+minutes after v1.143 published. The area had never been swept: ~1,368 lines of it were three days
+old, and this file's own "Not yet swept" list did not mention it.
+
+**Method.** Two enumerations rather than a read-through: every mechanism that keeps the watcher
+alive or notices it has died, and every piece of state that can hold blocking in a "do not block"
+position. Then the standing move — grep the primitive, not the feature — over `elapsedRealtime`,
+`@Volatile` process-lifetime state, `apply()` vs `commit()`, and every `register*` with no
+re-registration path.
+
+- **Blocking switching itself back off after Reactivate** — invariant 32. The one that best matches
+  what he actually reports.
+- **Schedules not firing on an app already open after a rebind** — invariant 33. The other half of
+  the Second Space fix that v1.139 only closed for HARD blocks.
+- **The mid-use re-check loop dying on one swallowed throw** — invariant 35.
+- **PAUSED outranking "switched on and not running"** — so the window right after an install, which
+  is Android killing our process and the leading hypothesis for his outages, was the one case
+  `OutageLog` structurally could not record. Reordered; `bindPending` now covers the paused case so
+  the reorder cannot cry wolf during a legitimate rebind.
+- **An outage episode only ever closed on the way to OK** — STALLED → OFF (him doing the repair the
+  alert asks for) and STALLED → PAUSED (an update mid-outage) left it open and `foundDeadPending`
+  stuck true, so the next outage was never counted and the one eventually closed spanned hours that
+  were not an outage. Reports now carry `outageEnded`.
+- **`ServiceHealth`'s two stamps were the last wall-clock timers in the app** — a backward clock
+  froze `health_last_event_at` and the staleness arm answered OK until the clock caught up. The
+  throttle is monotonic now and a future stamp self-heals.
+- Plus `DeviceBoot` caching a failed read forever, `realBrowserPackages` (invariant 34), the four
+  listener-fed settings gaining the backstop the DNS filter already had, and the revive nudge and
+  `onInterrupt` finally being counted — the inside view of `aliveButDeaf`.
+
+**What this did NOT establish.** The cause of his outages. Nothing here is proof; `outageDeaf` in
+the first real report still is. Two of the five, though, were corrupting that very instrument, so
+they were worth fixing before the data starts arriving rather than after.
+
+**Also confirmed, and worth not re-deriving:** there is no `disableSelf`, no `stopSelf`, no
+`System.exit` and no `killProcess` anywhere in the app. It never switches itself off deliberately.
+The boot path is sound — `BootReceiver` is not direct-boot-aware and takes only `BOOT_COMPLETED`,
+so nothing runs before credential storage is available, and WorkManager re-arms the watchdog two
+ways. The rule flow cannot die permanently: `SupervisorJob` plus `retryWhen` close that.
 
 ### Not yet swept
 

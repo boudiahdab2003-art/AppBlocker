@@ -65,7 +65,7 @@ object ProtectionWatchdog {
                 serviceConnected = connected,
                 msSinceProcessStart = sinceStart,
             ),
-            bindPending = bindPending(enabled, updatePaused, connected, sinceStart),
+            bindPending = bindPending(enabled, connected, sinceStart),
         )
     }
 
@@ -104,16 +104,18 @@ object ProtectionWatchdog {
         // holds. Falling through to that OK would cancel the alert and close the open episode,
         // which is the whole failure this deferral exists to avoid.
         val state = if (reading.bindPending) ProtectionState.STALLED else reading.state
+        // ⚠️ **Leaving STALLED closes the episode, whichever way we left it.** This used to live in
+        // the OK branch alone, so STALLED -> OFF (he switches accessibility off — which is the
+        // repair the alert tells him to do) and STALLED -> PAUSED (an update lands mid-outage,
+        // weekly for him) both left the episode open and `foundDeadPending` stuck true. The next
+        // outage was then never counted, and the one eventually closed carried a duration spanning
+        // hours that were not an outage at all. An instrument that keeps measuring after the thing
+        // it measures has stopped is worse than one that stops.
+        if (state != ProtectionState.STALLED) endOpenOutage(context, state)
         when (state) {
             ProtectionState.OK -> {
                 SettingsStore.clearProtectionOffSince(context)
                 ProtectionNotifier.cancel(context)
-                ProtectionScheduler.cancelStalledRepeat(context)
-                SettingsStore.setFoundDeadPending(context, false)
-                // Blocking is back. Closing the episode is what produces its duration, which is
-                // the reason the report goes out at the END of an outage and not the start.
-                // Returns null in the ordinary case, where nothing was down.
-                OutageLog.end(context)?.let { BugReportSender.reportOutage(context, it) }
             }
             ProtectionState.OFF -> ProtectionNotifier.notifyDisabled(context, force)
             // Switched on, but nothing has reached the watcher for hours of active use — the
@@ -136,13 +138,39 @@ object ProtectionWatchdog {
                 // Come back in five minutes and float it again. The 15-minute periodic check is
                 // still the backstop; this is what makes the alert insistent rather than a thing
                 // he has to happen to look at. Re-armed on every check that still sees STALLED,
-                // and cancelled in the OK branch above.
+                // and cancelled by endOpenOutage on any exit from it.
                 ProtectionScheduler.scheduleStalledRepeat(context)
             }
             // Off after an update, pending reactivation. Worth an alert precisely because it is
             // self-inflicted and easy to forget: the app was doing nothing at all, and saying it
             // was fine, until the user happened to open the Blocking tab.
             ProtectionState.PAUSED -> ProtectionNotifier.notifyPaused(context, force)
+        }
+    }
+
+    /**
+     * Closes an open outage episode and takes the stalled alert down with it. Called on **every**
+     * exit from STALLED, not only the one that means blocking is back.
+     *
+     * How it ended is recorded rather than assumed, because the three endings mean different
+     * things and the report is read as evidence:
+     *  - `recovered` — blocking is working again. The ordinary ending.
+     *  - `switched-off` — he switched accessibility off, which is the repair the alert asks for;
+     *    the outage really did stop here, and the next OK is a fresh start, not this episode.
+     *  - `paused` — an update landed mid-outage. Everything after this point is the pause, not
+     *    the failure, and counting it would inflate the very number the log exists to establish.
+     *
+     * Also cancels the stalled notification specifically: it is `ongoing`, so leaving it up while
+     * posting the "switched off" or "paused" one left him with a permanent alert about a state he
+     * was no longer in.
+     */
+    private fun endOpenOutage(context: Context, state: ProtectionState) {
+        SettingsStore.setFoundDeadPending(context, false)
+        ProtectionScheduler.cancelStalledRepeat(context)
+        ProtectionNotifier.cancelStalled(context)
+        // Returns null in the ordinary case, where nothing was down.
+        OutageLog.end(context)?.let {
+            BugReportSender.reportOutage(context, it, outageEndedBy(state))
         }
     }
 }

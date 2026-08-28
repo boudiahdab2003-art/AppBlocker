@@ -1,6 +1,7 @@
 package com.appblocker.data
 
 import android.content.Context
+import android.os.SystemClock
 
 /**
  * Whether the blocking watcher is actually alive, and what has gone wrong lately.
@@ -17,6 +18,9 @@ object ServiceHealth {
     private const val KEY_LAST_EVENT = "health_last_event_at"
     private const val KEY_LAST_ALIVE = "health_last_alive_at"
     private const val KEY_FOUND_DEAD = "health_found_dead_count"
+    private const val KEY_REVIVES = "health_revive_count"
+    private const val KEY_REVIVE_FAILS = "health_revive_fail_count"
+    private const val KEY_INTERRUPTS = "health_interrupt_count"
     private const val KEY_LAST_ERROR_AT = "health_last_error_at"
     private const val KEY_LAST_ERROR = "health_last_error"
     private const val KEY_LAST_ERROR_WHERE = "health_last_error_where"
@@ -25,7 +29,29 @@ object ServiceHealth {
     /** Don't touch disk on every accessibility event — one write a minute is plenty. */
     private const val WRITE_THROTTLE_MS = 60_000L
 
-    @Volatile private var lastWrittenAt = 0L
+    /**
+     * When the last write happened, **monotonically** (invariant 9).
+     *
+     * ⚠️ This used to hold `System.currentTimeMillis()`, and the throttle read
+     * `now - lastWrittenAt < WRITE_THROTTLE_MS`. After the wall clock moved *backwards* — an
+     * unsynced clock at boot, or a manual change — that subtraction is negative, so the branch
+     * returned and `health_last_event_at` stopped advancing until the clock caught back up.
+     * Downstream, `protectionState` computes `now - lastEventAt` against a stamp from the future
+     * and answers OK, so the deaf-but-bound detector — the one written for exactly the failure
+     * the owner reports — went blind for the length of the jump.
+     *
+     * The service's own `stopwatchNow()` KDoc enumerates this failure for six in-service timers
+     * and fixed them; these two stamps were the last ones left on the wall clock.
+     *
+     * Starts far in the past so the first event after a process start always writes: a boot leaves
+     * `elapsedRealtime` at a few seconds, and a zero here would have swallowed the first minute.
+     */
+    @Volatile private var lastWrittenAtRt = Long.MIN_VALUE / 2
+
+    /** A stamp later than "now" is impossible — the wall clock moved back under it. Anchoring it to
+     *  now restarts the staleness window instead of leaving one that can never elapse. Pure so the
+     *  rule is testable; the caller does the repair. */
+    internal fun anchoredStamp(stored: Long, now: Long): Long = if (stored > now) now else stored
 
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -35,14 +61,29 @@ object ServiceHealth {
      * throttles itself: at most one write a minute, and the in-memory guard means the common
      * case is a comparison, not a disk touch.
      */
-    fun recordEvent(context: Context, now: Long = System.currentTimeMillis()) {
-        if (now - lastWrittenAt < WRITE_THROTTLE_MS) return
-        lastWrittenAt = now
+    fun recordEvent(
+        context: Context,
+        now: Long = System.currentTimeMillis(),
+        nowRt: Long = SystemClock.elapsedRealtime(),
+    ) {
+        if (nowRt - lastWrittenAtRt < WRITE_THROTTLE_MS) return
+        lastWrittenAtRt = nowRt
         prefs(context).edit().putLong(KEY_LAST_EVENT, now).apply()
     }
 
-    /** When the watcher last showed a sign of life (0 = never since install). */
-    fun lastEventAt(context: Context): Long = prefs(context).getLong(KEY_LAST_EVENT, 0L)
+    /**
+     * When the watcher last showed a sign of life (0 = never since install).
+     *
+     * Self-heals a stamp from the future: see [anchoredStamp]. Without that, a backward clock
+     * change on a watcher that has genuinely gone deaf leaves a stamp no event will ever correct,
+     * and the staleness check answers OK for as long as the clock is behind.
+     */
+    fun lastEventAt(context: Context, now: Long = System.currentTimeMillis()): Long {
+        val stored = prefs(context).getLong(KEY_LAST_EVENT, 0L)
+        val sane = anchoredStamp(stored, now)
+        if (sane != stored) prefs(context).edit().putLong(KEY_LAST_EVENT, sane).apply()
+        return sane
+    }
 
     /**
      * "The watcher is still bound" — stamped on a timer rather than from the event path, so a
@@ -78,6 +119,48 @@ object ServiceHealth {
     }
 
     fun foundDeadCount(context: Context): Int = prefs(context).getInt(KEY_FOUND_DEAD, 0)
+
+    /**
+     * Counts the heartbeat's re-post of `serviceInfo` — **the only self-repair this app has**, and
+     * until now the only one that left no trace.
+     *
+     * After [BlockerAccessibilityService.REVIVE_AFTER_SILENCE_MS] of no events the heartbeat
+     * re-registers the event mask with the system, which is the one thing an app can do for a
+     * service that is still bound but has stopped being delivered to. Whether it fires, and how
+     * often, is the *inside* view of `OutageLog.aliveButDeaf`: a phone where this climbs is a
+     * phone whose watcher keeps going deaf while running. A phone where it stays at zero while
+     * outages accumulate is a phone whose watcher is being killed outright — different cause,
+     * different fix, and it was not measurable from either end before.
+     *
+     * @param worked whether the re-post itself threw. A nudge that throws is evidence too: it
+     *   means the binding is already gone, not merely quiet.
+     */
+    fun recordRevive(context: Context, worked: Boolean) {
+        val p = prefs(context)
+        p.edit()
+            .putInt(KEY_REVIVES, p.getInt(KEY_REVIVES, 0) + 1)
+            .apply { if (!worked) putInt(KEY_REVIVE_FAILS, p.getInt(KEY_REVIVE_FAILS, 0) + 1) }
+            .apply()
+    }
+
+    fun reviveCount(context: Context): Int = prefs(context).getInt(KEY_REVIVES, 0)
+
+    fun reviveFailCount(context: Context): Int = prefs(context).getInt(KEY_REVIVE_FAILS, 0)
+
+    /**
+     * Counts `onInterrupt` — Android telling the service to stop what it is doing.
+     *
+     * The callback has always been an empty body, so the one moment the framework explicitly says
+     * something is happening to this service went unrecorded. It is not by itself a failure (it
+     * fires for ordinary reasons too), but a spike of them either side of an outage would be the
+     * first evidence anyone has had about what precedes one.
+     */
+    fun recordInterrupt(context: Context) {
+        val p = prefs(context)
+        p.edit().putInt(KEY_INTERRUPTS, p.getInt(KEY_INTERRUPTS, 0) + 1).apply()
+    }
+
+    fun interruptCount(context: Context): Int = prefs(context).getInt(KEY_INTERRUPTS, 0)
 
     /**
      * An error the service swallowed instead of dying on. Kept (with a count) so a recurring
