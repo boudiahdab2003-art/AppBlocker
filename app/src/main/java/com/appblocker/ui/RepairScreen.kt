@@ -35,6 +35,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.appblocker.R
 import com.appblocker.data.DeviceVendor
+import com.appblocker.data.FilterState
+import com.appblocker.data.NetworkFilter
+import com.appblocker.data.OutageLog
 import com.appblocker.service.BlockerAccessibilityService
 import com.appblocker.service.ProtectionState
 import com.appblocker.service.ProtectionWatchdog
@@ -49,6 +52,8 @@ const val REPAIR_STEPS_TAG = "repair_steps"
 const val REPAIR_STATUS_TAG = "repair_status"
 const val REPAIR_NOTIFS_TAG = "repair_notification_settings"
 const val REPAIR_LIST_TAG = "repair_list"
+const val REPAIR_RECORD_TAG = "repair_record"
+const val REPAIR_SHORTCUT_TAG = "repair_shortcut"
 
 /**
  * **The screen for "it says it's on, and it isn't blocking anything".**
@@ -100,6 +105,16 @@ fun RepairScreen(
     val deviceHealthy = remember(tick) { ProtectionWatchdog.state(context) == ProtectionState.OK }
     val healthy = healthyOverride ?: deviceHealthy
     val vendor = remember { DeviceVendor.advice() }
+    // Re-read on the same tick as the status: he comes back from Settings having just ended an
+    // outage, and the count that does not include the one he just fixed reads as broken.
+    val totals = remember(tick) { OutageLog.totals(context) }
+    val lastMinutes = remember(tick) {
+        OutageLog.last(context)?.durationMs?.takeIf { it >= 0L }?.let { (it / 60_000L).toInt() }
+    }
+    val filtering = remember(tick) {
+        runCatching { NetworkFilter.read(context).state == FilterState.FILTERING }
+            .getOrDefault(false)
+    }
 
     Column(Modifier.fillMaxSize().background(appBackground()).safeDrawingPadding()) {
         EditorTopBar(title = stringResource(R.string.repair_title), onBack = onBack)
@@ -134,6 +149,45 @@ fun RepairScreen(
                     }
                 }
 
+                // What this phone has actually recorded, rather than what the app assumes about
+                // phones in general. The count was always there; the length is new, and it is the
+                // half that says what an outage costs.
+                item {
+                    AppCard(modifier = Modifier.testTag(REPAIR_RECORD_TAG)) {
+                        Text(
+                            stringResource(R.string.repair_record_title),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Spacer(Modifier.height(Space.sm))
+                        if (totals.count <= 0) {
+                            Text(
+                                stringResource(R.string.repair_record_first),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        } else {
+                            Text(
+                                stringResource(R.string.repair_record_count, totals.count),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            // Only when it was actually measured: a reboot mid-outage leaves the
+                            // duration unknown, and inventing one would be worse than saying
+                            // nothing (invariant 11).
+                            lastMinutes?.let {
+                                Spacer(Modifier.height(Space.sm))
+                                Text(
+                                    stringResource(R.string.repair_record_last, it),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
+
                 item {
                     AppCard(modifier = Modifier.testTag(REPAIR_STEPS_TAG)) {
                         Text(
@@ -153,6 +207,31 @@ fun RepairScreen(
                             onClick = { openOurAccessibilityPage(context) },
                             modifier = Modifier.testTag(REPAIR_BUTTON_TAG),
                         )
+                    }
+                }
+
+                item { ShortcutCard() }
+
+                // Only when the filter is genuinely doing something. Told he was still covered
+                // when he wasn't would be the worst sentence on this screen — see invariant 27,
+                // which is the same rule pointed the other way: never judge on an answer you
+                // don't have, and never reassure on one either.
+                if (filtering) {
+                    item {
+                        AppCard {
+                            Text(
+                                stringResource(R.string.repair_held_title),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Spacer(Modifier.height(Space.sm))
+                            Text(
+                                stringResource(R.string.repair_held_body),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
 
@@ -197,22 +276,10 @@ fun RepairScreen(
                 }
             }
 
-            item {
-                AppCard {
-                    Text(
-                        stringResource(R.string.repair_shortcut_title),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Spacer(Modifier.height(Space.sm))
-                    Text(
-                        stringResource(R.string.repair_shortcut_body),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
+            // When blocking is healthy the shortcut is still worth setting up — it is the thing
+            // that makes the NEXT one quick. When it is not healthy it has already been drawn
+            // directly under the steps, where it belongs: it is the same repair, faster.
+            if (healthy) item { ShortcutCard() }
 
             vendor.spacesWarning?.let { warning ->
                 item {
@@ -246,6 +313,36 @@ fun RepairScreen(
  * [BlockerAccessibilityService.isConnected]). Claiming it from the setting alone would reproduce
  * the exact lie this screen exists to correct.
  */
+/**
+ * The volume-key accessibility shortcut — **the only part of this screen that makes the next
+ * outage cheap.**
+ *
+ * Android will not let the app switch its own blocking back on, and it never will. What it does
+ * allow is a shortcut the user assigns himself: with it on, holding both volume keys for three
+ * seconds toggles the service from wherever he is. The repair stops being a hunt through Settings
+ * and becomes two button-holds.
+ *
+ * Extracted so it can be drawn in two places — directly under the fix steps while blocking is
+ * down, and on its own when everything is fine — without the text existing twice.
+ */
+@Composable
+private fun ShortcutCard() {
+    AppCard(modifier = Modifier.testTag(REPAIR_SHORTCUT_TAG)) {
+        Text(
+            stringResource(R.string.repair_shortcut_title),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.height(Space.sm))
+        Text(
+            stringResource(R.string.repair_shortcut_body),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
 @Composable
 private fun StatusCard(healthy: Boolean) {
     val color =

@@ -85,3 +85,33 @@ internal fun protectionState(
     val used = usedMinutesSinceLastEvent ?: return ProtectionState.OK
     return if (used >= STALE_MIN_USED_MINUTES) ProtectionState.STALLED else ProtectionState.OK
 }
+
+/**
+ * **"OK, or just too early to tell?"** — true when [protectionState] answered OK *only* because
+ * the bind grace had not run out yet.
+ *
+ * The grace exists so a cold start does not report blocking dead in the moment before Android
+ * binds us. What that missed is that **the check itself is usually what cold-starts the process**:
+ * the periodic worker, the boot receiver and the tile all run in a process WorkManager had to
+ * start first, so [SERVICE_BIND_GRACE_MS] is measured against a process two seconds old and the
+ * grace swallows the answer. The one check written to catch a watcher that never came back was, in
+ * exactly that case, certain to forgive it and wait another fifteen minutes.
+ *
+ * Worse than slow. The OK branch **clears the alert, cancels the repeat and closes the open
+ * [com.appblocker.data.OutageLog] episode** — so a cold-started check during a real outage would
+ * end the episode while blocking was still down, and the log would record a recovery that never
+ * happened. An instrument that can be fooled by the thing it measures is not an instrument.
+ *
+ * Kept as a separate predicate rather than a fifth [ProtectionState] so every screen reading the
+ * four states is untouched: this is a question only the watchdog asks, and it is about what to do
+ * next rather than about what is true.
+ */
+internal fun bindPending(
+    enabled: Boolean,
+    updatePaused: Boolean,
+    serviceConnected: Boolean?,
+    msSinceProcessStart: Long,
+): Boolean = enabled &&
+    !updatePaused &&
+    serviceConnected == false &&
+    msSinceProcessStart < SERVICE_BIND_GRACE_MS

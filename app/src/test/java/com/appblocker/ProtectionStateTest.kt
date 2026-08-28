@@ -2,8 +2,11 @@ package com.appblocker
 
 import com.appblocker.service.ProtectionState
 import com.appblocker.service.SERVICE_BIND_GRACE_MS
+import com.appblocker.service.bindPending
 import com.appblocker.service.protectionState
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -220,4 +223,79 @@ class ProtectionStateTest {
                 updatePaused = true, serviceConnected = false, msSinceProcessStart = upFor,
             ),
         )
+
+    // ---- "OK, or just too early to tell?" — see bindPending --------------------------------
+
+    /**
+     * **The hole this was written for.** A check WorkManager cold-started runs in a process a
+     * couple of seconds old, so the bind grace forgives an unbound watcher and [protectionState]
+     * answers OK — the one answer that makes the watchdog clear the alert and close the open
+     * outage episode. The state is still OK; what is new is that the watchdog can now tell this
+     * OK apart from a real one instead of acting on it.
+     */
+    @Test fun coldStartedCheckLooksHealthyButIsNotAnAnswer() {
+        val justStarted = 2_000L
+        assertEquals(
+            ProtectionState.OK,
+            protectionState(
+                true, lastEventAt = now - 60_000L, now = now, usedMinutesSinceLastEvent = 1,
+                serviceConnected = false, msSinceProcessStart = justStarted,
+            ),
+        )
+        assertTrue(
+            bindPending(
+                enabled = true, updatePaused = false,
+                serviceConnected = false, msSinceProcessStart = justStarted,
+            ),
+        )
+    }
+
+    /** Past the grace it is a real answer — STALLED — with nothing left to wait for. */
+    @Test fun pastTheGraceIsAnAnswerNotAPendingBind() =
+        assertFalse(
+            bindPending(
+                enabled = true, updatePaused = false,
+                serviceConnected = false, msSinceProcessStart = SERVICE_BIND_GRACE_MS,
+            ),
+        )
+
+    /** A bound watcher is never pending, however young the process is. */
+    @Test fun connectedIsNeverPending() =
+        assertFalse(
+            bindPending(
+                enabled = true, updatePaused = false,
+                serviceConnected = true, msSinceProcessStart = 0L,
+            ),
+        )
+
+    /**
+     * "Couldn't tell" is not "not bound" (invariant 11). A null reading must not arm a re-check,
+     * because nothing it came back to would be any more conclusive.
+     */
+    @Test fun cannotTellIsNotPending() =
+        assertFalse(
+            bindPending(
+                enabled = true, updatePaused = false,
+                serviceConnected = null, msSinceProcessStart = 0L,
+            ),
+        )
+
+    /**
+     * Switched off, and paused after an update, outrank a pending bind exactly as they outrank
+     * STALLED: both have their own answer on screen, and neither is waiting for a bind.
+     */
+    @Test fun disabledOrPausedAreNotPending() {
+        assertFalse(
+            bindPending(
+                enabled = false, updatePaused = false,
+                serviceConnected = false, msSinceProcessStart = 2_000L,
+            ),
+        )
+        assertFalse(
+            bindPending(
+                enabled = true, updatePaused = true,
+                serviceConnected = false, msSinceProcessStart = 2_000L,
+            ),
+        )
+    }
 }

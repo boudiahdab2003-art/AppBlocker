@@ -81,6 +81,10 @@ data class BugReport(
         // One profile per phone per build. Not per launch: the point is one report per *thing we
         // might have got wrong*, and that only changes when the phone or our guesses do.
         isProfile -> "profile:$device|$appVersion"
+        // One per episode, keyed on when it started. Deliberately NOT collapsed the way faults
+        // are: two outages are two outages even when they look identical, and the rate is the
+        // measurement being taken. The start stamp is what makes them distinguishable at all.
+        isOutage -> "outage:${context["outageAt"].orEmpty()}"
         note != null -> "note:${note.hashCode()}"
         else -> "$where|$errorClass|${frames.firstOrNull().orEmpty()}"
     }
@@ -94,6 +98,10 @@ data class BugReport(
      */
     val isProfile: Boolean get() = where == PROFILE_WHERE && errorClass == null && note == null
 
+    /** A report about an outage that has ended — see [OutageLog]. Detected the same way, and for
+     *  the same reason, as [isProfile]: no new field, so the queue's stored format is unchanged. */
+    val isOutage: Boolean get() = where == OUTAGE_WHERE && errorClass == null && note == null
+
     /**
      * The issue title, carrying the version — the first question about any report is "which build
      * is this?", and an issue list where every row starts "Report:" is a list you have to open
@@ -104,6 +112,12 @@ data class BugReport(
         // to make the one that isn't findable without opening twenty that are.
         isProfile -> "[$appVersion] $device — " +
             if (profileIsClean) "profile OK" else "PROFILE: something is wrong here"
+        // The length and the blame go in the title on purpose: the whole point of these reports is
+        // the pattern across them, and a list where every row reads "outage" would have to be
+        // opened issue by issue to see the very thing being measured.
+        isOutage -> "[$appVersion] STOPPED for ${context["outageMin"] ?: "?"} min" +
+            " — after ${context["outagePreceded"] ?: "?"}" +
+            if (context["outageDeaf"] == "true") ", still running" else ", process died"
         note != null -> "[$appVersion] " + note.lineSequence().first().take(60).trim()
         else -> "[$appVersion] $errorClass in $where"
     }
@@ -127,7 +141,64 @@ data class BugReport(
      * sections are always present — an absent section and an empty one look identical in an issue
      * and mean opposite things, which has already cost one round trip.
      */
-    fun body(): String = if (isProfile) profileBody() else faultBody()
+    fun body(): String = when {
+        isProfile -> profileBody()
+        isOutage -> outageBody()
+        else -> faultBody()
+    }
+
+    /**
+     * An outage's body: how long blocking was off, and the one field that says which of the three
+     * suspected causes this was.
+     *
+     * Leads with the discriminator rather than the duration, because the duration is what the
+     * owner feels and the discriminator is what can be acted on. The recent-blocks section stays —
+     * unlike a profile, the entries either side of the gap are exactly what a reader wants.
+     */
+    private fun outageBody(): String = buildString {
+        appendLine("**Blocking stopped and has now come back.** Nothing crashed — this is the")
+        appendLine("failure that cannot report itself as a fault, so the app times it instead.")
+        appendLine("The phone was unprotected for the period below.")
+        appendLine()
+        appendLine("### Which failure this was")
+        appendLine()
+        if (context["outageDeaf"] == "true") {
+            appendLine("`outageDeaf: true` — **our process was alive the whole time.** It was")
+            appendLine("bound and simply stopped receiving events, so a battery manager killing")
+            appendLine("the process is NOT the explanation here. Look at the watcher being")
+            appendLine("dropped for being slow, or the framework failing to deliver.")
+        } else {
+            appendLine("`outageDeaf: false` — **the process died and was never rebound.** Android")
+            appendLine("kept the accessibility switch reading ON, which is why nothing looked")
+            appendLine("wrong. Check `outagePreceded`: `update` means our own install did it.")
+        }
+        appendLine()
+        appendLine("### This outage")
+        appendLine()
+        appendLine("| | |")
+        appendLine("|---|---|")
+        appendLine("| Device | $device |")
+        appendLine("| Android | SDK $androidSdk |")
+        appendLine("| Version | $appVersion ($flavor) |")
+        context.toSortedMap().forEach { (k, v) -> appendLine("| $k | `$v` |") }
+        appendLine()
+        appendLine("`outageMin` is how long it was down; `outageDetectMin` is how much of that")
+        appendLine("passed before the app noticed — the second is the protection actually lost,")
+        appendLine("and shortening it does not need the cause to be known.")
+        appendLine()
+        appendLine("### Blocks either side of the gap")
+        appendLine()
+        appendLine("Newest first. The useful part is the **hole**: the last cover before blocking")
+        appendLine("stopped and the first one after it came back. Same format as a fault report.")
+        appendLine()
+        appendLine("```")
+        if (recentBlocks.isEmpty()) {
+            appendLine("(none recorded)")
+        } else {
+            recentBlocks.forEach { appendLine(it) }
+        }
+        appendLine("```")
+    }
 
     /**
      * A profile's body, which answers a different question from a fault's.
@@ -339,6 +410,22 @@ data class BugReport(
             // Enforcement state at the moment of the report.
             "quickPaused",
             "allowlist",
+            // --- The outage that just ended (see [OutageLog]) ---
+            // `foundDead` above counts outages; these describe one. How long blocking was down,
+            // and how much of that passed before the app noticed — the second is the protection
+            // actually lost, and the two are different questions.
+            "outageMin",
+            "outageDetectMin",
+            // Whether our process outlived the last event it saw. THE discriminator: false means
+            // the process was killed and never rebound, true means it was running the whole time
+            // and Android stopped delivering to it. Different causes, different fixes.
+            "outageDeaf",
+            // What had just happened — `update`, `boot` or `nothing`. One of our own three
+            // literals, never a package or a version string.
+            "outagePreceded",
+            // How many outages this install has finished, so one report carries the rate as well
+            // as the episode.
+            "outageCount",
         )
 
         /**
@@ -360,6 +447,16 @@ data class BugReport(
          */
         /** The [where] tag that marks a report as a device profile rather than a fault. */
         const val PROFILE_WHERE = "device-profile"
+
+        /**
+         * The [where] tag that marks a report as a finished outage.
+         *
+         * A third shape for the same reason the profile needed a second one: blocking stopping is
+         * not a fault Android can see. Nothing throws, so [fromThrowable] never fires; the owner
+         * has to be looking to file a note. The failure that costs the most was the one least able
+         * to report itself.
+         */
+        const val OUTAGE_WHERE = "outage"
 
         val PROFILE_CONTEXT_KEYS = setOf(
             "brand",
@@ -466,6 +563,33 @@ data class BugReport(
             device = device,
             context = sanitizeContext(context),
             recentBlocks = emptyList(),
+        )
+
+        /**
+         * A report about an outage that has **ended** — see [OutageLog].
+         *
+         * Keeps the recent blocks, unlike a profile: the entries either side of the gap are the
+         * closest thing there is to a witness. No frames, because nothing threw — that is the
+         * whole difficulty this shape exists to work around.
+         */
+        fun fromOutage(
+            appVersion: String,
+            flavor: String,
+            androidSdk: Int,
+            device: String,
+            context: Map<String, String>,
+            recentBlocks: List<String>,
+        ) = BugReport(
+            where = OUTAGE_WHERE,
+            errorClass = null,
+            frames = emptyList(),
+            note = null,
+            appVersion = appVersion,
+            flavor = flavor,
+            androidSdk = androidSdk,
+            device = device,
+            context = sanitizeContext(context),
+            recentBlocks = recentBlocks,
         )
 
         /**

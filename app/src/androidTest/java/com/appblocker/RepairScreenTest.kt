@@ -17,6 +17,8 @@ import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.appblocker.ui.REPAIR_BUTTON_TAG
 import com.appblocker.ui.REPAIR_LIST_TAG
+import com.appblocker.ui.REPAIR_RECORD_TAG
+import com.appblocker.ui.REPAIR_SHORTCUT_TAG
 import com.appblocker.ui.REPAIR_STATUS_TAG
 import com.appblocker.ui.REPAIR_STEPS_TAG
 import com.appblocker.ui.RepairScreen
@@ -148,5 +150,50 @@ class RepairScreenTest {
         compose.onNodeWithTag(REPAIR_LIST_TAG)
             .performScrollToNode(hasText("A much faster way to do it"))
         compose.onNodeWithText("A much faster way to do it").assertIsDisplayed()
+    }
+
+    /**
+     * **The shortcut card is now drawn from two different places**, and exactly one of them runs:
+     * directly under the fix steps while blocking is down, and on its own when it is healthy. That
+     * is a branch, and a branch is how a card silently goes missing — so both sides are asserted
+     * rather than whichever one happened to be in front of me.
+     *
+     * It earns the promotion. Android will never let the app switch its own blocking back on, so
+     * the volume-key shortcut is the only thing that turns this repair from a hunt through
+     * Settings into two button-holds — and it used to sit at the very bottom of this screen,
+     * below the explanation of why the app cannot help itself.
+     */
+    @Test
+    fun theShortcutIsReachableWhileBlockingIsDown() {
+        setScreen(scale = 1.5f, healthy = false)
+
+        compose.onNodeWithTag(REPAIR_LIST_TAG)
+            .performScrollToNode(hasTestTag(REPAIR_SHORTCUT_TAG))
+        compose.onNodeWithTag(REPAIR_SHORTCUT_TAG).assertIsDisplayed()
+    }
+
+    /** The other side of that branch: setting it up *before* the next outage is the whole point,
+     *  and the healthy screen is the only place anyone would ever do that calmly. */
+    @Test
+    fun theShortcutIsStillThereWhenBlockingIsHealthy() {
+        setScreen(scale = 1.5f, healthy = true)
+
+        compose.onNodeWithTag(REPAIR_LIST_TAG)
+            .performScrollToNode(hasTestTag(REPAIR_SHORTCUT_TAG))
+        compose.onNodeWithTag(REPAIR_SHORTCUT_TAG).assertIsDisplayed()
+    }
+
+    /**
+     * The card reporting what this phone has actually recorded. Its text varies — a first outage
+     * reads differently from the twentieth — so what is pinned is that the card is drawn and
+     * reachable at a large font, not which of its sentences ran.
+     */
+    @Test
+    fun theRecordCardIsReachable() {
+        setScreen(scale = 1.5f, healthy = false)
+
+        compose.onNodeWithTag(REPAIR_LIST_TAG)
+            .performScrollToNode(hasTestTag(REPAIR_RECORD_TAG))
+        compose.onNodeWithTag(REPAIR_RECORD_TAG).assertIsDisplayed()
     }
 }

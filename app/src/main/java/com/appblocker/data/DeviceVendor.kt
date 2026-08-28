@@ -137,11 +137,16 @@ object DeviceVendor {
         // HyperOS no longer does. A path with a step that does not exist is exactly how a
         // stuck person concludes the app is describing someone else's phone.
         accessibilityPathMeasured = true,
-        spacesWarning = "Switching to Second Space and back shuts AppBlocker down in this " +
-            "space, and Android's switch still says it's on. Lock AppBlocker in Recents (swipe " +
-            "down on its card), allow Auto-start, and set Battery saver to “No restrictions”. " +
-            "That makes it happen less often — it can't stop it completely, because switching " +
-            "space stops every app in this space. That's what the alert is for.",
+        // ⚠️ This used to name Second Space as THE cause. The owner ruled that out on 28 Aug
+        // 2026 — he rarely uses it now and blocking still stops — so it is listed as one cause
+        // among several rather than the explanation. Naming the wrong culprit confidently is
+        // worse than naming none: it sends someone to fix a setting that was never the problem.
+        spacesWarning = "Xiaomi phones stop background apps for several reasons — clearing " +
+            "memory, and switching to Second Space and back, which shuts AppBlocker down in " +
+            "this space. Android's switch still says it's on either way. Lock AppBlocker in " +
+            "Recents (swipe down on its card), allow Auto-start, and set Battery saver to " +
+            "“No restrictions”. That makes it happen less often — it can't stop it completely, " +
+            "and the app now times each one so the real cause can be found.",
     )
 
     private val SAMSUNG = VendorAdvice(

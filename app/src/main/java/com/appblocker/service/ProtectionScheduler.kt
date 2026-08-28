@@ -60,6 +60,52 @@ object ProtectionScheduler {
         WorkManager.getInstance(context).cancelUniqueWork(STALLED_WORK_NAME)
     }
 
+    private const val RECHECK_WORK_NAME = "protection_recheck_soon"
+    private const val RECHECK_AFTER_UPDATE_NAME = "protection_recheck_after_update"
+
+    /**
+     * Look again in three quarters of a minute, for the moment where a single check cannot tell
+     * "healthy" from "not bound yet".
+     *
+     * **Why 45 seconds.** `SERVICE_BIND_GRACE_MS` forgives an unbound watcher for the first 20
+     * seconds after our process starts. When WorkManager cold-starts that process *in order to
+     * run the check*, the process is about two seconds old — so the check lands inside its own
+     * grace and cannot answer, and before this it answered OK anyway. 45 seconds puts the retry
+     * past the grace with the same process still up.
+     *
+     * `KEEP`, not `REPLACE`: several triggers can ask for this at once — the worker, the boot
+     * receiver, an app open — and each replacement would push the answer further away, which is
+     * the opposite of the point.
+     */
+    fun scheduleRecheckSoon(context: Context) {
+        val request = OneTimeWorkRequestBuilder<ProtectionCheckWorker>()
+            .setInitialDelay(45, TimeUnit.SECONDS)
+            .setConstraints(Constraints.Builder().setRequiresBatteryNotLow(false).build())
+            .build()
+        WorkManager.getInstance(context)
+            .enqueueUniqueWork(RECHECK_WORK_NAME, ExistingWorkPolicy.KEEP, request)
+    }
+
+    /**
+     * Check again three minutes after our own update landed.
+     *
+     * Installing our APK is Android killing this process (invariant 21), and whether the
+     * accessibility service is rebound afterwards is the OEM's decision, not ours. Without this
+     * the first look after an update is whenever the 15-minute periodic tick next fires — so a
+     * rebind that never happened costs up to a quarter of an hour of unprotected phone on every
+     * release, and the owner takes several releases a week. A separate work name from
+     * [scheduleRecheckSoon] so the two cannot cancel each other: together they cover 45 seconds
+     * and three minutes after the install.
+     */
+    fun scheduleRecheckAfterUpdate(context: Context) {
+        val request = OneTimeWorkRequestBuilder<ProtectionCheckWorker>()
+            .setInitialDelay(3, TimeUnit.MINUTES)
+            .setConstraints(Constraints.Builder().setRequiresBatteryNotLow(false).build())
+            .build()
+        WorkManager.getInstance(context)
+            .enqueueUniqueWork(RECHECK_AFTER_UPDATE_NAME, ExistingWorkPolicy.REPLACE, request)
+    }
+
     private const val UPDATE_WORK_NAME = "auto_update"
 
     /**

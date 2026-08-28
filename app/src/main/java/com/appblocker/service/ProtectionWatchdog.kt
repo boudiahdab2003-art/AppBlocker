@@ -3,6 +3,7 @@ package com.appblocker.service
 import android.content.Context
 import android.os.Process
 import android.os.SystemClock
+import com.appblocker.data.OutageLog
 import com.appblocker.data.ServiceHealth
 import com.appblocker.data.SettingsStore
 import com.appblocker.ui.hasUsageAccess
@@ -16,8 +17,28 @@ import com.appblocker.ui.hasUsageAccess
  */
 object ProtectionWatchdog {
 
+    /**
+     * How many "too early to tell" answers in a row before the watchdog stops waiting and calls
+     * it. Three, at 45 seconds apart, is a little over two minutes of a phone that kills our
+     * process faster than we can finish looking at it — which is not a phone to keep quiet for.
+     */
+    private const val MAX_BIND_DEFERRALS = 3
+
+    /**
+     * A single look at blocking's health: the state every screen reads, plus whether that state
+     * was answered by the bind grace rather than by evidence — see [bindPending].
+     *
+     * Both come out of **one** set of readings on purpose. Asking the same questions twice, once
+     * for the state and once for the grace, is the shape that has cost this codebase more bugs
+     * than any other: two sources of truth that drift.
+     */
+    internal data class Reading(val state: ProtectionState, val bindPending: Boolean)
+
     /** The current health of blocking, for the watchdog and for the app's own status row. */
-    internal fun state(context: Context, now: Long = System.currentTimeMillis()): ProtectionState {
+    internal fun state(context: Context, now: Long = System.currentTimeMillis()): ProtectionState =
+        read(context, now).state
+
+    internal fun read(context: Context, now: Long = System.currentTimeMillis()): Reading {
         val enabled = AccessibilityUtil.isEnabled(context)
         val lastEventAt = ServiceHealth.lastEventAt(context)
         // Usage access is optional, so this can be null — protectionState then never says STALLED.
@@ -31,15 +52,20 @@ object ProtectionWatchdog {
         } else {
             null
         }
-        return protectionState(
-            enabled, lastEventAt, now, usedMinutes,
-            updatePaused = SettingsStore.updatePaused(context),
-            // The conclusive answer, available because the watcher shares this process — see
-            // BlockerAccessibilityService.isConnected.
-            serviceConnected = BlockerAccessibilityService.isConnected(),
-            // Monotonic, from the OS rather than a field of our own (invariant 9).
-            msSinceProcessStart =
-                SystemClock.elapsedRealtime() - Process.getStartElapsedRealtime(),
+        val updatePaused = SettingsStore.updatePaused(context)
+        // The conclusive answer, available because the watcher shares this process — see
+        // BlockerAccessibilityService.isConnected.
+        val connected = BlockerAccessibilityService.isConnected()
+        // Monotonic, from the OS rather than a field of our own (invariant 9).
+        val sinceStart = SystemClock.elapsedRealtime() - Process.getStartElapsedRealtime()
+        return Reading(
+            state = protectionState(
+                enabled, lastEventAt, now, usedMinutes,
+                updatePaused = updatePaused,
+                serviceConnected = connected,
+                msSinceProcessStart = sinceStart,
+            ),
+            bindPending = bindPending(enabled, updatePaused, connected, sinceStart),
         )
     }
 
@@ -54,12 +80,40 @@ object ProtectionWatchdog {
         // open from the resume path. The thing that tells the user blocking has stopped must not
         // itself be able to take the app down. Failures land in ServiceHealth, which the Profile
         // screen now shows.
-        when (state(context)) {
+        val reading = read(context)
+        // Too early to tell: our process is seconds old and Android has not bound the watcher
+        // yet — the normal shape of a check that WorkManager cold-started in order to run. There
+        // is nothing here to report and, more importantly, nothing to CLEAR: falling into the OK
+        // branch would cancel a live alert and close an open outage episode while blocking was
+        // still down. Come back once the grace has run out. See bindPending.
+        //
+        // Capped, because deferring is a silence. The re-check normally lands in this same
+        // process 45s later and answers properly; the count only climbs if every check gets a
+        // freshly killed process, and that phone is the one that most needs telling. Past the cap
+        // we stop being polite and let the verdict through.
+        val deferrals = SettingsStore.bindDeferrals(context)
+        if (reading.bindPending && deferrals < MAX_BIND_DEFERRALS) {
+            SettingsStore.setBindDeferrals(context, deferrals + 1)
+            ProtectionScheduler.scheduleRecheckSoon(context)
+            return@guarded
+        }
+        // A real verdict follows, so the run of deferrals is over.
+        if (deferrals != 0) SettingsStore.setBindDeferrals(context, 0)
+        // ⚠️ Past the cap, a pending bind must become the verdict it was standing in for —
+        // switched on and not running — NOT the OK that `protectionState` returns while the grace
+        // holds. Falling through to that OK would cancel the alert and close the open episode,
+        // which is the whole failure this deferral exists to avoid.
+        val state = if (reading.bindPending) ProtectionState.STALLED else reading.state
+        when (state) {
             ProtectionState.OK -> {
                 SettingsStore.clearProtectionOffSince(context)
                 ProtectionNotifier.cancel(context)
                 ProtectionScheduler.cancelStalledRepeat(context)
                 SettingsStore.setFoundDeadPending(context, false)
+                // Blocking is back. Closing the episode is what produces its duration, which is
+                // the reason the report goes out at the END of an outage and not the start.
+                // Returns null in the ordinary case, where nothing was down.
+                OutageLog.end(context)?.let { BugReportSender.reportOutage(context, it) }
             }
             ProtectionState.OFF -> ProtectionNotifier.notifyDisabled(context, force)
             // Switched on, but nothing has reached the watcher for hours of active use — the
@@ -73,6 +127,10 @@ object ProtectionWatchdog {
                 if (!SettingsStore.foundDeadPending(context)) {
                     SettingsStore.setFoundDeadPending(context, true)
                     ServiceHealth.recordFoundDead(context)
+                    // The same transition, so the count and the log can never disagree about how
+                    // many outages there have been. The count says how often; this says how long,
+                    // how late we noticed, and what had just happened — see OutageLog.
+                    OutageLog.begin(context, ServiceHealth.lastEventAt(context))
                 }
                 ProtectionNotifier.notifyStalled(context, force)
                 // Come back in five minutes and float it again. The 15-minute periodic check is

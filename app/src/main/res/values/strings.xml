@@ -885,7 +885,13 @@
     <!-- The "blocking has stopped" repair screen. -->
     <string name="repair_title">Blocking has stopped</string>
     <string name="repair_what_title">What happened</string>
-    <string name="repair_what_body_1">Your phone shut AppBlocker down. On Xiaomi this usually happens when you switch between spaces — switching space stops every app in the space you left, and your phone doesn\'t always start the blocker again when you come back.</string>
+    <string name="repair_what_body_1">Your phone stopped the blocker, and more than one thing does that: clearing memory in the background, the moment right after AppBlocker updates itself, or — on Xiaomi — switching between spaces. Which one it is on your phone is not something the app should be guessing at, so it now times every single stoppage and records the shape of it. That is how this gets fixed rather than explained.</string>
+    <string name="repair_record_title">What this phone has recorded</string>
+    <string name="repair_record_count">Times blocking has stopped on this phone: %1$d</string>
+    <string name="repair_record_last">The last one lasted about %1$d minutes before it was back.</string>
+    <string name="repair_record_first">This is the first one the app has timed. From now on it records how long each stoppage lasts, and how much of that goes by before you are told.</string>
+    <string name="repair_held_title">What kept working</string>
+    <string name="repair_held_body">The family filter sits underneath the app, in your phone\'s own DNS, so it carried on refusing bad sites for the whole time this was down. What stopped was app blocking, schedules and the danger hour — not everything.</string>
     <string name="repair_what_body_2">Android still shows the switch as on, which is why it looked fine and blocked nothing. That switch remembers what you chose — it doesn\'t check whether the blocker is actually running. Now the app checks, and tells you.</string>
     <string name="repair_steps_title">Switch it back on</string>
     <string name="repair_step_1">Tap the button below — it opens AppBlocker\'s own page.</string>

@@ -625,6 +625,50 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     **The shape to grep for: a field described as "refreshed periodically" whose refresh sits
     inside a callback that is itself conditional.**
 
+30. **A grace measured from an event the check itself causes will forgive every time.**
+    `protectionState` refuses to call an unbound watcher dead until `SERVICE_BIND_GRACE_MS` (20s)
+    has passed since **our process started** — a sound rule against crying wolf in the moment
+    Android takes to bind us. What it missed is who starts that process. The 15-minute worker, the
+    boot receiver and the quick-settings tile all run in a process **WorkManager had to start in
+    order to run them**, so `msSinceProcessStart` is one or two seconds and the grace swallows the
+    answer. The one check written to catch a watcher that never came back was, in precisely the
+    case it was written for, certain to forgive it and wait another fifteen minutes.
+
+    It was also about to corrupt a measurement. `OK` is not a passive verdict in that branch: it
+    **clears the alert, cancels the stalled repeat and closes the open `OutageLog` episode**. A
+    cold-started check landing during a real outage would have ended the episode while blocking
+    was still down — a recovery that never happened, recorded as fact.
+
+    Fixed with `bindPending`, a separate predicate rather than a fifth `ProtectionState`, so every
+    screen reading the four states is untouched: it answers "what should the watchdog do next",
+    not "what is true". While it holds, the watchdog does nothing at all and re-checks in 45s.
+
+    Same family as invariant 11 (an answer that has not arrived is not an answer) and invariant 29
+    (an answer that stopped being asked for), pointed at time rather than data. **The shape to
+    grep for: a threshold measured against a clock that the act of measuring resets.**
+
+31. **Instrument the interval, not the crossing — a second time.** `ServiceHealth.foundDeadCount`
+    counts outages and keeps nothing else: no start, no duration, no what-preceded-it. So when the
+    owner said blocking stops "frequently, more than my other blockers" (28 Aug 2026), there was
+    no value anywhere on the phone that could agree with him, disagree with him, or say whether a
+    fix had changed anything. That is **invariant 26 repeating itself on a different dial** —
+    `SilenceLog` kept a boolean where it had been handed an interval; this kept a count.
+
+    Recorded as a recurrence rather than folded into 26, because the repeat says something 26 did
+    not: this mistake is neither rare nor obvious at the time. Both instruments looked complete
+    when they were written, and both answered the question being asked that week.
+
+    ⚠️ **The Second Space explanation is retired.** `RepairScreen`, `DeviceVendor.spacesWarning`
+    and the device-quirk entry below all named a space switch as *the* cause. The owner ruled it
+    out on 28 Aug 2026 — he rarely uses it now and blocking still stops — while confirming the
+    symptom exactly (the switch still reads ON; only an off/on toggle revives it) and confirming
+    that Auto-start, "No restrictions" and a Recents lock are all already set. **Naming the wrong
+    cause confidently is worse than naming none**: it sends someone to fix a setting that was
+    never the problem, and it stops anyone looking further. Cause currently UNKNOWN. `OutageLog`
+    exists to find it, and `Episode.aliveButDeaf` is the discriminator that splits the candidates:
+    the process was killed and never rebound, or it was alive the whole time and stopped being
+    delivered to.
+
 ## Device quirks these invariants exist for
 
 - Gesture-nav Home on HyperOS often emits **no accessibility event at all**, so the foreground
@@ -681,6 +725,11 @@ than naming packages. What was not brand-neutral was everything written *around*
   `GuardPackages.INSTALLERS`, so an OEM we guessed wrong is *stated* rather than silently
   unguarded. That is the cheap substitute for owning five phones, and the first place to look when
   someone reports blocking not working on a brand nobody here has.
+- ⚠️ **SUPERSEDED as an explanation (28 Aug 2026) — see invariant 31.** The symptom below is
+  exactly right and still happens; the *cause* named here is not the owner's. He rarely uses
+  Second Space now and blocking still stops, with every keep-alive setting already granted. Read
+  what follows as one way the watcher dies, not the way. `OutageLog` is what will name the real
+  one.
 - **A space switch kills the watcher, and Android's toggle keeps saying "on" (20 Aug 2026).**
   Reported by the owner: after switching to Xiaomi's Second Space and back, blocking does nothing
   while Settings ▸ Accessibility still shows AppBlocker enabled, and only toggling it off and on
