@@ -133,6 +133,15 @@ two mistake-shapes every past bug reduced to, the grep-by-kind audit method that
 areas have already been swept, and which are still untouched. Keep its "Swept so far" /
 "Not yet swept" sections updated.
 
+**Some of the invariants now check themselves.** `app/src/test/java/com/appblocker/CodeShapeTest.kt`
+reads the shipped `.kt` sources and fails the build when a known bug *shape* comes back — a runnable
+re-posting itself inside its own guard, an update-pause flag written on its own, wall-clock
+subtraction in `ServiceHealth`, a raw `realBrowserPackages` read. It exists because the 29 Aug 2026
+sweep found four bugs whose rule was already written down and had simply never been grepped for.
+**Do not widen a failing check to make it pass** — allow-list the genuinely correct case with the
+reason, the way the existing entries do. And when a hunt finds a shape rather than a one-off, ask
+whether it belongs here instead of in another paragraph.
+
 Two things that make this worth doing: the watcher has **no test coverage** and can't have any
 as written, and **under-blocking is invisible to the owner** — he notices a block screen that
 shouldn't be there, never one that failed to appear. Assume his bug reports under-represent
