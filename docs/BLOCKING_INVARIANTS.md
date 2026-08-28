@@ -819,6 +819,39 @@ than naming packages. What was not brand-neutral was everything written *around*
   app, so Setup names the feature and says so — an unblocked app the user believes is blocked is
   the invisible under-block in its purest form.
 
+## Rules that check themselves — `CodeShapeTest`
+
+⚠️ **Read this before adding another invariant to the list below.**
+
+The 29 Aug 2026 sweep found four bugs whose rule was *already in this file*, and two of them had a
+correct sibling implementation forty lines away in the same source file. That is this document's own
+diagnosis turned on itself: *"the rule had been written down as a fact about one screen and never
+grepped for."* Writing invariant 36 changes nothing if invariants 9 and 29 did not stop 32-35.
+
+So the four shapes from that sweep are enforced by `app/src/test/java/com/appblocker/CodeShapeTest.kt`,
+which reads the shipped `.kt` files and fails the build when a shape returns:
+
+- a `Runnable` re-posting itself **inside** its own `guarded {}` / `runCatching {}` (invariant 35),
+- either update-pause flag written outside `SettingsStore.writeUpdatePause` (invariant 32),
+- wall-clock **subtraction** anywhere in `ServiceHealth` (invariant 9 — storing an instant is fine,
+  measuring an interval with one is not),
+- `in realBrowserPackages` read raw instead of through `isRealBrowserPkg` (invariant 34).
+
+Each was proved by putting the bug back and watching the check go red. **The first version of the
+runnable check did not fire** — the regex anchored to the end of the opener instead of scanning back
+to the brace — which is the same lesson as the block-screen matrix test that first ran against empty
+layouts: *a check that cannot fail is worse than none, and the only way to know is to break the code
+on purpose.*
+
+**When one of these fails, do not widen it.** Same rule as `BugReportTest`'s key tripwire: the check
+exists because the mistake looks reasonable while you are making it. If a genuinely correct new case
+does not fit, add it to that check's allow-list with the reason written next to it.
+
+**The standing question for every future invariant: can this be a check instead of a paragraph?**
+Not all of them can — most of this file is judgement, and judgement does not compile. But the ones
+with a greppable shape should be, and each entry below that ends with "the shape to grep for" is a
+candidate somebody has already done the hard half of.
+
 ## The audit method (this is what "bug hunt" means)
 
 Do not read the file narratively. Enumerate call sites by *kind*, then check each against the
