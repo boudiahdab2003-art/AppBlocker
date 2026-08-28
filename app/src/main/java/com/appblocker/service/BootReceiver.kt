@@ -17,6 +17,13 @@ class BootReceiver : BroadcastReceiver() {
         val appContext = context.applicationContext
         if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
             UpdatePause.checkVersionChange(appContext)
+            // Look again at three minutes. The check below runs seconds after the install, inside
+            // the bind grace, so it cannot yet tell a rebound watcher from one that will never
+            // come back — and whether Android rebinds us after our own install is the OEM's
+            // decision, not ours. Without this the next look is the 15-minute periodic tick, on
+            // every single release. (`scheduleRecheckSoon` covers 45 seconds and is armed by the
+            // check itself when it finds the grace still running.)
+            ProtectionScheduler.scheduleRecheckAfterUpdate(appContext)
         }
         ProtectionScheduler.ensureScheduled(appContext)
         ProtectionWatchdog.checkAndNotify(appContext)

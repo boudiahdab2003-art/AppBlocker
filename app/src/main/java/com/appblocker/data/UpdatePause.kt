@@ -46,6 +46,12 @@ object UpdatePause {
             // that. See SilentInstaller.
             val automatic = SettingsStore.autoInstalled(context)
             SettingsStore.setAutoInstalled(context, false)
+            // Stamp the install for OutageLog. Installing our own APK IS Android killing this
+            // process (invariant 21), and the owner installs releases several times a week —
+            // which is the one thing that makes this app different from the other blockers he
+            // compares it to. Whether that is what keeps stopping him is a question no amount of
+            // reasoning settles; this is the field that settles it.
+            OutageLog.noteVersionChange(context)
             // A version change is the only proof an install actually landed, so this is where the
             // "already tried this one" note is torn up — whoever installed it. Leaving it would
             // make the next release look like the one that was already declined.

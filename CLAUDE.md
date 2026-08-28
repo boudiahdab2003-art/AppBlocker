@@ -64,6 +64,17 @@ layer raised a cover (`why=`), what was really on screen (`window=match/other/bl
 it covered our own UI, and whether it counted. The entries *after* the complaint are usually the
 owner going to Settings to investigate — read the log backwards and find the block he means.
 
+Three shapes of issue arrive there now, answering different questions. A **fault** is a crash or a
+swallowed error. A **profile** (`profile OK` / `PROFILE: something is wrong here`) is this phone
+confirming or denying what the app assumed about its brand. An **outage** (`STOPPED for N min`) is
+blocking having stopped and come back, filed automatically when it *ends* — because that failure
+cannot produce a fault: nothing throws when Android stops delivering events. Read one against
+`data/OutageLog.kt`. **`outageDeaf` is the field to read first** — `false` means the process was
+killed and never rebound, `true` means it was alive the whole time and stopped being delivered to;
+different causes, different fixes. `outagePreceded` tests the standing hypothesis that the owner's
+own frequent self-updates are what kill it. ⚠️ **The cause is not known yet, and Second Space is
+NOT it** — he ruled that out on 28 Aug 2026 (invariant 31). Don't repeat the old explanation to him.
+
 **Then send him to Profile ▸ "What the blocker sees"** (`ui/DiagnosticsScreen.kt`). It is the first
 tool for any "it blocked X" / "it didn't block Y" report: it names this phone's brand, the uninstall
 screen, whether the keep-alive deep link resolves, which apps count as browsers, and — separately —

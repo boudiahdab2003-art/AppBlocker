@@ -513,6 +513,27 @@ object SettingsStore {
     fun setFoundDeadPending(context: Context, value: Boolean) =
         prefs(context).edit().putBoolean(KEY_FOUND_DEAD_PENDING, value).apply()
 
+    private const val KEY_BIND_DEFERRALS = "protection_bind_deferrals"
+
+    /**
+     * How many checks in a row have answered "too early to tell" (see
+     * `com.appblocker.service.bindPending`) instead of a verdict.
+     *
+     * **A safety cap on a deferral, because the deferral is a silence.** Normally this never gets
+     * past one: the re-check lands 45 seconds later in the *same* process, which is by then well
+     * past the bind grace, so it gives a real answer. It only climbs if every check runs in a
+     * freshly started process — a phone killing us within 45 seconds, over and over. That phone is
+     * exactly the one that most needs to be told blocking has stopped, and it is the one where
+     * waiting politely forever would say nothing at all. Past the cap the watchdog stops deferring
+     * and calls it.
+     *
+     * Reset on any real verdict, so the count means "in a row" rather than "ever".
+     */
+    fun bindDeferrals(context: Context): Int = prefs(context).getInt(KEY_BIND_DEFERRALS, 0)
+
+    fun setBindDeferrals(context: Context, value: Int) =
+        prefs(context).edit().putInt(KEY_BIND_DEFERRALS, value).apply()
+
     // ---- the family DNS filter (see NetworkFilter) ----------------------------------------
 
     private const val KEY_NET_SEEN = "net_filter_seen"

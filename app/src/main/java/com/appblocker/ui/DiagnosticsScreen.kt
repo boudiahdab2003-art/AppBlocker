@@ -47,6 +47,7 @@ import com.appblocker.data.DangerZone
 import com.appblocker.data.DeviceBoot
 import com.appblocker.data.FilterState
 import com.appblocker.data.NetworkFilter
+import com.appblocker.data.OutageLog
 import com.appblocker.data.SilenceLog
 import com.appblocker.data.UninstallGuardVerdict
 import com.appblocker.data.WatcherDiagnostics
@@ -478,6 +479,54 @@ private fun readSnapshot(context: Context): Snapshot {
                 ),
             )
         }
+        // How LONG, not just how often. The count above answers "is this getting better"; these
+        // answer "what did it cost", which is the question the count could never reach - see
+        // OutageLog, and invariant 26, which is the same mistake this is undoing.
+        OutageLog.totals(context).takeIf { it.count > 0 }?.let { totals ->
+            add(
+                Fact(
+                    "Time with no blocking: ${minutesLabel(totals.totalMs)} in total",
+                    "Added up across every stoppage since this was first measured. The longest " +
+                        "single one was ${minutesLabel(totals.longestMs)}. Each one is timed " +
+                        "and sent, so what keeps causing them can be found instead of guessed.",
+                    good = null,
+                ),
+            )
+        }
+        OutageLog.last(context)?.let { last ->
+            add(
+                Fact(
+                    "The last stoppage: " +
+                        if (last.durationMs < 0) "length unknown" else minutesLabel(last.durationMs),
+                    buildString {
+                        append(
+                            if (last.aliveButDeaf) {
+                                "The app was still running the whole time - your phone stopped " +
+                                    "sending it what it needs to see."
+                            } else {
+                                "The app itself was shut down and never restarted."
+                            },
+                        )
+                        append(
+                            when (last.precededBy) {
+                                OutageLog.Preceded.UPDATE ->
+                                    " It started right after AppBlocker updated itself."
+                                OutageLog.Preceded.BOOT ->
+                                    " It started right after the phone restarted."
+                                else -> " Nothing in particular happened just before it."
+                            },
+                        )
+                        if (last.detectedAfterMs >= 0) {
+                            append(
+                                " You were told about it ${minutesLabel(last.detectedAfterMs)} " +
+                                    "after it began.",
+                            )
+                        }
+                    },
+                    good = null,
+                ),
+            )
+        }
         // The layer that keeps working when everything above it has been killed, so it belongs on
         // the card that answers "is anything protecting me at all". Reports the STATE only - never
         // the resolver, never a thing it resolved.
@@ -744,6 +793,23 @@ private fun appLabel(context: Context, pkg: String): String = runCatching {
  */
 private fun sinceLabel(now: Long, at: Long): String =
     if (at <= 0L) "not yet" else agoLabel(now - at)
+
+/**
+ * A duration, as "under a minute" / "7 min" / "3 h 12 min" — a *length of time*, not a moment,
+ * which is why it does not go through [agoLabel] and its "ago".
+ *
+ * Rounds rather than truncates past the hour: "2 h" for anything under two and a half is closer to
+ * what happened than a number of minutes nobody can hold in their head.
+ */
+internal fun minutesLabel(millis: Long): String = when {
+    millis < 60_000L -> "under a minute"
+    millis < 3_600_000L -> "${millis / 60_000L} min"
+    else -> {
+        val hours = millis / 3_600_000L
+        val mins = (millis % 3_600_000L) / 60_000L
+        if (mins == 0L) "$hours h" else "$hours h $mins min"
+    }
+}
 
 /** "just now" / "4 min ago" / "2 h ago" — enough to tell a live reading from a stale one. */
 internal fun agoLabel(millis: Long): String = when {

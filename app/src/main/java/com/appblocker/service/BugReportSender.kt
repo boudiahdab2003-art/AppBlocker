@@ -19,6 +19,7 @@ import com.appblocker.data.ServiceHealth
 import com.appblocker.data.DeviceBoot
 import com.appblocker.data.FilterState
 import com.appblocker.data.NetworkFilter
+import com.appblocker.data.OutageLog
 import com.appblocker.data.PinStore
 import com.appblocker.data.QuickSession
 import com.appblocker.data.SettingsStore
@@ -248,6 +249,47 @@ object BugReportSender {
             )
         }
     }
+
+    /**
+     * Sends a **finished** outage — how long blocking was off, and what shape the failure had.
+     *
+     * The third report shape, and it exists for the same reason [reportDeviceProfile] does: this
+     * failure cannot produce a fault. Nothing throws when Android stops delivering events, so
+     * [report] never fires, and a note only exists if the owner happens to be looking. The failure
+     * that costs the most was the one least able to report itself.
+     *
+     * Called from the watchdog's OK branch, which usually runs in a background worker, so there is
+     * no flush here. It goes out on the next app open — which after an outage is soon, because
+     * opening the app is how he fixes it.
+     */
+    fun reportOutage(context: Context, episode: OutageLog.Episode) {
+        if (!enabled()) return
+        runCatching {
+            BugReportQueue.enqueue(
+                context,
+                BugReport.fromOutage(
+                    appVersion = BuildConfig.VERSION_NAME,
+                    flavor = BuildConfig.FLAVOR,
+                    androidSdk = Build.VERSION.SDK_INT,
+                    device = describeDevice(),
+                    context = appContext(context) + mapOf(
+                        // Seconds rather than millis: this only has to identify the episode and
+                        // stay readable, and the context cap is 24 characters.
+                        "outageAt" to "${episode.startedAt / 1000}",
+                        "outageMin" to minutesOrUnknown(episode.durationMs),
+                        "outageDetectMin" to minutesOrUnknown(episode.detectedAfterMs),
+                        "outageDeaf" to "${episode.aliveButDeaf}",
+                        "outagePreceded" to episode.precededBy,
+                        "outageCount" to "${OutageLog.totals(context).count}",
+                    ),
+                    recentBlocks = BlockLog.recent(context),
+                ),
+            )
+        }
+    }
+
+    /** Whole minutes, or `?` for the values [OutageLog] marks unmeasurable with -1. */
+    private fun minutesOrUnknown(ms: Long) = if (ms < 0) "?" else "${ms / 60_000}"
 
     /** Records what the owner typed, and tries to send it straight away. */
     fun reportNote(context: Context, note: String) {
