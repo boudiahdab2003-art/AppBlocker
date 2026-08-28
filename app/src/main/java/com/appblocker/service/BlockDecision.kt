@@ -339,3 +339,42 @@ internal fun locationFixUsable(
     val ageMs = (nowElapsedNanos - fixElapsedNanos) / 1_000_000L
     return ageMs in 0..maxAgeMs
 }
+
+/**
+ * **Which app to re-decide when the rules finally arrive after a rebind.**
+ *
+ * Every rebind — a boot, an update, a Second Space switch, the heartbeat reviving a deaf watcher —
+ * opens a window in which Room has not emitted yet. `RuleSnapshot`/`blockedSnapshot` covers it for
+ * HARD blocks, read synchronously on connect. **A schedule or a daily limit is not in that
+ * snapshot**, so during the window they read as "no reason" (invariant 11: not told is not the same
+ * as nothing).
+ *
+ * That window closing was never wired to anything. The flow's first emission set `rules`,
+ * `schedules` and `rulesLoaded` and stopped there, and no re-check tick could be waiting either,
+ * because `recheckMatters` decides by reading the very state that had not arrived. So an app opened
+ * inside the window stayed open until the user left it and came back — for a scheduled app, that is
+ * the whole of the block.
+ *
+ * @param cached the watcher's `lastForegroundPkg`, which is null when the service was revived
+ *   underneath an app that never generated a fresh window-state event — the outage-recovery case,
+ *   and the one that matters most here.
+ * @param actual what `rootInActiveWindow` reports right now, or null when the root is unreadable.
+ * @param own our own package: our cover is a window too, and it can report as the active one.
+ * @param actualIsTransient whether [actual] is a shade/keyboard/volume surface — those sit OVER an
+ *   app and say nothing about which app it is, so they are never adopted (the same rule the
+ *   re-check tick learned the hard way).
+ * @return the package to re-decide, or null when there is nothing trustworthy to act on. Answering
+ *   null is always safe here: the next window-state event decides normally.
+ */
+internal fun pkgToRedecide(
+    cached: String?,
+    actual: String?,
+    own: String,
+    actualIsTransient: Boolean,
+): String? {
+    // What is on screen beats what we remember — the cache may predate the rebind entirely.
+    if (actual != null && actual != own && !actualIsTransient) return actual
+    // Nothing readable, or only our own window / a transient surface: fall back to the cache. It
+    // can be stale, but handleAppBlock re-confirms the foreground before drawing anything.
+    return cached?.takeIf { it != own }
+}

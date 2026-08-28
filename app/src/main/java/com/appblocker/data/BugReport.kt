@@ -186,6 +186,11 @@ data class BugReport(
         appendLine("passed before the app noticed — the second is the protection actually lost,")
         appendLine("and shortening it does not need the cause to be known.")
         appendLine()
+        appendLine("`outageEnded` says how it stopped. Only **recovered** means blocking came back:")
+        appendLine("**switched-off** is him doing the repair by hand, **paused** is an update landing")
+        appendLine("mid-outage. Counting either as a recovery would flatter the app in the one log")
+        appendLine("written to judge it.")
+        appendLine()
         appendLine("### Blocks either side of the gap")
         appendLine()
         appendLine("Newest first. The useful part is the **hole**: the last cover before blocking")
@@ -395,6 +400,13 @@ data class BugReport(
             // nothing". `foundDead` counts how many times that has happened on this install.
             "serviceRunning",
             "foundDead",
+            // "12/2" — heartbeat nudges that found the watcher silent for three minutes, and how
+            // many of those nudges threw. The inside view of `outageDeaf`: a climbing first number
+            // is a watcher that keeps going deaf while running, a flat zero alongside outages is
+            // one that is being killed outright. Two of our own integers, nothing from the phone.
+            "revives",
+            // How many times Android called onInterrupt on the watcher. Our own integer.
+            "interrupts",
             "healthErrors",
             "lastErrorWhere",
             // Minutes since the phone booted. Separates "the service never started after a
@@ -423,6 +435,10 @@ data class BugReport(
             // What had just happened — `update`, `boot` or `nothing`. One of our own three
             // literals, never a package or a version string.
             "outagePreceded",
+            // How it stopped — `recovered`, `switched-off` or `paused`. Only the first means
+            // blocking came back; without this the other two read as recoveries and flatter the
+            // app in the one log written to judge it. Again one of our own literals.
+            "outageEnded",
             // How many outages this install has finished, so one report carries the rate as well
             // as the episode.
             "outageCount",

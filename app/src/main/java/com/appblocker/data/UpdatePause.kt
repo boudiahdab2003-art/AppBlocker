@@ -28,6 +28,42 @@ import kotlinx.coroutines.launch
  */
 object UpdatePause {
 
+    /**
+     * The two flags as one value. They are only ever meaningful together, and treating them as one
+     * is what stops half a decision surviving on its own — see [SettingsStore.writeUpdatePause].
+     *
+     * @param paused blocking is off, waiting for the Reactivate tap.
+     * @param pending a version change has been noticed but not yet turned into a decision.
+     */
+    data class PauseState(val paused: Boolean, val pending: Boolean)
+
+    /**
+     * Turning a pending intent into a decision. Pure, so the rule is testable.
+     *
+     * A pending pause arms unless a Strict session is running (the session keeps blocking on, so
+     * the pause is dropped rather than the session being cleared). Either way the intent is
+     * **consumed** — that is the half that used to be able to survive on its own.
+     */
+    internal fun resolve(state: PauseState, strictRunning: Boolean): PauseState = PauseState(
+        paused = state.paused || (state.pending && !strictRunning),
+        pending = false,
+    )
+
+    /**
+     * The Reactivate tap.
+     *
+     * ⚠️ **It must clear the pending intent too.** Clearing only `paused` left the intent behind,
+     * and [checkVersionChange] re-reads it on every service connect — so the next boot, update,
+     * space switch or revive quietly switched blocking off again, minutes or days after the owner
+     * had turned it back on, with the accessibility switch still reading ON. Invariant 21 from the
+     * other direction: not knowledge that died too young, but an instruction that lived too long.
+     */
+    internal fun reactivate(): PauseState = PauseState(paused = false, pending = false)
+
+    /** Lifts the pause the owner is looking at, intent and all. */
+    fun reactivate(context: Context) =
+        SettingsStore.writeUpdatePause(context, reactivate())
+
     /** Call at every app/service start: detects a version change and arms the pause.
      *  The very first run just records the version — a fresh install has nothing to pause
      *  (which also means the update INTO the first version carrying this feature is
@@ -83,15 +119,21 @@ object UpdatePause {
      * process died before it landed is retried until it does. Arming the pause asynchronously is
      * safe in a way that clearing a Strict session never was: the pause switches blocking OFF, so
      * being a few milliseconds late is harmless, while being wrong is not.
+     *
+     * ⚠️ **The decision and its consumption are one write.** They used to be two `apply()` calls
+     * with [strictSessionRunning]'s Room open between them, in a broadcast receiver's process —
+     * killable at exactly that point. Surviving half-applied left the intent armed after the pause
+     * had been lifted, and this function runs on every reconnect, so blocking went off again on
+     * its own. See [SettingsStore.writeUpdatePause].
      */
     private fun resolvePendingPause(context: Context) {
         if (!SettingsStore.updatePausePending(context)) return
         val app = context.applicationContext
         CoroutineScope(Dispatchers.IO).launch {
-            if (!strictSessionRunning(app)) SettingsStore.setUpdatePaused(app, true)
-            // Consumed only after the decision above has been made, so an interrupted run
-            // re-decides rather than silently dropping the pause.
-            SettingsStore.setUpdatePausePending(app, false)
+            val strict = strictSessionRunning(app)
+            // Re-read rather than reusing the value the early return above tested: the tap that
+            // lifts a pause can land while the database read above is in flight.
+            SettingsStore.writeUpdatePause(app, resolve(SettingsStore.updatePauseState(app), strict))
         }
     }
 

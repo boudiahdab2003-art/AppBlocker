@@ -141,6 +141,9 @@ class BlockerAccessibilityService : AccessibilityService() {
      * is blocked outright.
      */
     @Volatile private var realBrowserPackages: Set<String> = emptySet()
+
+    /** When [isRealBrowserPkg] last re-read an empty browser set, monotonically. */
+    @Volatile private var lastRealBrowserRefreshAt = Long.MIN_VALUE / 2
     // Home-screen (launcher) apps — never keyword-scanned, see findLauncherPackages(this).
     @Volatile private var launcherPackages: Set<String> = emptySet()
 
@@ -531,7 +534,16 @@ class BlockerAccessibilityService : AccessibilityService() {
                     // Re-posting the info we already hold is a no-op on a healthy service, so
                     // this is safe to do blind; runCatching because an OEM throwing here must
                     // not take the heartbeat down with it.
-                    runCatching { serviceInfo = serviceInfo }
+                    //
+                    // ⚠️ And it is COUNTED now. This is the app's only self-repair and it used to
+                    // leave no trace whatsoever, so nothing could say whether the owner's watcher
+                    // goes quiet often, or whether the nudge ever helps. It is the inside view of
+                    // OutageLog's `aliveButDeaf`: a climbing count is a watcher that keeps going
+                    // deaf while running, a flat zero alongside outages is one being killed
+                    // outright. A nudge that THROWS is evidence too — the binding is already gone,
+                    // not merely quiet.
+                    val worked = runCatching { serviceInfo = serviceInfo }.isSuccess
+                    ServiceHealth.recordRevive(applicationContext, worked)
                 }
             }
             handler.postDelayed(this, HEARTBEAT_MS)
@@ -550,10 +562,29 @@ class BlockerAccessibilityService : AccessibilityService() {
     // schedule starting (or ending — the same tick releases a stale block overlay), a
     // Pomodoro break starting/ending, a Timer or Strict session running out.
     private val recheckRunnable = object : Runnable {
-        override fun run() = guarded(applicationContext, "recheck") { runGuarded() }
+        /**
+         * ⚠️ **The re-post lives OUTSIDE the guard**, the way [heartbeatRunnable]'s does.
+         *
+         * It used to be the last line *inside* `runGuarded`, so a single swallowed throw anywhere
+         * above it ended the loop for good — silently, and taking every mid-use enforcement with
+         * it: a daily limit crossing, a schedule starting, a Pomodoro flip, and the release of a
+         * cover whose reason had passed. The two runnables sat forty lines apart with opposite
+         * answers to the same question.
+         *
+         * A swallowed error re-arms. An error that repeats then costs one wake every 30s and is
+         * reported by [guarded] on the way past; the alternative was mid-use blocking quietly
+         * stopping until the next app switch, which is the failure mode this app is least able to
+         * see. Only a clean run may decide to stop.
+         */
+        override fun run() {
+            var again = true
+            guarded(applicationContext, "recheck") { again = runGuarded() }
+            if (again) handler.postDelayed(this, RECHECK_MS)
+        }
 
-        private fun runGuarded() {
-            var pkg = lastForegroundPkg ?: return
+        /** @return whether a later tick could still change the outcome — i.e. keep the loop alive. */
+        private fun runGuarded(): Boolean {
+            var pkg = lastForegroundPkg ?: return false
             // Gesture-nav Home can arrive without a window-state event, leaving the cache on
             // the app the user already left — reconcile with the real active window first so
             // a stale package is never (re-)blocked over the home screen. (Our own overlay
@@ -578,7 +609,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                     lastBlockedPkg = null
                     overlay.remove()
                 }
-                return
+                return false
             }
             if (!overlay.isShowing) {
                 // Draw a NEW cover only when the foreground is positively identified as the
@@ -611,7 +642,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                 overlay.remove()
             }
             refreshNetFilter()
-            if (recheckMatters(pkg) || netFilterDown) handler.postDelayed(this, RECHECK_MS)
+            return recheckMatters(pkg) || netFilterDown
         }
     }
 
@@ -627,6 +658,40 @@ class BlockerAccessibilityService : AccessibilityService() {
             (allowlistMode && quickBlockActive() && ruleFor(pkg)?.isAllowed != true) ||
             QuickSession.state(this).active ||
             schedules.any { it.enabled && pkg in it.packages }
+
+    /**
+     * **Room has finally spoken after a rebind — look at what is already on screen.**
+     *
+     * The window this closes is real and counted: `SilenceLog.UNREADY_DECISIONS` records decisions
+     * taken before the rule flow emitted, and it is entered on every boot, every update, every
+     * Second Space switch and every revive. `blockedSnapshot` carries HARD blocks through it, so
+     * Quick Block survived; **a schedule or a daily limit did not**, and nothing re-asked afterwards.
+     *
+     * Two things had to be missing at once for that to be invisible. `handleAppBlock` returns
+     * without a cover while `!rulesLoaded` (correctly — it does not know yet), and no re-check tick
+     * can have been armed, because [recheckMatters] answers by reading `rules` and `schedules`,
+     * which is the state that had not arrived. So the app stayed open until the user left it and
+     * came back. Same family as invariants 29 and 30: not a wrong answer, an answer nobody asked
+     * for a second time.
+     */
+    private fun redecideAfterRulesArrived() {
+        val actual = rootInActiveWindow?.packageName?.toString()
+        val pkg = pkgToRedecide(
+            cached = lastForegroundPkg,
+            actual = actual,
+            own = packageName,
+            actualIsTransient = actual != null && isTransientSurface(actual),
+        ) ?: return
+        if (isLauncherPkg(pkg)) return
+        lastForegroundPkg = pkg
+        // A cover already up was raised by the snapshot or by a scan; leave it to its owner.
+        if (!overlay.isShowing) handleAppBlock(pkg)
+        // Arm the mid-use loop, which could not have been armed a moment ago for the same reason.
+        if (recheckMatters(pkg)) {
+            handler.removeCallbacks(recheckRunnable)
+            handler.postDelayed(recheckRunnable, RECHECK_MS)
+        }
+    }
 
     /** Millis left on [pkg]'s keyword lockout, or 0 when it isn't locked. Uses the same
      *  clock-change-proof reckoning as sessions, so winding the device clock forward can no
@@ -767,6 +832,36 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (now - netFilterCheckedAt < NET_FILTER_POLL_MS) return
         netFilterCheckedAt = now
         refreshNetFilter()
+    }
+
+    /** Last backstop re-read of the listener-fed settings, monotonic (invariant 9). */
+    @Volatile private var cachedSettingsCheckedAt = 0L
+
+    /**
+     * **The same backstop, for the four settings a prefs listener keeps fresh.**
+     *
+     * `keywordsEverywhere`, `adultPackOn`, `updatePaused` and `allowlistMode` are seeded once at
+     * connect and thereafter refreshed *only* by `prefsListener`. That is invariant 29's shape
+     * exactly — a value whose refresh sits inside a callback — and the DNS filter, which had the
+     * same shape, was given both a callback **and** this re-read after the owner found the hole.
+     * These four were left with only the callback.
+     *
+     * Android holds preference-change listeners weakly, so one that is collected, or an OEM prefs
+     * implementation that drops a delivery, freezes them silently. A frozen `updatePaused = true`
+     * is exactly the symptom he reports: the switch says ON and nothing blocks. A frozen
+     * `allowlistMode` is worse in the other direction.
+     *
+     * Cost is four prefs reads a minute at most, off one already-throttled path. Contrast
+     * `OffSwitchGuard.armed`, which re-reads on every call and says in its KDoc that it does.
+     */
+    private fun refreshCachedSettingsIfStale() {
+        val now = stopwatchNow()
+        if (now - cachedSettingsCheckedAt < CACHED_SETTINGS_POLL_MS) return
+        cachedSettingsCheckedAt = now
+        keywordsEverywhere = SettingsStore.keywordsEverywhere(this)
+        adultPackOn = SettingsStore.adultWordsPack(this)
+        updatePaused = SettingsStore.updatePaused(this)
+        allowlistMode = SettingsStore.quickBlockAllowlist(this)
     }
 
     /** Millis left on the 24-hour wider-list window, 0 when it is not armed. */
@@ -932,6 +1027,7 @@ class BlockerAccessibilityService : AccessibilityService() {
             db.blockedKeywordDao().getAll(),
             db.scheduleDao().getAll(),
         ) { ruleList, focus, keywords, scheduleList ->
+            val firstEmission = !rulesLoaded
             rules = ruleList.associateBy { it.packageName }
             rulesLoaded = true
             // Keep the pre-connect fallback current. Off the main thread already (this flow runs
@@ -962,6 +1058,9 @@ class BlockerAccessibilityService : AccessibilityService() {
             } else {
                 handler.post { stopLocationUpdates() }
             }
+            // The unready window is now over — go and look at whatever is already on screen.
+            // Until this existed, nothing did: see redecideAfterRulesArrived.
+            if (firstEmission) handler.post { redecideAfterRulesArrived() }
         }
             // This flow IS the watcher's view of reality — the rules, the Strict session, the
             // blocked words and the schedules. Without a retry, one throw anywhere in it (a bad
@@ -1699,6 +1798,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         // on the recheck tick because that tick does not run for an app with no rule on it - the
         // exact case this layer exists for.
         refreshNetFilterIfStale()
+        refreshCachedSettingsIfStale()
         val session = QuickSession.state(this)
         val strict = strictRemaining() > 0L
         val now = System.currentTimeMillis()
@@ -1710,7 +1810,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                 lockoutRemainingMs = keywordLockoutRemaining(pkg),
                 dangerZoneRemainingMs = dangerZoneRemaining(),
                 netFilterDown = netFilterDown,
-                isRealBrowser = pkg in realBrowserPackages,
+                isRealBrowser = isRealBrowserPkg(pkg),
                 lockoutWord = keywordLockoutWord(pkg),
                 strict = strict,
                 // Enforcing when Strict, or a running Timer/Pomodoro says "block now", or
@@ -1726,7 +1826,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                 // to read — needed because a blanket-blocked browser is never scanned, so without
                 // a seed a filterable browser could never demonstrate that it is one — and every
                 // other browser earns it by being read once. Unknown still counts as unsupported.
-                isUnsupportedBrowser = pkg in realBrowserPackages &&
+                isUnsupportedBrowser = isRealBrowserPkg(pkg) &&
                     pkg !in KNOWN_READABLE_BROWSERS &&
                     pkg !in SettingsStore.readableBrowsers(this),
                 unsupportedBrowserBlockingActive = {
@@ -1780,11 +1880,42 @@ class BlockerAccessibilityService : AccessibilityService() {
         // browser" is a possible truth, and adopting it costs only the blunt block, never
         // filtering. The loose set above keeps the non-empty rule because an empty one there
         // would silently disable every web layer.
+        //
+        // ⚠️ That reasoning is now out of date about the cost, which is why [isRealBrowserPkg]
+        // exists: since v1.139 and v1.142 this set also gates the **danger-zone hour** and the
+        // **DNS-filter browser shutdown** (BlockDecision's first two layers, both `isRealBrowser`).
+        // An empty answer no longer costs "only the blunt block" — it silently switches off two
+        // whole protections. The set may still legitimately be empty; it may no longer be *assumed*
+        // empty for the rest of the service's life on the strength of one reading.
         realBrowserPackages = findRealBrowserPackages(applicationContext)
+        lastRealBrowserRefreshAt = SystemClock.elapsedRealtime()
         findLauncherPackages(applicationContext).takeIf { it.isNotEmpty() }?.let {
             launcherPackages = it
             knownNonLauncherPkgs = emptySet() // a fresh answer retires every earlier guess
         }
+    }
+
+    /**
+     * "Is this really a browser?", with the empty set treated as **unanswered rather than no**.
+     *
+     * `findRealBrowserPackages` swallows every PackageManager failure into nothing, and it runs at
+     * connect — one hiccup there, and for the whole lifetime of the service the danger zone never
+     * arms and the DNS guard never shuts a browser, with nothing on screen saying so. Same shape as
+     * [isLauncherPkg], which learned this in v1.96, and the same fix: re-detect, throttled.
+     *
+     * Only the empty set triggers a re-read. A populated set that is missing one package is a
+     * different question (a newly installed browser), and `PackageInstallReceiver` already answers
+     * it.
+     */
+    private fun isRealBrowserPkg(pkg: String): Boolean {
+        if (pkg in realBrowserPackages) return true
+        if (realBrowserPackages.isNotEmpty()) return false
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastRealBrowserRefreshAt < REAL_BROWSER_REFRESH_MS) return false
+        lastRealBrowserRefreshAt = now
+        val found = findRealBrowserPackages(applicationContext)
+        if (found.isNotEmpty()) realBrowserPackages = found
+        return pkg in found
     }
 
     /** Launcher check that self-heals after a default-launcher change: the set is built at
@@ -2814,7 +2945,19 @@ class BlockerAccessibilityService : AccessibilityService() {
         InstalledAppsRepository.apps.value.firstOrNull { it.packageName == pkg }?.icon
             ?: runCatching { packageManager.getApplicationIcon(pkg).toBitmap(144, 144) }.getOrNull()
 
-    override fun onInterrupt() {}
+    /**
+     * Android telling us to stop what we are doing. There is nothing to stop — this service holds
+     * no speech, no long-running feedback — so the body stays empty of *behaviour*.
+     *
+     * It is no longer empty of *evidence*. This was the one framework callback that says something
+     * is happening to this service, and it recorded nothing, so an outage's first moment left no
+     * trace anywhere. It is not a failure on its own; it fires for ordinary reasons too. But a
+     * count that moves either side of an outage is the first thing anyone has had that describes
+     * what precedes one. See [ServiceHealth.recordInterrupt].
+     */
+    override fun onInterrupt() {
+        runCatching { ServiceHealth.recordInterrupt(applicationContext) }
+    }
 
     override fun onDestroy() {
         super.onDestroy()
@@ -2892,6 +3035,9 @@ class BlockerAccessibilityService : AccessibilityService() {
          *  [NetworkFilter.SETTLE_MS], so the backstop can never delay a decision the settle
          *  window has already allowed. */
         private const val NET_FILTER_POLL_MS = 20_000L
+        // Throttle for refreshCachedSettingsIfStale. A minute: the listener is the fast route,
+        // and this only has to bound how long a MISSED delivery can last.
+        private const val CACHED_SETTINGS_POLL_MS = 60_000L
         // Web scan pacing: run once events pause for the debounce, but a churning page that
         // never pauses is still scanned at least every max-wait.
         private const val WEB_SCAN_DEBOUNCE_MS = 250L
@@ -2926,6 +3072,10 @@ class BlockerAccessibilityService : AccessibilityService() {
 
         // Throttle for isLauncherPkg's on-miss launcher re-detection.
         private const val LAUNCHER_REFRESH_MS = 30_000L
+        // Throttle for isRealBrowserPkg re-reading an EMPTY browser set. Longer than the launcher
+        // one: an empty answer here is usually the truth (a phone with no browser installed at
+        // all), so this is a rare-but-cheap correction, not a poll.
+        private const val REAL_BROWSER_REFRESH_MS = 5 * 60_000L
         // Throttle for the cached keyboard package (see imePackage). Short, so a keyboard swap
         // is noticed quickly, but enough to keep Settings.Secure off the per-event path.
         private const val IME_REFRESH_MS = 10_000L

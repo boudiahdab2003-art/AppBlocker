@@ -63,6 +63,7 @@ import com.appblocker.data.QuickSession
 import com.appblocker.data.Schedule
 import com.appblocker.data.ScheduleType
 import com.appblocker.data.SettingsStore
+import com.appblocker.data.UpdatePause
 import com.appblocker.service.ProtectionState
 import com.appblocker.service.ProtectionWatchdog
 import com.appblocker.ui.theme.AppGradients
@@ -141,7 +142,9 @@ fun BlockingScreen(
             LaunchedEffect(perms) { updatePausedUi = SettingsStore.updatePaused(context) }
             if (updatePausedUi) {
                 UpdatePausedBanner {
-                    SettingsStore.setUpdatePaused(context, false)
+                    // Through UpdatePause, not straight at the flag: the pending intent has to go
+                    // with it, or the next service connect re-arms the pause. See its KDoc.
+                    UpdatePause.reactivate(context)
                     updatePausedUi = false
                     Toast.makeText(
                         context, R.string.blocking_back_on, Toast.LENGTH_SHORT,

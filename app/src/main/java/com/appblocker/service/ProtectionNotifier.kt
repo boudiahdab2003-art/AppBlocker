@@ -372,4 +372,18 @@ object ProtectionNotifier {
             cancel(NOTIF_ID_PAUSED)
         }
     }
+
+    /**
+     * Clears the stalled alert alone, for the exits from STALLED that are **not** a recovery — he
+     * switched accessibility off, or an update paused blocking. Those post their own alert, and
+     * this one is `ongoing`, so leaving it up meant an undismissable warning about a state he had
+     * already left. [cancel] stays the right call when everything is healthy.
+     *
+     * Resets the re-float stopwatch with it, so the next genuine stall peeks immediately rather
+     * than waiting out the remainder of a window that belonged to the old episode.
+     */
+    fun cancelStalled(context: Context) {
+        lastStalledFloatRt = 0L
+        NotificationManagerCompat.from(context).cancel(NOTIF_ID_STALLED)
+    }
 }

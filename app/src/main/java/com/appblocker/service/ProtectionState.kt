@@ -67,7 +67,6 @@ internal fun protectionState(
     msSinceProcessStart: Long = Long.MAX_VALUE,
 ): ProtectionState {
     if (!enabled) return ProtectionState.OFF
-    if (updatePaused) return ProtectionState.PAUSED
     // Switched on in Settings, and not running. This is the whole of the Second Space failure:
     // the phone stops every app in the space, HyperOS doesn't always rebind us on the way back,
     // and the setting still lists us because it records a *choice*. Everything below this line
@@ -75,11 +74,19 @@ internal fun protectionState(
     // plus usage-stats permission to say the same thing — hours during which the app cheerfully
     // reported "Protection active" and blocked nothing.
     //
-    // Deliberately BELOW the OFF and PAUSED checks: both are more specific answers with their own
-    // fixes, and telling someone to revive a service they themselves switched off would be wrong.
+    // Below OFF, because telling someone to revive a service they themselves switched off would be
+    // wrong. ⚠️ **ABOVE PAUSED, which is the opposite of where this used to sit.** The pause is
+    // armed by an update, and an update is Android killing our process (invariant 21) — so the
+    // pause covers exactly the window in which the watcher is most likely never to come back. With
+    // PAUSED ranked first, that window reported "tap Reactivate", the watchdog never reached
+    // STALLED, `recordFoundDead` never fired and `OutageLog.begin` never opened an episode: the
+    // leading hypothesis for the owner's outages was the one case the instrument could not see.
+    // The bind grace below, plus bindPending's deferrals, are what stop this crying wolf during
+    // the seconds Android legitimately takes to rebind after an install.
     if (serviceConnected == false && msSinceProcessStart >= SERVICE_BIND_GRACE_MS) {
         return ProtectionState.STALLED
     }
+    if (updatePaused) return ProtectionState.PAUSED
     if (lastEventAt <= 0L) return ProtectionState.OK // never ran yet (fresh install/just enabled)
     if (now - lastEventAt < STALE_AFTER_MS) return ProtectionState.OK
     val used = usedMinutesSinceLastEvent ?: return ProtectionState.OK
@@ -105,13 +112,34 @@ internal fun protectionState(
  * Kept as a separate predicate rather than a fifth [ProtectionState] so every screen reading the
  * four states is untouched: this is a question only the watchdog asks, and it is about what to do
  * next rather than about what is true.
+ *
+ * ⚠️ **An update pause no longer excludes a pending bind, and the parameter is gone.** It used to
+ * exclude one, on the grounds that a paused watcher could never be reported STALLED anyway. Now
+ * that it can be — the pause covers precisely the window after an install, which is Android killing
+ * our process — the deferral has to cover the paused case too, or a cold-started check landing
+ * seconds after an install would call a watcher dead that Android simply had not bound yet.
+ * **The deferral is what makes ranking STALLED above PAUSED safe.**
  */
 internal fun bindPending(
     enabled: Boolean,
-    updatePaused: Boolean,
     serviceConnected: Boolean?,
     msSinceProcessStart: Long,
 ): Boolean = enabled &&
-    !updatePaused &&
     serviceConnected == false &&
     msSinceProcessStart < SERVICE_BIND_GRACE_MS
+
+/**
+ * How an outage stopped, for the state the watchdog left STALLED for.
+ *
+ * ⚠️ **Only [ProtectionState.OK] is a recovery.** The other two exits are the owner switching
+ * accessibility off (the repair the alert asks him to do) and an update pausing blocking
+ * mid-outage. Reporting either as a recovery would make the app look like it repairs itself, in
+ * exactly the log written to find out whether it does.
+ *
+ * Pure, and separate from the watchdog, so the rule is a test rather than a branch nobody reads.
+ */
+internal fun outageEndedBy(state: ProtectionState): String = when (state) {
+    ProtectionState.OK -> "recovered"
+    ProtectionState.OFF -> "switched-off"
+    else -> "paused"
+}
