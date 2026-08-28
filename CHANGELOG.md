@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.143
+- Finding out what actually stops the blocker: every outage is now timed and reported, the Second Space explanation is gone, and the volume-key shortcut sits right under the fix steps
+
 ## v1.142
 - A family filter your phone cannot kill: blocking moves one layer below the screen, to the DNS lookup every app has to make. Already set on your devices, so there is nothing to switch on — and if it ever stops, the browsers close until it is back.
 
