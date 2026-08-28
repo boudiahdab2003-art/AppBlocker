@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.144
+- Five ways blocking could stop on its own: the pause that came back after Reactivate, schedules not firing on an app already open after a restart or space switch, the mid-use check dying on one error, plus two blind spots that were corrupting the outage log itself
+
 ## v1.143
 - Finding out what actually stops the blocker: every outage is now timed and reported, the Second Space explanation is gone, and the volume-key shortcut sits right under the fix steps
 
