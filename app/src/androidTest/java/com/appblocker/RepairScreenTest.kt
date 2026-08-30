@@ -87,6 +87,32 @@ class RepairScreenTest {
      * The one control that ends the problem. 2.0 is the top of Android's font slider and the
      * owner already runs above default, so "readable at 2×" is the real bar, not a stress test.
      */
+    /**
+     * ⚠️ **The fix is at the top, and this is what stops it drifting back down.**
+     *
+     * Reported 30 Aug 2026: *"sometimes when the app guides you to the accessibility there is a lot
+     * of talk a lot of unneeded one can we make it less"*. This screen had grown to ~460 words with
+     * roughly **200 of them above the fix button** — on the one screen someone opens when they want
+     * blocking back in seconds. It happened one justified paragraph at a time; nobody ever added up
+     * the total.
+     *
+     * The explanations now live behind `ExpandableNote` headings *below* the steps. Layout is what
+     * fixed that, and layout is exactly what nothing was checking — so this asserts the button is
+     * on screen at default font **with no scrolling at all**. Put two hundred words back above it
+     * and this is what goes red.
+     *
+     * `GuidanceLengthTest` is the other half, capping the words themselves.
+     */
+    @Test
+    fun theFixButtonIsOnScreenWithoutScrolling() {
+        // A phone in portrait. A short landscape window is allowed to cost a scroll — that trade is
+        // made by the case below, which never skips.
+        assumeWindowFits(600.dp)
+        setScreen(scale = 1f)
+
+        compose.onNodeWithTag(REPAIR_BUTTON_TAG).assertIsDisplayed()
+    }
+
     @Test
     fun theFixButtonIsReachableAtTheLargestFont() {
         // Being *on screen* at 2x font is a phone-portrait contract: 384dp of height — a phone on
