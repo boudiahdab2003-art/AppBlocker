@@ -2,6 +2,7 @@ package com.appblocker.service
 
 import android.Manifest
 import android.accessibilityservice.AccessibilityService
+import android.app.KeyguardManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -19,6 +20,7 @@ import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.os.SystemClock
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
@@ -536,6 +538,14 @@ class BlockerAccessibilityService : AccessibilityService() {
             guarded(applicationContext, "heartbeat") {
                 ServiceHealth.recordAlive(applicationContext)
                 val silence = stopwatchNow() - lastEventReceivedAt
+                // The end of the window the probe streak measures has to be wired to something,
+                // or a streak of four sits at four for the life of the process and the next quiet
+                // spell starts one failure from the verdict (invariant 33). An event arriving IS
+                // the watcher working, and it is the only thing that may say so — see
+                // ServiceHealth.probeFailStreak on why a successful nudge must not.
+                if (silence < REVIVE_AFTER_SILENCE_MS) {
+                    ServiceHealth.clearProbeStreak(applicationContext)
+                }
                 if (silence >= REVIVE_AFTER_SILENCE_MS &&
                     stopwatchNow() - lastReviveAttemptAt >= REVIVE_AFTER_SILENCE_MS
                 ) {
@@ -551,12 +561,47 @@ class BlockerAccessibilityService : AccessibilityService() {
                     // deaf while running, a flat zero alongside outages is one being killed
                     // outright. A nudge that THROWS is evidence too — the binding is already gone,
                     // not merely quiet.
+                    // ⚠️ Read BEFORE the nudge. The nudge is the app trying to change the thing
+                    // the probe is measuring, so measuring afterwards would be measuring the
+                    // repair rather than the fault.
+                    val readable = probeScreen()
                     val worked = runCatching { serviceInfo = serviceInfo }.isSuccess
                     ServiceHealth.recordRevive(applicationContext, worked)
+                    // The pull half of liveness — see ServiceHealth.recordProbe. A nudge that
+                    // threw is folded in here rather than counted as its own staleness arm: two
+                    // counters that both mean "the watcher is deaf" is the drift shape this
+                    // codebase has paid for more than any other.
+                    ServiceHealth.recordProbe(applicationContext, ok = readable && worked)
                 }
             }
             handler.postDelayed(this, HEARTBEAT_MS)
         }
+    }
+
+    /**
+     * **Can this service still read the screen?** — asked, rather than inferred from silence.
+     *
+     * `rootInActiveWindow` is the cheapest question that only a service the framework is still
+     * talking to can answer. Deliberately **not** `windows`: that returns an empty list without
+     * `flagRetrieveInteractiveWindows`, which `accessibility_service_config.xml` does not declare,
+     * so a probe built on it would report failure forever and look perfectly correct.
+     *
+     * ⚠️ **Every "can't tell" passes**, which is the same rule as `usedMinutesSinceLastEvent`
+     * being null and the reason this can never cry wolf. There are exactly three, and each is a
+     * state where a null tree is *expected* rather than evidence:
+     * - the screen is off — nothing is drawing, so nothing is readable;
+     * - the keyguard is up — the lock screen is not ours to read;
+     * - no `PowerManager` at all, which is not a question about the watcher.
+     *
+     * Only a lit, unlocked screen with no readable window counts as a failure, and even then one
+     * failure means nothing: `PROBE_FAIL_LIMIT` of them, three minutes apart, is the verdict.
+     */
+    private fun probeScreen(): Boolean {
+        val pm = getSystemService(POWER_SERVICE) as? PowerManager ?: return true
+        if (!pm.isInteractive) return true
+        val km = getSystemService(KEYGUARD_SERVICE) as? KeyguardManager
+        if (km?.isKeyguardLocked == true) return true
+        return rootInActiveWindow != null
     }
 
     /** When an accessibility event last reached us, monotonically (invariant 9). */
@@ -993,6 +1038,10 @@ class BlockerAccessibilityService : AccessibilityService() {
         // Before the rule flow below has emitted anything. Cheap by design: one string set.
         blockedSnapshot = SettingsStore.blockedSnapshot(this)
         unreadyCounted = false // one count per bind, and this is a bind
+        // A fresh bind is a fresh question. Without this a streak left behind by a process that
+        // died deaf would combine with a new `connected = true` and condemn a watcher that has
+        // just started working.
+        runCatching { ServiceHealth.clearProbeStreak(applicationContext) }
         // Restore unexpired keyword lockouts — a service rebind must not unlock an app early.
         // Filtered on the same reckoning that decides whether one is running, not on the wall
         // clock, or a clock change could drop a live lockout here instead of at the check.
@@ -3077,6 +3126,11 @@ class BlockerAccessibilityService : AccessibilityService() {
         // Cleared FIRST: everything below can throw, and a watcher that has begun tearing itself
         // down is not running whether or not the rest of this method completes.
         connected = false
+        // The binding is being taken down in an orderly way, and *that* is the finding — an OEM
+        // force-stop never gets here, and neither does a killed process. See recordUnbind: a
+        // stamp at the start of an outage means something ended the binding, and no stamp means
+        // the process vanished without being told anything.
+        runCatching { ServiceHealth.recordUnbind(applicationContext) }
         handler.removeCallbacks(heartbeatRunnable)
         handler.removeCallbacks(webScanRunnable)
         handler.removeCallbacks(shortsScanRunnable)

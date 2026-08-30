@@ -368,6 +368,19 @@ data class BugReport(
             // whether BACK closes YouTube's reel is unknowable from here and has to be measured
             // on his phone.
             "shortsExit",
+            // The watcher's own "can I still read the screen?" probe: a streak of consecutive
+            // failures, and how many failures there have been in total. A count of a question the
+            // app asked itself — it names nothing that was on the screen, only whether there was
+            // one it could read. This is the number that says whether the fifteen-minute detector
+            // is firing at all on his phone, which nothing else can answer.
+            "probeStreak",
+            // Whether `onDestroy` ever ran: an orderly unbind versus a process that vanished.
+            // Two entirely different causes that look identical from outside, separated by one
+            // boolean.
+            "unbindSeen",
+            // Which of the three detectors found the last outage — "unbound" / "probe" / "stale".
+            // Without it a shorter detection gap cannot be attributed to anything.
+            "outageDetectedBy",
             "layout",
             "theme",
             "serviceOn",

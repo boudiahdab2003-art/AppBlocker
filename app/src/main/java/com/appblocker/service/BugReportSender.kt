@@ -129,6 +129,16 @@ object BugReportSender {
             val blind = SilenceLog.get(ctx, SilenceLog.SHORTS_EXIT_BLIND).total
             if (shut == 0 && blind == 0) "none yet" else "$shut shut, $blind blind"
         }
+        // The pull side of liveness. A non-zero streak in a report is the watcher saying, at the
+        // moment the report was written, that it could not read a lit screen — which is the
+        // "alive but deaf" case that used to take two hours to admit to.
+        field("probeStreak") { ServiceHealth.probeFailStreak(ctx).toString() }
+        // Did the binding ever come down in an orderly way? An OEM force-stop never reaches
+        // onDestroy, so "no" alongside outages means the process is being killed outright.
+        field("unbindSeen") {
+            val n = ServiceHealth.unbindCount(ctx)
+            if (n == 0) "never" else "$n"
+        }
         field("adultPack") { SettingsStore.adultWordsPack(ctx).toString() }
         field("scanEverywhere") { SettingsStore.keywordsEverywhere(ctx).toString() }
         field("blockUnsupported") { SettingsStore.blockUnsupportedBrowsers(ctx).toString() }
@@ -304,6 +314,9 @@ object BugReportSender {
                         "outageDeaf" to "${episode.aliveButDeaf}",
                         "outagePreceded" to episode.precededBy,
                         "outageEnded" to endedBy,
+                        // Which detector caught it. Read alongside outageDetectMin: the same gap
+                        // means something completely different depending on which arm produced it.
+                        "outageDetectedBy" to episode.detectedBy,
                         "outageCount" to "${OutageLog.totals(context).count}",
                     ),
                     recentBlocks = BlockLog.recent(context),
