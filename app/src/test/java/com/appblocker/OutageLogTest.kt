@@ -274,4 +274,40 @@ class OutageLogTest {
         assertTrue(line.contains("deaf=true"))
         assertTrue(line.contains("after=update"))
     }
+
+    // ---- which detector found it ---------------------------------------------------------------
+
+    /**
+     * ⚠️ **The episodes already on his phone have to survive this field being added.**
+     *
+     * `decode` rejected anything that was not exactly seven fields, so bumping the format without
+     * accepting the old shape would have discarded every outage recorded since v1.143 — at exactly
+     * the moment the version that could finally interpret them was installed, and before a single
+     * one had ever been read. The first real data this project has about its worst bug is the last
+     * thing a schema change should throw away.
+     */
+    @Test fun oldSevenFieldEpisodesStillDecode() {
+        val e = OutageLog.decode("$now|60000|60000|true|update|false|143")
+        assertEquals(60_000L, e?.durationMs)
+        assertEquals(OutageLog.Preceded.UPDATE, e?.precededBy)
+        // Not guessed at: a row written before the field existed genuinely does not know.
+        assertEquals(OutageLog.DetectedBy.UNKNOWN, e?.detectedBy)
+    }
+
+    /** And the new shape round-trips, arm included. */
+    @Test fun anEpisodeSaysWhichArmDetectedIt() {
+        val e = OutageLog.Episode(
+            now, 14 * minute, 3 * minute, true, OutageLog.Preceded.UPDATE, false, 145L,
+            detectedBy = OutageLog.DetectedBy.PROBE,
+        )
+        assertEquals(e, OutageLog.decode(OutageLog.encode(e)))
+        assertTrue(e.render().contains("by=probe"))
+    }
+
+    /** An arm this version does not know is normalised, exactly like a foreign cause. */
+    @Test fun anUnknownArmIsNormalisedOnTheWayBack() =
+        assertEquals(
+            OutageLog.DetectedBy.UNKNOWN,
+            OutageLog.decode("$now|60000|60000|true|update|false|143|telepathy")?.detectedBy,
+        )
 }

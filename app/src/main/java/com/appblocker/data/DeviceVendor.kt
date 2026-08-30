@@ -121,11 +121,13 @@ object DeviceVendor {
         keepAliveLabel = "Auto-start",
         keepAliveDesc = "Xiaomi phones stop background apps after a while. Allow auto-start for " +
             "AppBlocker so blocking survives a reboot or a memory cleanup.",
-        extraTips = "On Xiaomi/MIUI: also lock AppBlocker in Recents (swipe down on the card) and " +
-            "set Battery saver to “No restrictions” so it isn't killed. And switch on " +
-            "“Floating notifications” for AppBlocker — MIUI keeps that as its own permission, " +
-            "off by default, and while it's off the “blocking has stopped” alert can't pop up " +
-            "no matter what the app does.",
+        // Trimmed 30 Aug 2026 from 59 words. It had grown a second copy of the whole
+        // floating-notifications explanation that `repair_floating_body` already gives in full,
+        // beside a button that opens the setting — so the longer half was being read twice and
+        // acted on once.
+        extraTips = "On Xiaomi: lock AppBlocker in Recents (swipe down on its card) and set " +
+            "Battery saver to “No restrictions”. Switch on “Floating notifications” too — " +
+            "without it the “blocking has stopped” alert can only sit silently in the shade.",
         deepLinks = listOf(
             "com.miui.securitycenter" to
                 "com.miui.permcenter.autostart.AutoStartManagementActivity",
@@ -141,12 +143,20 @@ object DeviceVendor {
         // 2026 — he rarely uses it now and blocking still stops — so it is listed as one cause
         // among several rather than the explanation. Naming the wrong culprit confidently is
         // worse than naming none: it sends someone to fix a setting that was never the problem.
-        spacesWarning = "Xiaomi phones stop background apps for several reasons — clearing " +
-            "memory, and switching to Second Space and back, which shuts AppBlocker down in " +
-            "this space. Android's switch still says it's on either way. Lock AppBlocker in " +
-            "Recents (swipe down on its card), allow Auto-start, and set Battery saver to " +
-            "“No restrictions”. That makes it happen less often — it can't stop it completely, " +
-            "and the app now times each one so the real cause can be found.",
+        // ⚠️ Trimmed again 30 Aug 2026, 77 words to 47 — *"a lot of talk a lot of unneeded"*. What
+        // went was the step-by-step walkthrough of Auto-start, Recents and Battery saver, which he
+        // has already set on both his phones: telling someone to do a thing they have done is the
+        // clearest possible signal that a screen is not reading their situation. They are still
+        // named, because someone else's phone will not have them set.
+        //
+        // The first trim cut the Second Space clause too, and `DeviceVendorTest` caught it — the
+        // card this renders in is *headed* "Switching spaces or users", so a version that never
+        // mentions them is incoherent. The v1.143 position is the right one and it still holds:
+        // named as one cause among several, never as the explanation.
+        spacesWarning = "Xiaomi stops background apps for several reasons — a memory clean, or " +
+            "switching to Second Space and back, which shuts AppBlocker down in this space. " +
+            "Android's switch still says it's on either way. Auto-start, the Recents lock and " +
+            "Battery ▸ No restrictions make it rarer, not impossible.",
     )
 
     private val SAMSUNG = VendorAdvice(
@@ -240,6 +250,10 @@ object DeviceVendor {
 
     /** Every entry, so a caller can ask about the whole table rather than one phone's row. */
     private val ALL = listOf(XIAOMI, SAMSUNG, HUAWEI, OPPO, VIVO, GENERIC)
+
+    /** The whole table, for tests that assert about every brand rather than this phone's — see
+     *  `GuidanceLengthTest`, which holds these strings to a word budget. */
+    fun allAdvice(): List<VendorAdvice> = ALL
 
     /**
      * Every package any [VendorAdvice.deepLinks] points at.

@@ -406,7 +406,7 @@
     <string name="onboarding_open_settings">افتح الإعدادات</string>
     <string name="onboarding_done">هذا كل شيء — إنه يعمل. اضغط متابعة.</string>
     <string name="onboarding_steps_heading">ما عليك فعله في الإعدادات — %1$s خطوات</string>
-    <string name="onboarding_leaves_app">الزر أدناه يخرجك من AppBlocker ويفتح إعدادات هاتفك. نفّذ هذه الخطوات ثم عُد إلى هنا مباشرة — وستخبرك هذه الشاشة إن نجح الأمر. والخطوات تأتي معك: اسحب من أعلى الشاشة لتراها مجددًا وأنت داخل الإعدادات.</string>
+    <string name="onboarding_leaves_app">الزر أدناه يخرجك من AppBlocker ويفتح إعدادات هاتفك. عُد إلى هنا عند الانتهاء وستخبرك هذه الشاشة إن نجح الأمر. الخطوات ترافقك — اسحب من أعلى الشاشة لرؤيتها مجددًا.</string>
     <string name="onboarding_headline_accessibility">الحظر يحتاج مفتاحًا واحدًا</string>
     <string name="onboarding_headline_overlay">دع شاشة الحظر تظهر</string>
     <string name="onboarding_stuck_title">لم يُشغَّل بعد</string>
@@ -455,15 +455,16 @@
     <string name="disclosure_decline">ليس الآن</string>
 
     <string name="permissions_header">امنح هذه الأذونات ليحظر AppBlocker بثبات.</string>
-    <string name="permissions_brand_note">ملاحظة لهواتف %1$s</string>
+    <string name="permissions_brand_note">ملاحظة لهواتف %1$s</string>
+    <string name="permissions_tips_title">إبقاؤه يعمل على %1$s</string>
     <string name="permissions_clone_note">نسخة التطبيق داخل %1$s هي تطبيق منفصل لا يستطيع AppBlocker رؤيته ولا حظره. وحظر الأصل لا يشمل النسخة.</string>
     <string name="permissions_spaces_title">تبديل المساحات أو المستخدمين</string>
     <string name="permissions_alert_title">تنبيه الحماية</string>
     <string name="permissions_alert_body">ينبّهك AppBlocker بإشعار إذا توقّف الحظر يومًا — سواء أوقفته أنت أو أغلقه هاتفك بينما ما زال يُظهره مُفعَّلًا. اضغط أدناه للتأكد من وصول التنبيه إلى هاتفك.</string>
     <string name="permissions_alert_button">أرسل تنبيهًا تجريبيًا</string>
     <string name="restricted_title">مفتاح إمكانية الوصول باهت ولا يعمل؟</string>
-    <string name="restricted_body">هذا يهمّك فقط إن كان المفتاح باهتًا فعلًا. أندرويد 13 وما بعده يحجبه عن التطبيقات المثبَّتة من خارج متجر، دون أن يوضّح السبب. لفتحه: افتح الإعدادات ▸ التطبيقات ▸ AppBlocker، اضغط ⋮ في الزاوية العلوية، واختر «السماح بالإعدادات المقيّدة». ثم عُد وشغّل إمكانية الوصول.</string>
-    <string name="restricted_android15">في أندرويد 15 قد لا تجد قائمة ⋮ تلك — فقد أعاد أندرويد تصميم الصفحة. إن لم تجدها، فعُد وجرّب المفتاح مرة أخرى: إن لم يكن باهتًا فلا شيء من هذا يعنيك.</string>
+    <string name="restricted_body">فقط إذا كان المفتاح باهتًا فعلًا. أندرويد 13 وما بعده يمنعه للتطبيقات المثبتة من خارج متجر التطبيقات. لفتحه: الإعدادات ▸ التطبيقات ▸ AppBlocker، اضغط ⋮ في الأعلى، واختر “السماح بالإعدادات المقيدة”، ثم عُد.</string>
+    <string name="restricted_android15">في أندرويد 15 قد لا تجد قائمة ⋮. إن لم تجدها، جرّب المفتاح مرة أخرى — فإن لم يكن باهتًا فهذا لا ينطبق عليك.</string>
 
     <string name="disclosure_noaccount_body">لا يوجد تسجيل دخول في AppBlocker. لا أحد — بمن فيهم المطوّر — يستطيع رؤية ما على شاشتك ولا ما تحظره.</string>
     <string name="onboarding_stuck_accessibility">لا شيء معطّل — هذه الشاشة يسهل تفويتها. %1$s اضغط «حاول مجددًا» واتبع الصور أدناه؛ السطر الذي تبحث عنه اسمه AppBlocker.</string>
@@ -941,6 +942,9 @@
     <string name="editor_mode_title">نمط الحظر</string>
     <string name="editor_mode_body">اختر النمط الذي يناسبك أكثر.</string>
     <string name="editor_shorts">Shorts</string>
+    <string name="shorts_pip_title">أوقف ظهور الريل فوق شاشتك</string>
+    <string name="shorts_pip_body">يمكن ليوتيوب مواصلة تشغيل الريل في نافذة صغيرة فوق كل شيء. ضغطة واحدة توقف ذلك نهائيًا.</string>
+    <string name="shorts_pip_button">افتح الإعداد</string>
     <string name="editor_protection_off">الحماية متوقّفة</string>
     <string name="editor_protection_off_body">شغّل الحاظر حتى تحظر اختياراتك فعلًا.</string>
     <string name="editor_turn_on">شغّل الحماية</string>

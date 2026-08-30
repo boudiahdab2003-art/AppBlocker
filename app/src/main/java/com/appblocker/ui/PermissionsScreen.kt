@@ -90,67 +90,70 @@ fun PermissionsScreen(
                 PermCard(p, onRequestDisclosure)
                 Spacer(Modifier.padding(top = 12.dp))
             }
-            Text(
-                vendor.extraTips,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp, bottom = 16.dp),
-            )
+            // ⚠️ **Everything below the permission rows is now folded away.** These four blocks
+            // ran to roughly 250 words of standing prose under the cards — the brand tips, the
+            // cloned-apps hole, the spaces warning and the alert explanation — two of which are
+            // also shown to him on the repair screen. *"a lot of talk a lot of unneeded"*
+            // (30 Aug 2026). Each keeps its heading, so the screen still says what it knows; the
+            // paragraphs are one tap away instead of in the way, and the button that sends a test
+            // alert stays above its own fold.
+            ExpandableNote(
+                title = stringResource(R.string.permissions_tips_title, vendor.brand),
+                modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
+            ) {
+                Text(
+                    vendor.extraTips,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             // Named honestly rather than left to be discovered. A cloned app runs as a different
             // Android user and an accessibility service gets no events from it, so this is a hole
             // the app cannot close — and an unblocked app the user believes is blocked is worse
             // than one they know about.
             vendor.clonedAppsFeature?.let { feature ->
-                Text(
-                    stringResource(R.string.permissions_brand_note, vendor.brand),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Spacer(Modifier.padding(top = 4.dp))
-                Text(
-                    stringResource(R.string.permissions_clone_note, feature),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 16.dp),
-                )
+                ExpandableNote(
+                    title = stringResource(R.string.permissions_brand_note, vendor.brand),
+                    modifier = Modifier.padding(bottom = 12.dp),
+                ) {
+                    Text(
+                        stringResource(R.string.permissions_clone_note, feature),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             // The *other* Second Space failure, and deliberately separate from the cloned-apps
             // note above: that one is "an app inside the other space is invisible to us", this
             // one is "switching space kills us in THIS space and Android still says we're on".
             // Same feature, opposite advice — merging them would leave each reader half wrong.
             vendor.spacesWarning?.let { warning ->
+                ExpandableNote(
+                    title = stringResource(R.string.permissions_spaces_title),
+                    modifier = Modifier.padding(bottom = 12.dp),
+                ) {
+                    Text(
+                        warning,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            ExpandableNote(
+                title = stringResource(R.string.permissions_alert_title),
+                alwaysVisible = {
+                    GradientButton(
+                        text = stringResource(R.string.permissions_alert_button),
+                        onClick = { ProtectionNotifier.notifyTest(context) },
+                    )
+                },
+            ) {
                 Text(
-                    stringResource(R.string.permissions_spaces_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Spacer(Modifier.padding(top = 4.dp))
-                Text(
-                    warning,
+                    stringResource(R.string.permissions_alert_body),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 16.dp),
                 )
             }
-            Text(
-                stringResource(R.string.permissions_alert_title),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Spacer(Modifier.padding(top = 4.dp))
-            Text(
-                stringResource(R.string.permissions_alert_body),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.padding(top = 12.dp))
-            GradientButton(
-                text = stringResource(R.string.permissions_alert_button),
-                onClick = { ProtectionNotifier.notifyTest(context) },
-            )
             Spacer(Modifier.padding(top = 24.dp))
         }
     }

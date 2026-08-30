@@ -178,4 +178,47 @@ class CodeShapeTest {
             direct.isEmpty(),
         )
     }
+
+    // ---- invariant 36 ------------------------------------------------------------------------
+
+    /**
+     * **Every background job the watcher owns is cancelled when the screen goes off.**
+     *
+     * A job outlives the moment it was started for. `shortsScanJob` was the one thing `onScreenOff`
+     * never stopped, so locking the phone mid-Shorts let a scan finish *after* the whole cleanup had
+     * run and raise a cover with nothing left to take it down — a cover stranded over whatever was
+     * on screen at the next unlock (v1.98). The Shorts *exit* added on 30 Aug 2026 is the same shape
+     * with a sharper edge: left running, it would keep pressing BACK into a phone that had just been
+     * locked.
+     *
+     * `onDestroy` needs no equivalent check — every one of these is launched on `scope`, and it
+     * calls `scope.cancel()`. Screen-off is the case that has to name them one by one, because the
+     * service keeps running and there is nothing structural to catch an omission.
+     *
+     * ⚠️ Adding a job and *not* listing it here is exactly the mistake this catches, so a new job
+     * belongs in `onScreenOff`, not in this test's exceptions. There are none.
+     */
+    @Test
+    fun `every background job is cancelled when the screen goes off`() {
+        val text = source("service/BlockerAccessibilityService.kt").readText()
+        val jobs = Regex("""@Volatile\s+private\s+var\s+(\w+):\s*Job\?""")
+            .findAll(text).map { it.groupValues[1] }.toList()
+        assertTrue(
+            "Expected to find the watcher's Job fields; the declaration shape must have changed, " +
+                "which means this check is no longer looking at anything.",
+            jobs.size >= 3,
+        )
+        val screenOff = text.substringAfter("private fun onScreenOff()").substringBefore("\n    }")
+        val unstopped = jobs.filterNot { screenOff.contains("$it?.cancel()") }
+        assertTrue(
+            "onScreenOff does not cancel $unstopped. A job that outlives screen-off finishes after " +
+                "the cleanup it was meant to be part of — raising a cover nothing will take down, " +
+                "or pressing BACK into a locked phone. Cancel it there; do not add it here.",
+            unstopped.isEmpty(),
+        )
+        assertTrue(
+            "onDestroy must cancel the scope: it is what makes enumerating jobs there unnecessary.",
+            text.substringAfter("override fun onDestroy()").contains("scope.cancel()"),
+        )
+    }
 }

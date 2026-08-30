@@ -55,6 +55,7 @@ import com.appblocker.data.uninstallGuardVerdict
 import com.appblocker.service.AccessibilityUtil
 import com.appblocker.service.BlockerAccessibilityService
 import com.appblocker.service.GuardPackages
+import com.appblocker.service.PROBE_FAIL_LIMIT
 import com.appblocker.service.KNOWN_READABLE_BROWSERS
 import com.appblocker.service.findBrowserPackages
 import com.appblocker.service.findRealBrowserPackages
@@ -308,6 +309,8 @@ private fun readSnapshot(context: Context): Snapshot {
     val deaf = SilenceLog.get(context, SilenceLog.DEAF_DISMISSALS)
     val declines = SilenceLog.get(context, SilenceLog.LATE_DECLINES)
     val unready = SilenceLog.get(context, SilenceLog.UNREADY_DECISIONS)
+    val shortsShut = SilenceLog.get(context, SilenceLog.SHORTS_EXIT_CLOSED)
+    val shortsBlind = SilenceLog.get(context, SilenceLog.SHORTS_EXIT_BLIND)
     val boot = DeviceBoot.count(context)
     val zoneLeft = SettingsStore.dangerZone(context)?.remaining(boot) ?: 0L
     val learned = SettingsStore.learnedDomains(context)
@@ -435,6 +438,26 @@ private fun readSnapshot(context: Context): Snapshot {
                 good = if (unready.total == 0) true else null,
             ),
         )
+        if (shortsShut.total > 0 || shortsBlind.total > 0) {
+            add(
+                Fact(
+                    "Shorts closed before leaving YouTube: ${shortsShut.total}" +
+                        if (shortsBlind.total > 0) " (${shortsBlind.total} not confirmed)" else "",
+                    if (shortsBlind.total == 0) {
+                        "Every time a Short was blocked, the player was shut before you were sent " +
+                            "out — so nothing was left playing behind you and opening YouTube " +
+                            "again lands on the normal feed."
+                    } else {
+                        "Most of the time the player is shut before you leave. When it can't be " +
+                            "confirmed the app deliberately does nothing rather than send you " +
+                            "Home, because sending you Home is what used to leave the Short " +
+                            "playing in a little floating window. Those times the block screen " +
+                            "simply comes back instead."
+                    },
+                    good = if (shortsBlind.total == 0) true else null,
+                ),
+            )
+        }
     }
 
     val protection = buildList {
@@ -522,7 +545,53 @@ private fun readSnapshot(context: Context): Snapshot {
                                     "after it began.",
                             )
                         }
+                        // How it was caught, in plain terms. The same gap means different things
+                        // depending on which detector produced it, and the difference is the whole
+                        // reason the arm is recorded at all.
+                        append(
+                            when (last.detectedBy) {
+                                OutageLog.DetectedBy.UNBOUND ->
+                                    " It was caught by the app noticing the blocker was not " +
+                                        "running at all."
+                                OutageLog.DetectedBy.PROBE ->
+                                    " It was caught by the blocker checking whether it could " +
+                                        "still read your screen, and finding it could not."
+                                OutageLog.DetectedBy.STALE ->
+                                    " It was caught the slow way: hours of you using the phone " +
+                                        "with the blocker seeing none of it."
+                                else -> ""
+                            },
+                        )
                     },
+                    good = null,
+                ),
+            )
+        }
+        // The self-check that closed the two-hour blind spot. Only shown when it has actually
+        // failed: a zero here is the normal state and would be a row saying nothing.
+        ServiceHealth.probeFailStreak(context).takeIf { it > 0 }?.let { streak ->
+            add(
+                Fact(
+                    "The blocker cannot read the screen right now ($streak checks in a row)",
+                    "Every few minutes, when nothing has reached it for a while, the blocker " +
+                        "asks whether it can still see what is on your screen. It has answered " +
+                        "no $streak times running. At $PROBE_FAIL_LIMIT it stops waiting and " +
+                        "tells you blocking has stopped, instead of taking hours to be sure.",
+                    good = false,
+                ),
+            )
+        }
+        // Whether the binding has ever been taken down in an orderly way. "Never" alongside real
+        // outages is itself the finding: an OEM force-stop never reaches onDestroy, so a phone
+        // with stoppages and no unbinds is a phone killing the process outright.
+        ServiceHealth.unbindCount(context).takeIf { it > 0 }?.let { n ->
+            add(
+                Fact(
+                    "The blocker has been shut down properly $n time${if (n == 1) "" else "s"}",
+                    "That means something asked it to stop — you switching it off, or Android " +
+                        "taking it down cleanly — rather than the app being killed where it " +
+                        "stood. Knowing which of the two happens to you is half of finding the " +
+                        "cause.",
                     good = null,
                 ),
             )

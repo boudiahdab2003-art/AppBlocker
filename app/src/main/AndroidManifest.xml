@@ -241,6 +241,14 @@
             </intent-filter>
         </receiver>
 
+        <!-- The second wake source: an inexact alarm whose only job is to notice that WorkManager
+             itself has stopped running, since every other out-of-process check in this app is a
+             WorkManager job. Not exported and no intent-filter — it is triggered solely by our own
+             PendingIntent from ProtectionScheduler.ensureAlarmScheduled. See ProtectionPulse. -->
+        <receiver
+            android:name=".service.ProtectionAlarmReceiver"
+            android:exported="false" />
+
         <!-- Optional: counts daily notifications for the Insights "Distractions" card.
              Only active while the user grants Notification access. -->
         <service

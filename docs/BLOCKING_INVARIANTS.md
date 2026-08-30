@@ -423,7 +423,23 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     So the enforcement was scoped and the exit was not, and the exit is what the user actually
     experiences. It gave away at dismissal exactly the distinction v1.132 split `word` from `site`
     to preserve. `CoverGate.exitFor` decides it now: a page cover goes BACK, an app cover goes
-    HOME, and the Shorts cover keeps its own path.
+    HOME, and a Shorts cover goes BACK **and then** HOME.
+
+    ⚠️ **That third answer was an unexplained exception for a year, and the exception was a bug.**
+    This entry used to end "and the Shorts cover keeps its own path" without ever saying what
+    scope that path matched — and the path was `overlay.remove(); GLOBAL_ACTION_HOME`. A Shorts
+    cover covers a *surface inside* an app that is not blocked, so HOME is the wrong scope for the
+    same reason it was wrong for a page. Worse, it was actively harmful: HOME fires
+    `onUserLeaveHint()`, which is precisely the signal that hands a playing video to a
+    picture-in-picture window, so "Got it" on a Short *created* a floating Short over the launcher
+    — reported 30 Aug 2026 as *"the short even when you are in home screen you can watch the
+    short"*. HOME also only backgrounds YouTube, leaving the reel on its back stack, so re-opening
+    resumed onto the same Short. One wrong action, both halves of the complaint.
+
+    The dismissal is now a `when` over the `Exit` enum, which the compiler requires to be
+    exhaustive — so a fourth kind of cover cannot inherit HOME by falling through an `else`, which
+    is exactly how this one did. **The general form: an exception in a rule that never states what
+    it is an exception *to* is not an exception, it is an unexamined case.**
 
     Two things worth keeping straight for whoever edits this next:
 
@@ -726,6 +742,46 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     alternative was mid-use blocking silently ending.
 
     **Grep for: `postDelayed(this` inside a `guarded {` or `runCatching {` block.**
+
+36. **A job outlives the moment it was started for, so every one of them is cancelled on
+    screen-off.** `shortsScanJob` was the one thing `onScreenOff` never stopped, so locking the
+    phone mid-Shorts let a scan finish *after* the whole cleanup had run and raise a cover with
+    nothing left to take it down — stranded over whatever was on screen at the next unlock (v1.98).
+    The Shorts *exit* added 30 Aug 2026 is the same shape with a sharper edge: left running, it
+    would go on pressing BACK into a phone that had just been locked.
+
+    `onDestroy` needs no equivalent list — every job is launched on `scope`, and it calls
+    `scope.cancel()`. Screen-off is the case that has to name them one by one, because the service
+    keeps running and nothing structural catches an omission. **`CodeShapeTest` now enforces it:
+    every `@Volatile private var …Job: Job?` in the watcher must appear with `?.cancel()` inside
+    `onScreenOff`.** Adding a job and not listing it there is precisely the mistake it catches, so
+    a new job belongs in `onScreenOff` — never in the test's exceptions.
+
+37. **Waiting to be told is not the only way to know.** Every liveness signal this app had was a
+    *push*: an event arrived, or it did not. An absence is weak evidence — an idle phone produces
+    exactly the same silence as a dead watcher — so the "bound but deaf" detector needed two hours
+    **plus** fifteen measured minutes of use **plus** usage-stats permission before it dared speak.
+    `ProtectionState`'s own comment called those *"hours during which the app cheerfully reported
+    Protection active and blocked nothing."*
+
+    The watcher can simply **ask**: on a lit, unlocked screen, `rootInActiveWindow` is a question
+    only a service the framework is still talking to can answer. Five failures in a row is about a
+    quarter of an hour, needs no permission, and is direct evidence rather than an inference from
+    nothing happening.
+
+    Three rules make it safe, and each is an older invariant applied here:
+    - **Every "can't tell" passes** — screen off, keyguard up, no `PowerManager`. Invariant 4.
+    - **It costs nothing when healthy.** The probe runs only inside the heartbeat branch that has
+      already seen several minutes of silence, so a working phone makes no extra binder call at
+      all. The owner's "keep the battery as it is" is met by construction, not by argument.
+    - ⚠️ **A successful nudge must never clear the streak.** The nudge fires on the same
+      three-minute schedule as the probe watching it, so letting it reset the count would mean the
+      count could never reach two. That is invariant 30 exactly — *a threshold measured against a
+      clock the act of measuring resets* — and it is the second time that shape has appeared in
+      this file's own repair machinery.
+
+    **The standing question this comes from, worth asking of any check: is it waiting to be told
+    something it could go and ask?**
 
 
 ## Device quirks these invariants exist for

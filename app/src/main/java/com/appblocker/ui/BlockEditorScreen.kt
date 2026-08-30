@@ -13,6 +13,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -52,6 +53,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -349,6 +351,10 @@ fun BlockEditorScreen(
                                             if (strictActive && !on) return@ShortsSubRow
                                             ytShorts = on
                                         }
+                                        // Only once Shorts blocking is actually on: before that
+                                        // there is nothing to explain, and this is the screen the
+                                        // "less talk" pass is trying to keep quiet.
+                                        if (ytShorts) ShortsPipNote()
                                     }
                                 } else null
                             },
@@ -695,6 +701,45 @@ private fun ShortsSubRow(
         }
         Spacer(Modifier.weight(1f))
         Checkbox(checked = checked, enabled = enabled, onCheckedChange = onToggle)
+    }
+}
+
+/**
+ * The one part of the floating-Short problem that is a setting rather than code.
+ *
+ * The app now closes the reel before it sends him out, so *its* blocks no longer leave a Short
+ * playing over the launcher. But nothing in an accessibility service can stop YouTube opening a
+ * floating window when **he** swipes home himself mid-Short, and nothing can close one that is
+ * already open — see [openPictureInPictureSettings]. Turning YouTube's permission off closes both
+ * routes permanently, so it is worth the one tap.
+ */
+@Composable
+private fun ShortsPipNote() {
+    val context = LocalContext.current
+    Column(
+        Modifier.fillMaxWidth().padding(start = 68.dp, end = 8.dp).padding(bottom = 8.dp),
+    ) {
+        Text(
+            stringResource(R.string.shorts_pip_title),
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+        Text(
+            stringResource(R.string.shorts_pip_body),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        TextButton(
+            onClick = { openPictureInPictureSettings(context) },
+            contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp),
+        ) {
+            Text(
+                stringResource(R.string.shorts_pip_button),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
+            )
+        }
     }
 }
 

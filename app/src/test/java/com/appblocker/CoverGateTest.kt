@@ -77,10 +77,27 @@ class CoverGateTest {
 
     @Test
     fun `shorts covers are never suppressed`() {
-        // Their scan owns adding and removing them; suppressing a show would desync it and
-        // leave Shorts uncovered.
+        // ⚠️ The reason has changed, and the exemption now carries more weight than it used to.
+        //
+        // It used to be "their scan tracks covering in its own flag, and suppressing a show would
+        // desync it" — stale since v1.98, when that flag was deleted and shortsCovering became
+        // derived from the overlay itself.
+        //
+        // What depends on it now is the Shorts exit (Exit.BACK_THEN_HOME): it takes its own cover
+        // down at the START of the walk, because the player cannot be read while one of our own
+        // windows is in front of it, and only then presses BACK. If suppression applied, a BACK
+        // that did not land would leave a Short playing UNCOVERED for the whole grace. Hence the
+        // second assertion: the exemption has to hold across the long window too, not just the
+        // instant after the tap.
         assertFalse(
             suppressed(counterKey = CoverGate.SHORTS_KEY, dismissedKey = CoverGate.SHORTS_KEY)
+        )
+        assertFalse(
+            suppressed(
+                counterKey = CoverGate.SHORTS_KEY,
+                dismissedKey = CoverGate.SHORTS_KEY,
+                sinceDismissMs = CoverGate.DISMISS_GRACE_STUCK_MS - 1,
+            )
         )
     }
 
@@ -466,6 +483,39 @@ class CoverGateTest {
 
     /** Home is the answer that always works, so it is what an unkeyed cover gets. */
     @Test fun anUnkeyedCoverGetsTheExitThatAlwaysWorks() {
+        assertEquals(CoverGate.Exit.HOME, CoverGate.exitFor(null))
+    }
+
+    /**
+     * **The Short that followed him home.** Reported 30 Aug 2026: *"blocking the shorts get you out
+     * of the app but doesnt close the short which follows you"* — and, asked what should happen,
+     * *"the short even when you are in home screen you can watch the short so it should get closed
+     * automatically and youtube get closed"*.
+     *
+     * The cover's dismissal fired HOME. HOME is `onUserLeaveHint()`, which is precisely the signal
+     * that hands a playing video to a picture-in-picture window — so the block *created* the
+     * floating Short. And because HOME only backgrounds YouTube, the reel stayed on its back stack
+     * and re-opening resumed onto it. One action, both halves of the complaint.
+     *
+     * A Shorts cover is over a surface *inside* an app that is not blocked, so it is a third scope
+     * and gets a third exit: close the player, then leave.
+     */
+    @Test fun aShortsCoverClosesThePlayerBeforeLeaving() {
+        assertEquals(CoverGate.Exit.BACK_THEN_HOME, CoverGate.exitFor(CoverGate.SHORTS_KEY))
+    }
+
+    /**
+     * Every cover kind names its own exit, so none can go back to inheriting one.
+     *
+     * The bug above was not a wrong branch — it was a *missing* one: Shorts fell through a
+     * catch-all `else` into HOME, and nothing anywhere said that was a decision. The dispatch in
+     * the watcher is now a `when` over this enum, which the compiler requires to be exhaustive;
+     * this is the same guarantee from the other side.
+     */
+    @Test fun everyCoverKindHasAnExitOfItsOwn() {
+        assertEquals(CoverGate.Exit.BACK, CoverGate.exitFor(CoverGate.WEB_KEY))
+        assertEquals(CoverGate.Exit.BACK_THEN_HOME, CoverGate.exitFor(CoverGate.SHORTS_KEY))
+        assertEquals(CoverGate.Exit.HOME, CoverGate.exitFor("com.google.android.youtube"))
         assertEquals(CoverGate.Exit.HOME, CoverGate.exitFor(null))
     }
 

@@ -20,6 +20,9 @@ object ServiceHealth {
     private const val KEY_FOUND_DEAD = "health_found_dead_count"
     private const val KEY_REVIVES = "health_revive_count"
     private const val KEY_REVIVE_FAILS = "health_revive_fail_count"
+    private const val KEY_PROBE_FAILS = "health_probe_fail_streak"
+    private const val KEY_UNBOUND_AT = "health_last_unbound_at"
+    private const val KEY_UNBINDS = "health_unbind_count"
     private const val KEY_INTERRUPTS = "health_interrupt_count"
     private const val KEY_LAST_ERROR_AT = "health_last_error_at"
     private const val KEY_LAST_ERROR = "health_last_error"
@@ -146,6 +149,97 @@ object ServiceHealth {
     fun reviveCount(context: Context): Int = prefs(context).getInt(KEY_REVIVES, 0)
 
     fun reviveFailCount(context: Context): Int = prefs(context).getInt(KEY_REVIVE_FAILS, 0)
+
+    /**
+     * **The watcher asking the screen a question, instead of waiting to be told.**
+     *
+     * Every other liveness signal in this app is a *push*: an event arrived, or it did not. That
+     * is why the deaf-but-bound case took so long to detect — the only evidence was an absence,
+     * and an absence needs hours before it means anything (`STALE_AFTER_MS`). A probe is the pull
+     * side: on a lit, unlocked screen the service asks for the window tree, and a service that
+     * cannot read one is a service the framework has stopped talking to. That is an answer in
+     * seconds rather than hours.
+     *
+     * It costs nothing on a healthy phone, because it runs only inside the heartbeat branch that
+     * has *already* noticed several minutes of silence — the same branch that fires the nudge. No
+     * silence, no binder call. (The owner's constraint is "keep the battery as it is", and this
+     * satisfies it by construction rather than by argument.)
+     *
+     * It also splits `OutageLog.aliveButDeaf` in two, which nothing on the phone could do before:
+     * a **failing** probe means the connection to the system is gone while our timer still runs;
+     * a **passing** probe during silence means the connection is fine and delivery has stopped.
+     * Different causes, different fixes.
+     *
+     * @param ok the probe passed **and** the nudge did not throw. "Could not tell" — screen off,
+     *   keyguard up, no PowerManager — must pass; see the caller.
+     */
+    fun recordProbe(context: Context, ok: Boolean) {
+        val p = prefs(context)
+        val next = nextProbeStreak(p.getInt(KEY_PROBE_FAILS, 0), ok)
+        if (next != p.getInt(KEY_PROBE_FAILS, 0)) {
+            p.edit().putInt(KEY_PROBE_FAILS, next).apply()
+        }
+    }
+
+    /**
+     * The streak arithmetic, pure so it can be stated rather than trusted.
+     *
+     * **Consecutive** is the whole idea: one passing probe wipes the count, because it is direct
+     * evidence the connection is alive right now and no number of earlier failures survives that.
+     * Failures only mean something in a row — a single one is a moment, five is a condition.
+     */
+    internal fun nextProbeStreak(current: Int, ok: Boolean): Int = if (ok) 0 else current + 1
+
+    /**
+     * Consecutive failed probes. Read by `protectionState`, which calls it dead past
+     * `PROBE_FAIL_LIMIT`.
+     *
+     * ⚠️ **Only a real event may clear this, never a successful nudge.** The nudge fires on the
+     * same three-minute schedule as the probe that watches it, so letting `worked = true` reset
+     * the streak would mean the streak could never reach two — a threshold measured against a
+     * clock the act of measuring resets, which is invariant 30 exactly and has already cost this
+     * project one release. `serviceInfo = serviceInfo` on a dead connection may also return
+     * quietly rather than throw, so a "successful" nudge is close to no evidence at all; only a
+     * failing one is worth anything, and it is folded in here as a failing probe.
+     */
+    fun probeFailStreak(context: Context): Int = prefs(context).getInt(KEY_PROBE_FAILS, 0)
+
+    /** Forget the streak. Called on a fresh bind (a new question) and when silence breaks (the
+     *  window this measures has ended — invariant 33). */
+    fun clearProbeStreak(context: Context) {
+        val p = prefs(context)
+        if (p.getInt(KEY_PROBE_FAILS, 0) != 0) p.edit().putInt(KEY_PROBE_FAILS, 0).apply()
+    }
+
+    /**
+     * **`onDestroy` ran — which is itself the finding.**
+     *
+     * Android calls it when the binding is taken down in an orderly way: the user switching the
+     * service off, the system unbinding it, our own process shutting down cleanly. It is **not**
+     * called when an OEM battery manager force-stops the app, and it is not called when the
+     * process is killed outright.
+     *
+     * So the presence or absence of a recent stamp at the start of an outage separates two things
+     * that look identical from the outside and have nothing else in common:
+     *
+     * - a stamp moments before → the binding was **ended**, by something that meant to end it;
+     * - no stamp at all → the process **vanished** without being told anything.
+     *
+     * Roughly as sharp a discriminator as `OutageLog.aliveButDeaf`, for one line at the one place
+     * that already knew. `onDestroy` used to set `connected = false` and record nothing.
+     */
+    fun recordUnbind(context: Context, now: Long = System.currentTimeMillis()) {
+        val p = prefs(context)
+        p.edit()
+            .putLong(KEY_UNBOUND_AT, now)
+            .putInt(KEY_UNBINDS, p.getInt(KEY_UNBINDS, 0) + 1)
+            .apply()
+    }
+
+    /** When the binding was last taken down in an orderly way (0 = never since install). */
+    fun lastUnboundAt(context: Context): Long = prefs(context).getLong(KEY_UNBOUND_AT, 0L)
+
+    fun unbindCount(context: Context): Int = prefs(context).getInt(KEY_UNBINDS, 0)
 
     /**
      * Counts `onInterrupt` — Android telling the service to stop what it is doing.

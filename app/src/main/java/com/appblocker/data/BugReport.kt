@@ -362,6 +362,29 @@ data class BugReport(
             // this phone raised and not one thing about how fast any of them arrived, which is
             // the only question the owner has actually asked twice.
             "blockSpeed",
+            // Two counts of the app's own exit walk after a Shorts block: how often the reel was
+            // confirmed shut before leaving, and how often it could not be. Says nothing about
+            // what was watched — not a video id, not a channel, not a word. It exists because
+            // whether BACK closes YouTube's reel is unknowable from here and has to be measured
+            // on his phone.
+            "shortsExit",
+            // The watcher's own "can I still read the screen?" probe: a streak of consecutive
+            // failures, and how many failures there have been in total. A count of a question the
+            // app asked itself — it names nothing that was on the screen, only whether there was
+            // one it could read. This is the number that says whether the fifteen-minute detector
+            // is firing at all on his phone, which nothing else can answer.
+            "probeStreak",
+            // Whether `onDestroy` ever ran: an orderly unbind versus a process that vanished.
+            // Two entirely different causes that look identical from outside, separated by one
+            // boolean.
+            "unbindSeen",
+            // Which of the three detectors found the last outage — "unbound" / "probe" / "stale".
+            // Without it a shorter detection gap cannot be attributed to anything.
+            "outageDetectedBy",
+            // How many times the alarm found WorkManager had stopped running. Every other
+            // background check in this app is a WorkManager job, so this is the first number
+            // anyone has had about whether that scheduler is reliable on his phone.
+            "workerSilent",
             "layout",
             "theme",
             "serviceOn",

@@ -23,6 +23,7 @@ import com.appblocker.data.OutageLog
 import com.appblocker.data.PinStore
 import com.appblocker.data.QuickSession
 import com.appblocker.data.SettingsStore
+import com.appblocker.data.ProtectionPulse
 import com.appblocker.data.SilenceLog
 import com.appblocker.ui.hasUsageAccess
 import com.appblocker.ui.isIgnoringBattery
@@ -118,6 +119,30 @@ object BugReportSender {
         }
         field("unreadyDecisions") {
             SilenceLog.get(ctx, SilenceLog.UNREADY_DECISIONS).total.toString()
+        }
+        // "12 shut, 2 blind" — Shorts dismissals where the reel was confirmed closed before
+        // leaving, against ones where it could not be confirmed and the walk pressed nothing.
+        // Whether BACK actually pops YouTube's reel is a fact about someone else's app on his
+        // phone, so it cannot be tested here and is measured instead. A rising "blind" against a
+        // flat "shut" means the reel markers or the BACK behaviour have moved.
+        field("shortsExit") {
+            val shut = SilenceLog.get(ctx, SilenceLog.SHORTS_EXIT_CLOSED).total
+            val blind = SilenceLog.get(ctx, SilenceLog.SHORTS_EXIT_BLIND).total
+            if (shut == 0 && blind == 0) "none yet" else "$shut shut, $blind blind"
+        }
+        // The pull side of liveness. A non-zero streak in a report is the watcher saying, at the
+        // moment the report was written, that it could not read a lit screen — which is the
+        // "alive but deaf" case that used to take two hours to admit to.
+        field("probeStreak") { ServiceHealth.probeFailStreak(ctx).toString() }
+        // Did the binding ever come down in an orderly way? An OEM force-stop never reaches
+        // onDestroy, so "no" alongside outages means the process is being killed outright.
+        // How often the alarm caught WorkManager not running. A climbing number here means the
+        // scheduler every other background check depends on is being throttled or killed, which
+        // is a live hypothesis for the outages and has never been measurable.
+        field("workerSilent") { ProtectionPulse.silentCount(ctx).toString() }
+        field("unbindSeen") {
+            val n = ServiceHealth.unbindCount(ctx)
+            if (n == 0) "never" else "$n"
         }
         field("adultPack") { SettingsStore.adultWordsPack(ctx).toString() }
         field("scanEverywhere") { SettingsStore.keywordsEverywhere(ctx).toString() }
@@ -294,6 +319,9 @@ object BugReportSender {
                         "outageDeaf" to "${episode.aliveButDeaf}",
                         "outagePreceded" to episode.precededBy,
                         "outageEnded" to endedBy,
+                        // Which detector caught it. Read alongside outageDetectMin: the same gap
+                        // means something completely different depending on which arm produced it.
+                        "outageDetectedBy" to episode.detectedBy,
                         "outageCount" to "${OutageLog.totals(context).count}",
                     ),
                     recentBlocks = BlockLog.recent(context),

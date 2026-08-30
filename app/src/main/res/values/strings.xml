@@ -349,7 +349,7 @@
     <string name="onboarding_open_settings">Open Settings</string>
     <string name="onboarding_done">That\'s it — it\'s on. Tap Continue.</string>
     <string name="onboarding_steps_heading">What to do in Settings — %1$s steps</string>
-    <string name="onboarding_leaves_app">The button below leaves AppBlocker and opens your phone\'s own Settings. Do these, then come straight back here — this screen will tell you if it worked. The steps go with you: swipe down from the top of the screen to see them again while you\'re in Settings.</string>
+    <string name="onboarding_leaves_app">The button below leaves AppBlocker and opens your phone\'s own Settings. Come back here when you\'re done and this screen will tell you if it worked. The steps follow you — swipe down from the top to see them again.</string>
     <string name="onboarding_headline_accessibility">Blocking needs one switch</string>
     <string name="onboarding_headline_overlay">Let the block screen show</string>
     <string name="onboarding_stuck_title">Not switched on yet</string>
@@ -399,14 +399,15 @@
 
     <string name="permissions_header">Grant these so AppBlocker can block reliably.</string>
     <string name="permissions_brand_note">Note for %1$s phones</string>
+    <string name="permissions_tips_title">Keeping it running on %1$s</string>
     <string name="permissions_clone_note">A copy of an app inside %1$s is a separate app that AppBlocker cannot see or block. Blocking the original doesn\'t cover the copy.</string>
     <string name="permissions_spaces_title">Switching spaces or users</string>
     <string name="permissions_alert_title">Protection alert</string>
     <string name="permissions_alert_body">AppBlocker warns you with a notification if blocking ever stops — whether you switched it off or your phone shut it down while still showing it as on. Tap below to check the alert reaches your phone.</string>
     <string name="permissions_alert_button">Send a test alert</string>
     <string name="restricted_title">Accessibility toggle greyed out?</string>
-    <string name="restricted_body">This only matters if the switch is actually greyed out. Android 13 and newer block it for apps installed outside an app store, and say nothing about why. To unlock it: open Settings ▸ Apps ▸ AppBlocker, tap ⋮ in the top corner, and choose “Allow restricted settings”. Then come back and turn Accessibility on.</string>
-    <string name="restricted_android15">On Android 15 that ⋮ menu may not be there — Android redesigned the page. If you can\'t find it, go back and try the switch again: if it isn\'t greyed out, none of this applies to you.</string>
+    <string name="restricted_body">Only if the switch is actually greyed out. Android 13 and newer block it for apps installed outside an app store. To unlock it: Settings ▸ Apps ▸ AppBlocker, tap ⋮ in the top corner, choose “Allow restricted settings”, then come back.</string>
+    <string name="restricted_android15">On Android 15 that ⋮ menu may be gone. If you can\'t find it, try the switch again — if it isn\'t greyed out, none of this applies to you.</string>
 
     <string name="disclosure_noaccount_body">AppBlocker has no sign-in. Nobody — including the developer — can see what\'s on your screen or what you block.</string>
     <string name="onboarding_stuck_accessibility">Nothing is broken — this screen is easy to miss. %1$s Tap “Try again” and follow the pictures below; the row you are looking for is called AppBlocker.</string>
@@ -878,6 +879,9 @@
     <string name="editor_mode_title">Blocking mode</string>
     <string name="editor_mode_body">Choose the variant that works best for you.</string>
     <string name="editor_shorts">Shorts</string>
+    <string name="shorts_pip_title">Stop a Short floating over your screen</string>
+    <string name="shorts_pip_body">YouTube can keep a Short playing in a small window on top of everything else. One tap turns that off for good.</string>
+    <string name="shorts_pip_button">Open the setting</string>
     <string name="editor_protection_off">Protection is off</string>
     <string name="editor_protection_off_body">Turn on the blocker so your choices actually block.</string>
     <string name="editor_turn_on">Turn on protection</string>

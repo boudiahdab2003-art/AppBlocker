@@ -2,6 +2,7 @@ package com.appblocker.service
 
 import android.Manifest
 import android.accessibilityservice.AccessibilityService
+import android.app.KeyguardManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -19,6 +20,7 @@ import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.os.SystemClock
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
@@ -506,6 +508,15 @@ class BlockerAccessibilityService : AccessibilityService() {
     }
 
     /**
+     * The walk that closes a Short after "Got it" and then leaves YouTube — see [ShortsExit].
+     *
+     * A job rather than a handler runnable because each step re-reads the window tree, which is a
+     * bounded but real node walk (invariant 25) and has no business on the main thread. It reads on
+     * a background thread and acts back on Main, the same shape as [scanShorts].
+     */
+    @Volatile private var shortsExitJob: Job? = null
+
+    /**
      * Proof that the watcher is still alive **when nothing is happening on screen**.
      *
      * [ServiceHealth.recordEvent] only stamps from the event path, so a phone left alone for an
@@ -527,6 +538,14 @@ class BlockerAccessibilityService : AccessibilityService() {
             guarded(applicationContext, "heartbeat") {
                 ServiceHealth.recordAlive(applicationContext)
                 val silence = stopwatchNow() - lastEventReceivedAt
+                // The end of the window the probe streak measures has to be wired to something,
+                // or a streak of four sits at four for the life of the process and the next quiet
+                // spell starts one failure from the verdict (invariant 33). An event arriving IS
+                // the watcher working, and it is the only thing that may say so — see
+                // ServiceHealth.probeFailStreak on why a successful nudge must not.
+                if (silence < REVIVE_AFTER_SILENCE_MS) {
+                    ServiceHealth.clearProbeStreak(applicationContext)
+                }
                 if (silence >= REVIVE_AFTER_SILENCE_MS &&
                     stopwatchNow() - lastReviveAttemptAt >= REVIVE_AFTER_SILENCE_MS
                 ) {
@@ -542,12 +561,47 @@ class BlockerAccessibilityService : AccessibilityService() {
                     // deaf while running, a flat zero alongside outages is one being killed
                     // outright. A nudge that THROWS is evidence too — the binding is already gone,
                     // not merely quiet.
+                    // ⚠️ Read BEFORE the nudge. The nudge is the app trying to change the thing
+                    // the probe is measuring, so measuring afterwards would be measuring the
+                    // repair rather than the fault.
+                    val readable = probeScreen()
                     val worked = runCatching { serviceInfo = serviceInfo }.isSuccess
                     ServiceHealth.recordRevive(applicationContext, worked)
+                    // The pull half of liveness — see ServiceHealth.recordProbe. A nudge that
+                    // threw is folded in here rather than counted as its own staleness arm: two
+                    // counters that both mean "the watcher is deaf" is the drift shape this
+                    // codebase has paid for more than any other.
+                    ServiceHealth.recordProbe(applicationContext, ok = readable && worked)
                 }
             }
             handler.postDelayed(this, HEARTBEAT_MS)
         }
+    }
+
+    /**
+     * **Can this service still read the screen?** — asked, rather than inferred from silence.
+     *
+     * `rootInActiveWindow` is the cheapest question that only a service the framework is still
+     * talking to can answer. Deliberately **not** `windows`: that returns an empty list without
+     * `flagRetrieveInteractiveWindows`, which `accessibility_service_config.xml` does not declare,
+     * so a probe built on it would report failure forever and look perfectly correct.
+     *
+     * ⚠️ **Every "can't tell" passes**, which is the same rule as `usedMinutesSinceLastEvent`
+     * being null and the reason this can never cry wolf. There are exactly three, and each is a
+     * state where a null tree is *expected* rather than evidence:
+     * - the screen is off — nothing is drawing, so nothing is readable;
+     * - the keyguard is up — the lock screen is not ours to read;
+     * - no `PowerManager` at all, which is not a question about the watcher.
+     *
+     * Only a lit, unlocked screen with no readable window counts as a failure, and even then one
+     * failure means nothing: `PROBE_FAIL_LIMIT` of them, three minutes apart, is the verdict.
+     */
+    private fun probeScreen(): Boolean {
+        val pm = getSystemService(POWER_SERVICE) as? PowerManager ?: return true
+        if (!pm.isInteractive) return true
+        val km = getSystemService(KEYGUARD_SERVICE) as? KeyguardManager
+        if (km?.isKeyguardLocked == true) return true
+        return rootInActiveWindow != null
     }
 
     /** When an accessibility event last reached us, monotonically (invariant 9). */
@@ -984,6 +1038,15 @@ class BlockerAccessibilityService : AccessibilityService() {
         // Before the rule flow below has emitted anything. Cheap by design: one string set.
         blockedSnapshot = SettingsStore.blockedSnapshot(this)
         unreadyCounted = false // one count per bind, and this is a bind
+        // A fresh bind is a fresh question. Without this a streak left behind by a process that
+        // died deaf would combine with a new `connected = true` and condemn a watcher that has
+        // just started working.
+        runCatching { ServiceHealth.clearProbeStreak(applicationContext) }
+        // Re-arm the alarm that watches WorkManager. An inexact alarm is re-armed only by its
+        // own firing, so a single missed one would end the chain for the life of the install --
+        // and a rebind is a free chance to repair that, right after the events most likely to
+        // have broken it (a boot, an update, a space switch).
+        runCatching { ProtectionScheduler.ensureAlarmScheduled(applicationContext) }
         // Restore unexpired keyword lockouts — a service rebind must not unlock an app early.
         // Filtered on the same reckoning that decides whether one is running, not on the wall
         // clock, or a clock change could drop a live lockout here instead of at the check.
@@ -1100,13 +1163,23 @@ class BlockerAccessibilityService : AccessibilityService() {
     private fun handleEvent(event: AccessibilityEvent?) {
         event ?: return
         val pkg = event.packageName?.toString()
-        if (pkg == packageName) return // never act on ourselves
         // Proof of life for the watchdog: "switched on" is not the same as "still working".
         // Self-throttled to one write a minute (ServiceHealth), so this costs a comparison.
+        //
+        // ⚠️ **Above the own-package return, and that is the point.** The return below is about
+        // *acting* — we never block ourselves — but an event carrying our own package name is
+        // proof the framework is still delivering to us, exactly like any other. Stamping
+        // liveness after it meant time spent in our own screens recorded nothing, while
+        // `UsageTracker` counts this app like every other ("every package **including AppBlocker
+        // itself**", its own KDoc). So reading the journal for twenty minutes fed
+        // `usedMinutesSinceLastEvent` while `lastEventAt` stood still — the two halves of the
+        // staleness arm pulling in opposite directions. Only `STALE_AFTER_MS` being two hours
+        // stopped that ever surfacing as a false "blocking has stopped".
         ServiceHealth.recordEvent(applicationContext)
         // The same fact monotonically, for the heartbeat's "have I gone deaf?" question. Not a
         // disk write, and never the wall clock (invariant 9).
         lastEventReceivedAt = stopwatchNow()
+        if (pkg == packageName) return // never act on ourselves
         // Where the stopwatch starts for a whole-app block, which is decided and covered inside
         // this same turn of the main thread. The scans cannot use it — they answer long after the
         // event that woke them, by which time later events have moved it on — so they carry their
@@ -2051,6 +2124,10 @@ class BlockerAccessibilityService : AccessibilityService() {
         // The Shorts scan was the one thing screen-off never stopped — so it could finish after
         // all the cleanup below and raise a cover with nothing left to take it down.
         shortsScanJob?.cancel()
+        // Same rule, one job later: a Shorts exit left running here would keep pressing BACK into
+        // a phone that has just been locked. Every scan job is cancelled in both this method and
+        // onDestroy, and CodeShapeTest fails the build if a new one is not.
+        shortsExitJob?.cancel()
         webScanQueuedAt = 0L
         // Stop trying to send a screened-off phone Home, and release the attempt dedup: the
         // next unlock starts clean, so a fresh open of the app is a fresh attempt.
@@ -2556,6 +2633,11 @@ class BlockerAccessibilityService : AccessibilityService() {
         // the YouTube UI behind it, re-keying the cover to "shorts": a visible repaint plus
         // a double-counted attempt. Leave the app-block cover alone.
         if (overlay.isShowing && overlay.isAppBlock) return
+        // A Shorts exit is walking the player shut right now. Raising the cover again mid-walk
+        // would put our own window in front of the thing it is reading, and readPlayerView answers
+        // UNREADABLE to that — so every remaining step would go blind and the walk would stall
+        // into give-up. The exit hands the player back here when it finishes, either way.
+        if (shortsExitJob?.isActive == true) return
         if (!SettingsStore.blockYoutubeShorts(applicationContext) || !quickBlockActive() ||
             lastForegroundPkg != YOUTUBE_PKG
         ) {
@@ -2806,7 +2888,6 @@ class BlockerAccessibilityService : AccessibilityService() {
      */
     private fun onCoverDismissed() {
         // Read before anything is torn down — remove() clears it.
-        val wasShorts = overlay.counterKey == CoverGate.SHORTS_KEY
         dismissedKey = overlay.counterKey
         dismissedPkg = lastForegroundPkg
         // Read AFTER dismissedKey, which is what decides which unit this cover thinks in.
@@ -2820,60 +2901,146 @@ class BlockerAccessibilityService : AccessibilityService() {
         // block again, not read as "already handled" via the text dedup.
         lastWebText = null
         lastCheckedUrl = null
-        if (wasShorts) {
-            // The Shorts cover is scoped to the player, so it must NOT be held until the user
-            // leaves YouTube — the rest of the app is meant to keep working. Taking it down
-            // hands ownership straight back to its scan, which redraws it on the next tick if
-            // the user is still on a Short. (shortsCovering is derived from the visible cover
-            // now, so there is no flag to clear here: removing it IS the state change.)
-            overlay.remove()
-            performGlobalAction(GLOBAL_ACTION_HOME)
-        } else if (
-            CoverGate.exitFor(dismissedKey) == CoverGate.Exit.BACK &&
-            !CoverGate.backExitFailed(
-                dismissedPkg, lastBackExitPkg, stopwatchNow() - lastBackExitAt,
-            )
-        ) {
-            // **A page cover covers a page, so its exit is off the page — not out of the app.**
-            // The app underneath is not blocked (a site hit adds no lockout), and firing HOME left
-            // him in a loop he reported: the blocked site is still the open tab, so coming back to
-            // the browser lands on it and covers again, with no way from the cover to a different
-            // page. See CoverGate.exitFor.
-            //
-            // The old objection to BACK is at the raise site — "it races with the just-launched
-            // activity and dismisses it" — and it is about firing BACK *automatically at block
-            // time*, against an activity that is still opening. This is a deliberate tap seconds
-            // later with nothing launching. Different moment, different race.
-            //
-            // Not a bypass: the scan re-runs on whatever page BACK lands on, and another blocked
-            // page covers again. The dismiss grace set above absorbs only the page being left,
-            // exactly as it already does for the trip Home.
-            lastBackExitPkg = dismissedPkg
-            lastBackExitAt = stopwatchNow()
-            dismissedViaBack = true
-            overlay.remove()
-            performGlobalAction(GLOBAL_ACTION_BACK)
-            // **A blocked word locks the whole app, and nothing was raising that lock's cover.**
-            // The lockout is recorded the instant the word is caught, but the "Locked" screen it
-            // calls for waits for [handleAppBlock] to run again — and the only things that run it
-            // are a foreground change and the thirty-second re-check tick. BACK keeps him in the
-            // same app, and the page it lands on is static and emits nothing, so an app he had
-            // just been locked out of sat there usable for up to half a minute.
-            //
-            // Re-decide the moment the grace ends instead. No scan and no reading of the screen:
-            // the lockout is already recorded, so this is a decision whose inputs are all in hand.
-            lastForegroundPkg?.let { pkg ->
-                if (keywordLockoutRemaining(pkg) > 0L) {
+        // A `when` over the **enum**, deliberately, and not a chain of ifs: a non-exhaustive
+        // `when` on an enum subject is a compile error, so a fourth kind of cover cannot be added
+        // without something here deciding how it leaves. The old shape — a boolean for Shorts,
+        // then an `if` for BACK, then a catch-all `else` — meant every new cover silently
+        // inherited HOME, which is exactly how the Shorts cover came to fire the one action that
+        // makes a playing video float away (see CoverGate.exitFor).
+        when (CoverGate.exitFor(dismissedKey)) {
+            CoverGate.Exit.BACK_THEN_HOME -> startShortsExit()
+
+            CoverGate.Exit.BACK -> if (
+                !CoverGate.backExitFailed(
+                    dismissedPkg, lastBackExitPkg, stopwatchNow() - lastBackExitAt,
+                )
+            ) {
+                // **A page cover covers a page, so its exit is off the page — not out of the app.**
+                // The app underneath is not blocked (a site hit adds no lockout), and firing HOME
+                // left him in a loop he reported: the blocked site is still the open tab, so coming
+                // back to the browser lands on it and covers again, with no way from the cover to a
+                // different page. See CoverGate.exitFor.
+                //
+                // The old objection to BACK is at the raise site — "it races with the just-launched
+                // activity and dismisses it" — and it is about firing BACK *automatically at block
+                // time*, against an activity that is still opening. This is a deliberate tap seconds
+                // later with nothing launching. Different moment, different race.
+                //
+                // Not a bypass: the scan re-runs on whatever page BACK lands on, and another blocked
+                // page covers again. The dismiss grace set above absorbs only the page being left,
+                // exactly as it already does for the trip Home.
+                lastBackExitPkg = dismissedPkg
+                lastBackExitAt = stopwatchNow()
+                dismissedViaBack = true
+                overlay.remove()
+                performGlobalAction(GLOBAL_ACTION_BACK)
+                // **A blocked word locks the whole app, and nothing was raising that lock's cover.**
+                // The lockout is recorded the instant the word is caught, but the "Locked" screen it
+                // calls for waits for [handleAppBlock] to run again — and the only things that run
+                // it are a foreground change and the thirty-second re-check tick. BACK keeps him in
+                // the same app, and the page it lands on is static and emits nothing, so an app he
+                // had just been locked out of sat there usable for up to half a minute.
+                //
+                // Re-decide the moment the grace ends instead. No scan and no reading of the screen:
+                // the lockout is already recorded, so this is a decision whose inputs are all in
+                // hand.
+                val lockedPkg = lastForegroundPkg
+                if (lockedPkg != null && keywordLockoutRemaining(lockedPkg) > 0L) {
                     handler.removeCallbacks(recheckRunnable)
                     handler.postDelayed(recheckRunnable, CoverGate.DISMISS_GRACE_MS + 150L)
                 }
+            } else {
+                // BACK has already been tried in this app and left him somewhere still worth
+                // covering, so this tap leaves instead. See CoverGate.backExitFailed.
+                startExit(dismissedPkg)
             }
-        } else {
+
             // Everything else — a whole app, the purchase sheet, a Settings page we bounced out
-            // of, and a page whose BACK has already been tried — is held until the user is really
-            // off the app it covered, so a swallowed HOME can't leave the thing we were covering
-            // exposed.
-            startExit(dismissedPkg)
+            // of — is held until the user is really off the app it covered, so a swallowed HOME
+            // can't leave the thing we were covering exposed.
+            CoverGate.Exit.HOME -> startExit(dismissedPkg)
+        }
+    }
+
+    /**
+     * "Got it" on a **Shorts** cover: close the reel, confirm it closed, and only then leave
+     * YouTube. See [ShortsExit] for the rules and [CoverGate.Exit.BACK_THEN_HOME] for why this is
+     * a third exit rather than a variation on the other two.
+     *
+     * ## Why the cover comes down first, against this file's usual instinct
+     *
+     * Every other exit **holds** the cover until the user is verifiably off the app. Here that
+     * would break the mechanism: [readPlayerView] answers `UNREADABLE` whenever our own package is
+     * the active window, and our cover is exactly that. Holding it up would blind every reading
+     * and reduce this to firing blind actions — which is the bug being fixed, not a safer version
+     * of it.
+     *
+     * Taking it down is safe because [CoverGate.suppressed] exempts Shorts covers: if the close
+     * fails, [scheduleShortsScan] re-covers the player within a tick. And it makes the failure
+     * mode of this whole walk *"nothing happens"* rather than *"a cover is stuck"* — invariant 7
+     * (never trap the user) satisfied by construction rather than by a timeout.
+     *
+     * The first BACK is unconditional and fires before any reading: at the instant "Got it" is
+     * tapped, "a Short is on screen" is the best-evidenced fact in the system — the cover is up,
+     * and its own scan takes it down as soon as that stops being true.
+     */
+    private fun startShortsExit() {
+        performGlobalAction(GLOBAL_ACTION_BACK)
+        // Recorded because a BACK really was fired *inside* the app: the dismiss grace should be
+        // the short one, not the eight seconds priced for a swallowed HOME. CoverGate.inGrace asks
+        // for the move that was actually made, not the key it was made for.
+        dismissedViaBack = true
+        overlay.remove()
+        val startedAt = stopwatchNow()
+        shortsExitJob?.cancel()
+        shortsExitJob = scope.launch {
+            var backsSent = 1
+            var closedReads = 0
+            while (true) {
+                delay(ShortsExit.CLOSE_POLL_MS)
+                val view = readPlayerView()
+                closedReads = if (view == PlayerView.CLOSED) closedReads + 1 else 0
+                val step = ShortsExit.next(
+                    view, backsSent, closedReads, stopwatchNow() - startedAt,
+                )
+                if (DEBUG) Log.d(TAG, "shortsExit: view=$view backs=$backsSent step=$step")
+                when (step) {
+                    ShortsExit.Step.BACK -> {
+                        backsSent++
+                        withContext(Dispatchers.Main) {
+                            performGlobalAction(GLOBAL_ACTION_BACK)
+                        }
+                    }
+                    ShortsExit.Step.HOME -> {
+                        SilenceLog.record(applicationContext, SilenceLog.SHORTS_EXIT_CLOSED)
+                        withContext(Dispatchers.Main) {
+                            // Hand over to the ordinary exit watcher, which owns leaving an app
+                            // and re-tries a swallowed HOME. It restamps exitStartedAt, so the
+                            // trip Home gets its own full budget rather than what this walk left.
+                            //
+                            // dismissedViaBack goes back to false: the move that now decides the
+                            // grace is a trip Home, and that one needs the long window.
+                            dismissedViaBack = false
+                            startExit(YOUTUBE_PKG)
+                        }
+                        return@launch
+                    }
+                    // He is already out of YouTube — the BACK that closed the reel also left the
+                    // app, or he walked out himself. Nothing to press.
+                    ShortsExit.Step.DONE -> return@launch
+                    ShortsExit.Step.GIVE_UP -> {
+                        // ⚠️ Presses NOTHING. A close that could not be confirmed must never be
+                        // followed by HOME: HOME on a playing Short is what hands it to a floating
+                        // window, which is the entire reason this walk exists. Leaving it alone
+                        // costs nothing — the cover is already down and the scan owns the player
+                        // again, so a Short still playing is re-covered on the next tick.
+                        SilenceLog.record(applicationContext, SilenceLog.SHORTS_EXIT_BLIND)
+                        withContext(Dispatchers.Main) { scheduleShortsScan() }
+                        return@launch
+                    }
+                    ShortsExit.Step.WAIT -> Unit
+                }
+            }
         }
     }
 
@@ -2964,6 +3131,11 @@ class BlockerAccessibilityService : AccessibilityService() {
         // Cleared FIRST: everything below can throw, and a watcher that has begun tearing itself
         // down is not running whether or not the rest of this method completes.
         connected = false
+        // The binding is being taken down in an orderly way, and *that* is the finding — an OEM
+        // force-stop never gets here, and neither does a killed process. See recordUnbind: a
+        // stamp at the start of an outage means something ended the binding, and no stamp means
+        // the process vanished without being told anything.
+        runCatching { ServiceHealth.recordUnbind(applicationContext) }
         handler.removeCallbacks(heartbeatRunnable)
         handler.removeCallbacks(webScanRunnable)
         handler.removeCallbacks(shortsScanRunnable)
@@ -2993,6 +3165,9 @@ class BlockerAccessibilityService : AccessibilityService() {
         unlockReceiver?.let { runCatching { unregisterReceiver(it) } }
         unlockReceiver = null
         overlay.remove()
+        // Cancels every scan/exit job in one go — they are all launched on this scope, so there is
+        // nothing to enumerate here and nothing that can be forgotten when a new one is added.
+        // Screen-off is the case that has to name them individually, and CodeShapeTest checks it.
         scope.cancel()
     }
 

@@ -1,5 +1,7 @@
 package com.appblocker.service
 
+import com.appblocker.data.OutageLog
+
 /** What the watchdog found. */
 internal enum class ProtectionState {
     OK,
@@ -35,6 +37,23 @@ internal const val STALE_AFTER_MS = 2 * 60 * 60_000L
 internal const val STALE_MIN_USED_MINUTES = 15
 
 /**
+ * Consecutive failed probes before a **bound** watcher is called dead.
+ *
+ * A probe is the service asking, on a lit and unlocked screen, whether it can still read a window
+ * at all — `BlockerAccessibilityService.probeScreen`, recorded by
+ * [com.appblocker.data.ServiceHealth.recordProbe]. It runs only inside the heartbeat's existing
+ * "several minutes of silence" branch, so five of them is roughly a quarter of an hour of a
+ * connection that is gone while Android's switch still reads ON.
+ *
+ * **This is the arm that closes the two-hour hole.** The event-staleness path below needs
+ * [STALE_AFTER_MS] to pass *and* [STALE_MIN_USED_MINUTES] of measured use *and* usage-stats
+ * permission, because an absence of events is weak evidence on its own — an idle phone produces
+ * exactly the same silence as a dead watcher. A service that cannot read a lit, unlocked screen is
+ * not weak evidence, so it is not made to wait like it.
+ */
+internal const val PROBE_FAIL_LIMIT = 5
+
+/**
  * Decides whether blocking is healthy, switched off, or **stalled**: switched on, yet the watcher
  * has shown no sign of life for hours while the phone was clearly being used. That last state is
  * the one the app used to be blind to — aggressive OEM battery managers (HyperOS especially) kill
@@ -56,6 +75,9 @@ internal const val STALE_MIN_USED_MINUTES = 15
  *   couldn't tell** — which must behave exactly as this function did before the parameter existed.
  * @param msSinceProcessStart how long our process has been up, monotonically. Only read when
  *   [serviceConnected] is false, to skip the moment before Android has bound us.
+ * @param probeFailStreak consecutive failures of the watcher's own "can I still read the screen?"
+ *   probe — see [PROBE_FAIL_LIMIT]. Zero when nothing has been measured, which is the same as
+ *   healthy: this arm can only ever *add* a verdict, never soften one.
  */
 internal fun protectionState(
     enabled: Boolean,
@@ -65,8 +87,42 @@ internal fun protectionState(
     updatePaused: Boolean = false,
     serviceConnected: Boolean? = null,
     msSinceProcessStart: Long = Long.MAX_VALUE,
-): ProtectionState {
-    if (!enabled) return ProtectionState.OFF
+    probeFailStreak: Int = 0,
+): ProtectionState = protectionVerdict(
+    enabled, lastEventAt, now, usedMinutesSinceLastEvent,
+    updatePaused, serviceConnected, msSinceProcessStart, probeFailStreak,
+).state
+
+/**
+ * The state **and which arm produced it** — one evaluation, so the two can never disagree.
+ *
+ * [protectionState] delegates here and throws the arm away. That indirection is the point: there
+ * are now three routes to STALLED answering at wildly different speeds (twenty seconds, a quarter
+ * of an hour, two hours), and `OutageLog` has to record which one fired or a change in detection
+ * time cannot be attributed to anything — invariant 31, measuring the crossing and discarding what
+ * caused it.
+ *
+ * ⚠️ **The obvious alternative was a second function that re-derives the arm from the same inputs,
+ * and that is the shape this codebase has been hurt by most** — two implementations of one
+ * ordering, drifting the first time somebody edits one. `ProtectionStateTest` also pins the two
+ * halves together: STALLED always names an arm, and nothing else ever does.
+ */
+internal data class Verdict(val state: ProtectionState, val arm: String?)
+
+internal fun protectionVerdict(
+    enabled: Boolean,
+    lastEventAt: Long,
+    now: Long,
+    usedMinutesSinceLastEvent: Int?,
+    updatePaused: Boolean = false,
+    serviceConnected: Boolean? = null,
+    msSinceProcessStart: Long = Long.MAX_VALUE,
+    probeFailStreak: Int = 0,
+): Verdict {
+    fun ok(state: ProtectionState) = Verdict(state, null)
+    fun stalled(arm: String) = Verdict(ProtectionState.STALLED, arm)
+
+    if (!enabled) return ok(ProtectionState.OFF)
     // Switched on in Settings, and not running. This is the whole of the Second Space failure:
     // the phone stops every app in the space, HyperOS doesn't always rebind us on the way back,
     // and the setting still lists us because it records a *choice*. Everything below this line
@@ -84,13 +140,32 @@ internal fun protectionState(
     // The bind grace below, plus bindPending's deferrals, are what stop this crying wolf during
     // the seconds Android legitimately takes to rebind after an install.
     if (serviceConnected == false && msSinceProcessStart >= SERVICE_BIND_GRACE_MS) {
-        return ProtectionState.STALLED
+        return stalled(OutageLog.DetectedBy.UNBOUND)
     }
-    if (updatePaused) return ProtectionState.PAUSED
-    if (lastEventAt <= 0L) return ProtectionState.OK // never ran yet (fresh install/just enabled)
-    if (now - lastEventAt < STALE_AFTER_MS) return ProtectionState.OK
-    val used = usedMinutesSinceLastEvent ?: return ProtectionState.OK
-    return if (used >= STALE_MIN_USED_MINUTES) ProtectionState.STALLED else ProtectionState.OK
+    // Bound, running its own timer, and unable to read a lit unlocked screen five times running.
+    // That is the "alive but deaf" half of the owner's complaint, and until now the only detector
+    // for it was the two-hour staleness check below.
+    //
+    // `== true` is required, not merely tidy. `false` is already answered above; `null` means the
+    // caller could not tell whether we are bound, and a persisted streak must never be combined
+    // with an unknown liveness — that is how a count left behind by a dead process gets read as a
+    // verdict about a live one.
+    //
+    // Placed above PAUSED for the same reason the unbound arm is: an update pause covers exactly
+    // the window in which Android has just killed our process (invariant 21), so ranking the pause
+    // first is what hid the leading outage hypothesis from its own instrument in v1.143.
+    if (serviceConnected == true && probeFailStreak >= PROBE_FAIL_LIMIT) {
+        return stalled(OutageLog.DetectedBy.PROBE)
+    }
+    if (updatePaused) return ok(ProtectionState.PAUSED)
+    if (lastEventAt <= 0L) return ok(ProtectionState.OK) // never ran yet (fresh install/just enabled)
+    if (now - lastEventAt < STALE_AFTER_MS) return ok(ProtectionState.OK)
+    val used = usedMinutesSinceLastEvent ?: return ok(ProtectionState.OK)
+    return if (used >= STALE_MIN_USED_MINUTES) {
+        stalled(OutageLog.DetectedBy.STALE)
+    } else {
+        ok(ProtectionState.OK)
+    }
 }
 
 /**

@@ -1,7 +1,11 @@
 package com.appblocker
 
+import com.appblocker.data.OutageLog
+import com.appblocker.service.PROBE_FAIL_LIMIT
 import com.appblocker.service.ProtectionState
 import com.appblocker.service.SERVICE_BIND_GRACE_MS
+import com.appblocker.service.STALE_MIN_USED_MINUTES
+import com.appblocker.service.protectionVerdict
 import com.appblocker.service.bindPending
 import com.appblocker.service.protectionState
 import org.junit.Assert.assertEquals
@@ -329,4 +333,141 @@ class ProtectionStateTest {
                 serviceConnected = false, msSinceProcessStart = 2_000L,
             ),
         )
+
+    // --- The probe arm: a bound watcher that cannot read the screen ---------------------------
+
+    /**
+     * **The hole this closes.** Until now the only detector for "bound but deaf" was the staleness
+     * check above, which needs two hours *plus* fifteen measured minutes *plus* usage-stats
+     * permission. Everything here is inside that window — five minutes of silence, no usage access
+     * at all — and it is still STALLED, because a watcher answering "I cannot read a lit, unlocked
+     * screen" five times running is not an absence of evidence.
+     */
+    @Test fun aWatcherThatCannotReadALitScreenIsStalled() =
+        assertEquals(
+            ProtectionState.STALLED,
+            protectionState(
+                true, lastEventAt = now - 5 * 60_000L, now = now,
+                usedMinutesSinceLastEvent = null,
+                serviceConnected = true, probeFailStreak = PROBE_FAIL_LIMIT,
+            ),
+        )
+
+    /** One bad reading is a bad reading. The limit is what makes it a verdict. */
+    @Test fun oneFailedProbeIsNotEnough() =
+        assertEquals(
+            ProtectionState.OK,
+            protectionState(
+                true, lastEventAt = now - 5 * 60_000L, now = now,
+                usedMinutesSinceLastEvent = null,
+                serviceConnected = true, probeFailStreak = PROBE_FAIL_LIMIT - 1,
+            ),
+        )
+
+    /**
+     * ⚠️ A streak only means something about a watcher we know is bound.
+     *
+     * `false` is already answered by the arm above it, and `null` is "we could not tell" — pairing
+     * a persisted count with an unknown liveness is how a streak left behind by a process that
+     * died deaf gets read as a verdict about the one running now.
+     */
+    @Test fun theProbeStreakIsIgnoredWhenLivenessIsUnknown() =
+        assertEquals(
+            ProtectionState.OK,
+            protectionState(
+                true, lastEventAt = now - 5 * 60_000L, now = now,
+                usedMinutesSinceLastEvent = null,
+                serviceConnected = null, probeFailStreak = PROBE_FAIL_LIMIT * 10,
+            ),
+        )
+
+    /**
+     * Failing probes outrank an update pause, for the same reason the unbound arm does: the pause
+     * covers exactly the window after an install, which is when Android has just killed the
+     * process — so ranking the pause first is what hid the leading outage hypothesis from its own
+     * instrument until v1.144.
+     */
+    @Test fun probeFailuresOutrankAnUpdatePause() =
+        assertEquals(
+            ProtectionState.STALLED,
+            protectionState(
+                true, lastEventAt = now - 5 * 60_000L, now = now,
+                usedMinutesSinceLastEvent = null, updatePaused = true,
+                serviceConnected = true, probeFailStreak = PROBE_FAIL_LIMIT,
+            ),
+        )
+
+    /** Telling someone to revive a service they switched off themselves would be wrong. */
+    @Test fun switchedOffOutranksAFailingProbe() =
+        assertEquals(
+            ProtectionState.OFF,
+            protectionState(
+                enabled = false, lastEventAt = now, now = now,
+                usedMinutesSinceLastEvent = null,
+                serviceConnected = true, probeFailStreak = PROBE_FAIL_LIMIT,
+            ),
+        )
+
+    /** Nothing measured is not a complaint: the arm can only ever add a verdict, never soften one. */
+    @Test fun noProbesYetChangesNothing() =
+        assertEquals(
+            ProtectionState.OK,
+            protectionState(
+                true, lastEventAt = now - 5 * 60_000L, now = now,
+                usedMinutesSinceLastEvent = 4,
+                serviceConnected = true, probeFailStreak = 0,
+            ),
+        )
+
+    // --- The state and the arm are one answer -------------------------------------------------
+
+    /**
+     * ⚠️ **`OutageLog` records which detector fired, and this is what stops that drifting from the
+     * detector that actually fired.**
+     *
+     * Three routes now reach STALLED at wildly different speeds, and a report that says detection
+     * took twenty seconds is worthless unless the arm named is the arm that did it. The obvious
+     * implementation — a second function re-deriving the arm from the same inputs — is the
+     * two-sources-of-truth shape this codebase has paid for repeatedly, so `protectionVerdict`
+     * produces both in one pass and this sweeps the whole input space to prove the pairing holds:
+     * every STALLED names a real arm, and nothing else ever names one.
+     */
+    @Test fun everyStalledNamesTheArmThatFoundItAndNothingElseDoes() {
+        val flags = listOf(true, false)
+        val liveness = listOf(true, false, null)
+        val used = listOf(null, 0, STALE_MIN_USED_MINUTES, 120)
+        val ages = listOf(0L, now - 60_000L, now - 3 * hour)
+        val streaks = listOf(0, PROBE_FAIL_LIMIT - 1, PROBE_FAIL_LIMIT)
+        val ups = listOf(0L, SERVICE_BIND_GRACE_MS - 1, SERVICE_BIND_GRACE_MS, Long.MAX_VALUE)
+        var stalledSeen = 0
+        for (enabled in flags) for (paused in flags) for (conn in liveness) {
+            for (u in used) for (last in ages) for (streak in streaks) for (up in ups) {
+                val v = protectionVerdict(
+                    enabled, lastEventAt = last, now = now, usedMinutesSinceLastEvent = u,
+                    updatePaused = paused, serviceConnected = conn,
+                    msSinceProcessStart = up, probeFailStreak = streak,
+                )
+                if (v.state == ProtectionState.STALLED) {
+                    stalledSeen++
+                    assertTrue(
+                        "STALLED with arm=${v.arm}, which is not one this log knows",
+                        v.arm in OutageLog.DetectedBy.ALL && v.arm != OutageLog.DetectedBy.UNKNOWN,
+                    )
+                } else {
+                    assertEquals("only STALLED may name an arm", null, v.arm)
+                }
+                assertEquals(
+                    "protectionState must agree with the verdict it delegates to",
+                    v.state,
+                    protectionState(
+                        enabled, lastEventAt = last, now = now, usedMinutesSinceLastEvent = u,
+                        updatePaused = paused, serviceConnected = conn,
+                        msSinceProcessStart = up, probeFailStreak = streak,
+                    ),
+                )
+            }
+        }
+        // A sweep that never reached the state it is about would pass while proving nothing.
+        assertTrue("the sweep never produced a STALLED", stalledSeen > 0)
+    }
 }

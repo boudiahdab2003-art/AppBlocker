@@ -64,6 +64,7 @@ object OutageLog {
     private const val KEY_OPEN_PRECEDED = "open_preceded_by"
     private const val KEY_OPEN_BOOT = "open_boot_count"
     private const val KEY_OPEN_VERSION = "open_version"
+    private const val KEY_OPEN_DETECTED_BY = "open_detected_by"
 
     /** When a version change was last noticed, stamped by [UpdatePause.checkVersionChange]. */
     private const val KEY_LAST_UPDATE_AT = "last_update_at"
@@ -96,6 +97,33 @@ object OutageLog {
         val ALL = setOf(UPDATE, BOOT, NOTHING)
     }
 
+    /**
+     * **Which detector noticed** — without this, a shorter `detectedAfterMs` cannot be attributed
+     * to anything.
+     *
+     * The app now has three ways to conclude blocking has stopped, and they answer at wildly
+     * different speeds: [UNBOUND] in about twenty seconds, [PROBE] in about a quarter of an hour,
+     * [STALE] in two hours plus fifteen measured minutes of use. If the average detection gap
+     * improves after this release, the only way to know *why* is to have recorded which arm fired
+     * — otherwise it is exactly the mistake invariant 31 is about, measuring the crossing and
+     * throwing away what caused it.
+     */
+    object DetectedBy {
+        /** `serviceConnected == false` past the bind grace: the watcher is not there at all. */
+        const val UNBOUND = "unbound"
+
+        /** Bound, but it could not read a lit unlocked screen — see `PROBE_FAIL_LIMIT`. */
+        const val PROBE = "probe"
+
+        /** Hours of silence with the phone measurably in use — the original, slowest detector. */
+        const val STALE = "stale"
+
+        /** An episode recorded before this field existed. Never guessed at. */
+        const val UNKNOWN = "unknown"
+
+        val ALL = setOf(UNBOUND, PROBE, STALE, UNKNOWN)
+    }
+
     /** One finished outage. */
     data class Episode(
         /** Wall clock, roughly when blocking stopped — the last event the watcher saw. */
@@ -112,13 +140,15 @@ object OutageLog {
         val rebooted: Boolean,
         /** The version that was running when it stopped. */
         val versionCode: Long,
+        /** Which arm concluded blocking had stopped — one of [DetectedBy]. */
+        val detectedBy: String = DetectedBy.UNKNOWN,
     ) {
         /** A report-ready line. No content, by construction — every field here is a number. */
         fun render(): String {
             val mins = if (durationMs < 0) "?" else "${durationMs / 60_000}"
             val detect = if (detectedAfterMs < 0) "?" else "${detectedAfterMs / 60_000}"
             return "down=${mins}min  noticedAfter=${detect}min  deaf=$aliveButDeaf  " +
-                "after=$precededBy  rebooted=$rebooted  v=$versionCode"
+                "after=$precededBy  rebooted=$rebooted  v=$versionCode  by=$detectedBy"
         }
     }
 
@@ -145,6 +175,7 @@ object OutageLog {
         aliveButDeaf: Boolean,
         precededBy: String,
         versionCode: Long,
+        detectedBy: String = DetectedBy.UNKNOWN,
     ): Episode {
         val rebooted = bootAtOpen != bootNow
         // A reboot resets the monotonic clock, so the difference across one is not a duration.
@@ -162,6 +193,7 @@ object OutageLog {
             precededBy = if (precededBy in Preceded.ALL) precededBy else Preceded.NOTHING,
             rebooted = rebooted,
             versionCode = versionCode,
+            detectedBy = if (detectedBy in DetectedBy.ALL) detectedBy else DetectedBy.UNKNOWN,
         )
     }
 
@@ -219,7 +251,12 @@ object OutageLog {
      *
      * Never throws: this runs from the watchdog, which runs from the app's own resume path.
      */
-    fun begin(context: Context, lastEventAt: Long, now: Long = System.currentTimeMillis()) {
+    fun begin(
+        context: Context,
+        lastEventAt: Long,
+        now: Long = System.currentTimeMillis(),
+        detectedBy: String = DetectedBy.UNKNOWN,
+    ) {
         runCatching {
             val p = prefs(context)
             if (p.contains(KEY_OPEN_STARTED)) return@runCatching
@@ -244,6 +281,12 @@ object OutageLog {
                 )
                 .putInt(KEY_OPEN_BOOT, DeviceBoot.count(context))
                 .putLong(KEY_OPEN_VERSION, AppVersion.code(context))
+                // Recorded when the episode OPENS, because that is the only moment anyone knows
+                // which arm fired. By the time it closes the state has moved on.
+                .putString(
+                    KEY_OPEN_DETECTED_BY,
+                    if (detectedBy in DetectedBy.ALL) detectedBy else DetectedBy.UNKNOWN,
+                )
                 .apply()
         }
     }
@@ -270,6 +313,7 @@ object OutageLog {
             aliveButDeaf = p.getBoolean(KEY_OPEN_DEAF, false),
             precededBy = p.getString(KEY_OPEN_PRECEDED, Preceded.NOTHING) ?: Preceded.NOTHING,
             versionCode = p.getLong(KEY_OPEN_VERSION, -1L),
+            detectedBy = p.getString(KEY_OPEN_DETECTED_BY, DetectedBy.UNKNOWN) ?: DetectedBy.UNKNOWN,
         )
         val existing = p.getString(KEY_EPISODES, "").orEmpty()
             .split(';').filter { it.isNotBlank() }
@@ -288,6 +332,7 @@ object OutageLog {
             .remove(KEY_OPEN_PRECEDED)
             .remove(KEY_OPEN_BOOT)
             .remove(KEY_OPEN_VERSION)
+            .remove(KEY_OPEN_DETECTED_BY)
             .apply()
         episode
     }.getOrNull()
@@ -326,12 +371,21 @@ object OutageLog {
 
     internal fun encode(e: Episode): String = listOf(
         e.startedAt, e.durationMs, e.detectedAfterMs, e.aliveButDeaf,
-        e.precededBy, e.rebooted, e.versionCode,
+        e.precededBy, e.rebooted, e.versionCode, e.detectedBy,
     ).joinToString("|")
 
+    /**
+     * ⚠️ **Both shapes decode.** The seven-field form is what is already stored on his phone, and
+     * it is the only outage data that has ever existed — the instrument shipped in v1.143 and the
+     * first reports have not come back yet. A strict `p.size != 8` here would silently discard
+     * every episode recorded so far at the moment the app that could finally read them installed.
+     *
+     * A legacy row genuinely does not know which arm found it, and `UNKNOWN` says so rather than
+     * guessing a plausible one — the same rule as a rebooted duration reporting `-1`.
+     */
     internal fun decode(raw: String): Episode? {
         val p = raw.split('|')
-        if (p.size != 7) return null
+        if (p.size != 7 && p.size != 8) return null
         return Episode(
             startedAt = p[0].toLongOrNull() ?: return null,
             durationMs = p[1].toLongOrNull() ?: return null,
@@ -340,6 +394,7 @@ object OutageLog {
             precededBy = if (p[4] in Preceded.ALL) p[4] else Preceded.NOTHING,
             rebooted = p[5].toBoolean(),
             versionCode = p[6].toLongOrNull() ?: -1L,
+            detectedBy = p.getOrNull(7)?.takeIf { it in DetectedBy.ALL } ?: DetectedBy.UNKNOWN,
         )
     }
 }

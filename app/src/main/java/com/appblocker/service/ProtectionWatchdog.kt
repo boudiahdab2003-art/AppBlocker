@@ -32,7 +32,12 @@ object ProtectionWatchdog {
      * for the state and once for the grace, is the shape that has cost this codebase more bugs
      * than any other: two sources of truth that drift.
      */
-    internal data class Reading(val state: ProtectionState, val bindPending: Boolean)
+    internal data class Reading(
+        val state: ProtectionState,
+        val bindPending: Boolean,
+        /** Which detector produced a STALLED, for `OutageLog` — null for every other state. */
+        val arm: String? = null,
+    )
 
     /** The current health of blocking, for the watchdog and for the app's own status row. */
     internal fun state(context: Context, now: Long = System.currentTimeMillis()): ProtectionState =
@@ -58,14 +63,21 @@ object ProtectionWatchdog {
         val connected = BlockerAccessibilityService.isConnected()
         // Monotonic, from the OS rather than a field of our own (invariant 9).
         val sinceStart = SystemClock.elapsedRealtime() - Process.getStartElapsedRealtime()
+        // The watcher's own answer to "can I still read the screen?", counted by the heartbeat.
+        // Read here rather than inside protectionState so the whole verdict still comes out of one
+        // set of readings — see the Reading KDoc.
+        val probeFails = ServiceHealth.probeFailStreak(context)
+        val verdict = protectionVerdict(
+            enabled, lastEventAt, now, usedMinutes,
+            updatePaused = updatePaused,
+            serviceConnected = connected,
+            msSinceProcessStart = sinceStart,
+            probeFailStreak = probeFails,
+        )
         return Reading(
-            state = protectionState(
-                enabled, lastEventAt, now, usedMinutes,
-                updatePaused = updatePaused,
-                serviceConnected = connected,
-                msSinceProcessStart = sinceStart,
-            ),
+            state = verdict.state,
             bindPending = bindPending(enabled, connected, sinceStart),
+            arm = verdict.arm,
         )
     }
 
@@ -132,7 +144,14 @@ object ProtectionWatchdog {
                     // The same transition, so the count and the log can never disagree about how
                     // many outages there have been. The count says how often; this says how long,
                     // how late we noticed, and what had just happened — see OutageLog.
-                    OutageLog.begin(context, ServiceHealth.lastEventAt(context))
+                    // Which arm found it travels with the episode. A deferred bind that ran out
+                    // of deferrals above has no arm of its own — it IS the unbound case, standing
+                    // in for the verdict the grace was holding back.
+                    OutageLog.begin(
+                        context,
+                        ServiceHealth.lastEventAt(context),
+                        detectedBy = reading.arm ?: OutageLog.DetectedBy.UNBOUND,
+                    )
                 }
                 ProtectionNotifier.notifyStalled(context, force)
                 // Come back in five minutes and float it again. The 15-minute periodic check is
