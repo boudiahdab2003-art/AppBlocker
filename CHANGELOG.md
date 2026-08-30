@@ -4,6 +4,9 @@ All notable changes to AppBlocker, newest first. Versions map to `versionName` i
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
 ## v1.145
+- The Short that followed you home, a lot less talking, and a blocker that checks on itself instead of only waiting
+
+## v1.145
 - The blocked Short no longer follows you: "Got it" now closes the reel and confirms it closed before leaving YouTube, instead of pressing Home - which was itself the signal that handed the Short to a floating window. Plus a one-tap route to YouTube's picture-in-picture permission, the only complete fix. Much less text on the way to the accessibility switch (the repair screen had ~200 words above its own fix button; everything now folds behind its heading). And the blocker asks whether it can still see the screen rather than only waiting to be told: "switched on but not working" is caught in about 15 minutes instead of two hours, with a second alarm watching whether the background scheduler is running at all.
 
 ## v1.144
