@@ -941,6 +941,9 @@
     <string name="editor_mode_title">نمط الحظر</string>
     <string name="editor_mode_body">اختر النمط الذي يناسبك أكثر.</string>
     <string name="editor_shorts">Shorts</string>
+    <string name="shorts_pip_title">أوقف ظهور الريل فوق شاشتك</string>
+    <string name="shorts_pip_body">يمكن ليوتيوب مواصلة تشغيل الريل في نافذة صغيرة فوق كل شيء. ضغطة واحدة توقف ذلك نهائيًا.</string>
+    <string name="shorts_pip_button">افتح الإعداد</string>
     <string name="editor_protection_off">الحماية متوقّفة</string>
     <string name="editor_protection_off_body">شغّل الحاظر حتى تحظر اختياراتك فعلًا.</string>
     <string name="editor_turn_on">شغّل الحماية</string>

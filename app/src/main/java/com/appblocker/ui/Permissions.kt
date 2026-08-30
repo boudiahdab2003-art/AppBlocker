@@ -101,6 +101,57 @@ private fun openAutostart(ctx: Context) {
     open(ctx, Settings.ACTION_APPLICATION_DETAILS_SETTINGS, withPackage = true)
 }
 
+/** YouTube, whose picture-in-picture permission is what lets a Short outlive being blocked. */
+private const val YOUTUBE_PKG = "com.google.android.youtube"
+
+/** `Settings.ACTION_PICTURE_IN_PICTURE_SETTINGS`, spelt out because the constant is `@SystemApi`
+ *  and does not exist on the public SDK — the same reason and the same treatment as the fragment
+ *  extras at the bottom of RepairScreen.kt. The action string has not changed since Android 8. */
+private const val ACTION_PICTURE_IN_PICTURE_SETTINGS =
+    "android.settings.PICTURE_IN_PICTURE_SETTINGS"
+
+/**
+ * Opens YouTube's **picture-in-picture** permission, so a Short can never float over the screen.
+ *
+ * ⚠️ **This is the only complete fix for the floating Short, and it is a setting rather than
+ * code.** The app's own part — closing the reel before leaving, instead of pressing Home at a
+ * playing video — is in [com.appblocker.service.ShortsExit], and it covers the case where *we*
+ * end the Short. It cannot cover the case where **he** swipes home himself while one is playing:
+ * that is YouTube reacting to Android, with nothing of ours involved. Turning the permission off
+ * closes both, permanently, in one tap.
+ *
+ * And it cannot be done from inside the app in any other way. An accessibility service cannot
+ * close a picture-in-picture window: the close button lives in SystemUI's own menu, which only
+ * appears once the window is tapped, and the surface exposes no node to act on. Nor can the app
+ * see one — `AccessibilityWindowInfo.isInPictureInPictureMode` is only reachable through
+ * `getWindows()`, which needs `flagRetrieveInteractiveWindows` that this service deliberately does
+ * not declare. A detector built on it would answer "no floating window" forever and look right.
+ *
+ * `ACTION_PICTURE_IN_PICTURE_SETTINGS` (API 26) lands on the list of apps that may use it; the
+ * per-app `data` uri takes some builds straight to YouTube's own row. Both are best-effort for the
+ * same reason as [openAutostart], so the app details page is the last resort — a missing screen
+ * costs a scroll, never a dead button.
+ */
+internal fun openPictureInPictureSettings(ctx: Context) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val direct = Intent(ACTION_PICTURE_IN_PICTURE_SETTINGS)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            .setData(Uri.fromParts("package", YOUTUBE_PKG, null))
+        if (runCatching { ctx.startActivity(direct) }.isSuccess) return
+        val list = Intent(ACTION_PICTURE_IN_PICTURE_SETTINGS)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (runCatching { ctx.startActivity(list) }.isSuccess) return
+    }
+    runCatching {
+        ctx.startActivity(
+            Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.fromParts("package", YOUTUBE_PKG, null),
+            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+    }
+}
+
 /**
  * Whether to show the "Allow restricted settings" note.
  *

@@ -878,6 +878,9 @@
     <string name="editor_mode_title">Blocking mode</string>
     <string name="editor_mode_body">Choose the variant that works best for you.</string>
     <string name="editor_shorts">Shorts</string>
+    <string name="shorts_pip_title">Stop a Short floating over your screen</string>
+    <string name="shorts_pip_body">YouTube can keep a Short playing in a small window on top of everything else. One tap turns that off for good.</string>
+    <string name="shorts_pip_button">Open the setting</string>
     <string name="editor_protection_off">Protection is off</string>
     <string name="editor_protection_off_body">Turn on the blocker so your choices actually block.</string>
     <string name="editor_turn_on">Turn on protection</string>
