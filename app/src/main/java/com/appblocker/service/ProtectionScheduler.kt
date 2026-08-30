@@ -1,6 +1,11 @@
 package com.appblocker.service
 
+import android.app.AlarmManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
+import android.os.SystemClock
+import com.appblocker.data.ProtectionPulse
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
@@ -24,6 +29,44 @@ object ProtectionScheduler {
         WorkManager.getInstance(context)
             .enqueueUniquePeriodicWork(WORK_NAME, ExistingPeriodicWorkPolicy.KEEP, request)
         ensureUpdateScheduled(context)
+        ensureAlarmScheduled(context)
+    }
+
+    /**
+     * Arms the alarm that watches **this scheduler** — see [ProtectionAlarmReceiver] and
+     * [ProtectionPulse].
+     *
+     * ⚠️ **Called from more than one place on purpose.** An inexact alarm is re-armed only by its
+     * own firing, so a single missed one ends the chain permanently with nothing to notice. This
+     * is therefore also called from [BootReceiver] and from the watcher's `onServiceConnected`, so
+     * a restart, an update or simply opening the app repairs it.
+     *
+     * `setAndAllowWhileIdle` rather than `setExactAndAllowWhileIdle`: the exact variants need
+     * `SCHEDULE_EXACT_ALARM` on Android 12+, which is a permission to ask for and a Play policy to
+     * justify, and the timing here does not need to be exact — nothing is being scheduled *for* a
+     * moment, only checked periodically. `ELAPSED_REALTIME_WAKEUP` because a user moving the wall
+     * clock must not move this (invariant 9).
+     */
+    fun ensureAlarmScheduled(context: Context) {
+        runCatching {
+            // So "silence" is measured from when this was armed, rather than from the beginning of
+            // time on a phone where the worker has never run at all.
+            ProtectionPulse.ensureBaseline(context)
+            val am = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+                ?: return@runCatching
+            val intent = Intent(context, ProtectionAlarmReceiver::class.java)
+            val pending = PendingIntent.getBroadcast(
+                context,
+                0,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            am.setAndAllowWhileIdle(
+                AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                SystemClock.elapsedRealtime() + ALARM_INTERVAL_MS,
+                pending,
+            )
+        }
     }
 
     private const val STALLED_WORK_NAME = "protection_stalled_repeat"

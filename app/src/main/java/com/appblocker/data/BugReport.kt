@@ -381,6 +381,10 @@ data class BugReport(
             // Which of the three detectors found the last outage — "unbound" / "probe" / "stale".
             // Without it a shorter detection gap cannot be attributed to anything.
             "outageDetectedBy",
+            // How many times the alarm found WorkManager had stopped running. Every other
+            // background check in this app is a WorkManager job, so this is the first number
+            // anyone has had about whether that scheduler is reliable on his phone.
+            "workerSilent",
             "layout",
             "theme",
             "serviceOn",

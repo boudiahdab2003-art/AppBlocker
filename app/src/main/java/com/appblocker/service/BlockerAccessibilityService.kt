@@ -1042,6 +1042,11 @@ class BlockerAccessibilityService : AccessibilityService() {
         // died deaf would combine with a new `connected = true` and condemn a watcher that has
         // just started working.
         runCatching { ServiceHealth.clearProbeStreak(applicationContext) }
+        // Re-arm the alarm that watches WorkManager. An inexact alarm is re-armed only by its
+        // own firing, so a single missed one would end the chain for the life of the install --
+        // and a rebind is a free chance to repair that, right after the events most likely to
+        // have broken it (a boot, an update, a space switch).
+        runCatching { ProtectionScheduler.ensureAlarmScheduled(applicationContext) }
         // Restore unexpired keyword lockouts — a service rebind must not unlock an app early.
         // Filtered on the same reckoning that decides whether one is running, not on the wall
         // clock, or a clock change could drop a live lockout here instead of at the check.

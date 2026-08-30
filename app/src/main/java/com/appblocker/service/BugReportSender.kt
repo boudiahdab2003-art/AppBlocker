@@ -23,6 +23,7 @@ import com.appblocker.data.OutageLog
 import com.appblocker.data.PinStore
 import com.appblocker.data.QuickSession
 import com.appblocker.data.SettingsStore
+import com.appblocker.data.ProtectionPulse
 import com.appblocker.data.SilenceLog
 import com.appblocker.ui.hasUsageAccess
 import com.appblocker.ui.isIgnoringBattery
@@ -135,6 +136,10 @@ object BugReportSender {
         field("probeStreak") { ServiceHealth.probeFailStreak(ctx).toString() }
         // Did the binding ever come down in an orderly way? An OEM force-stop never reaches
         // onDestroy, so "no" alongside outages means the process is being killed outright.
+        // How often the alarm caught WorkManager not running. A climbing number here means the
+        // scheduler every other background check depends on is being throttled or killed, which
+        // is a live hypothesis for the outages and has never been measurable.
+        field("workerSilent") { ProtectionPulse.silentCount(ctx).toString() }
         field("unbindSeen") {
             val n = ServiceHealth.unbindCount(ctx)
             if (n == 0) "never" else "$n"
