@@ -76,12 +76,27 @@ private val SHORTS_ID_MARKERS = listOf(
  * "not on Shorts", so the cover came off while the user was still watching one. Same
  * can't-tell-is-not-a-no mistake as the covers parked on the home screen in v1.96.
  */
-internal fun AccessibilityService.isShortsOnScreen(): Boolean? {
-    val root = rootInActiveWindow ?: return null
+internal fun AccessibilityService.isShortsOnScreen(): Boolean? = when (readPlayerView()) {
+    PlayerView.OPEN -> true
+    PlayerView.CLOSED, PlayerView.GONE -> false
+    PlayerView.UNREADABLE -> null
+}
+
+/**
+ * The same reading as [isShortsOnScreen], one notch finer: it distinguishes **"the player closed"**
+ * from **"YouTube is no longer in front"**, which the raise has no use for (there is nothing to
+ * cover either way) and [ShortsExit] cannot work without — one of them means press on, the other
+ * means stop.
+ *
+ * Deliberately the single implementation of both, so the exit can never end up reading the screen
+ * by rules that have drifted from the ones the cover was raised under.
+ */
+internal fun AccessibilityService.readPlayerView(): PlayerView {
+    val root = rootInActiveWindow ?: return PlayerView.UNREADABLE
     val active = root.packageName?.toString()
     // Our own window says nothing about what is behind it; never reconcile to ourselves.
-    if (active == packageName) return null
-    if (active != YOUTUBE_PKG) return false
+    if (active == packageName) return PlayerView.UNREADABLE
+    if (active != YOUTUBE_PKG) return PlayerView.GONE
     val queue = ArrayDeque<AccessibilityNodeInfo>()
     queue.add(root)
     var visited = 0
@@ -89,15 +104,21 @@ internal fun AccessibilityService.isShortsOnScreen(): Boolean? {
         val node = queue.removeFirst()
         visited++
         node.viewIdResourceName?.let { id ->
-            if (SHORTS_ID_MARKERS.any { id.contains(it) }) return true
+            if (SHORTS_ID_MARKERS.any { id.contains(it) }) return PlayerView.OPEN
         }
         for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
     }
-    // Deliberately "no", not "can't tell", even when the walk stopped at MAX_NODES: the screen WAS
-    // readable, we just didn't finish it, and the walk is breadth-first while the reel markers are
-    // player/container ids high in the tree. Answering null here would instead risk stranding a
-    // Shorts cover over ordinary YouTube — a visible over-block, and the harder one to get out of.
-    return false
+    // Deliberately "closed", not "can't tell", even when the walk stopped at MAX_NODES: the screen
+    // WAS readable, we just didn't finish it, and the walk is breadth-first while the reel markers
+    // are player/container ids high in the tree. Answering UNREADABLE here would instead risk
+    // stranding a Shorts cover over ordinary YouTube — a visible over-block, and the harder one to
+    // get out of.
+    //
+    // ⚠️ That trade is right for the raise and wrong for the exit, where being wrong means firing
+    // HOME at a playing Short and handing it to a floating window. [ShortsExit] pays for the
+    // difference on its own side, by requiring [ShortsExit.CLOSED_READS_FOR_HOME] agreeing reads
+    // before it will leave — never by softening this answer, which the cover depends on.
+    return PlayerView.CLOSED
 }
 
 /**

@@ -308,6 +308,8 @@ private fun readSnapshot(context: Context): Snapshot {
     val deaf = SilenceLog.get(context, SilenceLog.DEAF_DISMISSALS)
     val declines = SilenceLog.get(context, SilenceLog.LATE_DECLINES)
     val unready = SilenceLog.get(context, SilenceLog.UNREADY_DECISIONS)
+    val shortsShut = SilenceLog.get(context, SilenceLog.SHORTS_EXIT_CLOSED)
+    val shortsBlind = SilenceLog.get(context, SilenceLog.SHORTS_EXIT_BLIND)
     val boot = DeviceBoot.count(context)
     val zoneLeft = SettingsStore.dangerZone(context)?.remaining(boot) ?: 0L
     val learned = SettingsStore.learnedDomains(context)
@@ -435,6 +437,26 @@ private fun readSnapshot(context: Context): Snapshot {
                 good = if (unready.total == 0) true else null,
             ),
         )
+        if (shortsShut.total > 0 || shortsBlind.total > 0) {
+            add(
+                Fact(
+                    "Shorts closed before leaving YouTube: ${shortsShut.total}" +
+                        if (shortsBlind.total > 0) " (${shortsBlind.total} not confirmed)" else "",
+                    if (shortsBlind.total == 0) {
+                        "Every time a Short was blocked, the player was shut before you were sent " +
+                            "out — so nothing was left playing behind you and opening YouTube " +
+                            "again lands on the normal feed."
+                    } else {
+                        "Most of the time the player is shut before you leave. When it can't be " +
+                            "confirmed the app deliberately does nothing rather than send you " +
+                            "Home, because sending you Home is what used to leave the Short " +
+                            "playing in a little floating window. Those times the block screen " +
+                            "simply comes back instead."
+                    },
+                    good = if (shortsBlind.total == 0) true else null,
+                ),
+            )
+        }
     }
 
     val protection = buildList {

@@ -54,7 +54,26 @@ object SilenceLog {
      *  Non-zero means the window invariant 11's update is about is real on this phone. */
     const val UNREADY_DECISIONS = "unready_decisions"
 
-    val KINDS = listOf(DEAF_DISMISSALS, LATE_DECLINES, UNREADY_DECISIONS)
+    /**
+     * Shorts dismissals where the reel was **confirmed shut** before leaving YouTube.
+     *
+     * Paired with [SHORTS_EXIT_BLIND], this is the only evidence anyone will ever have that BACK
+     * actually closes the player on his phone. It cannot be tested here: whether YouTube's reel
+     * pops on BACK, and whether a floating window results, are facts about a real build of a real
+     * app on a real device. So the app measures instead of assuming — the same reasoning as
+     * [com.appblocker.data.BlockLatency], and the same reason this file exists at all.
+     */
+    const val SHORTS_EXIT_CLOSED = "shorts_exit_closed"
+
+    /** Shorts dismissals where the close could not be confirmed, so the walk pressed nothing and
+     *  handed the player back to its scan. A high count here against a low [SHORTS_EXIT_CLOSED]
+     *  means the reel markers or the BACK behaviour have moved and the exit needs re-reading. */
+    const val SHORTS_EXIT_BLIND = "shorts_exit_blind"
+
+    val KINDS = listOf(
+        DEAF_DISMISSALS, LATE_DECLINES, UNREADY_DECISIONS,
+        SHORTS_EXIT_CLOSED, SHORTS_EXIT_BLIND,
+    )
 
     fun get(context: Context, kind: String): Count {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)

@@ -362,6 +362,12 @@ data class BugReport(
             // this phone raised and not one thing about how fast any of them arrived, which is
             // the only question the owner has actually asked twice.
             "blockSpeed",
+            // Two counts of the app's own exit walk after a Shorts block: how often the reel was
+            // confirmed shut before leaving, and how often it could not be. Says nothing about
+            // what was watched — not a video id, not a channel, not a word. It exists because
+            // whether BACK closes YouTube's reel is unknowable from here and has to be measured
+            // on his phone.
+            "shortsExit",
             "layout",
             "theme",
             "serviceOn",

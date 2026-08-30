@@ -45,6 +45,16 @@ internal object CoverGate {
 
         /** Off the page, staying in the app. */
         BACK,
+
+        /**
+         * Close the surface the cover was over, *then* leave the app — the Shorts exit.
+         *
+         * A third value rather than "BACK, and also HOME afterwards", because the two are not a
+         * sequence of independent moves: the HOME is conditional on the BACK having demonstrably
+         * worked. See [ShortsExit], which owns that decision, and its one hard rule — a close that
+         * could not be confirmed never presses HOME.
+         */
+        BACK_THEN_HOME,
     }
 
     /**
@@ -65,14 +75,28 @@ internal object CoverGate {
      * An app cover keeps HOME: there the whole app IS blocked, and going back a page inside it
      * would land on another part of the same blocked app.
      *
-     * [SHORTS_KEY] is not decided here — that cover is scoped to the player and its dismissal has
-     * its own path, which takes the cover down and hands ownership back to its scan.
+     * **A Shorts cover is the third scope, and it used to be an exception instead of an answer.**
+     * It covers a *surface inside* an app that is not blocked — the reel player inside YouTube,
+     * which the owner is otherwise free to use ("The rest of YouTube still works", the cover says
+     * so itself). So neither of the other two exits fits: HOME leaves the player open, and BACK
+     * alone leaves him sitting in an app he was told to leave. It closes the player, then leaves.
+     *
+     * ⚠️ And HOME was not merely the wrong scope here, it was the mechanism of a reported bug.
+     * HOME fires `onUserLeaveHint()`, which is exactly the signal Android gives an app to hand a
+     * playing video to a **picture-in-picture** window — BACK does not. So "Got it" on a Short
+     * put that Short in a floating window over the launcher, and the owner reported precisely
+     * that: *"the short even when you are in home screen you can watch the short"*. HOME also
+     * only backgrounds YouTube, leaving the reel on its back stack, so re-opening resumed onto
+     * the same Short. One action, both halves of his complaint.
      *
      * Null is HOME. It is the answer that always works, and an unkeyed cover has nothing to say
      * about what it was over.
      */
-    fun exitFor(counterKey: String?): Exit =
-        if (counterKey == WEB_KEY) Exit.BACK else Exit.HOME
+    fun exitFor(counterKey: String?): Exit = when (counterKey) {
+        WEB_KEY -> Exit.BACK
+        SHORTS_KEY -> Exit.BACK_THEN_HOME
+        else -> Exit.HOME
+    }
 
     /**
      * How long a page cover's BACK exit is remembered, so a second "Got it" in the same app falls
@@ -111,9 +135,18 @@ internal object CoverGate {
      * the foreground app now.
      *
      * Only the dismissed cover's own key/package is suppressed — a *different* app opened
-     * right after a dismissal still blocks instantly. Shorts covers are exempt: their scan
-     * tracks whether it is covering in its own flag, and suppressing a show here would desync
-     * that and leave Shorts uncovered.
+     * right after a dismissal still blocks instantly.
+     *
+     * **Shorts covers are exempt, and the reason has changed.** The old one — "their scan tracks
+     * whether it is covering in its own flag, and suppressing a show would desync that" — has
+     * been stale since v1.98, when that flag was deleted and `shortsCovering` became derived from
+     * the overlay itself. The reason that holds now is [Exit.BACK_THEN_HOME]: the Shorts exit
+     * takes its own cover down at the *start* of the walk, because the player can only be read
+     * while nothing of ours is in front of it, and then spends up to
+     * [ShortsExit.CLOSE_GIVE_UP_MS] trying to close it. If dismiss suppression applied, a BACK
+     * that did not land would leave a Short playing **uncovered** for the whole grace. The
+     * exemption is what makes taking the cover down safe, and taking it down is what makes the
+     * close verifiable.
      */
     fun suppressed(
         counterKey: String,

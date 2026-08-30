@@ -119,6 +119,16 @@ object BugReportSender {
         field("unreadyDecisions") {
             SilenceLog.get(ctx, SilenceLog.UNREADY_DECISIONS).total.toString()
         }
+        // "12 shut, 2 blind" — Shorts dismissals where the reel was confirmed closed before
+        // leaving, against ones where it could not be confirmed and the walk pressed nothing.
+        // Whether BACK actually pops YouTube's reel is a fact about someone else's app on his
+        // phone, so it cannot be tested here and is measured instead. A rising "blind" against a
+        // flat "shut" means the reel markers or the BACK behaviour have moved.
+        field("shortsExit") {
+            val shut = SilenceLog.get(ctx, SilenceLog.SHORTS_EXIT_CLOSED).total
+            val blind = SilenceLog.get(ctx, SilenceLog.SHORTS_EXIT_BLIND).total
+            if (shut == 0 && blind == 0) "none yet" else "$shut shut, $blind blind"
+        }
         field("adultPack") { SettingsStore.adultWordsPack(ctx).toString() }
         field("scanEverywhere") { SettingsStore.keywordsEverywhere(ctx).toString() }
         field("blockUnsupported") { SettingsStore.blockUnsupportedBrowsers(ctx).toString() }
