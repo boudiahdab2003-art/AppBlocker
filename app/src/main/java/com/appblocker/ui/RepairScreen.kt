@@ -58,11 +58,16 @@ const val REPAIR_SHORTCUT_TAG = "repair_shortcut"
 /**
  * **The screen for "it says it's on, and it isn't blocking anything".**
  *
- * The owner switches to Xiaomi's Second Space and back, and finds AppBlocker doing nothing while
- * Android's accessibility page still shows the switch on. It is not a display bug: switching space
- * stops every app in this space, HyperOS does not always rebind the accessibility service on the
- * way back, and `ENABLED_ACCESSIBILITY_SERVICES` records the user's *choice* rather than the
- * service's state. So the setting is telling the truth about a decision and a lie about reality.
+ * The owner finds AppBlocker doing nothing while Android's accessibility page still shows the
+ * switch on. It is not a display bug: `ENABLED_ACCESSIBILITY_SERVICES` records the user's *choice*
+ * rather than the service's state, so the setting tells the truth about a decision and a lie about
+ * reality.
+ *
+ * ⚠️ **What stops it is not known, and this screen must not pretend otherwise.** It used to open
+ * by blaming Xiaomi's Second Space. He ruled that out himself on 28 Aug 2026 — *"our app doesnt
+ * stop just because of second space i rarely use second space these days and it still turn off"* —
+ * and naming the wrong cause confidently is worse than naming none, because it sends him to fix a
+ * setting that was never the problem. `OutageLog` exists to find the real one; invariant 31.
  *
  * **Android does not allow the app to fix this itself.** Writing that setting needs
  * `WRITE_SECURE_SETTINGS`, which is granted over adb and to system apps only — the rule that stops
@@ -70,15 +75,20 @@ const val REPAIR_SHORTCUT_TAG = "repair_shortcut"
  * switching itself back. Nor does the app switch *itself off* to force an honest toggle: a false
  * positive would disable the owner's own protection, and it would hand Strict Mode an exit.
  *
- * So this screen does the three things that are left, in order of how much they help:
+ * So this screen does the three things that are left, in order of how much they help — **and that
+ * order is now the order they appear in**, which it was not until 30 Aug 2026:
  *
  * 1. **Lands on the right switch.** `ACTION_ACCESSIBILITY_SETTINGS` plus the `fragment_args`
- *    extras opens AppBlocker's own page, not the list of every accessibility service.
+ *    extras opens AppBlocker's own page, not the list of every accessibility service. The steps
+ *    and that button are the first thing on the screen, followed by the volume-key shortcut that
+ *    makes the next outage cost six seconds.
  * 2. **Says whether it worked.** It re-reads [ProtectionWatchdog] on every resume, so coming back
  *    from Settings turns the card green rather than leaving him to guess — which is the whole
  *    difference between a fix and a ritual.
- * 3. **Explains, once, why it keeps happening** and what makes it rarer, without pretending any
- *    of it is a cure.
+ * 3. **Explains, once, why it keeps happening** and what makes it rarer, without pretending any of
+ *    it is a cure — now behind [ExpandableNote] headings rather than in front of the button. The
+ *    explanations were about two hundred words and they sat *above* the fix, on the screen someone
+ *    opens when they want blocking back immediately.
  */
 @Composable
 fun RepairScreen(
@@ -126,15 +136,42 @@ fun RepairScreen(
             item { StatusCard(healthy) }
 
             if (!healthy) {
+                // ⚠️ **The fix comes first, and it did not used to.**
+                //
+                // This screen is reached by someone whose blocking has stopped and who wants it
+                // back — from the alert, the red banner, or the Profile pill. It used to open with
+                // about two hundred words of explanation and put the button that ends the problem
+                // in the fourth card down. *"a lot of talk a lot of unneeded"* (30 Aug 2026).
+                //
+                // Now: the four steps and the button, then the volume-key shortcut that makes the
+                // next one cost six seconds, and only then everything the app has to say about it
+                // — each of which is one tap away rather than in the way. Nothing was deleted.
                 item {
-                    AppCard {
+                    AppCard(modifier = Modifier.testTag(REPAIR_STEPS_TAG)) {
                         Text(
-                            stringResource(R.string.repair_what_title),
+                            stringResource(R.string.repair_steps_title),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                         Spacer(Modifier.height(Space.sm))
+                        Step(1, stringResource(R.string.repair_step_1))
+                        Step(2, stringResource(R.string.repair_step_2))
+                        Step(3, stringResource(R.string.repair_step_3))
+                        Step(4, stringResource(R.string.repair_step_4))
+                        Spacer(Modifier.height(Space.md))
+                        GradientButton(
+                            text = stringResource(R.string.repair_open_switch),
+                            onClick = { openOurAccessibilityPage(context) },
+                            modifier = Modifier.testTag(REPAIR_BUTTON_TAG),
+                        )
+                    }
+                }
+
+                item { ShortcutCard() }
+
+                item {
+                    ExpandableNote(title = stringResource(R.string.repair_what_title)) {
                         Text(
                             stringResource(R.string.repair_what_body_1),
                             style = MaterialTheme.typography.bodyMedium,
@@ -152,6 +189,9 @@ fun RepairScreen(
                 // What this phone has actually recorded, rather than what the app assumes about
                 // phones in general. The count was always there; the length is new, and it is the
                 // half that says what an outage costs.
+                //
+                // Left open: it is short, it is *his* data rather than our explaining, and it is
+                // the one thing on this screen that changes between visits.
                 item {
                     AppCard(modifier = Modifier.testTag(REPAIR_RECORD_TAG)) {
                         Text(
@@ -188,44 +228,13 @@ fun RepairScreen(
                     }
                 }
 
-                item {
-                    AppCard(modifier = Modifier.testTag(REPAIR_STEPS_TAG)) {
-                        Text(
-                            stringResource(R.string.repair_steps_title),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        Spacer(Modifier.height(Space.sm))
-                        Step(1, stringResource(R.string.repair_step_1))
-                        Step(2, stringResource(R.string.repair_step_2))
-                        Step(3, stringResource(R.string.repair_step_3))
-                        Step(4, stringResource(R.string.repair_step_4))
-                        Spacer(Modifier.height(Space.md))
-                        GradientButton(
-                            text = stringResource(R.string.repair_open_switch),
-                            onClick = { openOurAccessibilityPage(context) },
-                            modifier = Modifier.testTag(REPAIR_BUTTON_TAG),
-                        )
-                    }
-                }
-
-                item { ShortcutCard() }
-
                 // Only when the filter is genuinely doing something. Told he was still covered
                 // when he wasn't would be the worst sentence on this screen — see invariant 27,
                 // which is the same rule pointed the other way: never judge on an answer you
                 // don't have, and never reassure on one either.
                 if (filtering) {
                     item {
-                        AppCard {
-                            Text(
-                                stringResource(R.string.repair_held_title),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                            Spacer(Modifier.height(Space.sm))
+                        ExpandableNote(title = stringResource(R.string.repair_held_title)) {
                             Text(
                                 stringResource(R.string.repair_held_body),
                                 style = MaterialTheme.typography.bodyMedium,
@@ -235,38 +244,30 @@ fun RepairScreen(
                     }
                 }
 
+                // The button stays above the fold: this card is one of only two on the screen that
+                // *do* something, and the sixty-five words explaining why are not what makes it
+                // worth tapping.
                 item {
-                    AppCard {
-                        Text(
-                            stringResource(R.string.repair_floating_title),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        Spacer(Modifier.height(Space.sm))
+                    ExpandableNote(
+                        title = stringResource(R.string.repair_floating_title),
+                        alwaysVisible = {
+                            GradientButton(
+                                text = stringResource(R.string.repair_notification_settings),
+                                onClick = { openOurNotificationSettings(context) },
+                                modifier = Modifier.testTag(REPAIR_NOTIFS_TAG),
+                            )
+                        },
+                    ) {
                         Text(
                             stringResource(R.string.repair_floating_body),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        Spacer(Modifier.height(Space.md))
-                        GradientButton(
-                            text = stringResource(R.string.repair_notification_settings),
-                            onClick = { openOurNotificationSettings(context) },
-                            modifier = Modifier.testTag(REPAIR_NOTIFS_TAG),
-                        )
                     }
                 }
 
                 item {
-                    AppCard {
-                        Text(
-                            stringResource(R.string.repair_why_title),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        Spacer(Modifier.height(Space.sm))
+                    ExpandableNote(title = stringResource(R.string.repair_why_title)) {
                         Text(
                             stringResource(R.string.repair_why_body),
                             style = MaterialTheme.typography.bodyMedium,
@@ -283,14 +284,7 @@ fun RepairScreen(
 
             vendor.spacesWarning?.let { warning ->
                 item {
-                    AppCard {
-                        Text(
-                            stringResource(R.string.repair_vendor_title),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        Spacer(Modifier.height(Space.sm))
+                    ExpandableNote(title = stringResource(R.string.repair_vendor_title)) {
                         Text(
                             warning,
                             style = MaterialTheme.typography.bodyMedium,
