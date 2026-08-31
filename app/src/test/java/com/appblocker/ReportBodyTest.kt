@@ -4,6 +4,7 @@ import com.appblocker.data.BugReport
 import com.appblocker.data.HealthFacts
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -189,5 +190,67 @@ class ReportBodyTest {
 
         assertFalse(sneaky.body().contains("example.com"))
         assertFalse(sneaky.body().contains("someprivateword"))
+    }
+
+    // --- the weekly summary: the only report filed when nothing is wrong ----------------------
+
+    private fun weekly(week: String, skipped: Int = 0, facts: List<String> = emptyList()) =
+        BugReport.fromWeekly(
+            appVersion = "1.146", flavor = "github", androidSdk = 36, device = "d",
+            context = mapOf("weekOf" to week, "weeksSkipped" to "$skipped"),
+            healthFacts = facts,
+        )
+
+    /**
+     * Its whole value is that its **absence** means something. If two summaries for one week
+     * could both arrive, a missing one would stop being evidence of anything.
+     */
+    @Test
+    fun `a week can only ever file one summary`() {
+        assertEquals(weekly("2026-W35").dedupeKey(), weekly("2026-W35").dedupeKey())
+        assertNotEquals(weekly("2026-W35").dedupeKey(), weekly("2026-W36").dedupeKey())
+    }
+
+    /** The verdict is in the title, so a healthy week never has to be opened. */
+    @Test
+    fun `a healthy week says so in the title`() {
+        assertEquals("[1.146] Week of 2026-W35 — all healthy", weekly("2026-W35").title())
+    }
+
+    @Test
+    fun `a week with a problem names it in the title`() {
+        val facts = HealthFacts.render(
+            listOf(HealthFacts.Fact("Switched on, but NOT running", "Nothing blocked.", false)),
+        )
+
+        assertEquals(
+            "[1.146] Week of 2026-W35 — Switched on, but NOT running",
+            weekly("2026-W35", facts = facts).title(),
+        )
+    }
+
+    /**
+     * A gap is stated, not hidden. The summary only files when the app is opened, so a missing
+     * week means "not opened" OR "not getting through" — and the report must not imply it knows
+     * which, because that ambiguity is the exact thing this shape exists to expose.
+     */
+    @Test
+    fun `skipped weeks are declared instead of quietly closed over`() {
+        val body = weekly("2026-W38", skipped = 2).body()
+
+        assertTrue(body.contains("2 week(s) produced no summary"))
+        assertTrue(body.contains("says nothing about which of the two it was"))
+    }
+
+    @Test
+    fun `an unbroken run of weeks says nothing about gaps`() {
+        assertFalse(weekly("2026-W36", skipped = 0).body().contains("produced no summary"))
+    }
+
+    /** Sixty block-log lines would bury the one fact a summary exists to deliver. */
+    @Test
+    fun `a weekly summary carries no block log`() {
+        assertTrue(weekly("2026-W35").recentBlocks.isEmpty())
+        assertFalse(weekly("2026-W35").body().contains("Recent blocks"))
     }
 }

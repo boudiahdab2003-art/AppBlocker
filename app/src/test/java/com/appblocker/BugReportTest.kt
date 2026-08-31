@@ -283,8 +283,55 @@ class BlockLogTest {
         val line = com.appblocker.data.BlockLog
             .decode("1000|app|true|other|quick|true", now = 4000)!!.render()
         assertEquals(
-            "3s ago    app  why=quick  window=other  ownUi=true  counted=true", line,
+            "3s ago    app  why=quick  window=other  ownUi=true  counted=true  drawn=?  ms=?",
+            line,
         )
+    }
+
+    /**
+     * The two facts the block path already had in hand and never wrote down: which of the two
+     * render paths drew the cover, and how long this particular one took. `drawn=false` means the
+     * overlay could not be used and the Activity fallback ran — the other half of "the block
+     * screen didn't appear".
+     */
+    @Test
+    fun `a current entry carries how it was drawn and how long it took`() {
+        val line = com.appblocker.data.BlockLog
+            .decode("1000|app|false|match|quick|true|false|142", now = 3000)!!.render()
+
+        assertTrue(line, line.contains("drawn=false"))
+        assertTrue(line, line.contains("ms=142"))
+    }
+
+    /**
+     * ⚠️ **`counted` is read by index, not as "the last field".**
+     *
+     * It was the last field until `drawn` and `tookMs` were appended, at which point "the last
+     * one" silently became the latency — and `"142".toBoolean()` is false, so every entry in
+     * every report would have read `counted=false`. That is the field separating a real block
+     * from a redraw, wrong on every line, with nothing failing. This is the line that catches it.
+     */
+    @Test
+    fun `counted survives new fields being appended after it`() {
+        val e = com.appblocker.data.BlockLog
+            .decode("1000|app|false|match|quick|true|true|142", now = 3000)!!
+
+        assertTrue(e.counted)
+    }
+
+    /**
+     * Entries written before this version still decode, and say `?` rather than claiming the
+     * common case — the log survives an app update, and the entries covering the minutes he is
+     * reporting about are routinely the ones written by the version before.
+     */
+    @Test
+    fun `an entry from an older build says unknown rather than guessing`() {
+        val old = com.appblocker.data.BlockLog
+            .decode("1000|app|false|match|quick|true", now = 3000)!!
+
+        assertEquals(null, old.drawn)
+        assertTrue(old.render().contains("drawn=?"))
+        assertTrue(old.counted)
     }
 
     /**

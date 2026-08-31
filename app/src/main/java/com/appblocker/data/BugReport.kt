@@ -114,6 +114,9 @@ data class BugReport(
         // are: two outages are two outages even when they look identical, and the rate is the
         // measurement being taken. The start stamp is what makes them distinguishable at all.
         isOutage -> "outage:${context["outageAt"].orEmpty()}"
+        // One per calendar week, which is the whole contract: the summary is filed on the first
+        // app open of a new week and must not arrive again on the second.
+        isWeekly -> "weekly:${context["weekOf"].orEmpty()}"
         // Keyed on **when he pressed Send**, not on what he wrote.
         //
         // It used to be `note.hashCode()`, which made the sentence above this method false in two
@@ -139,6 +142,9 @@ data class BugReport(
      *  the same reason, as [isProfile]: no new field, so the queue's stored format is unchanged. */
     val isOutage: Boolean get() = where == OUTAGE_WHERE && errorClass == null && note == null
 
+    /** The weekly health summary. Detected from [where] like the two above, for the same reason. */
+    val isWeekly: Boolean get() = where == WEEKLY_WHERE && errorClass == null && note == null
+
     /**
      * The issue title, carrying the version — the first question about any report is "which build
      * is this?", and an issue list where every row starts "Report:" is a list you have to open
@@ -152,6 +158,9 @@ data class BugReport(
         // The length and the blame go in the title on purpose: the whole point of these reports is
         // the pattern across them, and a list where every row reads "outage" would have to be
         // opened issue by issue to see the very thing being measured.
+        // Says the answer in the list, so a healthy week never needs opening.
+        isWeekly -> "[$appVersion] Week of ${context["weekOf"] ?: "?"} — " +
+            (weeklyVerdict() ?: "all healthy")
         isOutage -> "[$appVersion] STOPPED for ${context["outageMin"] ?: "?"} min" +
             " — after ${context["outagePreceded"] ?: "?"}" +
             if (context["outageDeaf"] == "true") ", still running" else ", process died"
@@ -213,8 +222,54 @@ data class BugReport(
     fun body(): String = whatLooksWrong() + when {
         isProfile -> profileBody()
         isOutage -> outageBody()
+        isWeekly -> weeklyBody()
         else -> faultBody()
     } + selfKnowledge() + outageHistory()
+
+    /**
+     * The shortest verdict that fits in a title, or null when the week was clean.
+     *
+     * Reads the stored health lines rather than re-deciding anything: the summary is written by
+     * the phone and read weeks later, and re-running today's thresholds over an old week would
+     * quietly rewrite history.
+     */
+    private fun weeklyVerdict(): String? = HealthFacts.problemLines(healthFacts)
+        .firstOrNull()?.substringAfter("**")?.substringBefore("**")?.trim()
+
+    /**
+     * The weekly summary — **the only report that is filed when nothing is wrong.**
+     *
+     * It exists to make silence mean something. Every other shape arrives only on trouble, so a
+     * quiet tracker was indistinguishable from a broken delivery route, and in August 2026 that
+     * ambiguity hid a dead route for five days while three releases of stoppage detection sent
+     * nothing into it. A weekly heartbeat turns "nothing arrived" into a fact rather than a hope.
+     *
+     * Deliberately short. Nobody should have to read this one: the title carries the verdict, and
+     * the sections that follow are the same ones every other report has.
+     */
+    private fun weeklyBody(): String = buildString {
+        appendLine("### The week")
+        appendLine()
+        val skipped = context["weeksSkipped"]?.toIntOrNull() ?: 0
+        if (skipped > 0) {
+            // Said plainly rather than hidden: a summary is only filed when the app is opened, so
+            // a gap means "he did not open it" OR "the route was down", and pretending otherwise
+            // would recreate the exact ambiguity this report exists to remove.
+            appendLine("⚠️ **$skipped week(s) produced no summary.** Either the app was not opened")
+            appendLine("in them, or nothing sent was getting through. This one arriving says the")
+            appendLine("route works now; it says nothing about which of the two it was.")
+            appendLine()
+        }
+        appendLine("| | |")
+        appendLine("|---|---|")
+        appendLine("| Week of | ${context["weekOf"] ?: "?"} |")
+        appendLine("| Device | $device |")
+        appendLine("| Version | $appVersion ($flavor) |")
+        appendLine()
+        appendLine("Nothing here needs a reply. It is filed so that a week with **no** summary is")
+        appendLine("a signal rather than a silence — which is the failure this whole shape exists")
+        appendLine("to make visible. The verdict is in the title; the detail is below.")
+    }
 
     /**
      * **The finding, before anything else.**
@@ -641,6 +696,13 @@ data class BugReport(
             // one send different from the next now that the text box is optional and two blank
             // reports are otherwise identical. Load-bearing, not descriptive; see `outageAt`.
             "noteAt",
+            // The calendar week a summary covers, e.g. "2026-W35". **[dedupeKey] reads this** —
+            // it is what makes a week's summary arrive once. Load-bearing, like `outageAt`.
+            "weekOf",
+            // How many weeks in a row produced no summary. A gap means the app was not opened, or
+            // nothing was getting through; the number says how big the gap was without claiming
+            // which of the two it was.
+            "weeksSkipped",
             // Which of the three chips he tapped in the report box, or absent. One of our own
             // literals, never anything he typed — the chips exist so a report can say which of
             // sixty logged covers to look at without him having to describe it.
@@ -703,6 +765,18 @@ data class BugReport(
          * to report itself.
          */
         const val OUTAGE_WHERE = "outage"
+
+        /**
+         * The [where] tag for the weekly health summary.
+         *
+         * A fourth shape, and the only one that is filed when **nothing is wrong**. Its value is
+         * not what it says on any given week — it is that its absence starts to mean something.
+         * Every other report shape arrives only when there is trouble, so a quiet tracker and a
+         * dead delivery route look exactly alike, which is the trap that cost five days in
+         * August 2026: three releases of stoppage detection sent nothing, and nothing could say
+         * whether that was good news or a broken pipe.
+         */
+        const val WEEKLY_WHERE = "weekly"
 
         val PROFILE_CONTEXT_KEYS = setOf(
             "brand",
@@ -826,6 +900,36 @@ data class BugReport(
          * closest thing there is to a witness. No frames, because nothing threw — that is the
          * whole difficulty this shape exists to work around.
          */
+        /**
+         * The weekly health summary — see [WEEKLY_WHERE].
+         *
+         * Carries the health lines and the stoppage history like any other report, and no block
+         * log: the week's covers are not what this is for, and sixty lines would bury the one
+         * fact it exists to deliver.
+         */
+        fun fromWeekly(
+            appVersion: String,
+            flavor: String,
+            androidSdk: Int,
+            device: String,
+            context: Map<String, String>,
+            recentOutages: List<String> = emptyList(),
+            healthFacts: List<String> = emptyList(),
+        ) = BugReport(
+            where = WEEKLY_WHERE,
+            errorClass = null,
+            frames = emptyList(),
+            note = null,
+            appVersion = appVersion,
+            flavor = flavor,
+            androidSdk = androidSdk,
+            device = device,
+            context = sanitizeContext(context),
+            recentBlocks = emptyList(),
+            recentOutages = recentOutages,
+            healthFacts = healthFacts,
+        )
+
         fun fromOutage(
             appVersion: String,
             flavor: String,

@@ -2852,7 +2852,8 @@ class BlockerAccessibilityService : AccessibilityService() {
         // it took to happen, so when the owner said the blocking was too slow there was no
         // number on the phone that could agree with him. Recorded after the cover for the same
         // reason as the breadcrumb below, and only when there is a real start to measure from.
-        if (startedAt > 0L) BlockLatency.record(applicationContext, stopwatchNow() - startedAt)
+        val took = if (startedAt > 0L) stopwatchNow() - startedAt else -1L
+        if (took >= 0L) BlockLatency.record(applicationContext, took)
         // Diagnostic breadcrumb, recorded at the one place every cover passes through. Shape
         // only — which path raised it, whether our own UI was in front, whether the window on
         // screen actually matched what we were blocking. Never the app, word or page: see
@@ -2872,6 +2873,13 @@ class BlockerAccessibilityService : AccessibilityService() {
                     window = logWindow,
                     why = why,
                     counted = fresh,
+                    // Both were already in hand at this point and neither was recorded. `drawn`
+                    // separates the overlay from the Activity fallback — the two paths behind
+                    // "the block screen didn't appear" and "it flashed", which fail in completely
+                    // different ways. `took` is this cover's own latency: the histogram already
+                    // said how many were slow, never which one.
+                    drawn = drawn,
+                    tookMs = took,
                 )
             }
         }

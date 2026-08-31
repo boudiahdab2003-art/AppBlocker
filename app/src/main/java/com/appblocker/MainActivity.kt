@@ -107,6 +107,11 @@ class MainActivity : ComponentActivity() {
         // one lookup after the first send. Before the flush, or the first profile would sit in the
         // queue until the next launch.
         BugReportSender.reportDeviceProfile(applicationContext)
+        // The one report filed when nothing is wrong. Rides here rather than on a schedule for
+        // the reason spelled out in reportWeekly: every background job in this app runs on the
+        // component that is itself a suspect for the outages, and a health report must not depend
+        // on the thing whose health it reports.
+        BugReportSender.reportWeekly(applicationContext)
         // Anything recorded while offline (or while crashing) goes out now. Resume is the moment
         // a network is most likely, and the send is off the main thread and best-effort.
         BugReportSender.flush(applicationContext)

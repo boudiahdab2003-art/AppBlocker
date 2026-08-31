@@ -82,6 +82,19 @@ object BlockLog {
         /** A `BlockWhy` code: which rule fired. "?" for entries written before this was recorded. */
         val why: String,
         val counted: Boolean,
+        /**
+         * Whether the **overlay** drew it, or the app had to fall back to `BlockScreenActivity`.
+         *
+         * `null` for entries written before this was recorded, and rendered `?` — the two paths
+         * fail in completely different ways, so guessing `true` for an old entry would invent
+         * evidence. "The block screen didn't appear" and "it flashed" are the commonest reports
+         * there are, and until now nothing said which of the two paths had been taken.
+         */
+        val drawn: Boolean? = null,
+        /** How long this cover took to appear, or -1 when it had no start to measure from (the
+         *  re-check tick, the guard, a purchase sheet) or the entry predates the field. The
+         *  histogram says how many were slow; this says **which one**. */
+        val tookMs: Long = -1L,
     ) {
         /**
          * One line for the report body. Fixed tokens only — nothing here can carry content.
@@ -92,7 +105,8 @@ object BlockLog {
          * Padded to a fixed width so the columns still line up when the units differ.
          */
         fun render(): String =
-            ago().padEnd(9) + " $kind  why=$why  window=$window  ownUi=$ownUi  counted=$counted"
+            ago().padEnd(9) + " $kind  why=$why  window=$window  ownUi=$ownUi  " +
+                "counted=$counted  drawn=${drawn ?: "?"}  ms=${if (tookMs < 0) "?" else "$tookMs"}"
 
         /** `4s`, `7m`, `2h`, `3d` — the largest unit that still says something useful. */
         private fun ago(): String {
@@ -120,6 +134,8 @@ object BlockLog {
         window: String,
         why: String,
         counted: Boolean,
+        drawn: Boolean,
+        tookMs: Long,
         now: Long = System.currentTimeMillis(),
     ) {
         runCatching {
@@ -129,7 +145,7 @@ object BlockLog {
             // recorded as unknown rather than passed through, exactly as `kind` is. The delimiter
             // is stripped for the same reason: a code that could carry a `|` could carry content.
             val safeWhy = why.replace('|', '-').replace(';', '-').take(16).ifBlank { "?" }
-            val line = "$now|$safeKind|$ownUi|$safeWindow|$safeWhy|$counted"
+            val line = "$now|$safeKind|$ownUi|$safeWindow|$safeWhy|$counted|$drawn|$tookMs"
             val existing = prefs(context).getString(KEY, "").orEmpty()
                 .split(';').filter { it.isNotBlank() }
             val trimmed = (existing + line).takeLast(MAX)
@@ -159,7 +175,7 @@ object BlockLog {
      */
     internal fun decode(raw: String, now: Long): Entry? {
         val p = raw.split('|')
-        if (p.size != 6 && p.size != 5) return null
+        if (p.size !in setOf(5, 6, 8)) return null
         val at = p[0].toLongOrNull() ?: return null
         val legacy = p.size == 5
         return Entry(
@@ -174,7 +190,15 @@ object BlockLog {
                 if (p[3] in Window.ALL) p[3] else Window.NA
             },
             why = if (legacy) "?" else p[4].ifBlank { "?" },
-            counted = p.last().toBoolean(),
+            // **Indexed, not `p.last()`.** It was the last field until `drawn` and `tookMs` were
+            // appended, at which point "the last one" silently became the latency and every entry
+            // would have decoded as counted=false — the field that separates a real block from a
+            // redraw, wrong on every line of every report, with nothing failing.
+            counted = (if (legacy) p[4] else p[5]).toBoolean(),
+            // Absent in both older formats, and left null rather than guessed: `drawn=true` is
+            // the common case, which is exactly why inventing it would be evidence-shaped.
+            drawn = if (p.size == 8) p[6].toBooleanStrictOrNull() else null,
+            tookMs = if (p.size == 8) p[7].toLongOrNull() ?: -1L else -1L,
         )
     }
 }

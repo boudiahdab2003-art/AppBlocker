@@ -205,6 +205,18 @@ object SettingsStore {
      *  Retires the old "strict_clear_pending", which meant the opposite: an update used to END a
      *  running Strict session, and that flag was the intent to do so. Cleared on read so an install
      *  carrying it doesn't hold a stale instruction forever. */
+    /**
+     * The last calendar week a health summary was filed, e.g. `2026-W35`.
+     *
+     * Blank on a fresh install, which `reportWeekly` treats as "write the marker, file nothing" —
+     * there is no week to summarise yet.
+     */
+    fun lastWeeklyReport(context: Context): String =
+        prefs(context).getString(KEY_LAST_WEEKLY, "").orEmpty()
+
+    fun setLastWeeklyReport(context: Context, week: String) =
+        prefs(context).edit().putString(KEY_LAST_WEEKLY, week).apply()
+
     fun updatePausePending(context: Context): Boolean =
         prefs(context).getBoolean(KEY_UPDATE_PAUSE_PENDING, false)
 
@@ -242,6 +254,7 @@ object SettingsStore {
     }
 
     private const val KEY_UPDATE_PAUSE_PENDING = "update_pause_pending"
+    private const val KEY_LAST_WEEKLY = "last_weekly_report"
 
     /** Which launcher icon is active (Profile ▸ App icon). Ids defined in [AppIcons]. */
     fun appIcon(context: Context): String =

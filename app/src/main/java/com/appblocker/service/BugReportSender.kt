@@ -499,6 +499,72 @@ object BugReportSender {
     }
 
     /**
+     * Files the weekly health summary, if this is the first app open of a new week.
+     *
+     * **Not scheduled.** Every background check in this app is a WorkManager job, and WorkManager
+     * stopping is one of the live suspects for the outages — `ProtectionPulse` exists only to
+     * measure how often it happens. Hanging the health summary off the component under suspicion
+     * would put the report inside the failure it is meant to describe, which this file's own KDoc
+     * forbids. So it rides on `onResume`, the same way [reportDeviceProfile] rides on "once per
+     * phone per build": no worker, no alarm, no permission, and nothing new that can break.
+     *
+     * The cost is stated rather than hidden: a week he never opens the app files nothing, so the
+     * next summary carries `weeksSkipped` and says so out loud. A gap means "not opened" or "not
+     * getting through" and this deliberately does not pretend to know which.
+     */
+    fun reportWeekly(context: Context) {
+        if (!enabled()) return
+        runCatching {
+            val week = currentWeek()
+            val last = SettingsStore.lastWeeklyReport(context)
+            if (last == week) return
+            // First run on an install writes the marker without filing: there is no week to
+            // summarise yet, and a summary of nothing would train the eye to skip these.
+            if (last.isBlank()) {
+                SettingsStore.setLastWeeklyReport(context, week)
+                return
+            }
+            val watch = watchReading(context)
+            BugReportQueue.enqueue(
+                context,
+                BugReport.fromWeekly(
+                    appVersion = BuildConfig.VERSION_NAME,
+                    flavor = BuildConfig.FLAVOR,
+                    androidSdk = Build.VERSION.SDK_INT,
+                    device = describeDevice(),
+                    context = appContext(context, watch) + mapOf(
+                        "weekOf" to week,
+                        "weeksSkipped" to "${weeksBetween(last, week)}",
+                    ),
+                    recentOutages = OutageLog.recent(context),
+                    healthFacts = healthLines(context, watch),
+                ),
+            )
+            // Written whether or not the enqueue took it. A queue that is full or capped must not
+            // make the app retry the same week on every single open for the rest of the week.
+            SettingsStore.setLastWeeklyReport(context, week)
+        }
+    }
+
+    /** `2026-W35`. ISO week, so a summary's name sorts and compares as plain text. */
+    private fun currentWeek(): String {
+        val c = java.util.Calendar.getInstance()
+        c.firstDayOfWeek = java.util.Calendar.MONDAY
+        c.minimalDaysInFirstWeek = 4
+        val week = c.get(java.util.Calendar.WEEK_OF_YEAR)
+        val year = c.get(java.util.Calendar.YEAR)
+        return "%d-W%02d".format(year, week)
+    }
+
+    /** How many whole weeks were skipped between two labels; 0 when they are consecutive or the
+     *  labels cannot be compared (a year boundary counts as consecutive rather than guessing). */
+    private fun weeksBetween(from: String, to: String): Int = runCatching {
+        val (fy, fw) = from.split("-W").let { it[0].toInt() to it[1].toInt() }
+        val (ty, tw) = to.split("-W").let { it[0].toInt() to it[1].toInt() }
+        if (fy != ty) 0 else (tw - fw - 1).coerceAtLeast(0)
+    }.getOrDefault(0)
+
+    /**
      * Sends everything queued, one at a time. Called on app resume, where a network is most
      * likely and where taking a moment costs nothing.
      */
