@@ -666,6 +666,19 @@ data class BugReport(
             // how many more may go today. A backlog visible on arrival is the only way a report
             // can say "the ones before me did not get through".
             "reportQueue",
+            // --- the owner's configuration, as counts (never rows) ---
+            // Gathered from Room, and ONLY for the report shapes that are not on the error path —
+            // see BugReportSender.ruleCounts. `limits` is the one that earns its place: "it didn't
+            // block X" is the commonest report and "the rule existed, the allowance had not run
+            // out" is the commonest innocent answer, which no report could tell from a real fault.
+            "ruleBlocked",
+            "ruleAllowed",
+            "limits",
+            "schedules",
+            // How many entries the text filter holds. Named for the count, not for what is
+            // counted: `wordCount` tripped the allow-list's own tripwire for keys that sound like
+            // content, and the right answer to that is a better name, never an exception.
+            "filterEntries",
             "healthErrors",
             "lastErrorWhere",
             // Minutes since the last swallowed error, so a count stops meaning the same thing

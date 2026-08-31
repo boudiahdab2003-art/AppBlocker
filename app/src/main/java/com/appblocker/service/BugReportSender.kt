@@ -31,6 +31,7 @@ import com.appblocker.ui.isIgnoringBattery
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.net.HttpURLConnection
 import java.net.URL
@@ -469,6 +470,19 @@ object BugReportSender {
     fun reportNote(context: Context, note: String, kind: String? = null) {
         if (!enabled()) return
         val watch = watchReading(context)
+        // Built off the main thread because this shape reads the database — see [ruleCounts].
+        // The screen has already thanked him by the time this runs, which is correct: whether
+        // the report reaches the tracker is not something he should be made to wait on.
+        scope.launch { buildNote(context, note, kind, watch) }
+    }
+
+    private suspend fun buildNote(
+        context: Context,
+        note: String,
+        kind: String?,
+        watch: ProtectionWatchdog.Reading?,
+    ) {
+        val rules = ruleCounts(context)
         runCatching {
             BugReportQueue.enqueue(
                 context,
@@ -482,7 +496,7 @@ object BugReportSender {
                     // typed report by. Added here rather than in [appContext] because it means
                     // "this send" — every other report shape has its own identity already, and a
                     // crash report carrying a send time would be claiming something untrue.
-                    context = appContext(context, watch) + buildMap {
+                    context = appContext(context, watch) + rules + buildMap {
                         put("noteAt", "${System.currentTimeMillis() / 1000}")
                         // One of our own three literals, chosen by a tap, or absent. Absent is the
                         // ordinary case and must stay unremarkable: the chips are optional, and a
@@ -514,6 +528,10 @@ object BugReportSender {
      */
     fun reportWeekly(context: Context) {
         if (!enabled()) return
+        scope.launch { buildWeekly(context) }
+    }
+
+    private suspend fun buildWeekly(context: Context) {
         runCatching {
             val week = currentWeek()
             val last = SettingsStore.lastWeeklyReport(context)
@@ -532,7 +550,7 @@ object BugReportSender {
                     flavor = BuildConfig.FLAVOR,
                     androidSdk = Build.VERSION.SDK_INT,
                     device = describeDevice(),
-                    context = appContext(context, watch) + mapOf(
+                    context = appContext(context, watch) + ruleCounts(context) + mapOf(
                         "weekOf" to week,
                         "weeksSkipped" to "${weeksBetween(last, week)}",
                     ),
@@ -545,6 +563,43 @@ object BugReportSender {
             SettingsStore.setLastWeeklyReport(context, week)
         }
     }
+
+    /**
+     * The owner's configuration, **as counts only** — and never on the error path.
+     *
+     * [appContext]'s KDoc refuses to touch Room on purpose: it runs inside the crash handler,
+     * where the app is already in trouble and a synchronous query is a new way to make things
+     * worse. That stands. This is the other half of the split — the report shapes that are built
+     * from a healthy app (the note he sends, the weekly summary) can afford one read, and they
+     * are the shapes that need it.
+     *
+     * ⚠️ **Do not "tidy" this by folding it into [appContext].** The split is the point, and a
+     * crash report must keep reading nothing but preferences.
+     *
+     * The best line here is `limits`. "It didn't block X" is the commonest thing he reports and
+     * the commonest innocent explanation is that the rule existed and the allowance had not run
+     * out yet — which no report could previously distinguish from the blocker being broken.
+     *
+     * ⚠️ **Counts, never rows.** `Schedule` carries a name, a wifi SSID and the owner's
+     * latitude/longitude; `AppRule` carries a package name and an app label; a blocked keyword IS
+     * its own primary key. None of those may ever appear in a report — see [BugReport]'s contract.
+     */
+    private suspend fun ruleCounts(ctx: Context): Map<String, String> = runCatching {
+        val db = com.appblocker.data.BlockerDatabase.get(ctx)
+        val rules = db.appRuleDao().getAll().first()
+        val schedules = db.scheduleDao().getAll().first()
+        val words = db.blockedKeywordDao().getAll().first()
+        val limits = rules.filter { it.dailyLimitMinutes >= 0 }
+        val used = runCatching { UsageTracker.minutesByPackageToday(ctx) }.getOrDefault(emptyMap())
+        val spent = limits.count { (used[it.packageName] ?: 0) >= it.dailyLimitMinutes }
+        mapOf(
+            "ruleBlocked" to rules.count { it.isBlocked }.toString(),
+            "ruleAllowed" to rules.count { it.isAllowed }.toString(),
+            "limits" to "${limits.size}, $spent spent",
+            "schedules" to "${schedules.size}, ${schedules.count { it.enabled }} on",
+            "filterEntries" to words.size.toString(),
+        )
+    }.getOrDefault(emptyMap())
 
     /** `2026-W35`. ISO week, so a summary's name sorts and compares as plain text. */
     private fun currentWeek(): String {
