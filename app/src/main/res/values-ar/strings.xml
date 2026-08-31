@@ -298,9 +298,14 @@
     <string name="profile_report_title">أبلغ عن مشكلة</string>
     <string name="profile_report_subtitle">اشرح ما الذي حدث ويصل مباشرة إلى المطوّر. لا يتضمّن أبدًا كلماتك المحظورة ولا مواقعك ولا أسماء تطبيقاتك.</string>
     <string name="profile_report_disabled">الإبلاغ غير مُفعَّل في هذه النسخة.</string>
-    <string name="profile_report_prompt">ما الذي حدث؟ أي تفصيل يفيد — ماذا كنت تفعل، وفي أي تطبيق، وهل ظهرت شاشة حظر في غير موضعها، أو لم تظهر حين كان ينبغي أن تظهر.</string>
-    <string name="profile_report_placeholder">اشرح المشكلة</string>
-    <string name="profile_report_privacy">يُرسَل معه: إصدار التطبيق، وإصدار أندرويد، وطراز الهاتف، وإعداداتك الحالية — أي شاشة حظر تستخدم، وهل الحظر يعمل، وكم مرة حدث حظر اليوم.\n\nلا يُرسَل أبدًا: كلماتك المحظورة، ولا المواقع التي تزورها، ولا التطبيقات التي تحظرها.</string>
+    <string name="profile_report_prompt">اضغط على ما حدث إن أردت، ثم أرسِل. لست مضطرًا لكتابة شيء — التقرير يحمل أصلًا ما يعرفه الحاجب عن نفسه.</string>
+    <string name="profile_report_placeholder">أي شيء تريد إضافته (اختياري)</string>
+    <string name="profile_report_kind_wrong">حظَر شيئًا بالخطأ</string>
+    <string name="profile_report_kind_missed">لم يحظُر شيئًا كان يجب حظره</string>
+    <string name="profile_report_kind_stopped">توقّف عن العمل</string>
+    <string name="profile_report_privacy">يُرسَل معه: إصدار التطبيق، وإصدار أندرويد، وطراز الهاتف، وإعداداتك الحالية، وما يعرفه الحاجب عن نفسه — هل هو يعمل، ومتى رأى شيئًا آخر مرة، وكم يستغرق ظهور الحظر، وكل مرة توقف فيها الحظر ثم عاد.
+
+لا يُرسَل أبدًا: كلماتك المحظورة، ولا المواقع التي تزورها، ولا التطبيقات التي تحظرها، ولا أي شيء من قسم التعافي.</string>
     <string name="profile_report_send">إرسال</string>
     <string name="profile_report_thanks">أُرسل — شكرًا لك</string>
 

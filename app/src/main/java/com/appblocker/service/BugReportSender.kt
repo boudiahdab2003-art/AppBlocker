@@ -19,6 +19,7 @@ import com.appblocker.data.ServiceHealth
 import com.appblocker.data.DeviceBoot
 import com.appblocker.data.FilterState
 import com.appblocker.data.NetworkFilter
+import com.appblocker.data.HealthFacts
 import com.appblocker.data.OutageLog
 import com.appblocker.data.PinStore
 import com.appblocker.data.QuickSession
@@ -82,7 +83,12 @@ object BugReportSender {
      * worse. That is why there is no "how many rules" or "is Strict running" — both live in Room.
      * Everything below is SharedPreferences or a system flag.
      */
-    fun appContext(ctx: Context): Map<String, String> {
+    // `internal` because it takes ProtectionWatchdog.Reading, which is internal by design —
+    // the watchdog's raw reading is not something outside this module should be handling.
+    internal fun appContext(
+        ctx: Context,
+        watch: ProtectionWatchdog.Reading? = null,
+    ): Map<String, String> {
         val out = mutableMapOf<String, String>()
         var failed = 0
         // Each field is read on its own. This used to be one runCatching around the whole map,
@@ -97,7 +103,36 @@ object BugReportSender {
         field("layout") { BlockLayouts.current(ctx).id }
         field("theme") { BlockThemes.current(ctx).id }
         field("serviceOn") { AccessibilityUtil.isEnabled(ctx).toString() }
-        field("protection") { ProtectionWatchdog.state(ctx).name }
+        // One read, then every number that fell out of it — the watchdog answers this question by
+        // gathering them all anyway, and asking twice is the two-sources-of-truth shape its own
+        // KDoc warns about. **Passed in by the caller**, because the health verdicts need the same
+        // reading and `ProtectionWatchdog.read` is not cheap: it walks the usage-event stream from
+        // the last event seen until now, which on a phone that has been quiet for hours is a long
+        // walk. Doing that twice per report would have put two of them inside the uncaught-
+        // exception handler, in a process that is already dying — the exact cost this method's
+        // KDoc refuses Room for.
+        val reading = watch ?: runCatching { ProtectionWatchdog.read(ctx) }.getOrNull()
+        field("protection") { reading?.state?.name ?: ProtectionWatchdog.state(ctx).name }
+        // **The number the STALLED verdict actually turns on**, and it was computed on every check
+        // and thrown away. Quiet is only evidence when something was happening: `lastEventMin 240`
+        // beside `usedMinutes 90` is four unprotected hours, and beside `usedMinutes 0` it is a
+        // phone on a table. Those were the same report until now. `?` = usage access never
+        // answered, which is a third thing again and must not read as zero.
+        field("usedMinutes") { reading?.usedMinutes?.toString() ?: "?" }
+        // Whether the answer above came from the bind grace rather than from evidence. A STALLED
+        // that is really "we have not waited long enough yet" is not a finding.
+        field("bindPending") { reading?.bindPending?.toString() ?: "?" }
+        // How long THIS PROCESS has been alive, against `uptimeMin`'s whole-phone figure. A
+        // watcher missing three seconds after a cold start has not died; one missing after two
+        // hours of process life has.
+        field("processAgeMin") { ((reading?.sinceProcessStartMs ?: 0L) / 60_000L).toString() }
+        // The watchdog re-checked and the watcher was still gone. Non-zero means the phone is
+        // killing the process faster than the 45-second grace can wait for it.
+        field("bindDeferrals") { SettingsStore.bindDeferrals(ctx).toString() }
+        // Is blocking stopped AT THIS MOMENT? Every other `outage*` key describes the last
+        // *finished* episode, so a report written during a stoppage used to look exactly like one
+        // written after it.
+        field("outageNow") { OutageLog.isOpen(ctx).toString() }
         field("guard") { SettingsStore.guardOffSwitch(ctx).toString() }
         field("blocksToday") { AttemptCounter.summary(ctx).sumOf { it.today }.toString() }
         // The other half of "blocksToday": the spells where it declined to block. A report that
@@ -116,6 +151,32 @@ object BugReportSender {
                 val counts = (0 until BlockLatency.SIZE).map { BlockLatency.get(ctx, it).total }
                 "$quick% of ${counts.sum()}, ${counts.last()} slow"
             }
+        }
+        // The same measurement without the collapse: every bucket, fastest to slowest. The summary
+        // above can read 90% while the middle of the distribution walks steadily to the right, and
+        // "sometimes it's slow" is a claim about the shape rather than the headline. Eleven
+        // characters for five numbers, so it fits the context cap with room to spare.
+        field("speedBuckets") {
+            (0 until BlockLatency.SIZE).joinToString("/") { BlockLatency.get(ctx, it).total.toString() }
+        }
+        // Total time unprotected, and the worst single stoppage. Both shown on the diagnostics
+        // screen since v1.143 and neither ever sent — they are the two headline numbers about the
+        // owner's actual complaint.
+        field("outageTotalMin") { (OutageLog.totals(ctx).totalMs / 60_000L).toString() }
+        field("outageWorstMin") { (OutageLog.totals(ctx).longestMs / 60_000L).toString() }
+        // The live gap since the background scheduler last ran, against `workerSilent`'s lifetime
+        // count. "It has been quiet for six hours" is a different statement from "it has gone
+        // quiet nine times", and only the first describes right now.
+        field("workerSilentMin") {
+            val ms = ProtectionPulse.silentFor(ctx)
+            if (ms == ProtectionPulse.UNKNOWN) "?" else (ms / 60_000L).toString()
+        }
+        // ⚠️ The reporter describing its own channel. Written after five days in which every
+        // report the phone produced was queued and none arrived, with nothing in any report able
+        // to say so. A backlog visible on arrival means the reports before this one did not get
+        // through — a fact about the route that only the route can tell us.
+        field("reportQueue") {
+            "${BugReportQueue.pending(ctx).size} left ${BugReportQueue.remainingToday(ctx)}"
         }
         field("unreadyDecisions") {
             SilenceLog.get(ctx, SilenceLog.UNREADY_DECISIONS).total.toString()
@@ -177,6 +238,25 @@ object BugReportSender {
         // The tag only. ServiceHealth's full line contains the exception message, which is where
         // a blocked word gets quoted back — see BugReport's contract.
         ServiceHealth.lastErrorWhere(ctx)?.let { w -> field("lastErrorWhere") { w } }
+        // *When*, not just where and how many. "3 errors, last one four months ago" and "3 errors,
+        // last one two minutes ago" were the same report until now, and only one of them is about
+        // the thing being reported. Absent when nothing has ever thrown.
+        ServiceHealth.lastErrorAt(ctx).takeIf { it > 0L }?.let { at ->
+            field("lastErrorMin") { ((System.currentTimeMillis() - at) / 60_000L).toString() }
+        }
+        // How long since the watcher was last known to be alive at all, as opposed to last
+        // *hearing* something ([lastEventMin]). The two together separate a phone left on the side
+        // from a watcher that stopped: a quiet hour with a fresh heartbeat is somebody not using
+        // their phone, and a quiet hour with a stale one is the failure.
+        field("aliveMin") {
+            val at = ServiceHealth.lastAliveAt(ctx)
+            if (at <= 0L) "never" else ((System.currentTimeMillis() - at) / 60_000L).toString()
+        }
+        // Android's own boot counter. Reboots are invisible to every other field here, and half
+        // the outage hypotheses are about what a restart does — this is what makes "it stops after
+        // the phone restarts" checkable rather than a feeling. `-1` means it could not be read,
+        // which is itself worth knowing: DeviceBoot's KDoc explains what a lost boot count breaks.
+        field("boots") { DeviceBoot.count(ctx).toString() }
         // Separates "the service never came back after a reboot" from "it died an hour ago",
         // which look identical in every other field.
         field("uptimeMin") { (SystemClock.elapsedRealtime() / 60_000L).toString() }
@@ -226,6 +306,22 @@ object BugReportSender {
             "$state${if (armed) " armed" else ""}"
         }
         field("learnedCount") { SettingsStore.learnedDomains(ctx).size.toString() }
+        // --- the last stoppage, on EVERY report ---
+        // These used to be attached only to the automatic outage report, which meant the one
+        // report shape the owner writes himself — "it stopped working" — carried no trace of the
+        // stoppage he was describing. He asked why, and he was right: the diagnostics screen shows
+        // him this and the report he sends from the same app did not. Same key names as
+        // [reportOutage]'s own map, so on an outage report that map still wins and describes the
+        // episode being filed rather than the newest one on record.
+        OutageLog.last(ctx)?.let { last ->
+            field("outageAt") { "${last.startedAt / 1000}" }
+            field("outageMin") { minutesOrUnknown(last.durationMs) }
+            field("outageDetectMin") { minutesOrUnknown(last.detectedAfterMs) }
+            field("outageDeaf") { "${last.aliveButDeaf}" }
+            field("outagePreceded") { last.precededBy }
+            field("outageDetectedBy") { last.detectedBy }
+            field("outageCount") { OutageLog.totals(ctx).count.toString() }
+        }
         // Reported rather than hidden: a bare report and a healthy one must never look alike.
         if (failed > 0) out["fieldErrors"] = failed.toString()
         return out
@@ -234,6 +330,7 @@ object BugReportSender {
     /** Records an error for later sending. Safe to call from anywhere, including the watcher. */
     fun report(context: Context, where: String, t: Throwable) {
         if (!enabled()) return
+        val watch = watchReading(context)
         runCatching {
             BugReportQueue.enqueue(
                 context,
@@ -244,8 +341,10 @@ object BugReportSender {
                     flavor = BuildConfig.FLAVOR,
                     androidSdk = Build.VERSION.SDK_INT,
                     device = describeDevice(),
-                    context = appContext(context),
+                    context = appContext(context, watch),
                     recentBlocks = BlockLog.recent(context),
+                    recentOutages = OutageLog.recent(context),
+                    healthFacts = healthLines(context, watch),
                 ),
             )
         }
@@ -270,6 +369,10 @@ object BugReportSender {
      */
     fun reportDeviceProfile(context: Context) {
         if (!enabled()) return
+        // No watchdog reading here on purpose: a profile is about what this phone IS, not how
+        // blocking is doing, and it is filed from `onResume` on every launch. Taking the usage
+        // walk for a report that would not print it would be paying the most expensive read in
+        // the file for nothing.
         runCatching {
             BugReportQueue.enqueue(
                 context,
@@ -302,6 +405,7 @@ object BugReportSender {
      */
     fun reportOutage(context: Context, episode: OutageLog.Episode, endedBy: String) {
         if (!enabled()) return
+        val watch = watchReading(context)
         runCatching {
             BugReportQueue.enqueue(
                 context,
@@ -310,7 +414,7 @@ object BugReportSender {
                     flavor = BuildConfig.FLAVOR,
                     androidSdk = Build.VERSION.SDK_INT,
                     device = describeDevice(),
-                    context = appContext(context) + mapOf(
+                    context = appContext(context, watch) + mapOf(
                         // Seconds rather than millis: this only has to identify the episode and
                         // stay readable, and the context cap is 24 characters.
                         "outageAt" to "${episode.startedAt / 1000}",
@@ -325,17 +429,46 @@ object BugReportSender {
                         "outageCount" to "${OutageLog.totals(context).count}",
                     ),
                     recentBlocks = BlockLog.recent(context),
+                    recentOutages = OutageLog.recent(context),
+                    healthFacts = healthLines(context, watch),
                 ),
             )
         }
     }
 
     /** Whole minutes, or `?` for the values [OutageLog] marks unmeasurable with -1. */
+    /**
+     * The blocker's own reading of itself, already turned into sentences.
+     *
+     * Rendered here rather than in [BugReport] because the interpretation belongs to
+     * [HealthFacts], which both this and the diagnostics screen read — the two must never be able
+     * to disagree about the same phone, which is the rule [DeviceProfile] exists to enforce for
+     * the device facts. Wrapped because a report is never allowed to be the thing that breaks:
+     * a failure here costs the section, not the report.
+     */
+    private fun healthLines(
+        ctx: Context,
+        watch: ProtectionWatchdog.Reading?,
+    ): List<String> = runCatching {
+        HealthFacts.render(HealthFacts.verdicts(HealthReader.read(ctx, watch = watch)))
+    }.getOrDefault(emptyList())
+
+    /**
+     * The one expensive reading a report needs, taken once and shared.
+     *
+     * [ProtectionWatchdog.read] walks the usage-event stream, so it is the costliest thing in a
+     * report by a wide margin — and both halves of a report want it. Taking it here means the
+     * crash handler pays for one walk instead of two.
+     */
+    private fun watchReading(ctx: Context): ProtectionWatchdog.Reading? =
+        runCatching { ProtectionWatchdog.read(ctx) }.getOrNull()
+
     private fun minutesOrUnknown(ms: Long) = if (ms < 0) "?" else "${ms / 60_000}"
 
     /** Records what the owner typed, and tries to send it straight away. */
-    fun reportNote(context: Context, note: String) {
+    fun reportNote(context: Context, note: String, kind: String? = null) {
         if (!enabled()) return
+        val watch = watchReading(context)
         runCatching {
             BugReportQueue.enqueue(
                 context,
@@ -345,8 +478,20 @@ object BugReportSender {
                     flavor = BuildConfig.FLAVOR,
                     androidSdk = Build.VERSION.SDK_INT,
                     device = describeDevice(),
-                    context = appContext(context),
+                    // The moment he pressed Send, which is what [BugReport.dedupeKey] identifies a
+                    // typed report by. Added here rather than in [appContext] because it means
+                    // "this send" — every other report shape has its own identity already, and a
+                    // crash report carrying a send time would be claiming something untrue.
+                    context = appContext(context, watch) + buildMap {
+                        put("noteAt", "${System.currentTimeMillis() / 1000}")
+                        // One of our own three literals, chosen by a tap, or absent. Absent is the
+                        // ordinary case and must stay unremarkable: the chips are optional, and a
+                        // report with no chip is a complete report.
+                        kind?.let { put("reportKind", it) }
+                    },
                     recentBlocks = BlockLog.recent(context),
+                    recentOutages = OutageLog.recent(context),
+                    healthFacts = healthLines(context, watch),
                 ),
             )
             flush(context)

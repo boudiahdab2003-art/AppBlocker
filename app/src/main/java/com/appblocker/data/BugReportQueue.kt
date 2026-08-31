@@ -17,12 +17,29 @@ import org.json.JSONArray
  * second copy is dropped rather than sent. That memory is also what makes it safe to re-queue on
  * failure: a report can be retried forever without ever arriving twice.
  *
- * Shares `appblocker_prefs` with the rest of the data layer. Everything here is best-effort —
- * a report is never worth an exception, and the whole feature must be droppable without the
- * blocking behaviour noticing (see docs/SERVER.md: the app works fully with the VM offline).
+ * Kept in its **own** preferences file rather than the app's — see [PREFS]. Everything here is
+ * best-effort: a report is never worth an exception, and the whole feature must be droppable
+ * without the blocking behaviour noticing (see docs/SERVER.md: the app works fully with the VM
+ * offline).
  */
 object BugReportQueue {
-    private const val PREFS = "appblocker_prefs"
+    /**
+     * **The queue's own file, not the app's main preferences.**
+     *
+     * It used to share `appblocker_prefs` with every setting in the app, which was fine while a
+     * report was a few hundred bytes. It is not fine now: a report carries the settings table, the
+     * block log, the stoppage history and the health verdicts, and up to [MAX_PENDING] of them can
+     * be waiting at once. Android reads a preferences file **whole, into memory, on first touch** —
+     * so a full queue meant every launch parsing a couple of hundred kilobytes of queued JSON
+     * before the app could read a single setting. And a full queue is not hypothetical: when the
+     * delivery route is down, full is exactly what it becomes.
+     *
+     * The reports already waiting are evidence, so this does not start clean — see [migrate].
+     */
+    private const val PREFS = "appblocker_reports"
+
+    /** Where the queue used to live. Only ever read, and only until [migrate] has emptied it. */
+    private const val LEGACY_PREFS = "appblocker_prefs"
     private const val KEY_PENDING = "bugreport_pending"
     private const val KEY_SENT_KEYS = "bugreport_sent_keys"
     private const val KEY_SENT_DAY = "bugreport_sent_day"
@@ -39,8 +56,52 @@ object BugReportQueue {
      */
     private const val MAX_PER_DAY = 12
 
-    private fun prefs(context: Context) =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    @Volatile private var migrated = false
+
+    private fun prefs(context: Context): android.content.SharedPreferences {
+        val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (!migrated) migrate(context, p)
+        return p
+    }
+
+    /**
+     * Carries a queue written by an older build across to [PREFS], once.
+     *
+     * **Both halves matter and for different reasons.** The pending reports are the evidence the
+     * owner's phone has already gathered and could not deliver — dropping them on an update would
+     * throw away exactly the reports that prove the route was broken. The *sent keys* matter just
+     * as much in the other direction: they are what stops a report being filed twice, so losing
+     * them would re-file the device profile for every build the phone has ever run, the moment it
+     * next opens the app.
+     *
+     * Only ever copies into an empty destination, so a second run can never overwrite newer work,
+     * and clears the old keys afterwards so the main preferences file actually gets smaller.
+     * Wrapped, because a reporter is never allowed to be the thing that breaks the app: a failed
+     * migration costs the backlog, not the launch.
+     */
+    private fun migrate(context: Context, into: android.content.SharedPreferences) {
+        synchronized(this) {
+            if (migrated) return
+            migrated = true
+            runCatching {
+                val old = context.getSharedPreferences(LEGACY_PREFS, Context.MODE_PRIVATE)
+                val hasLegacy = old.contains(KEY_PENDING) || old.contains(KEY_SENT_KEYS)
+                if (!hasLegacy) return@runCatching
+                if (!into.contains(KEY_PENDING) && !into.contains(KEY_SENT_KEYS)) {
+                    into.edit()
+                        .putString(KEY_PENDING, old.getString(KEY_PENDING, null))
+                        .putStringSet(KEY_SENT_KEYS, old.getStringSet(KEY_SENT_KEYS, emptySet()))
+                        .putInt(KEY_SENT_DAY, old.getInt(KEY_SENT_DAY, 0))
+                        .putInt(KEY_SENT_TODAY, old.getInt(KEY_SENT_TODAY, 0))
+                        .apply()
+                }
+                old.edit()
+                    .remove(KEY_PENDING).remove(KEY_SENT_KEYS)
+                    .remove(KEY_SENT_DAY).remove(KEY_SENT_TODAY)
+                    .apply()
+            }
+        }
+    }
 
     /**
      * Queues a report unless it duplicates one already sent, or today's cap is spent.
@@ -128,7 +189,9 @@ object BugReportQueue {
                     .put("androidSdk", r.androidSdk)
                     .put("device", r.device)
                     .put("context", org.json.JSONObject(r.context.toMap()))
-                    .put("recentBlocks", JSONArray(r.recentBlocks)),
+                    .put("recentBlocks", JSONArray(r.recentBlocks))
+                    .put("recentOutages", JSONArray(r.recentOutages))
+                    .put("healthFacts", JSONArray(r.healthFacts)),
             )
         }
         return arr.toString()
@@ -141,6 +204,8 @@ object BugReportQueue {
                 val o = arr.getJSONObject(i)
                 val frames = o.optJSONArray("frames")
                 val blocks = o.optJSONArray("recentBlocks")
+                val outages = o.optJSONArray("recentOutages")
+                val health = o.optJSONArray("healthFacts")
                 val ctx = o.optJSONObject("context")
                 BugReport(
                     where = o.getString("where"),
@@ -163,6 +228,10 @@ object BugReportQueue {
                     ),
                     recentBlocks = (0 until (blocks?.length() ?: 0))
                         .map { blocks!!.getString(it) },
+                    recentOutages = (0 until (outages?.length() ?: 0))
+                        .map { outages!!.getString(it) },
+                    healthFacts = (0 until (health?.length() ?: 0))
+                        .map { health!!.getString(it) },
                 )
             }.getOrNull()
         }

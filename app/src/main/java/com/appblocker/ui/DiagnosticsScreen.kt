@@ -47,7 +47,9 @@ import com.appblocker.data.DangerZone
 import com.appblocker.data.DeviceBoot
 import com.appblocker.data.FilterState
 import com.appblocker.data.NetworkFilter
+import com.appblocker.data.HealthFacts
 import com.appblocker.data.OutageLog
+import com.appblocker.service.HealthReader
 import com.appblocker.data.SilenceLog
 import com.appblocker.data.UninstallGuardVerdict
 import com.appblocker.data.WatcherDiagnostics
@@ -461,61 +463,21 @@ private fun readSnapshot(context: Context): Snapshot {
     }
 
     val protection = buildList {
-        // FIRST, because it outranks everything below it: a watcher that isn't running makes
-        // every other line on this card irrelevant. It is also the one fact the app was blind to
-        // until now — Android's toggle says "on" over a watcher the phone killed, which is what
-        // a Second Space switch leaves behind.
-        val running = BlockerAccessibilityService.isConnected()
-        val enabled = AccessibilityUtil.isEnabled(context)
-        add(
-            when {
-                !enabled -> Fact(
-                    "The blocker is switched off",
-                    "Accessibility is off for AppBlocker, so nothing is being blocked.",
-                    good = false,
-                )
-                running -> Fact(
-                    "The blocker is running right now",
-                    "It's switched on AND actually watching. Last thing it saw: " +
-                        sinceLabel(now, ServiceHealth.lastEventAt(context)) +
-                        ". Last heartbeat: " +
-                        sinceLabel(now, ServiceHealth.lastAliveAt(context)) + ".",
-                    good = true,
-                )
-                else -> Fact(
-                    "Switched on, but NOT running",
-                    "Android says it's on, but the watcher isn't there — your phone shut it " +
-                        "down. Nothing is being blocked. Turning accessibility off and on again " +
-                        "brings it back.",
-                    good = false,
-                )
-            },
-        )
-        ServiceHealth.foundDeadCount(context).takeIf { it > 0 }?.let { dead ->
-            add(
-                Fact(
-                    "Times blocking has been found stopped: $dead",
-                    "Each time, your phone had shut the blocker down while Android still said " +
-                        "it was on. If this number keeps climbing, tell me — it's the " +
-                        "measurement that says whether a fix worked.",
-                    good = null,
-                ),
-            )
-        }
-        // How LONG, not just how often. The count above answers "is this getting better"; these
-        // answer "what did it cost", which is the question the count could never reach - see
-        // OutageLog, and invariant 26, which is the same mistake this is undoing.
-        OutageLog.totals(context).takeIf { it.count > 0 }?.let { totals ->
-            add(
-                Fact(
-                    "Time with no blocking: ${minutesLabel(totals.totalMs)} in total",
-                    "Added up across every stoppage since this was first measured. The longest " +
-                        "single one was ${minutesLabel(totals.longestMs)}. Each one is timed " +
-                        "and sent, so what keeps causing them can be found instead of guessed.",
-                    good = null,
-                ),
-            )
-        }
+        // **These come from `HealthFacts`, not from here.**
+        //
+        // This screen and the bug report used to work the same readings out separately: the
+        // enabled-vs-running three-way, the stoppage counts, the probe streak. Two copies of one
+        // judgement, which is the drift `DeviceProfile` was created to end for the device facts —
+        // "the diagnostics screen, the probe and the reporter must never be able to disagree about
+        // a phone". The verdicts now live in one tested place and this page renders them; the
+        // thresholds are unit-tested there, which they never could be from inside a composable.
+        //
+        // Only the PROTECTION group: speed, silence and the report queue have their own cards
+        // below, with their own zero-state wording that a report has no use for.
+        HealthFacts.verdicts(HealthReader.read(context, now))
+            .filter { it.group == HealthFacts.Group.PROTECTION }
+            .forEach { add(Fact(it.title, it.detail, it.good)) }
+
         OutageLog.last(context)?.let { last ->
             add(
                 Fact(
@@ -567,23 +529,8 @@ private fun readSnapshot(context: Context): Snapshot {
                 ),
             )
         }
-        // The self-check that closed the two-hour blind spot. Only shown when it has actually
-        // failed: a zero here is the normal state and would be a row saying nothing.
-        ServiceHealth.probeFailStreak(context).takeIf { it > 0 }?.let { streak ->
-            add(
-                Fact(
-                    "The blocker cannot read the screen right now ($streak checks in a row)",
-                    "Every few minutes, when nothing has reached it for a while, the blocker " +
-                        "asks whether it can still see what is on your screen. It has answered " +
-                        "no $streak times running. At $PROBE_FAIL_LIMIT it stops waiting and " +
-                        "tells you blocking has stopped, instead of taking hours to be sure.",
-                    good = false,
-                ),
-            )
-        }
-        // Whether the binding has ever been taken down in an orderly way. "Never" alongside real
-        // outages is itself the finding: an OEM force-stop never reaches onDestroy, so a phone
-        // with stoppages and no unbinds is a phone killing the process outright.
+        // Whether the binding ever came down in an ORDERLY way. Only shown when it has actually
+        // happened: a zero here is the normal state and would be a row saying nothing.
         ServiceHealth.unbindCount(context).takeIf { it > 0 }?.let { n ->
             add(
                 Fact(

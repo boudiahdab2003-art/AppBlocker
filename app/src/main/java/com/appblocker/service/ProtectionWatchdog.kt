@@ -37,6 +37,20 @@ object ProtectionWatchdog {
         val bindPending: Boolean,
         /** Which detector produced a STALLED, for `OutageLog` — null for every other state. */
         val arm: String? = null,
+        /**
+         * Foreground minutes since the last event the watcher saw, or null when it cannot be told
+         * (no usage access, nothing seen yet, or the system service failed).
+         *
+         * **The number the verdict actually turns on.** A [ProtectionState.STALLED] needs
+         * `STALE_MIN_USED_MINUTES` of *measured use* before quiet counts against the watcher, so
+         * this is what separates four unprotected hours from a phone left on a table. It was
+         * computed on every read and thrown away, which left a report carrying `lastEventMin 240`
+         * and no way to tell those apart. Carried here rather than recomputed elsewhere, because
+         * the point of [Reading] is that the state and the numbers behind it come from one look.
+         */
+        val usedMinutes: Int? = null,
+        /** How long this process has been alive — separates a cold start from a real death. */
+        val sinceProcessStartMs: Long = 0L,
     )
 
     /** The current health of blocking, for the watchdog and for the app's own status row. */
@@ -78,6 +92,8 @@ object ProtectionWatchdog {
             state = verdict.state,
             bindPending = bindPending(enabled, connected, sinceStart),
             arm = verdict.arm,
+            usedMinutes = usedMinutes,
+            sinceProcessStartMs = sinceStart,
         )
     }
 

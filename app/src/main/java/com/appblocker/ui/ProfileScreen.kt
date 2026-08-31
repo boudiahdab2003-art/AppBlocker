@@ -1,5 +1,9 @@
 package com.appblocker.ui
 
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import android.content.Context
 import android.app.Activity
 import android.content.Intent
@@ -737,8 +741,8 @@ fun ProfileScreen(
     if (showReport) {
         ReportProblemSheet(
             onDismiss = { showReport = false },
-            onSend = { note ->
-                BugReportSender.reportNote(context, note)
+            onSend = { note, kind ->
+                BugReportSender.reportNote(context, note, kind)
                 showReport = false
                 Toast.makeText(
                     context, R.string.profile_report_thanks, Toast.LENGTH_SHORT,
@@ -1123,9 +1127,28 @@ private fun Divider() {
  * A full screen rather than a Dialog, like [FrictionGate] and for the same device reason: dialog
  * windows report zero insets on the owner's phone, so the keyboard would sit on top of the field.
  */
+/**
+ * The three shapes a report from the owner actually takes, offered as one optional tap.
+ *
+ * Not a required field and never a dropdown of twelve. The value is narrowing: "it did NOT block"
+ * points at the block log's *absence* of an entry, "it blocked wrongly" points at the newest entry
+ * in it, and "it stopped working" points at the outage log — three different first places to look,
+ * which `CLAUDE.md` currently says to work out by reading the log backwards and guessing which
+ * cover he means.
+ *
+ * [tag] is what travels in the report. Our own literal, never anything he typed.
+ */
+private enum class ReportKind(val tag: String, val label: Int) {
+    BLOCKED_WRONGLY("blocked-wrongly", R.string.profile_report_kind_wrong),
+    DID_NOT_BLOCK("did-not-block", R.string.profile_report_kind_missed),
+    STOPPED("stopped-working", R.string.profile_report_kind_stopped),
+}
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ReportProblemSheet(onDismiss: () -> Unit, onSend: (String) -> Unit) {
+private fun ReportProblemSheet(onDismiss: () -> Unit, onSend: (String, String?) -> Unit) {
     var text by remember { mutableStateOf("") }
+    var kind by remember { mutableStateOf<ReportKind?>(null) }
     BackHandler { onDismiss() }
     Column(
         Modifier.fillMaxSize().background(com.appblocker.ui.theme.appBackground())
@@ -1140,6 +1163,24 @@ private fun ReportProblemSheet(onDismiss: () -> Unit, onSend: (String) -> Unit) 
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Spacer(Modifier.height(12.dp))
+            // Optional, and they must stay optional. One tap tells the report which of sixty
+            // logged blocks to look at, which is the thing that used to be guessed by reading the
+            // log backwards. Tapping a selected chip again clears it — a wrong answer left behind
+            // is worse than none, because it aims the reading at the wrong entry.
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ReportKind.entries.forEach { option ->
+                    FilterChip(
+                        selected = kind == option,
+                        onClick = { kind = if (kind == option) null else option },
+                        label = { Text(stringResource(option.label)) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primary,
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                        ),
+                    )
+                }
+            }
             Spacer(Modifier.height(12.dp))
             OutlinedTextField(
                 value = text,
@@ -1158,8 +1199,11 @@ private fun ReportProblemSheet(onDismiss: () -> Unit, onSend: (String) -> Unit) 
         }
         GradientButton(
             text = stringResource(R.string.profile_report_send),
-            enabled = text.isNotBlank(),
-            onClick = { onSend(text) },
+            // **Never disabled.** The report is built to stand on its own — it carries the
+            // blocker's own verdict on itself, the stoppage history and the block log — so
+            // requiring him to write a sentence first asked him to supply what the app already
+            // knows, at the moment he is annoyed enough to be reporting something.
+            onClick = { onSend(text, kind?.tag) },
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 8.dp),
         )
         TextButton(

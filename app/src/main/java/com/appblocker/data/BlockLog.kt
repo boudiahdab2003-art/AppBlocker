@@ -83,9 +83,27 @@ object BlockLog {
         val why: String,
         val counted: Boolean,
     ) {
-        /** One line for the report body. Fixed tokens only — nothing here can carry content. */
+        /**
+         * One line for the report body. Fixed tokens only — nothing here can carry content.
+         *
+         * The age used to be printed in raw seconds, so a real report carried `121808s ago` and
+         * reading it meant dividing by 3600 to discover the entry was from yesterday — sixty times
+         * per report, on the log whose whole purpose is finding the one block the owner means.
+         * Padded to a fixed width so the columns still line up when the units differ.
+         */
         fun render(): String =
-            "${agoMs / 1000}s ago  $kind  why=$why  window=$window  ownUi=$ownUi  counted=$counted"
+            ago().padEnd(9) + " $kind  why=$why  window=$window  ownUi=$ownUi  counted=$counted"
+
+        /** `4s`, `7m`, `2h`, `3d` — the largest unit that still says something useful. */
+        private fun ago(): String {
+            val s = agoMs / 1000
+            return when {
+                s < 60 -> "${s}s ago"
+                s < 3_600 -> "${s / 60}m ago"
+                s < 86_400 -> "${s / 3_600}h ago"
+                else -> "${s / 86_400}d ago"
+            }
+        }
     }
 
     private fun prefs(context: android.content.Context) =
