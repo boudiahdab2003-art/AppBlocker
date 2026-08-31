@@ -143,13 +143,33 @@ object OutageLog {
         /** Which arm concluded blocking had stopped — one of [DetectedBy]. */
         val detectedBy: String = DetectedBy.UNKNOWN,
     ) {
-        /** A report-ready line. No content, by construction — every field here is a number. */
+        /**
+         * A report-ready line. No content, by construction — every field here is a number.
+         *
+         * **`at=` is the day and hour it began**, and it is the only place in the whole app that
+         * question can be answered. Every other instrument stores `today_` and `total_` and a day
+         * stamp, so there is no per-hour history anywhere; these lines are the sole record of
+         * *when* blocking has failed. The stoppage history exists to show whether episodes cluster
+         * — after updates, after reboots, at one time of the evening — and without the hour it
+         * could answer only two thirds of that. Local time on purpose: the phone's own evening is
+         * the thing being asked about, and the issue's UTC timestamp is when the report was sent,
+         * which for a queued report can be days later.
+         */
         fun render(): String {
             val mins = if (durationMs < 0) "?" else "${durationMs / 60_000}"
             val detect = if (detectedAfterMs < 0) "?" else "${detectedAfterMs / 60_000}"
-            return "down=${mins}min  noticedAfter=${detect}min  deaf=$aliveButDeaf  " +
-                "after=$precededBy  rebooted=$rebooted  v=$versionCode  by=$detectedBy"
+            return "at=${startedLabel()}  down=${mins}min  noticedAfter=${detect}min  " +
+                "deaf=$aliveButDeaf  after=$precededBy  rebooted=$rebooted  v=$versionCode  " +
+                "by=$detectedBy"
         }
+
+        /** `Sun 21:40`, or `?` when the stamp was never recorded. Never a date-with-year: the day
+         *  of the week and the hour are the pattern, and the rest is noise in a fixed-width line. */
+        private fun startedLabel(): String =
+            if (startedAt <= 0L) "?" else runCatching {
+                java.text.SimpleDateFormat("EEE HH:mm", java.util.Locale.US)
+                    .format(java.util.Date(startedAt))
+            }.getOrDefault("?")
     }
 
     /**

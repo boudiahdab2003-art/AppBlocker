@@ -241,9 +241,14 @@
     <string name="profile_report_title">Report a problem</string>
     <string name="profile_report_subtitle">Describe what went wrong and it goes straight to the developer. Never includes your blocked words, sites or app names.</string>
     <string name="profile_report_disabled">Reporting isn\'t set up in this build.</string>
-    <string name="profile_report_prompt">What happened? Anything helps — what you were doing, which app, whether a block screen appeared when it shouldn\'t have, or didn\'t when it should.</string>
-    <string name="profile_report_placeholder">Describe the problem</string>
-    <string name="profile_report_privacy">Sent with: app version, Android version, phone model, and your current settings — which block screen you use, whether blocking is running, and how many blocks happened today.\n\nNever sent: your blocked words, the sites you visit, or which apps you block.</string>
+    <string name="profile_report_prompt">Tap what went wrong if you like, then send. You don\'t have to write anything — the report already carries what the blocker knows about itself.</string>
+    <string name="profile_report_placeholder">Anything you want to add (optional)</string>
+    <string name="profile_report_kind_wrong">It blocked something wrongly</string>
+    <string name="profile_report_kind_missed">It did NOT block something</string>
+    <string name="profile_report_kind_stopped">It stopped working</string>
+    <string name="profile_report_privacy">Sent with: app version, Android version, phone model, your current settings, and what the blocker knows about itself — whether it is running, when it last saw anything, how fast blocks appear, and every time blocking has stopped and come back.
+
+Never sent: your blocked words, the sites you visit, which apps you block, or anything from Recovery.</string>
     <string name="profile_report_send">Send</string>
     <string name="profile_report_thanks">Sent — thank you</string>
 

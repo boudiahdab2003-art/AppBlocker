@@ -67,15 +67,44 @@ data class BugReport(
      * guarantee that these lines cannot carry content lives.
      */
     val recentBlocks: List<String> = emptyList(),
+    /**
+     * The stoppages this install has finished, newest first, as [OutageLog.Episode.render] lines —
+     * numbers and our own literals only, never content.
+     *
+     * **One episode cannot show a pattern and the pattern is the whole question.** The context
+     * carries the newest stoppage and the running total; those say what the last one cost and how
+     * many there have been, and neither can say whether they cluster after an update, arrive at
+     * the same hour, or follow every reboot. That is the shape a cause has, and it only appears
+     * across episodes — so the history travels with every report, the way [recentBlocks] does.
+     *
+     * ⚠️ **Not the recovery journal, and never anything from it.** The clean counter and the
+     * journal are the one part of this app that never leaves the phone; this is the blocker's own
+     * failure log and nothing else.
+     */
+    val recentOutages: List<String> = emptyList(),
+    /**
+     * What the blocker's own numbers mean, already interpreted — see [HealthFacts].
+     *
+     * **The report has to answer "what went wrong" without him typing a word**, which is the
+     * standard the owner set for it, and a table of raw keys never could: `serviceRunning=false`
+     * rendered exactly like `theme=ink`, and the sentence explaining the difference lived on his
+     * phone where the person who fixes things cannot read it.
+     *
+     * Carried as rendered lines rather than as [HealthFacts.Fact] objects because a report is
+     * stored to disk and read back by a *later* version of the app (see [BugReportQueue]). Storing
+     * the sentence means an old queued report still says what it meant, instead of being
+     * re-interpreted by thresholds that have since moved.
+     */
+    val healthFacts: List<String> = emptyList(),
 ) {
 
     /**
      * Groups reports that are "the same bug" so a crash loop opens one issue rather than hundreds.
      *
      * Deliberately excludes [note] and every varying field: two crashes at the same place with the
-     * same exception are one bug even though their timestamps differ. Hand-written reports get a
-     * unique key from their note so the owner can always file the same complaint twice — if he
-     * bothered to type it, he means it.
+     * same exception are one bug even though their timestamps differ. Hand-written reports are the
+     * opposite — **every send he makes is its own report** — because he only sends one by deciding
+     * to, and an act of deciding is never a duplicate of an earlier one.
      */
     fun dedupeKey(): String = when {
         // One profile per phone per build. Not per launch: the point is one report per *thing we
@@ -85,7 +114,18 @@ data class BugReport(
         // are: two outages are two outages even when they look identical, and the rate is the
         // measurement being taken. The start stamp is what makes them distinguishable at all.
         isOutage -> "outage:${context["outageAt"].orEmpty()}"
-        note != null -> "note:${note.hashCode()}"
+        // One per calendar week, which is the whole contract: the summary is filed on the first
+        // app open of a new week and must not arrive again on the second.
+        isWeekly -> "weekly:${context["weekOf"].orEmpty()}"
+        // Keyed on **when he pressed Send**, not on what he wrote.
+        //
+        // It used to be `note.hashCode()`, which made the sentence above this method false in two
+        // ways. Typing the same complaint twice produced one key and the queue dropped the second
+        // — and once the box became optional, *every* empty send hashed to `0`, so the second
+        // blank report he ever sent would have been discarded as a duplicate of the first. The
+        // report is now meant to stand on its own without a word typed into it, which makes the
+        // text exactly the wrong thing to identify it by.
+        note != null -> "note:${context["noteAt"].orEmpty()}|${note.hashCode()}"
         else -> "$where|$errorClass|${frames.firstOrNull().orEmpty()}"
     }
 
@@ -102,6 +142,9 @@ data class BugReport(
      *  the same reason, as [isProfile]: no new field, so the queue's stored format is unchanged. */
     val isOutage: Boolean get() = where == OUTAGE_WHERE && errorClass == null && note == null
 
+    /** The weekly health summary. Detected from [where] like the two above, for the same reason. */
+    val isWeekly: Boolean get() = where == WEEKLY_WHERE && errorClass == null && note == null
+
     /**
      * The issue title, carrying the version — the first question about any report is "which build
      * is this?", and an issue list where every row starts "Report:" is a list you have to open
@@ -115,11 +158,46 @@ data class BugReport(
         // The length and the blame go in the title on purpose: the whole point of these reports is
         // the pattern across them, and a list where every row reads "outage" would have to be
         // opened issue by issue to see the very thing being measured.
+        // Says the answer in the list, so a healthy week never needs opening.
+        isWeekly -> "[$appVersion] Week of ${context["weekOf"] ?: "?"} — " +
+            (weeklyVerdict() ?: "all healthy")
         isOutage -> "[$appVersion] STOPPED for ${context["outageMin"] ?: "?"} min" +
             " — after ${context["outagePreceded"] ?: "?"}" +
             if (context["outageDeaf"] == "true") ", still running" else ", process died"
-        note != null -> "[$appVersion] " + note.lineSequence().first().take(60).trim()
+        // His own words when there are any — nothing summarises a complaint better than the
+        // complaint. When there are none, the title has to be earned rather than left blank: an
+        // issue list of bare `[1.146]` rows would have to be opened one by one, which is exactly
+        // the failure the profile and outage titles above were written to avoid.
+        note != null -> "[$appVersion] " + noteTitle()
         else -> "[$appVersion] $errorClass in $where"
+    }
+
+    /**
+     * What to call a report the owner sent without typing anything.
+     *
+     * Order of preference: what he wrote, then what he tapped, then what the app found wrong about
+     * itself, then a plain statement that he sent it. The last is not a failure case — a report
+     * from a phone with nothing wrong is a real and useful thing to receive, and it should say so
+     * rather than pretending to a finding it does not have.
+     */
+    private fun noteTitle(): String {
+        val typed = note?.lineSequence()?.firstOrNull()?.take(60)?.trim().orEmpty()
+        if (typed.isNotEmpty()) return typed
+        val chip = when (context["reportKind"]) {
+            "blocked-wrongly" -> "blocked something wrongly"
+            "did-not-block" -> "did NOT block something"
+            "stopped-working" -> "it stopped working"
+            else -> null
+        }
+        // The worst finding, with its markdown and marker stripped — a title is plain text.
+        val worst = HealthFacts.problemLines(healthFacts).firstOrNull()
+            ?.substringAfter("**")?.substringBefore("**")?.trim()
+        return when {
+            chip != null && worst != null -> "$chip — $worst"
+            chip != null -> "Sent from the phone — $chip"
+            worst != null -> "Sent from the phone — $worst"
+            else -> "Sent from the phone — nothing looks wrong"
+        }
     }
 
     /**
@@ -141,10 +219,135 @@ data class BugReport(
      * sections are always present — an absent section and an empty one look identical in an issue
      * and mean opposite things, which has already cost one round trip.
      */
-    fun body(): String = when {
+    fun body(): String = whatLooksWrong() + when {
         isProfile -> profileBody()
         isOutage -> outageBody()
+        isWeekly -> weeklyBody()
         else -> faultBody()
+    } + selfKnowledge() + outageHistory()
+
+    /**
+     * The shortest verdict that fits in a title, or null when the week was clean.
+     *
+     * Reads the stored health lines rather than re-deciding anything: the summary is written by
+     * the phone and read weeks later, and re-running today's thresholds over an old week would
+     * quietly rewrite history.
+     */
+    private fun weeklyVerdict(): String? = HealthFacts.problemLines(healthFacts)
+        .firstOrNull()?.substringAfter("**")?.substringBefore("**")?.trim()
+
+    /**
+     * The weekly summary — **the only report that is filed when nothing is wrong.**
+     *
+     * It exists to make silence mean something. Every other shape arrives only on trouble, so a
+     * quiet tracker was indistinguishable from a broken delivery route, and in August 2026 that
+     * ambiguity hid a dead route for five days while three releases of stoppage detection sent
+     * nothing into it. A weekly heartbeat turns "nothing arrived" into a fact rather than a hope.
+     *
+     * Deliberately short. Nobody should have to read this one: the title carries the verdict, and
+     * the sections that follow are the same ones every other report has.
+     */
+    private fun weeklyBody(): String = buildString {
+        appendLine("### The week")
+        appendLine()
+        val skipped = context["weeksSkipped"]?.toIntOrNull() ?: 0
+        if (skipped > 0) {
+            // Said plainly rather than hidden: a summary is only filed when the app is opened, so
+            // a gap means "he did not open it" OR "the route was down", and pretending otherwise
+            // would recreate the exact ambiguity this report exists to remove.
+            appendLine("⚠️ **$skipped week(s) produced no summary.** Either the app was not opened")
+            appendLine("in them, or nothing sent was getting through. This one arriving says the")
+            appendLine("route works now; it says nothing about which of the two it was.")
+            appendLine()
+        }
+        appendLine("| | |")
+        appendLine("|---|---|")
+        appendLine("| Week of | ${context["weekOf"] ?: "?"} |")
+        appendLine("| Device | $device |")
+        appendLine("| Version | $appVersion ($flavor) |")
+        appendLine()
+        appendLine("Nothing here needs a reply. It is filed so that a week with **no** summary is")
+        appendLine("a signal rather than a silence — which is the failure this whole shape exists")
+        appendLine("to make visible. The verdict is in the title; the detail is below.")
+    }
+
+    /**
+     * **The finding, before anything else.**
+     *
+     * A report used to open on a 24-row alphabetical table in which the one alarming value was
+     * indistinguishable from the choice of colour scheme, and the reader's first job was to work
+     * out which row mattered. The owner's standard for this rewrite was a report so telling that
+     * his own comment is optional — which means the first thing on the page has to be the answer,
+     * not the evidence.
+     *
+     * Renders nothing at all when there are no health facts (an old queued report, or a build that
+     * did not collect them) — but when there ARE facts and none of them is bad, it says so out
+     * loud. A missing section and a clean bill of health must not look alike; that ambiguity is
+     * the one `docs/BLOCKING_INVARIANTS.md` says already cost a whole round trip.
+     */
+    private fun whatLooksWrong(): String {
+        if (healthFacts.isEmpty()) return ""
+        val problems = HealthFacts.problemLines(healthFacts)
+        return buildString {
+            appendLine("### What looks wrong here")
+            appendLine()
+            if (problems.isEmpty()) {
+                appendLine("**Nothing in the blocker's own numbers is wrong.** Every check it can")
+                appendLine("run on itself came back healthy, so whatever prompted this report is")
+                appendLine("not visible to the app — read the block log and the settings below.")
+            } else {
+                appendLine("Worst first. Each line is the app's own reading of itself, not a guess.")
+                appendLine()
+                problems.forEach { appendLine("- $it") }
+            }
+            appendLine()
+        }
+    }
+
+    /**
+     * Everything the blocker can say about itself, healthy lines included.
+     *
+     * The healthy ones earn their place for the same reason a clean device profile is still filed:
+     * "the blocker is running, last thing it saw just now" is what makes the *absence* of a
+     * complaint meaningful. Without them a report can only ever be read as a list of accusations.
+     */
+    private fun selfKnowledge(): String {
+        if (healthFacts.isEmpty()) return ""
+        return buildString {
+            appendLine()
+            appendLine("### What the blocker knows about itself")
+            appendLine()
+            appendLine("${HealthFacts.BAD} wrong · ${HealthFacts.OK} healthy · ${HealthFacts.PLAIN} a number, nobody's fault.")
+            appendLine("Written by the phone at the moment of the report, in the order that matters.")
+            appendLine()
+            healthFacts.forEach { appendLine("- $it") }
+        }
+    }
+
+    /**
+     * Every stoppage this install has finished, appended to **whatever kind of report this is**.
+     *
+     * On an outage report it is the episode's own history; on a fault or a typed note it is the
+     * context the sentence "it stopped working again" has never come with. One episode says what
+     * the last stoppage cost. Only the list says whether they cluster after updates, land at one
+     * time of day, or follow reboots — and that is the shape a cause has.
+     *
+     * Empty renders nothing rather than an empty heading: on a phone that has never lost blocking
+     * the absence is the point, and a "(none)" block in every report would train the eye to skip
+     * the section on the one where it fills up.
+     */
+    private fun outageHistory(): String = if (recentOutages.isEmpty()) "" else buildString {
+        appendLine()
+        appendLine("### Every stoppage on this install")
+        appendLine()
+        appendLine("Newest first, one line each. `deaf=true` was alive the whole time and stopped")
+        appendLine("being spoken to; `deaf=false` was killed and never rebound. `after=` is what")
+        appendLine("happened just before, `by=` is which check noticed, and `v=` is the version")
+        appendLine("that was running — a run of one version is a regression, a spread is not.")
+        appendLine()
+        appendLine("```")
+        recentOutages.forEach { appendLine(it) }
+        appendLine("```")
     }
 
     /**
@@ -253,7 +456,10 @@ data class BugReport(
     }
 
     private fun faultBody(): String = buildString {
-        if (note != null) {
+        // `isNotBlank`, not `!= null`. The text box is optional now, so an empty note is the
+        // ordinary case rather than an impossible one — and quoting it produced a bare "> " above
+        // every report he sent without typing, which reads as though something failed to load.
+        if (!note.isNullOrBlank()) {
             appendLine("> $note".replace("\n", "\n> "))
             appendLine()
         }
@@ -430,8 +636,62 @@ data class BugReport(
             "revives",
             // How many times Android called onInterrupt on the watcher. Our own integer.
             "interrupts",
+            // Foreground minutes since the watcher last saw anything, or `?` when usage access
+            // never answered. **The number `protection`'s verdict actually turns on**: quiet is
+            // only evidence when the phone was being used, and this is what separates four
+            // unprotected hours from a phone left on a table. `?` is a third answer, not a zero.
+            "usedMinutes",
+            // Whether that verdict came from the bind grace rather than from evidence.
+            "bindPending",
+            // Age of THIS PROCESS in minutes, against `uptimeMin`'s whole-phone figure — a missing
+            // watcher three seconds after a cold start has not died.
+            "processAgeMin",
+            // Times the re-check found the watcher still gone: the phone killing our process
+            // faster than the grace period can wait for it.
+            "bindDeferrals",
+            // Is blocking stopped **at this moment**. Every other outage key describes the last
+            // finished episode, so a report written during a stoppage used to be unrecognisable.
+            "outageNow",
+            // The latency histogram uncollapsed, fastest bucket first ("3/8/40/12/2"). The summary
+            // in `blockSpeed` can hold steady while the middle of the distribution drifts right.
+            "speedBuckets",
+            // Total minutes unprotected, and the worst single stoppage. The two headline numbers
+            // about the owner's actual complaint, shown on his screen and never sent until now.
+            "outageTotalMin",
+            "outageWorstMin",
+            // Minutes since the background scheduler last ran — the live gap, against
+            // `workerSilent`'s lifetime count. `?` when it has never been seen to run at all.
+            "workerSilentMin",
+            // ⚠️ The reporter describing its own channel: reports written but not delivered, and
+            // how many more may go today. A backlog visible on arrival is the only way a report
+            // can say "the ones before me did not get through".
+            "reportQueue",
+            // --- the owner's configuration, as counts (never rows) ---
+            // Gathered from Room, and ONLY for the report shapes that are not on the error path —
+            // see BugReportSender.ruleCounts. `limits` is the one that earns its place: "it didn't
+            // block X" is the commonest report and "the rule existed, the allowance had not run
+            // out" is the commonest innocent answer, which no report could tell from a real fault.
+            "ruleBlocked",
+            "ruleAllowed",
+            "limits",
+            "schedules",
+            // How many entries the text filter holds. Named for the count, not for what is
+            // counted: `wordCount` tripped the allow-list's own tripwire for keys that sound like
+            // content, and the right answer to that is a better name, never an exception.
+            "filterEntries",
             "healthErrors",
             "lastErrorWhere",
+            // Minutes since the last swallowed error, so a count stops meaning the same thing
+            // whether it happened months ago or during the thing being reported. Our own integer.
+            "lastErrorMin",
+            // Minutes since the watcher was last known alive, against `lastEventMin`'s "last time
+            // it heard anything". A quiet hour with a fresh heartbeat is a phone nobody is using;
+            // a quiet hour with a stale one is the failure. Our own integer, or `never`.
+            "aliveMin",
+            // Android's persistent boot sequence number — how many times this phone has restarted,
+            // not when or why. Reboots are invisible in every other field, and half the outage
+            // hypotheses are about what a restart does. `-1` means unreadable (see [DeviceBoot]).
+            "boots",
             // Minutes since the phone booted. Separates "the service never started after a
             // reboot" from "it died an hour ago", which look identical in every other field.
             "uptimeMin",
@@ -445,7 +705,29 @@ data class BugReport(
             // Enforcement state at the moment of the report.
             "quickPaused",
             "allowlist",
+            // When he pressed Send, in whole seconds. **[dedupeKey] reads this** — it is what makes
+            // one send different from the next now that the text box is optional and two blank
+            // reports are otherwise identical. Load-bearing, not descriptive; see `outageAt`.
+            "noteAt",
+            // The calendar week a summary covers, e.g. "2026-W35". **[dedupeKey] reads this** —
+            // it is what makes a week's summary arrive once. Load-bearing, like `outageAt`.
+            "weekOf",
+            // How many weeks in a row produced no summary. A gap means the app was not opened, or
+            // nothing was getting through; the number says how big the gap was without claiming
+            // which of the two it was.
+            "weeksSkipped",
+            // Which of the three chips he tapped in the report box, or absent. One of our own
+            // literals, never anything he typed — the chips exist so a report can say which of
+            // sixty logged covers to look at without him having to describe it.
+            "reportKind",
             // --- The outage that just ended (see [OutageLog]) ---
+            // When the episode began, in whole seconds. **[dedupeKey] reads this**, which makes it
+            // the one key here that is load-bearing rather than descriptive: without it every
+            // outage keys as `outage:`, the queue calls the second one a duplicate of the first,
+            // and the app can report exactly one stoppage for the life of the install. It was
+            // missing from this list for three releases, and no outage report has ever arrived to
+            // contradict that. `two stoppages are two reports` is the test.
+            "outageAt",
             // `foundDead` above counts outages; these describe one. How long blocking was down,
             // and how much of that passed before the app noticed — the second is the protection
             // actually lost, and the two are different questions.
@@ -497,6 +779,18 @@ data class BugReport(
          */
         const val OUTAGE_WHERE = "outage"
 
+        /**
+         * The [where] tag for the weekly health summary.
+         *
+         * A fourth shape, and the only one that is filed when **nothing is wrong**. Its value is
+         * not what it says on any given week — it is that its absence starts to mean something.
+         * Every other report shape arrives only when there is trouble, so a quiet tracker and a
+         * dead delivery route look exactly alike, which is the trap that cost five days in
+         * August 2026: three releases of stoppage detection sent nothing, and nothing could say
+         * whether that was good news or a broken pipe.
+         */
+        const val WEEKLY_WHERE = "weekly"
+
         val PROFILE_CONTEXT_KEYS = setOf(
             "brand",
             "uninstallHandler",
@@ -543,6 +837,8 @@ data class BugReport(
             device: String,
             context: Map<String, String> = emptyMap(),
             recentBlocks: List<String> = emptyList(),
+            recentOutages: List<String> = emptyList(),
+            healthFacts: List<String> = emptyList(),
         ) = BugReport(
             where = where,
             errorClass = t.javaClass.name.substringAfterLast('.'),
@@ -554,6 +850,8 @@ data class BugReport(
             device = device,
             context = sanitizeContext(context),
             recentBlocks = recentBlocks,
+            recentOutages = recentOutages,
+            healthFacts = healthFacts,
         )
 
         /** Builds a report the owner typed himself. */
@@ -565,6 +863,8 @@ data class BugReport(
             device: String,
             context: Map<String, String> = emptyMap(),
             recentBlocks: List<String> = emptyList(),
+            recentOutages: List<String> = emptyList(),
+            healthFacts: List<String> = emptyList(),
         ) = BugReport(
             where = "owner",
             errorClass = null,
@@ -576,6 +876,8 @@ data class BugReport(
             device = device,
             context = sanitizeContext(context),
             recentBlocks = recentBlocks,
+            recentOutages = recentOutages,
+            healthFacts = healthFacts,
         )
 
         /**
@@ -611,6 +913,36 @@ data class BugReport(
          * closest thing there is to a witness. No frames, because nothing threw — that is the
          * whole difficulty this shape exists to work around.
          */
+        /**
+         * The weekly health summary — see [WEEKLY_WHERE].
+         *
+         * Carries the health lines and the stoppage history like any other report, and no block
+         * log: the week's covers are not what this is for, and sixty lines would bury the one
+         * fact it exists to deliver.
+         */
+        fun fromWeekly(
+            appVersion: String,
+            flavor: String,
+            androidSdk: Int,
+            device: String,
+            context: Map<String, String>,
+            recentOutages: List<String> = emptyList(),
+            healthFacts: List<String> = emptyList(),
+        ) = BugReport(
+            where = WEEKLY_WHERE,
+            errorClass = null,
+            frames = emptyList(),
+            note = null,
+            appVersion = appVersion,
+            flavor = flavor,
+            androidSdk = androidSdk,
+            device = device,
+            context = sanitizeContext(context),
+            recentBlocks = emptyList(),
+            recentOutages = recentOutages,
+            healthFacts = healthFacts,
+        )
+
         fun fromOutage(
             appVersion: String,
             flavor: String,
@@ -618,6 +950,8 @@ data class BugReport(
             device: String,
             context: Map<String, String>,
             recentBlocks: List<String>,
+            recentOutages: List<String> = emptyList(),
+            healthFacts: List<String> = emptyList(),
         ) = BugReport(
             where = OUTAGE_WHERE,
             errorClass = null,
@@ -629,6 +963,8 @@ data class BugReport(
             device = device,
             context = sanitizeContext(context),
             recentBlocks = recentBlocks,
+            recentOutages = recentOutages,
+            healthFacts = healthFacts,
         )
 
         /**

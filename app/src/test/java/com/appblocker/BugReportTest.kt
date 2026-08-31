@@ -178,6 +178,87 @@ class BugReportTest {
         assertTrue(parsed.getString("body").isNotBlank())
         assertFalse(json.contains(secret))
     }
+
+    // --- typed reports: every send he makes is its own report ---
+
+    private fun sent(note: String, at: Long) = BugReport.fromNote(
+        note = note,
+        appVersion = "1.146",
+        flavor = "github",
+        androidSdk = 36,
+        device = "Xiaomi 25080RABDG",
+        context = mapOf("noteAt" to "$at"),
+    )
+
+    /**
+     * The box is optional now, so this is the ordinary case rather than an edge one: he opens the
+     * report screen, taps Send, and the report speaks for itself. Keyed on the text, every blank
+     * send hashed to `0` and the queue dropped the second one he ever made as a duplicate of the
+     * first — the same shape as the outage bug, arriving through a different door.
+     */
+    @Test
+    fun `two blank reports are two reports`() {
+        assertNotEquals(sent("", 1_756_000_000L).dedupeKey(), sent("", 1_756_000_600L).dedupeKey())
+    }
+
+    /**
+     * And the case the old KDoc claimed to support while the code did the opposite: the same
+     * complaint typed twice is two complaints. He only sends one by deciding to.
+     */
+    @Test
+    fun `the same complaint sent twice is two reports`() {
+        assertNotEquals(
+            sent("it stopped again", 1_756_000_000L).dedupeKey(),
+            sent("it stopped again", 1_756_000_600L).dedupeKey(),
+        )
+    }
+
+    /** A blank report is still a report the owner sent, not a fault and not a profile. */
+    @Test
+    fun `a blank report is still an owner report`() {
+        val blank = sent("", 1_756_000_000L)
+
+        assertFalse(blank.isProfile)
+        assertFalse(blank.isOutage)
+        assertTrue(blank.dedupeKey().startsWith("note:"))
+    }
+
+    // --- outages: two stoppages have to arrive as two reports ---
+
+    private fun outage(startedAtSec: Long) = BugReport.fromOutage(
+        appVersion = "1.145",
+        flavor = "github",
+        androidSdk = 35,
+        device = "Xiaomi 25080RABDG",
+        context = mapOf(
+            "outageAt" to "$startedAtSec",
+            "outageMin" to "42",
+            "outageDeaf" to "true",
+            "outagePreceded" to "nothing",
+            "outageEnded" to "recovered",
+        ),
+        recentBlocks = emptyList(),
+    )
+
+    /**
+     * The bug this was written for. `dedupeKey` reads `outageAt` back out of the context, and
+     * `sanitizeContext` dropped it before the key was ever built — so every outage on every phone
+     * keyed as `outage:`, and the queue threw away the second one as a duplicate of the first.
+     * The app could report exactly one stoppage ever, which is the opposite of the measurement
+     * the outage log exists to take. The key's own comment already said the start stamp "is what
+     * makes them distinguishable at all"; nothing checked that the stamp still existed.
+     */
+    @Test
+    fun `two stoppages are two reports`() {
+        assertNotEquals(outage(1_756_000_000L).dedupeKey(), outage(1_756_600_000L).dedupeKey())
+    }
+
+    /** The same fact from the other side: the stamp has to survive the filter to be keyed on. */
+    @Test
+    fun `the stoppage start time survives sanitising`() {
+        assertEquals("1756000000", outage(1_756_000_000L).context["outageAt"])
+    }
+
 }
 
 /**
@@ -202,8 +283,72 @@ class BlockLogTest {
         val line = com.appblocker.data.BlockLog
             .decode("1000|app|true|other|quick|true", now = 4000)!!.render()
         assertEquals(
-            "3s ago  app  why=quick  window=other  ownUi=true  counted=true", line,
+            "3s ago    app  why=quick  window=other  ownUi=true  counted=true  drawn=?  ms=?",
+            line,
         )
+    }
+
+    /**
+     * The two facts the block path already had in hand and never wrote down: which of the two
+     * render paths drew the cover, and how long this particular one took. `drawn=false` means the
+     * overlay could not be used and the Activity fallback ran — the other half of "the block
+     * screen didn't appear".
+     */
+    @Test
+    fun `a current entry carries how it was drawn and how long it took`() {
+        val line = com.appblocker.data.BlockLog
+            .decode("1000|app|false|match|quick|true|false|142", now = 3000)!!.render()
+
+        assertTrue(line, line.contains("drawn=false"))
+        assertTrue(line, line.contains("ms=142"))
+    }
+
+    /**
+     * ⚠️ **`counted` is read by index, not as "the last field".**
+     *
+     * It was the last field until `drawn` and `tookMs` were appended, at which point "the last
+     * one" silently became the latency — and `"142".toBoolean()` is false, so every entry in
+     * every report would have read `counted=false`. That is the field separating a real block
+     * from a redraw, wrong on every line, with nothing failing. This is the line that catches it.
+     */
+    @Test
+    fun `counted survives new fields being appended after it`() {
+        val e = com.appblocker.data.BlockLog
+            .decode("1000|app|false|match|quick|true|true|142", now = 3000)!!
+
+        assertTrue(e.counted)
+    }
+
+    /**
+     * Entries written before this version still decode, and say `?` rather than claiming the
+     * common case — the log survives an app update, and the entries covering the minutes he is
+     * reporting about are routinely the ones written by the version before.
+     */
+    @Test
+    fun `an entry from an older build says unknown rather than guessing`() {
+        val old = com.appblocker.data.BlockLog
+            .decode("1000|app|false|match|quick|true", now = 3000)!!
+
+        assertEquals(null, old.drawn)
+        assertTrue(old.render().contains("drawn=?"))
+        assertTrue(old.counted)
+    }
+
+    /**
+     * Ages are for reading. A real report carried `121808s ago`, and finding out that meant
+     * "yesterday" was a division the reader did sixty times per report — on the very log whose
+     * job is locating the one block the owner is complaining about. The width is fixed so the
+     * columns still line up once the units differ down the list.
+     */
+    @Test
+    fun `an old entry reads as days rather than six digits of seconds`() {
+        fun ageOf(agoMs: Long) = com.appblocker.data.BlockLog
+            .decode("0|app|false|match|quick|true", now = agoMs)!!.render().substringBefore(" app")
+
+        assertEquals("45s ago  ", ageOf(45_000L))
+        assertEquals("7m ago   ", ageOf(450_000L))
+        assertEquals("2h ago   ", ageOf(7_500_000L))
+        assertEquals("1d ago   ", ageOf(121_808_000L))
     }
 
     @Test
@@ -435,6 +580,69 @@ class ReportRoundTripTest {
         val r = BugReport.fromNote("flashing", "1.111", "github", 36, "d", recentBlocks = blocks)
         assertEquals(blocks, store(r).recentBlocks)
         assertTrue(store(r).body().contains("ownUi=true"))
+    }
+
+    /**
+     * **Every field, found by reflection rather than by remembering to add one here.**
+     *
+     * The test beside this one lists the fields it checks, which is the same shape as the bug this
+     * class is named after: the encoder listed eight fields and the report had ten, and nothing
+     * failed — the two that were missing were simply absent from a hand-written list. A test that
+     * has to be updated by the person adding the field cannot catch the person who forgets.
+     *
+     * So this one builds a report with **every** declared field set to a distinctive value, proves
+     * by reflection that none was left at a default (or the round-trip would prove nothing about
+     * it), and compares the whole object. `BugReport` is a data class, so one `assertEquals` covers
+     * every field there will ever be. Add a field and forget the queue, and this fails on the
+     * comparison; add a field and forget to populate it here, and it fails on the emptiness check
+     * with the field's name — which is the message that tells you what to do.
+     *
+     * The instance is deliberately not a shape the app produces (it carries an error class *and* a
+     * note): this is a storage test, and the question is whether a field survives the disk, not
+     * whether the combination is one a factory would build.
+     */
+    @Test
+    fun `every field a report carries survives the queue`() {
+        val full = BugReport(
+            where = "watchdog",
+            errorClass = "IllegalStateException",
+            frames = listOf("com.appblocker.A.b:3"),
+            note = "it stopped again",
+            appVersion = "1.146",
+            flavor = "github",
+            androidSdk = 36,
+            device = "Xiaomi 25080RABDG",
+            context = mapOf("serviceOn" to "true"),
+            recentBlocks = listOf("3s ago  app  why=quick  window=other"),
+            recentOutages = listOf("down=42min  noticedAfter=15min  deaf=true  after=nothing"),
+            healthFacts = listOf("❌ **Switched on, but NOT running** — nothing is being blocked."),
+        )
+        val empty = BugReport::class.java.declaredFields
+            .filterNot { it.isSynthetic || java.lang.reflect.Modifier.isStatic(it.modifiers) }
+            .filter { f ->
+                f.isAccessible = true
+                when (val v = f.get(full)) {
+                    null -> true
+                    is String -> v.isEmpty()
+                    is Collection<*> -> v.isEmpty()
+                    is Map<*, *> -> v.isEmpty()
+                    is Int -> v == 0
+                    is Boolean -> !v
+                    else -> false
+                }
+            }
+            .map { it.name }
+        assertTrue(
+            "$empty is left at its default here, so the round-trip below says nothing about it. " +
+                "Give it a distinctive value — that is the whole job of this fixture.",
+            empty.isEmpty(),
+        )
+        assertEquals(
+            "A field was lost between encode and decode. Every field BugReport carries has to be " +
+                "written in BOTH halves of BugReportQueue — that omission is this class's KDoc.",
+            full,
+            store(full),
+        )
     }
 
     @Test

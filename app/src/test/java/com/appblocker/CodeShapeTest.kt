@@ -1,5 +1,6 @@
 package com.appblocker
 
+import com.appblocker.data.BugReport
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -219,6 +220,43 @@ class CodeShapeTest {
         assertTrue(
             "onDestroy must cancel the scope: it is what makes enumerating jobs there unnecessary.",
             text.substringAfter("override fun onDestroy()").contains("scope.cancel()"),
+        )
+    }
+
+    // ---- the dedupe key's own inputs ---------------------------------------------------------
+
+    /**
+     * **Every context key a `dedupeKey` reads must survive `sanitizeContext`.**
+     *
+     * `dedupeKey` builds an outage's identity out of `context["outageAt"]`, and the sanitiser that
+     * runs one step earlier dropped that key because it was never added to `ALLOWED_CONTEXT_KEYS`.
+     * So every outage on every phone keyed as `outage:`, and `enqueue` discarded the second one as
+     * a duplicate of the first — the app could report one stoppage for the life of the install,
+     * while `OutageLog` exists precisely to measure how *often* blocking stops. Nothing failed: the
+     * report was built correctly, then quietly lost the field that made it distinguishable, which
+     * is the same shape as the `context`/`recentBlocks` loss `BugReportQueue` already documents.
+     *
+     * The key's own comment said the start stamp "is what makes them distinguishable at all". It
+     * was right, and unenforced. This is the enforcement, and it covers keys not yet written.
+     */
+    @Test
+    fun `a dedupe key never reads a field the sanitiser strips`() {
+        val text = source("data/BugReport.kt").readText()
+        val key = text.substringAfter("fun dedupeKey()").substringBefore("\n    }")
+        val read = Regex("""context\["(\w+)"\]""").findAll(key).map { it.groupValues[1] }.toList()
+        assertTrue(
+            "Expected dedupeKey to read at least one context field; if it no longer does, this " +
+                "check is looking at nothing and should be removed rather than left passing.",
+            read.isNotEmpty(),
+        )
+        val allowed = BugReport.ALLOWED_CONTEXT_KEYS + BugReport.PROFILE_CONTEXT_KEYS
+        val stripped = read.filterNot { it in allowed }
+        assertTrue(
+            "dedupeKey reads $stripped, which sanitizeContext removes before the key is built. " +
+                "Every report of that kind will share one key and the queue will drop all but the " +
+                "first as duplicates. Add the key to ALLOWED_CONTEXT_KEYS with its reason — do " +
+                "not stop keying on it.",
+            stripped.isEmpty(),
         )
     }
 }
