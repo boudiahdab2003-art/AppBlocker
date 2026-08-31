@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.146
+- Reports that explain themselves. You can now send a report without writing anything at all - the Send button works with the box empty, and three optional buttons let you say what went wrong in one tap. Every report now opens by naming what is wrong in plain sentences, carries the whole history of stoppages with the hour each began, and says how many earlier reports are still stuck waiting to be delivered. Once a week the app sends a short health note even when nothing is wrong, so a missing week becomes a signal rather than a silence. Fixes: the app could only ever report ONE stoppage ever, and a second blank report would have been silently discarded.
+
 ## v1.145
 - The Short that followed you home, a lot less talking, and a blocker that checks on itself instead of only waiting
 
