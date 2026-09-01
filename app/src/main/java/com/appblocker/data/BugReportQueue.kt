@@ -45,6 +45,10 @@ object BugReportQueue {
     private const val KEY_SENT_DAY = "bugreport_sent_day"
     private const val KEY_SENT_TODAY = "bugreport_sent_today"
 
+    /** The last delivery attempt: when it happened, and what came back. See [recordAttempt]. */
+    private const val KEY_LAST_TRY_AT = "bugreport_last_try_at"
+    private const val KEY_LAST_RESULT = "bugreport_last_result"
+
     /** Small on purpose: this is a diagnostic aid, not a black box recorder. Oldest is evicted. */
     private const val MAX_PENDING = 20
 
@@ -142,6 +146,32 @@ object BugReportQueue {
             .putInt(KEY_SENT_DAY, todayStamp())
             .apply()
     }
+
+    /**
+     * Remembers what happened on the last delivery attempt.
+     *
+     * **The instrument this whole file was missing.** Between 26 Aug and 1 Sep 2026 every send
+     * failed and nothing anywhere recorded why: the app's own DNS filter blocks dynamic-DNS
+     * domains, so the phone could not resolve its own reporting host. On the screen, in the queue
+     * and in the owner's hands, that looked exactly like "nothing has happened" — and the one
+     * field that could have said otherwise was being discarded inside [BugReportSender.post].
+     *
+     * @param result an HTTP status as text, or an exception class name. Never a response body.
+     */
+    fun recordAttempt(context: Context, result: String) = runCatching {
+        prefs(context).edit()
+            .putLong(KEY_LAST_TRY_AT, System.currentTimeMillis())
+            .putString(KEY_LAST_RESULT, result.take(40))
+            .apply()
+    }.let { }
+
+    /** When delivery was last attempted, or 0 if it never has been. */
+    fun lastAttemptAt(context: Context): Long =
+        runCatching { prefs(context).getLong(KEY_LAST_TRY_AT, 0L) }.getOrDefault(0L)
+
+    /** What came back last time, or null if nothing has ever been attempted. */
+    fun lastResult(context: Context): String? =
+        runCatching { prefs(context).getString(KEY_LAST_RESULT, null) }.getOrNull()
 
     /** Leaves the report queued to try again later — the normal outcome when offline. */
     fun markFailed(context: Context, report: BugReport) = Unit

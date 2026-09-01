@@ -88,6 +88,16 @@ object HealthFacts {
         /** Reports written but not yet delivered, and how many more may be sent today. */
         val queuedReports: Int,
         val reportsLeftToday: Int,
+        /** Whether reporting is configured in this build at all. */
+        val reportingOn: Boolean = true,
+        /**
+         * What came back from the last delivery attempt — an HTTP status as text, an exception
+         * class name, or null when nothing has ever been tried. **Our own literal either way**;
+         * never a response body.
+         */
+        val lastSendResult: String? = null,
+        /** Millis since that attempt, or -1 when there has never been one. */
+        val sinceLastSendMs: Long = -1L,
     )
 
     /**
@@ -175,6 +185,7 @@ object HealthFacts {
         speedFact(r)?.let { add(it) }
         silenceFacts(r).forEach { add(it) }
         queueFact(r)?.let { add(it) }
+        deliveryFacts(r).forEach { add(it) }
     }
 
     /** Only the facts that are actually wrong — what a report leads with. */
@@ -341,13 +352,105 @@ object HealthFacts {
                 "${r.queuedReports} reports are waiting to be sent",
             if (r.reportsLeftToday <= 0) {
                 "Anything else recorded today stays on the phone until tomorrow."
+            } else if (r.lastSendResult == null) {
+                "They are written and waiting. Nothing has been attempted yet, so this is not a " +
+                    "failure — opening the app is what starts a delivery."
             } else {
                 "They were written and could not be delivered. If this report arrived, the ones " +
                     "behind it should be arriving too — if they are not, the route is broken " +
                     "rather than the phone."
             },
-            good = false,
+            // ⚠️ A backlog is only a *fault* once a delivery has been tried and failed. Saying
+            // "could not be delivered" about reports nothing has attempted yet is a claim the app
+            // cannot support — and a finding that fires on ordinary behaviour teaches the reader
+            // to skip the section, which is how the real failure stayed invisible for six days.
+            good = if (r.lastSendResult == null && r.reportsLeftToday > 0) null else false,
             group = Group.REPORTING,
+        )
+    }
+
+    /**
+     * **Can the app actually reach its own reporting server?**
+     *
+     * Written after six days in which it could not, and nothing said so. AppBlocker's own family
+     * DNS filter blocks dynamic-DNS domains as a category — a correct thing for a content filter
+     * to do — and the app's reporting host was on one. So every send died at name resolution,
+     * the queue grew, and the phone, the screen and the tracker all showed exactly the same thing
+     * as a quiet week.
+     *
+     * The three states below are three different diagnoses and must never render alike:
+     * **never tried**, **tried and was refused**, and **could not find the server**.
+     */
+    private fun deliveryFacts(r: Reading): List<Fact> = buildList {
+        if (!r.reportingOn) {
+            add(
+                Fact(
+                    "Reporting is switched off in this build",
+                    "Nothing is being sent anywhere, by design. This is normal for a version " +
+                        "built on a computer rather than published.",
+                    good = null,
+                    group = Group.REPORTING,
+                ),
+            )
+            return@buildList
+        }
+        val result = r.lastSendResult
+        if (result == null) {
+            // Only interesting once something is actually waiting: a phone with an empty queue has
+            // simply had nothing to say, which is the healthy case and not worth a row.
+            if (r.queuedReports > 0) {
+                add(
+                    Fact(
+                        "Nothing has ever been sent from this phone",
+                        "${r.queuedReports} report(s) are waiting and no delivery has been " +
+                            "attempted yet. Opening the app is what triggers one.",
+                        // Not a fault: on a fresh install this is simply "it has not happened
+                        // yet". A delivery that was actually TRIED and failed is the finding, and
+                        // that case carries a result to say so.
+                        good = null,
+                        group = Group.REPORTING,
+                    ),
+                )
+            }
+            return@buildList
+        }
+        val ago = agoText(r.sinceLastSendMs)
+        val code = result.toIntOrNull()
+        add(
+            when {
+                code != null && code in 200..299 -> Fact(
+                    "The last report was delivered, $ago",
+                    "The route from this phone to the developer is working.",
+                    good = true,
+                    group = Group.REPORTING,
+                )
+                // No HTTP status at all: the request never reached a server. On this phone that
+                // almost always means the name could not be resolved, and the most likely reason
+                // is the app's own network filter — see NetworkFilter.
+                code == null -> Fact(
+                    "The app cannot reach its own reporting server ($ago)",
+                    "The attempt failed before any reply came back — \"$result\". This is usually " +
+                        "the phone being unable to look up the server's address. If the family " +
+                        "DNS filter is on, check that it is not blocking the app's own address: " +
+                        "filters block whole categories, and the app's server can fall inside one.",
+                    good = false,
+                    group = Group.REPORTING,
+                )
+                code in 401..403 -> Fact(
+                    "The reporting server refused this phone ($ago)",
+                    "It answered $code. The phone reached the server, and the server would not " +
+                        "accept it — the shared password in this build does not match the one on " +
+                        "the server. A new release fixes that; nothing on this phone can.",
+                    good = false,
+                    group = Group.REPORTING,
+                )
+                else -> Fact(
+                    "The last report was not delivered ($ago)",
+                    "The server answered $result. The reports are kept and tried again.",
+                    good = false,
+                    group = Group.REPORTING,
+                )
+            },
         )
     }
 

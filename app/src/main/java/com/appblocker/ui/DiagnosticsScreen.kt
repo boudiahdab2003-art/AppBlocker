@@ -475,7 +475,15 @@ private fun readSnapshot(context: Context): Snapshot {
         // Only the PROTECTION group: speed, silence and the report queue have their own cards
         // below, with their own zero-state wording that a report has no use for.
         HealthFacts.verdicts(HealthReader.read(context, now))
-            .filter { it.group == HealthFacts.Group.PROTECTION }
+            .filter {
+                // PROTECTION is this card's own subject. REPORTING rides along because it has
+                // nowhere else to be shown and it is the one thing that cannot report itself: when
+                // sending is broken, a line inside a report is precisely the line nobody can read.
+                // Speed and silence have their own cards further down, with their own zero-state
+                // wording, so they stay out of here.
+                it.group == HealthFacts.Group.PROTECTION ||
+                    it.group == HealthFacts.Group.REPORTING
+            }
             .forEach { add(Fact(it.title, it.detail, it.good)) }
 
         OutageLog.last(context)?.let { last ->

@@ -315,6 +315,17 @@ private fun AddressBox() {
             color = MaterialTheme.colorScheme.onSurface,
         )
     }
+    Spacer(Modifier.height(Space.sm))
+    // Written after this exact filter silently blocked AppBlocker's own reporting server for six
+    // days: family resolvers block dynamic-DNS domains as a category (they are a standard way to
+    // evade filters), the app's own address happened to be one, and nothing anywhere said so.
+    // The app now detects it — see HealthFacts' delivery facts — but the person switching the
+    // filter on deserves to know the shape of the trade before it costs them anything.
+    Text(
+        stringResource(R.string.netdns_blocks_categories),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 @Composable

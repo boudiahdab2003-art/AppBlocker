@@ -77,6 +77,9 @@ object HealthReader {
             shortsBlind = safe(0) { SilenceLog.get(ctx, SilenceLog.SHORTS_EXIT_BLIND).total },
             queuedReports = safe(0) { BugReportQueue.pending(ctx).size },
             reportsLeftToday = safe(0) { BugReportQueue.remainingToday(ctx) },
+            reportingOn = safe(false) { BugReportSender.enabled() },
+            lastSendResult = runCatching { BugReportQueue.lastResult(ctx) }.getOrNull(),
+            sinceLastSendMs = since(now) { BugReportQueue.lastAttemptAt(ctx) },
         )
     }
 

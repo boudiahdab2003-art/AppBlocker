@@ -1008,6 +1008,7 @@
     <string name="netdns_step_4">اختر «اسم مضيف مزوّد DNS الخاص» والصق العنوان.</string>
     <string name="netdns_step_5">احفظ، ثم عُد إلى هنا. تتحول هذه الصفحة إلى الأخضر عندما يرى التطبيق أنها تعمل.</string>
     <string name="netdns_address_label">العنوان الذي تلصقه</string>
+    <string name="netdns_blocks_categories">يحجب هذا المرشّح فئات كاملة، وليس المواقع الإباحية وحدها — ومنها عناوين ‏«الـ DNS المتغيّر» التي تُستخدم غالبًا للالتفاف على المرشّحات. وهذا ما تريده عادةً. وإن توقّف يومًا تطبيق عن الوصول إلى خادمه والمرشّح مُفعّل، فهذا هو السبب.</string>
     <string name="netdns_copy">انسخ العنوان</string>
     <string name="netdns_copied">تم النسخ — الصقه الآن في «DNS خاص»</string>
     <string name="netdns_open_settings">افتح الإعدادات</string>
