@@ -893,6 +893,17 @@ data class BugReport(
             androidSdk: Int,
             device: String,
             context: Map<String, String>,
+            /**
+             * The blocker's verdict on itself, as on every other shape.
+             *
+             * A profile is filed **once per phone per build, on the first open after an update**,
+             * which makes it the earliest thing to arrive from a new version and often the only
+             * thing to arrive at all when something is wrong. Leaving it as the one report with no
+             * "what looks wrong here" made the shape we depend on most the least informative — and
+             * it is where the delivery verdicts now live, which is exactly what explains a phone
+             * that cannot reach its own server.
+             */
+            healthFacts: List<String> = emptyList(),
         ) = BugReport(
             where = PROFILE_WHERE,
             errorClass = null,
@@ -904,6 +915,7 @@ data class BugReport(
             device = device,
             context = sanitizeContext(context),
             recentBlocks = emptyList(),
+            healthFacts = healthFacts,
         )
 
         /**

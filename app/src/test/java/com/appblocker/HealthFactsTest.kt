@@ -188,9 +188,23 @@ class HealthFactsTest {
      * Written after five days in which every report was queued and none arrived, with nothing in
      * any report able to say so. A backlog visible on arrival is the channel describing itself.
      */
+    /**
+     * A backlog is a finding **once a delivery has actually been tried and failed** — which is the
+     * real shape of the Aug-Sep 2026 outage: nine reports written, every send refused at DNS.
+     * Before an attempt it is just a queue, and saying otherwise is a claim the app cannot support.
+     */
     @Test
-    fun `a backlog of undelivered reports is itself a finding`() {
-        assertTrue(problems(healthy.copy(queuedReports = 7)).any { it.contains("waiting") })
+    fun `a backlog that has failed to deliver is a finding`() {
+        val stuck = healthy.copy(
+            queuedReports = 7, lastSendResult = "UnknownHostException", sinceLastSendMs = 60_000L,
+        )
+
+        assertTrue(problems(stuck).any { it.contains("waiting") })
+    }
+
+    @Test
+    fun `the same backlog before any attempt is not a finding`() {
+        assertTrue(problems(healthy.copy(queuedReports = 7)).isEmpty())
     }
 
     @Test
@@ -265,9 +279,16 @@ class HealthFactsTest {
             java.lang.Integer.TYPE, java.lang.Long.TYPE, java.lang.Boolean.TYPE,
             Integer::class.java, java.lang.Long::class.java, java.lang.Boolean::class.java,
         )
+        // The ONE documented exception, added the way the check's own message demands rather than
+        // by widening it: `lastSendResult` is an HTTP status as text ("403") or an exception class
+        // name ("UnknownHostException"), written only by `BugReportQueue.recordAttempt`, which is
+        // called only with `BugReportSender.post`'s return value. **Never a response body** — a
+        // failure body can echo what was submitted. If that ever stops being true, this exception
+        // must go, not the test.
+        val allowedText = setOf("lastSendResult")
         val text = HealthFacts.Reading::class.java.declaredFields
             .filterNot { it.isSynthetic || java.lang.reflect.Modifier.isStatic(it.modifiers) }
-            .filterNot { it.type in allowed }
+            .filterNot { it.type in allowed || it.name in allowedText }
             .map { "${it.name}: ${it.type.simpleName}" }
 
         assertTrue(
@@ -285,5 +306,80 @@ class HealthFactsTest {
 
         assertTrue(lines.isNotEmpty())
         assertTrue(lines.all { it.length < 400 })
+    }
+
+    // --- can the app reach its own server? ----------------------------------------------------
+
+    /**
+     * **The failure that cost six days, as a test.**
+     *
+     * AppBlocker's own family DNS filter blocks dynamic-DNS domains as a category — correct
+     * behaviour for a content filter — and the app's reporting host was on one. Every send died
+     * at name resolution with an `UnknownHostException`, the queue grew, and the phone, the screen
+     * and the tracker all looked exactly like a quiet week. Three different diagnoses rendered
+     * identically, so these three cases must now be distinguishable by anyone reading the screen.
+     */
+    @Test
+    fun `a name that cannot be resolved reads as cannot reach, not as refused`() {
+        val dns = healthy.copy(
+            lastSendResult = "UnknownHostException", sinceLastSendMs = 120_000L, queuedReports = 9,
+        )
+
+        val fact = HealthFacts.problems(dns).single { it.title.contains("cannot reach") }
+        assertTrue(fact.detail, fact.detail.contains("look up the server"))
+        // Names the app's own filter, because that is the likeliest cause on this phone and the
+        // one the owner can actually act on.
+        assertTrue(fact.detail, fact.detail.contains("DNS filter"))
+    }
+
+    @Test
+    fun `being refused reads as refused, and blames the build rather than the phone`() {
+        val refused = healthy.copy(lastSendResult = "403", sinceLastSendMs = 60_000L)
+
+        val fact = HealthFacts.problems(refused).single { it.title.contains("refused") }
+        assertTrue(fact.detail, fact.detail.contains("password"))
+        assertTrue(fact.detail, fact.detail.contains("nothing on this phone can"))
+    }
+
+    @Test
+    fun `a delivered report is the healthy answer and says the route works`() {
+        val ok = healthy.copy(lastSendResult = "201", sinceLastSendMs = 5_000L)
+
+        assertTrue(HealthFacts.problems(ok).isEmpty())
+        assertTrue(HealthFacts.verdicts(ok).any { it.good == true && it.title.contains("delivered") })
+    }
+
+    /** Never attempted is not a fault — on a fresh install it just has not happened yet. */
+    @Test
+    fun `never having tried is a statement rather than an accusation`() {
+        val fresh = healthy.copy(lastSendResult = null, queuedReports = 3)
+
+        assertTrue(HealthFacts.problems(fresh).isEmpty())
+        assertTrue(HealthFacts.verdicts(fresh).any { it.title.contains("ever been sent") })
+    }
+
+    /** A build with no reporting configured must not look like a broken one. */
+    @Test
+    fun `reporting switched off in the build is not a failure`() {
+        val off = healthy.copy(reportingOn = false, lastSendResult = null)
+
+        assertTrue(HealthFacts.problems(off).isEmpty())
+        assertTrue(HealthFacts.verdicts(off).any { it.title.contains("switched off in this build") })
+    }
+
+    /**
+     * These belong to the REPORTING group so the diagnostics screen can show them. They are the
+     * one kind of fact that cannot travel inside a report: when sending is broken, a line in a
+     * report is precisely the line nobody can read.
+     */
+    @Test
+    fun `delivery facts are grouped so the phone can display them`() {
+        val dns = healthy.copy(lastSendResult = "UnknownHostException", sinceLastSendMs = 1000L)
+
+        assertTrue(
+            HealthFacts.verdicts(dns)
+                .filter { it.title.contains("cannot reach") }
+                .all { it.group == HealthFacts.Group.REPORTING },
+        )
     }
 }

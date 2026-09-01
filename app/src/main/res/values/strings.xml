@@ -945,6 +945,7 @@ Never sent: your blocked words, the sites you visit, which apps you block, or an
     <string name="netdns_step_4">Choose Private DNS provider hostname and paste the address.</string>
     <string name="netdns_step_5">Save, then come back here. This page turns green when the app can see it working.</string>
     <string name="netdns_address_label">The address to paste</string>
+    <string name="netdns_blocks_categories">This filter blocks whole categories, not just adult sites — including dynamic-DNS addresses, which are often used to get around filters. That is usually what you want. If an app ever stops reaching its own server while the filter is on, this is why: check Profile ▸ What the blocker sees, which now says so plainly.</string>
     <string name="netdns_copy">Copy the address</string>
     <string name="netdns_copied">Copied — now paste it into Private DNS</string>
     <string name="netdns_open_settings">Open settings</string>

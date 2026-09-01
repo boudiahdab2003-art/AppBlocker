@@ -383,6 +383,10 @@ object BugReportSender {
                     androidSdk = Build.VERSION.SDK_INT,
                     device = describeDevice(),
                     context = DeviceProfile.reportContext(context),
+                    // No watchdog reading is taken for a profile, so this passes none — the
+                    // health facts still gather cheaply from prefs, and they include the delivery
+                    // verdicts, which is the whole reason a profile is worth reading right now.
+                    healthFacts = healthLines(context, watch = null),
                 ),
             )
         }
@@ -637,7 +641,11 @@ object BugReportSender {
                 // go out stays queued for tomorrow, which is the intended cost.
                 for (report in BugReportQueue.pending(app)) {
                     if (BugReportQueue.remainingToday(app) <= 0) break
-                    if (post(report)) BugReportQueue.markSent(app, report)
+                    val outcome = post(report)
+                    // Recorded for every attempt, delivered or not. This is the line that turns
+                    // "nothing is arriving" from a mystery into a sentence on his own screen.
+                    BugReportQueue.recordAttempt(app, outcome)
+                    if (delivered(outcome)) BugReportQueue.markSent(app, report)
                     else BugReportQueue.markFailed(app, report)
                 }
             }.onFailure {
@@ -647,7 +655,21 @@ object BugReportSender {
         }
     }
 
-    private fun post(report: BugReport): Boolean = runCatching {
+    /**
+     * Sends one report and **says what happened**.
+     *
+     * It used to return a bare `Boolean`, which threw away the only fact that could have explained
+     * six days of silence in Aug-Sep 2026: the app's own DNS filter blocks dynamic-DNS domains as a
+     * category, so the phone could not resolve its own reporting host and every send died with an
+     * `UnknownHostException`. "Failed" and "was refused" and "could not find the server" are three
+     * different diagnoses and they all looked identical — to the owner and to me.
+     *
+     * @return an HTTP status as text ("201", "403"), or the exception's class name when the
+     *   request never got an answer at all. **Never a response body**: a failure body can echo what
+     *   was submitted, and [BugReport]'s privacy contract governs what may be stored just as much
+     *   as what may be sent.
+     */
+    private fun post(report: BugReport): String = runCatching {
         val conn = (URL(BuildConfig.REPORT_URL).openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             setRequestProperty("Content-Type", "application/json")
@@ -659,8 +681,11 @@ object BugReportSender {
         conn.outputStream.use { it.write(report.toJson().toByteArray()) }
         val code = conn.responseCode
         conn.disconnect()
-        // GitHub answers 201 on create. Treat any 2xx as done; anything else stays queued, so a
-        // misconfigured secret retries rather than silently discarding the report.
-        code in 200..299
-    }.getOrDefault(false)
+        code.toString()
+    }.getOrElse { it.javaClass.simpleName }
+
+    /** GitHub answers 201 on create. Any 2xx is done; anything else stays queued, so a
+     *  misconfigured secret or an unreachable host retries rather than discarding the report. */
+    internal fun delivered(outcome: String): Boolean =
+        outcome.toIntOrNull()?.let { it in 200..299 } == true
 }
