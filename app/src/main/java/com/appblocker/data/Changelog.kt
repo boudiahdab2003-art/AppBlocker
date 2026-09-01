@@ -13,6 +13,13 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.148", "Sep 1, 2026", "It was the app blocking its own reports", listOf(
+        "**Found it, and it was my fault, not your phone’s.** Your reports stopped on 26 August and I blamed two innocent things before finding the real one: **AppBlocker’s own family DNS filter was blocking AppBlocker’s own server.** These filters block whole categories of address, and one of those categories is exactly the kind of address my server had. The moment you switched your own protection on, your phone lost the ability to find the place its reports go. The filter shipped on 26 August at 19:35. Your last report arrived at 20:07 the same evening.",
+        "**Your AI Coach was broken by the same thing**, since it talks to the same address. If you tried it in the last week and it did not answer, that was this — not the Coach.",
+        "**Nothing was lost, and you did nothing wrong.** Reports that cannot be delivered wait on the phone. You also rotated a password and a security token during this, and neither of them was ever the problem — that was me naming a cause before measuring it.",
+        "**The app can now tell you when it cannot reach home.** This is the real fix, and it matters more than the address. Until now the app could not tell apart \"nobody has tried yet\", \"the server said no\" and \"the server could not be found\" — all three looked like silence, to you and to me. Open Profile ▸ What the blocker sees and it now says which one, in a sentence, with how long ago it happened.",
+        "**And the filter screen now warns you** that these filters block entire categories, not just adult sites — the one line that would have saved a week.",
+    )),
     VersionLog("1.147", "Aug 31, 2026", "The reports can reach me again", listOf(
         "**Nothing you can see changed in this version, and that is the point.** Since 26 August, every report your phone tried to send had been quietly failing — including the automatic ones the app sends by itself. Your phone was doing its job the whole time; the delivery was broken past it. This release is built with the corrected settings so the route works again.",
         "**Nothing was lost while it was broken.** Reports that cannot be delivered wait on your phone rather than being thrown away. Install this, open the app once, and everything that has been stacking up since 26 August — including the ones you sent tonight — goes out at last.",
