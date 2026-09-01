@@ -278,36 +278,42 @@ object OutageLog {
         detectedBy: String = DetectedBy.UNKNOWN,
     ) {
         runCatching {
-            val p = prefs(context)
-            if (p.contains(KEY_OPEN_STARTED)) return@runCatching
-            val nowRt = SystemClock.elapsedRealtime()
-            // When blocking stopped, as opposed to when we noticed: the last event the watcher
-            // saw. It is up to a minute stale (ServiceHealth throttles its writes) and it is
-            // still far closer than the moment a 15-minute worker happened to look.
-            val startedAt = if (lastEventAt > 0L) lastEventAt else now
-            val startedRt = nowRt - (now - startedAt).coerceAtLeast(0L)
-            val bootedAt = now - nowRt
-            p.edit()
-                .putLong(KEY_OPEN_STARTED, startedAt)
-                .putLong(KEY_OPEN_STARTED_RT, startedRt)
-                .putLong(KEY_OPEN_DETECTED, now)
-                .putBoolean(
-                    KEY_OPEN_DEAF,
-                    aliveButDeaf(lastEventAt, now, nowRt, Process.getStartElapsedRealtime()),
-                )
-                .putString(
-                    KEY_OPEN_PRECEDED,
-                    blame(startedAt, p.getLong(KEY_LAST_UPDATE_AT, 0L), bootedAt),
-                )
-                .putInt(KEY_OPEN_BOOT, DeviceBoot.count(context))
-                .putLong(KEY_OPEN_VERSION, AppVersion.code(context))
-                // Recorded when the episode OPENS, because that is the only moment anyone knows
-                // which arm fired. By the time it closes the state has moved on.
-                .putString(
-                    KEY_OPEN_DETECTED_BY,
-                    if (detectedBy in DetectedBy.ALL) detectedBy else DetectedBy.UNKNOWN,
-                )
-                .apply()
+            // Invariant 37. Read-then-write on KEY_OPEN_STARTED, reached by seven separate
+            // callers of ProtectionWatchdog.checkAndNotify — boot, notification listener,
+            // alarm, worker, tile, UI resume, service. Two landing together used to open or
+            // close one episode twice.
+            synchronized(this) {
+                val p = prefs(context)
+                if (p.contains(KEY_OPEN_STARTED)) return@runCatching
+                val nowRt = SystemClock.elapsedRealtime()
+                // When blocking stopped, as opposed to when we noticed: the last event the watcher
+                // saw. It is up to a minute stale (ServiceHealth throttles its writes) and it is
+                // still far closer than the moment a 15-minute worker happened to look.
+                val startedAt = if (lastEventAt > 0L) lastEventAt else now
+                val startedRt = nowRt - (now - startedAt).coerceAtLeast(0L)
+                val bootedAt = now - nowRt
+                p.edit()
+                    .putLong(KEY_OPEN_STARTED, startedAt)
+                    .putLong(KEY_OPEN_STARTED_RT, startedRt)
+                    .putLong(KEY_OPEN_DETECTED, now)
+                    .putBoolean(
+                        KEY_OPEN_DEAF,
+                        aliveButDeaf(lastEventAt, now, nowRt, Process.getStartElapsedRealtime()),
+                    )
+                    .putString(
+                        KEY_OPEN_PRECEDED,
+                        blame(startedAt, p.getLong(KEY_LAST_UPDATE_AT, 0L), bootedAt),
+                    )
+                    .putInt(KEY_OPEN_BOOT, DeviceBoot.count(context))
+                    .putLong(KEY_OPEN_VERSION, AppVersion.code(context))
+                    // Recorded when the episode OPENS, because that is the only moment anyone knows
+                    // which arm fired. By the time it closes the state has moved on.
+                    .putString(
+                        KEY_OPEN_DETECTED_BY,
+                        if (detectedBy in DetectedBy.ALL) detectedBy else DetectedBy.UNKNOWN,
+                    )
+                    .apply()
+            }
         }
     }
 
@@ -320,41 +326,46 @@ object OutageLog {
      * stays a store rather than becoming a reporter.
      */
     fun end(context: Context, now: Long = System.currentTimeMillis()): Episode? = runCatching {
-        val p = prefs(context)
-        val startedAt = p.getLong(KEY_OPEN_STARTED, 0L)
-        if (!p.contains(KEY_OPEN_STARTED)) return@runCatching null
-        val episode = shape(
-            startedAt = startedAt,
-            startedRt = p.getLong(KEY_OPEN_STARTED_RT, 0L),
-            detectedAt = p.getLong(KEY_OPEN_DETECTED, 0L),
-            nowRt = SystemClock.elapsedRealtime(),
-            bootAtOpen = p.getInt(KEY_OPEN_BOOT, -1),
-            bootNow = DeviceBoot.count(context),
-            aliveButDeaf = p.getBoolean(KEY_OPEN_DEAF, false),
-            precededBy = p.getString(KEY_OPEN_PRECEDED, Preceded.NOTHING) ?: Preceded.NOTHING,
-            versionCode = p.getLong(KEY_OPEN_VERSION, -1L),
-            detectedBy = p.getString(KEY_OPEN_DETECTED_BY, DetectedBy.UNKNOWN) ?: DetectedBy.UNKNOWN,
-        )
-        val existing = p.getString(KEY_EPISODES, "").orEmpty()
-            .split(';').filter { it.isNotBlank() }
-        val trimmed = (existing + encode(episode)).takeLast(MAX)
-        val known = episode.durationMs.coerceAtLeast(0L)
-        p.edit()
-            .putString(KEY_EPISODES, trimmed.joinToString(";"))
-            // Totals live outside the ring so twenty-one outages don't erase the first one's cost.
-            .putInt(KEY_TOTAL_COUNT, p.getInt(KEY_TOTAL_COUNT, 0) + 1)
-            .putLong(KEY_TOTAL_MS, p.getLong(KEY_TOTAL_MS, 0L) + known)
-            .putLong(KEY_LONGEST_MS, maxOf(p.getLong(KEY_LONGEST_MS, 0L), known))
-            .remove(KEY_OPEN_STARTED)
-            .remove(KEY_OPEN_STARTED_RT)
-            .remove(KEY_OPEN_DETECTED)
-            .remove(KEY_OPEN_DEAF)
-            .remove(KEY_OPEN_PRECEDED)
-            .remove(KEY_OPEN_BOOT)
-            .remove(KEY_OPEN_VERSION)
-            .remove(KEY_OPEN_DETECTED_BY)
-            .apply()
-        episode
+        // Invariant 37 — same lock as begin(). A double close duplicated the line in his
+        // log AND bumped KEY_TOTAL_COUNT and KEY_TOTAL_MS twice, so the two figures the
+        // whole outage investigation rests on came out overstated.
+        synchronized(this) {
+            val p = prefs(context)
+            val startedAt = p.getLong(KEY_OPEN_STARTED, 0L)
+            if (!p.contains(KEY_OPEN_STARTED)) return@runCatching null
+            val episode = shape(
+                startedAt = startedAt,
+                startedRt = p.getLong(KEY_OPEN_STARTED_RT, 0L),
+                detectedAt = p.getLong(KEY_OPEN_DETECTED, 0L),
+                nowRt = SystemClock.elapsedRealtime(),
+                bootAtOpen = p.getInt(KEY_OPEN_BOOT, -1),
+                bootNow = DeviceBoot.count(context),
+                aliveButDeaf = p.getBoolean(KEY_OPEN_DEAF, false),
+                precededBy = p.getString(KEY_OPEN_PRECEDED, Preceded.NOTHING) ?: Preceded.NOTHING,
+                versionCode = p.getLong(KEY_OPEN_VERSION, -1L),
+                detectedBy = p.getString(KEY_OPEN_DETECTED_BY, DetectedBy.UNKNOWN) ?: DetectedBy.UNKNOWN,
+            )
+            val existing = p.getString(KEY_EPISODES, "").orEmpty()
+                .split(';').filter { it.isNotBlank() }
+            val trimmed = (existing + encode(episode)).takeLast(MAX)
+            val known = episode.durationMs.coerceAtLeast(0L)
+            p.edit()
+                .putString(KEY_EPISODES, trimmed.joinToString(";"))
+                // Totals live outside the ring so twenty-one outages don't erase the first one's cost.
+                .putInt(KEY_TOTAL_COUNT, p.getInt(KEY_TOTAL_COUNT, 0) + 1)
+                .putLong(KEY_TOTAL_MS, p.getLong(KEY_TOTAL_MS, 0L) + known)
+                .putLong(KEY_LONGEST_MS, maxOf(p.getLong(KEY_LONGEST_MS, 0L), known))
+                .remove(KEY_OPEN_STARTED)
+                .remove(KEY_OPEN_STARTED_RT)
+                .remove(KEY_OPEN_DETECTED)
+                .remove(KEY_OPEN_DEAF)
+                .remove(KEY_OPEN_PRECEDED)
+                .remove(KEY_OPEN_BOOT)
+                .remove(KEY_OPEN_VERSION)
+                .remove(KEY_OPEN_DETECTED_BY)
+                .apply()
+            episode
+        }
     }.getOrNull()
 
     /** True while blocking is down and an episode is open. */

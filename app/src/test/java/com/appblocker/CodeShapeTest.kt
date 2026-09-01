@@ -297,4 +297,43 @@ class CodeShapeTest {
             Regex("""finally\s*\{[^}]*\.set\(false\)""").containsMatchIn(body),
         )
     }
+    // ---- invariant 37 ------------------------------------------------------------------------
+
+    /**
+     * **Opening and closing an outage episode must happen under a lock.**
+     *
+     * The same 1 Sep 2026 backlog that exposed invariant 36 showed a *second* duplicate, in a
+     * different place: the phone's own stoppage log listed `at=Mon 21:02 down=14min
+     * noticedAfter=2min` twice, identical in every field. Two closes of one episode.
+     *
+     * `begin` and `end` are both check-then-act on `KEY_OPEN_STARTED` — read the key, decide,
+     * then write. Nothing held a lock between the read and the write, and **seven** independent
+     * things call `ProtectionWatchdog.checkAndNotify`: the boot receiver, the notification
+     * listener, the alarm receiver, the WorkManager job, the quick-block tile, the UI on resume
+     * and the service itself. Two of them landing together is ordinary, not exotic.
+     *
+     * The cost is not one ugly line. `end` also bumps `KEY_TOTAL_COUNT` and `KEY_TOTAL_MS`, so a
+     * double close inflates the two figures the whole outage investigation is being judged on —
+     * it reports more stoppages and more lost time than actually happened. A log that overstates
+     * the problem is as useless as one that hides it.
+     */
+    @Test
+    fun `an outage episode is opened and closed under a lock`() {
+        val text = source("data/OutageLog.kt").readText()
+        for (name in listOf("begin", "end")) {
+            val start = text.indexOf("    fun $name(")
+            assertTrue("OutageLog no longer has a $name( to check", start >= 0)
+            val tail = text.substring(start)
+            val body = tail.substringBefore(System.lineSeparator() + "    fun ", tail)
+            val guard = Regex("""synchronized\s*\(""").containsMatchIn(body) ||
+                Regex("""lock\.with""").containsMatchIn(body)
+            assertTrue(
+                "OutageLog.$name touches KEY_OPEN_STARTED without holding a lock. It is a " +
+                    "check-then-act, and seven separate callers reach it, so two can open or " +
+                    "close the same episode at once — which duplicates the line in his log AND " +
+                    "double-counts outageCount and outageTotalMin.",
+                guard,
+            )
+        }
+    }
 }
