@@ -2,6 +2,7 @@ package com.appblocker.data
 
 import android.content.Context
 import android.os.Process
+import kotlin.math.abs
 import android.os.SystemClock
 
 /**
@@ -159,7 +160,7 @@ object OutageLog {
             val mins = if (durationMs < 0) "?" else "${durationMs / 60_000}"
             val detect = if (detectedAfterMs < 0) "?" else "${detectedAfterMs / 60_000}"
             return "at=${startedLabel()}  down=${mins}min  noticedAfter=${detect}min  " +
-                "deaf=$aliveButDeaf  after=$precededBy  rebooted=$rebooted  v=$versionCode  " +
+                "deaf=$aliveButDeaf  after=$precededBy  rebooted=$rebooted  build=$versionCode  " +
                 "by=$detectedBy"
         }
 
@@ -225,8 +226,25 @@ object OutageLog {
      * when the app noticed — the gap between those two is exactly what this file exists to expose.
      */
     internal fun blame(startedAt: Long, lastUpdateAt: Long, bootedAt: Long): String = when {
-        lastUpdateAt > 0L && startedAt - lastUpdateAt in 0..BLAME_WINDOW_MS -> Preceded.UPDATE
-        bootedAt > 0L && startedAt - bootedAt in 0..BLAME_WINDOW_MS -> Preceded.BOOT
+        // ⚠️ The window is on BOTH sides of the start, and that is the whole point.
+        //
+        // This used to be `in 0..BLAME_WINDOW_MS` — an update only counted if it was stamped
+        // at or BEFORE blocking stopped. For this app that can never happen. Installing our own
+        // APK is itself Android killing this process (`UpdatePause.checkVersionChange` says so
+        // in as many words), so blocking stops FIRST and the stamp is written afterwards, by
+        // the new process, once it gets as far as running. The stamp is always later than
+        // `startedAt`, so the field built to settle the update hypothesis could only ever
+        // answer "nothing".
+        //
+        // It shipped that way and it cost a wrong reading: ten stoppages arrived on 1 Sep 2026
+        // all saying `after=nothing`, one of which began 42 seconds after v1.146 was published.
+        // A test even pinned the old behaviour, reasoning that an update landing after the
+        // outage could not have caused it — true in general, false for the one installer that
+        // has to kill us to do its job.
+        lastUpdateAt > 0L && abs(startedAt - lastUpdateAt) <= BLAME_WINDOW_MS -> Preceded.UPDATE
+        // A reboot has the identical shape: the last event the watcher saw is from before the
+        // phone went down, so boot time is later than the moment blocking stopped.
+        bootedAt > 0L && abs(startedAt - bootedAt) <= BLAME_WINDOW_MS -> Preceded.BOOT
         else -> Preceded.NOTHING
     }
 

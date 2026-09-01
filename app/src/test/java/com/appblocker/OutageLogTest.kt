@@ -153,11 +153,43 @@ class OutageLogTest {
             ),
         )
 
-    /** An update that lands *after* blocking stopped cannot be what stopped it. */
-    @Test fun anUpdateAfterTheOutageStartedIsNotTheCause() =
+    /**
+     * **An update stamped just AFTER blocking stopped is exactly what an update looks like.**
+     *
+     * This test used to assert the opposite, under the name
+     * `anUpdateAfterTheOutageStartedIsNotTheCause` and the reasoning "an update that lands after
+     * blocking stopped cannot be what stopped it". That reasoning is wrong *for this app*, and it
+     * made the one field built to settle the update hypothesis incapable of ever reporting it.
+     *
+     * `UpdatePause.checkVersionChange` says it plainly: installing our own APK IS Android killing
+     * this process. So the order is forced — blocking stops first, the new process starts, and
+     * only THEN does anything exist to write `lastUpdateAt`. The stamp is always later than
+     * `startedAt`. A rule that only credits an update at or before the start can never fire.
+     *
+     * Found 1 Sep 2026 in the first real outage log: ten stoppages, `after=nothing` on every one,
+     * and one of them beginning 42 seconds after v1.146 was published.
+     */
+    @Test fun anUpdateStampedJustAfterTheOutageStartedIsBlamed() =
+        assertEquals(
+            OutageLog.Preceded.UPDATE,
+            OutageLog.blame(startedAt = now, lastUpdateAt = now + minute, bootedAt = 0L),
+        )
+
+    /** Far enough after and it is a coincidence, not a cause. */
+    @Test fun anUpdateLongAfterTheOutageStartedIsNotBlamed() =
         assertEquals(
             OutageLog.Preceded.NOTHING,
-            OutageLog.blame(startedAt = now, lastUpdateAt = now + minute, bootedAt = 0L),
+            OutageLog.blame(startedAt = now, lastUpdateAt = now + 6 * 3_600_000L, bootedAt = 0L),
+        )
+
+    /**
+     * A reboot has the same shape: the device boots *after* blocking stopped, because the last
+     * event the watcher saw was before the phone went down.
+     */
+    @Test fun aBootJustAfterTheOutageStartedIsBlamed() =
+        assertEquals(
+            OutageLog.Preceded.BOOT,
+            OutageLog.blame(startedAt = now, lastUpdateAt = 0L, bootedAt = now + 2 * minute),
         )
 
     /** A never-updated install has no stamp, and zero must not read as "1970, close enough". */
@@ -302,6 +334,32 @@ class OutageLogTest {
         )
         assertEquals(e, OutageLog.decode(OutageLog.encode(e)))
         assertTrue(e.render().contains("by=probe"))
+    }
+
+    /**
+     * **The version in a stoppage line is a BUILD number, and it is not the 1.x version.**
+     *
+     * `versionCode = 150` sits beside `versionName = "1.149"` in `app/build.gradle.kts` — they
+     * are one apart, and always have been. The line rendered `v=146` into a report whose own
+     * header said `[1.146]`, so a reader matches the two and reads the wrong release. That is not
+     * hypothetical: on 1 Sep 2026 it sent the first pass at his outage data looking at 1.146 when
+     * every stoppage but one happened on 1.145.
+     *
+     * The legend in `BugReport` calls this field the thing that separates a regression from a
+     * spread. Naming the wrong release is precisely how a regression hunt goes to the wrong place.
+     */
+    @Test fun theStoppageLineLabelsTheVersionAsABuildNumber() {
+        val line = OutageLog.shape(
+            startedAt = now - minute, startedRt = 1_000L, detectedAt = now,
+            nowRt = 1_000L + minute, bootAtOpen = 3, bootNow = 3,
+            aliveButDeaf = false, precededBy = OutageLog.Preceded.NOTHING, versionCode = 146L,
+        ).render()
+        assertTrue(
+            "a stoppage line must not render the build number as \"v=\", which reads as the 1.x " +
+                "version shown everywhere else in the same report. Got: $line",
+            line.contains("build=146"),
+        )
+        assertFalse("$line still carries the ambiguous v= label", line.contains("v=146"))
     }
 
     /** An arm this version does not know is normalised, exactly like a foreign cause. */
