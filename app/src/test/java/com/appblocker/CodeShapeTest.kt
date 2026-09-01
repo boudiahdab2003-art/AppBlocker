@@ -259,4 +259,42 @@ class CodeShapeTest {
             stripped.isEmpty(),
         )
     }
+    // ---- invariant 36 ------------------------------------------------------------------------
+
+    /**
+     * **`flush` may not run twice at once.**
+     *
+     * Found on 1 Sep 2026 in the first reports ever delivered through the new relay. Thirteen
+     * arrived and four were exact duplicates — and not a random four: the *back* of the queue,
+     * 1.145 and 1.146, while 1.141-1.144 at the front came through once each. That is the
+     * signature of a second flush reading `pending()` partway through the first, because
+     * `markSent` only removes a report *after* its POST returns.
+     *
+     * It is not cosmetic. `MAX_PER_DAY` is 12, and every duplicate spends one — so on the one day
+     * a six-day backlog went out, a third of his daily budget was burnt re-sending reports we
+     * already had, and real ones stayed queued behind them.
+     *
+     * `MainActivity` calls `flush` on resume, so two resumes inside one slow drain is an ordinary
+     * Tuesday, not a race you have to go looking for. The guard must be claimed *before* the
+     * launch and released in a `finally`, or one throw wedges reporting off until the next boot.
+     */
+    @Test
+    fun `flush claims a guard before launching and releases it in a finally`() {
+        val text = source("service/BugReportSender.kt").readText()
+        val body = text.substringAfter("fun flush(context: Context) {", "")
+        assertTrue("BugReportSender no longer has a flush(context) to check", body.isNotEmpty())
+        val beforeLaunch = body.substringBefore("scope.launch", "")
+
+        assertTrue(
+            "flush must claim a re-entrancy guard with compareAndSet BEFORE scope.launch, or two " +
+                "app resumes drain the same queue snapshot and every report still in flight is " +
+                "sent twice — spending the daily cap on duplicates.",
+            "compareAndSet(false, true)" in beforeLaunch,
+        )
+        assertTrue(
+            "flush's guard must be released in a finally block. Released on the happy path only, " +
+                "one swallowed throw leaves it claimed forever and no report is ever sent again.",
+            Regex("""finally\s*\{[^}]*\.set\(false\)""").containsMatchIn(body),
+        )
+    }
 }

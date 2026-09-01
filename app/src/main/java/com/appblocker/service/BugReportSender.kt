@@ -58,6 +58,19 @@ object BugReportSender {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    /**
+     * **True while a [flush] is draining the queue.** Invariant 36.
+     *
+     * `markSent` only drops a report once its POST has *returned*, so a second flush starting
+     * mid-drain reads a `pending()` that still lists everything in flight and sends it all again.
+     * On 1 Sep 2026 that put four duplicates into the tracker out of thirteen — the back of the
+     * queue, which is exactly the half a second flush would still have been holding.
+     *
+     * `MainActivity` flushes on resume, so this needs no unusual timing to happen; it needs him to
+     * come back to the app twice while a slow drain is running.
+     */
+    private val flushing = java.util.concurrent.atomic.AtomicBoolean(false)
+
     /** Whether reporting is configured at all. */
     fun enabled(): Boolean =
         BuildConfig.REPORT_URL.isNotBlank() && BuildConfig.REPORT_SECRET.isNotBlank()
@@ -630,27 +643,40 @@ object BugReportSender {
     fun flush(context: Context) {
         if (!enabled()) return
         val app = context.applicationContext
+        // Claimed BEFORE the launch, so two resumes in the same instant cannot both get in.
+        // A dropped flush costs nothing: the drain already running will send whatever is queued,
+        // and anything enqueued after it has passed by goes out on the next resume.
+        if (!flushing.compareAndSet(false, true)) return
         scope.launch {
-            runCatching {
-                // **The daily cap is checked here as well as at enqueue, and it has to be.**
-                // `remainingToday` only moves when a report is *sent*, and nothing is sent until
-                // the next app open — so a bad day queues reports against a counter that is still
-                // reading zero spent, and one flush then posts the whole queue at once. The cap
-                // said 12 and the real ceiling was MAX_PENDING, 20. Checking it per report is what
-                // makes the KDoc's "backstop that cannot be reasoned around" true; what does not
-                // go out stays queued for tomorrow, which is the intended cost.
-                for (report in BugReportQueue.pending(app)) {
-                    if (BugReportQueue.remainingToday(app) <= 0) break
-                    val outcome = post(report)
-                    // Recorded for every attempt, delivered or not. This is the line that turns
-                    // "nothing is arriving" from a mystery into a sentence on his own screen.
-                    BugReportQueue.recordAttempt(app, outcome)
-                    if (delivered(outcome)) BugReportQueue.markSent(app, report)
-                    else BugReportQueue.markFailed(app, report)
+            try {
+                runCatching {
+                    // **The daily cap is checked here as well as at enqueue, and it has to be.**
+                    // `remainingToday` only moves when a report is *sent*, and nothing is sent
+                    // until the next app open — so a bad day queues reports against a counter that
+                    // is still reading zero spent, and one flush then posts the whole queue at
+                    // once. The cap said 12 and the real ceiling was MAX_PENDING, 20. Checking it
+                    // per report is what makes the KDoc's "backstop that cannot be reasoned
+                    // around" true; what does not go out stays queued for tomorrow, which is the
+                    // intended cost.
+                    for (report in BugReportQueue.pending(app)) {
+                        if (BugReportQueue.remainingToday(app) <= 0) break
+                        val outcome = post(report)
+                        // Recorded for every attempt, delivered or not. This is the line that
+                        // turns "nothing is arriving" from a mystery into a sentence on his screen.
+                        BugReportQueue.recordAttempt(app, outcome)
+                        if (delivered(outcome)) BugReportQueue.markSent(app, report)
+                        else BugReportQueue.markFailed(app, report)
+                    }
+                }.onFailure {
+                    // Swallowed on purpose, and NOT reported — see the class KDoc.
+                    Log.w(TAG, "flush failed", it)
                 }
-            }.onFailure {
-                // Swallowed on purpose, and NOT reported — see the class KDoc.
-                Log.w(TAG, "flush failed", it)
+            } finally {
+                // In a finally, not on the happy path. `runCatching` cannot catch a coroutine
+                // cancellation, and a guard released only on success would wedge reporting off for
+                // the life of the process — silently, which is the one failure this file exists
+                // to stop.
+                flushing.set(false)
             }
         }
     }
