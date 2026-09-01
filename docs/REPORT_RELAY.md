@@ -15,6 +15,16 @@ nslookup <new-host> 185.228.168.168     # CleanBrowsing family
 Verified resolvable on 1 Sep 2026: `workers.dev`, `vercel.app`, `fly.dev`, `netlify.app`,
 `pages.dev`, `onrender.com`. Verified blocked on **all three** CleanBrowsing tiers: `duckdns.org`.
 
+## Deployed, 1 Sep 2026
+
+`https://appblocker-reports.boudiahdab2003.workers.dev` — report route `/report`.
+Checked against the filter he actually runs BEFORE anything was pointed at it:
+resolves through CleanBrowsing family (185.228.168.168) and adult (185.228.168.10).
+A wrong password on `/report` answers **403**, which is how you tell the relay is really
+ours and not a leftover hello-world.
+
+`REPORT_URL` (Actions secret) and `coachProxyUrl` (gradle.properties) both point here.
+
 ## Setup (owner, ~10 minutes)
 
 1. Sign in at **dash.cloudflare.com** (free account is enough) → **Workers & Pages** → **Create** →

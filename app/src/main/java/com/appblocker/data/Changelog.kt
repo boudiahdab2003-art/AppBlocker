@@ -13,6 +13,12 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.149", "Sep 1, 2026", "Your reports have a new home", listOf(
+        "**The reports move to an address your own filter cannot block.** Yesterday’s release explained why they stopped: your family DNS filter blocks a whole category of address, and my server’s address was in it. Explaining it did not fix it. This does. The server has moved somewhere your filter resolves fine — and I checked that through your exact filter, at both of its levels, before moving anything, instead of finding out afterwards.",
+        "**Your AI Coach comes back with it**, since it was broken by the same thing and lives at the same address.",
+        "**Everything your phone has been holding since 26 August goes out now.** Reports that could not be delivered were never thrown away. Install this, open the app once, and the whole backlog leaves at last — including every stoppage the app recorded while it had no way to tell me.",
+        "**Nothing on your phone changes.** Same blocking, same filter, same settings. This is the road, not the app.",
+    )),
     VersionLog("1.148", "Sep 1, 2026", "It was the app blocking its own reports", listOf(
         "**Found it, and it was my fault, not your phone’s.** Your reports stopped on 26 August and I blamed two innocent things before finding the real one: **AppBlocker’s own family DNS filter was blocking AppBlocker’s own server.** These filters block whole categories of address, and one of those categories is exactly the kind of address my server had. The moment you switched your own protection on, your phone lost the ability to find the place its reports go. The filter shipped on 26 August at 19:35. Your last report arrived at 20:07 the same evening.",
         "**Your AI Coach was broken by the same thing**, since it talks to the same address. If you tried it in the last week and it did not answer, that was this — not the Coach.",
