@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.149
+- The reports move to their new home
+
 ## v1.148
 - The app can now tell you when it cannot reach its own server. The six days of missing reports were AppBlocker's own DNS filter blocking AppBlocker's own address - nothing was wrong with your phone. Profile, What the blocker sees now says which of three things happened: never tried, was refused, or could not find the server.
 
