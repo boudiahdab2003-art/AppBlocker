@@ -3,6 +3,7 @@ package com.appblocker.service
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import com.appblocker.data.OutageLog
 import com.appblocker.data.UpdatePause
 
 /** Re-arms the protection watchdog and checks immediately after a reboot, since a device
@@ -26,6 +27,6 @@ class BootReceiver : BroadcastReceiver() {
             ProtectionScheduler.scheduleRecheckAfterUpdate(appContext)
         }
         ProtectionScheduler.ensureScheduled(appContext)
-        ProtectionWatchdog.checkAndNotify(appContext)
+        ProtectionWatchdog.checkAndNotify(appContext, calledBy = OutageLog.EndedBy.BOOT)
     }
 }

@@ -4,6 +4,7 @@ import android.os.SystemClock
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import com.appblocker.data.NotificationCounter
+import com.appblocker.data.OutageLog
 
 /**
  * Counts incoming notifications for the Insights "Distractions" card. Optional — only active
@@ -24,7 +25,7 @@ class NotificationCountListener : NotificationListenerService() {
         val now = SystemClock.elapsedRealtime()
         if (now - lastHealthCheckAt >= HEALTH_CHECK_MS) {
             lastHealthCheckAt = now
-            ProtectionWatchdog.checkAndNotify(applicationContext)
+            ProtectionWatchdog.checkAndNotify(applicationContext, calledBy = OutageLog.EndedBy.GLANCED)
         }
         sbn ?: return
         if (sbn.isOngoing) return

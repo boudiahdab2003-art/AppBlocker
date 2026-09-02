@@ -3,6 +3,7 @@ package com.appblocker.service
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import com.appblocker.data.OutageLog
 import com.appblocker.data.ProtectionPulse
 
 /**
@@ -36,7 +37,7 @@ class ProtectionAlarmReceiver : BroadcastReceiver() {
             // Only now is a real check worth its cost, and it re-stamps the pulse on its way
             // through so one silent spell is counted once rather than every twenty minutes.
             ProtectionPulse.stamp(context)
-            ProtectionWatchdog.checkAndNotify(context)
+            ProtectionWatchdog.checkAndNotify(context, calledBy = OutageLog.EndedBy.BACKGROUND)
         }
     }
 }

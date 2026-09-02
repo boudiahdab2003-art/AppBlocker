@@ -44,6 +44,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.appblocker.data.OutageLog
 import com.appblocker.data.Schedule
 import com.appblocker.data.ScheduleType
 import com.appblocker.data.SettingsStore
@@ -135,7 +136,7 @@ fun AppRoot(
     // posts/cancels the "protection turned off" notification the moment the user returns to the
     // app; the 15-min background worker is only the fallback when the app isn't opened at all.
     val protectionTick = resumeTick()
-    LaunchedEffect(protectionTick) { ProtectionWatchdog.checkAndNotify(context, force = true) }
+    LaunchedEffect(protectionTick) { ProtectionWatchdog.checkAndNotify(context, force = true, calledBy = OutageLog.EndedBy.APP_OPENED) }
 
     // Coming back from the "allow install unknown apps" screen resumes an update that was
     // waiting on it. No-op unless one is waiting.

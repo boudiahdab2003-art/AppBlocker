@@ -146,6 +146,33 @@ object ServiceHealth {
             .apply()
     }
 
+    private const val KEY_REVIVE_HELPED = "health_revive_helped"
+    private const val KEY_REVIVE_FUTILE = "health_revive_futile"
+
+    /**
+     * **Did the nudge actually bring events back?** — asked, rather than inferred from the
+     * re-post not throwing.
+     *
+     * [recordRevive]'s `worked` means only that `serviceInfo = serviceInfo` did not throw, and on
+     * 2 Sep 2026 that read **67 of 67 successful** on a phone whose blocking had been stopping for
+     * hours at a time. A remedy reporting perfect success while the fault it treats continues is
+     * worse than no remedy: it is the reason the self-repair was never suspected.
+     *
+     * This is the honest question. An accessibility service that is deaf receives no events, so
+     * the test is whether one arrived AFTER the nudge — nothing else is evidence.
+     */
+    fun recordReviveOutcome(context: Context, helped: Boolean) {
+        synchronized(this) {
+            val p = prefs(context)
+            val key = if (helped) KEY_REVIVE_HELPED else KEY_REVIVE_FUTILE
+            p.edit().putInt(key, p.getInt(key, 0) + 1).apply()
+        }
+    }
+
+    fun reviveHelpedCount(context: Context): Int = prefs(context).getInt(KEY_REVIVE_HELPED, 0)
+
+    fun reviveFutileCount(context: Context): Int = prefs(context).getInt(KEY_REVIVE_FUTILE, 0)
+
     fun reviveCount(context: Context): Int = prefs(context).getInt(KEY_REVIVES, 0)
 
     fun reviveFailCount(context: Context): Int = prefs(context).getInt(KEY_REVIVE_FAILS, 0)

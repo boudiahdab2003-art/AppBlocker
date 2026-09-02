@@ -573,6 +573,15 @@ class BlockerAccessibilityService : AccessibilityService() {
                 // spell starts one failure from the verdict (invariant 33). An event arriving IS
                 // the watcher working, and it is the only thing that may say so — see
                 // ServiceHealth.probeFailStreak on why a successful nudge must not.
+                // Has the last nudge earned its "success" yet? An event arriving after it is
+                // the only thing that shows the framework started talking to us again.
+                if (reviveVerifyDueAt != 0L && stopwatchNow() >= reviveVerifyDueAt) {
+                    reviveVerifyDueAt = 0L
+                    ServiceHealth.recordReviveOutcome(
+                        applicationContext,
+                        helped = lastEventReceivedAt > reviveEventMark,
+                    )
+                }
                 if (silence < REVIVE_AFTER_SILENCE_MS) {
                     ServiceHealth.clearProbeStreak(applicationContext)
                 }
@@ -597,6 +606,9 @@ class BlockerAccessibilityService : AccessibilityService() {
                     val readable = probeScreen()
                     val worked = runCatching { serviceInfo = serviceInfo }.isSuccess
                     ServiceHealth.recordRevive(applicationContext, worked)
+                    // Judge it later, on evidence. See reviveVerifyDueAt.
+                    reviveEventMark = lastEventReceivedAt
+                    reviveVerifyDueAt = stopwatchNow() + REVIVE_VERIFY_MS
                     // The pull half of liveness — see ServiceHealth.recordProbe. A nudge that
                     // threw is folded in here rather than counted as its own staleness arm: two
                     // counters that both mean "the watcher is deaf" is the drift shape this
@@ -640,6 +652,17 @@ class BlockerAccessibilityService : AccessibilityService() {
     /** When the heartbeat last re-posted [serviceInfo], so a deaf service is nudged at a pace
      *  rather than on every single tick. */
     @Volatile private var lastReviveAttemptAt = Long.MIN_VALUE / 2
+
+    /**
+     * When the pending nudge should be judged, and what the event clock read when it was made.
+     *
+     * `recordRevive`'s "worked" only ever meant that re-posting `serviceInfo` did not throw — it
+     * read 67 of 67 on a phone that was losing hours of blocking. A deaf service is one that
+     * receives no events, so the only honest test is whether an event arrived AFTER the nudge.
+     * Judged one grace period later, from the heartbeat that is already running.
+     */
+    @Volatile private var reviveVerifyDueAt = 0L
+    @Volatile private var reviveEventMark = 0L
 
     // Periodic re-check of the app the user is sitting in, so time-based conditions take
     // effect mid-use instead of only on the next app switch: a daily limit crossing, a time
@@ -3262,7 +3285,17 @@ class BlockerAccessibilityService : AccessibilityService() {
         /** Silence this long means the service may be bound but deaf, and is worth a nudge.
          *  Generous: a phone genuinely left alone produces no events either, and the nudge is
          *  only ever a re-post of state we already hold. */
-        private const val REVIVE_AFTER_SILENCE_MS = 3 * 60_000L
+        private const val REVIVE_AFTER_SILENCE_MS = 3 * 60_000L
+        /**
+         * How long a nudge gets to prove itself before the answer is recorded.
+         *
+         * Long enough that an ordinary phone in use produces at least one window change, short
+         * enough that the verdict still belongs to the nudge rather than to whatever happened
+         * afterwards. A quiet phone with the screen off will report `futile` here, which is the
+         * conservative direction: the number is only ever read as "how often did the repair
+         * demonstrably work", never as proof it failed.
+         */
+        private const val REVIVE_VERIFY_MS = 60_000L
 
         // How often to re-check the app the user is currently inside (mid-use enforcement).
         private const val RECHECK_MS = 30_000L

@@ -101,7 +101,15 @@ object ProtectionWatchdog {
      * @param force pass true from the app-open/resume path so the alert always reflects the true
      *   current state (bypasses the 4-hour throttle); the background worker uses the default false.
      */
-    fun checkAndNotify(context: Context, force: Boolean = false) = guarded(context, "watchdog") {
+    fun checkAndNotify(
+        context: Context,
+        force: Boolean = false,
+        // Who is asking. Carried only so that, when this check is the one that finds blocking
+        // back, the episode can record what brought it back rather than leaving "recovered" to
+        // mean seven different things. See OutageLog.EndedBy — the whole recovery question is
+        // whether these come back "background" or "app-opened".
+        calledBy: String = OutageLog.EndedBy.UNKNOWN,
+    ) = guarded(context, "watchdog") {
         // Guarded for the same reason the watcher's callbacks are: this runs from the app's own
         // resume effect (AppRoot), the boot receiver and the periodic worker. An exception from
         // posting a notification — OEM notification managers do throw — would crash the app on
@@ -139,7 +147,7 @@ object ProtectionWatchdog {
         // outage was then never counted, and the one eventually closed carried a duration spanning
         // hours that were not an outage at all. An instrument that keeps measuring after the thing
         // it measures has stopped is worse than one that stops.
-        if (state != ProtectionState.STALLED) endOpenOutage(context, state)
+        if (state != ProtectionState.STALLED) endOpenOutage(context, state, calledBy)
         when (state) {
             ProtectionState.OK -> {
                 SettingsStore.clearProtectionOffSince(context)
@@ -199,12 +207,12 @@ object ProtectionWatchdog {
      * posting the "switched off" or "paused" one left him with a permanent alert about a state he
      * was no longer in.
      */
-    private fun endOpenOutage(context: Context, state: ProtectionState) {
+    private fun endOpenOutage(context: Context, state: ProtectionState, calledBy: String) {
         SettingsStore.setFoundDeadPending(context, false)
         ProtectionScheduler.cancelStalledRepeat(context)
         ProtectionNotifier.cancelStalled(context)
         // Returns null in the ordinary case, where nothing was down.
-        OutageLog.end(context)?.let {
+        OutageLog.end(context, endedBy = calledBy)?.let {
             BugReportSender.reportOutage(context, it, outageEndedBy(state))
         }
     }

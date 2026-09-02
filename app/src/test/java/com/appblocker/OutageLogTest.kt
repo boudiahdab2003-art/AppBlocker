@@ -368,4 +368,42 @@ class OutageLogTest {
             OutageLog.DetectedBy.UNKNOWN,
             OutageLog.decode("$now|60000|60000|true|update|false|143|telepathy")?.detectedBy,
         )
+    // ---- what brought blocking back --------------------------------------------------------
+
+    /**
+     * **The field the recovery work turns on.** `outageEnded: recovered` has always said blocking
+     * returned and never what returned it. If these come back overwhelmingly `app-opened`,
+     * recovery waits for him to pick the phone up; if `background`, it recovers alone and the
+     * hours-long tail is something else. The two point at different fixes.
+     */
+    @Test fun whatEndedTheOutageSurvivesTheRoundTrip() {
+        val e = OutageLog.shape(
+            startedAt = now - 10 * minute, startedRt = 5_000_000L, detectedAt = now - 9 * minute,
+            nowRt = 5_000_000L + 10 * minute, bootAtOpen = 7, bootNow = 7,
+            aliveButDeaf = true, precededBy = OutageLog.Preceded.NOTHING, versionCode = 151L,
+            detectedBy = OutageLog.DetectedBy.PROBE,
+            endedBy = OutageLog.EndedBy.APP_OPENED,
+        )
+        assertEquals(OutageLog.EndedBy.APP_OPENED, e.endedBy)
+        assertEquals(
+            OutageLog.EndedBy.APP_OPENED,
+            OutageLog.decode(OutageLog.encode(e))?.endedBy,
+        )
+        assertTrue(e.render().contains("backBy=app-opened"))
+    }
+
+    /** An episode written before the field existed says so, rather than claiming a cause. */
+    @Test fun anOlderEpisodeHasNoEndedByAndDoesNotInventOne() {
+        assertEquals(
+            OutageLog.EndedBy.UNKNOWN,
+            OutageLog.decode("$now|60000|60000|true|nothing|false|143|probe")?.endedBy,
+        )
+    }
+
+    /** A value nobody defined is not quietly adopted. */
+    @Test fun anUnknownEndedByIsRejected() =
+        assertEquals(
+            OutageLog.EndedBy.UNKNOWN,
+            OutageLog.decode("$now|60000|60000|true|nothing|false|143|probe|telepathy")?.endedBy,
+        )
 }

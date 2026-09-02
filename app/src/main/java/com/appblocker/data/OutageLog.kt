@@ -109,6 +109,36 @@ object OutageLog {
      * — otherwise it is exactly the mistake invariant 31 is about, measuring the crossing and
      * throwing away what caused it.
      */
+    /**
+     * **Which check was running when blocking came back** — the question the recovery work turns
+     * on, and one nothing has ever been able to answer.
+     *
+     * `outageEnded: recovered` says blocking returned; it has never said what brought it back.
+     * The 1-2 Sep 2026 reports showed outages noticed in minutes and lasting hours, which is
+     * only explicable if recovery waits for something. If these come back overwhelmingly
+     * [APP_OPENED], recovery depends on him picking the phone up, and every hour he does not is
+     * an hour unprotected. If they are [BACKGROUND], it recovers on its own and the delay is
+     * something else entirely. The two point at completely different fixes.
+     */
+    object EndedBy {
+        /** A worker, alarm or the service itself found it healthy with nobody looking. */
+        const val BACKGROUND = "background"
+
+        /** The owner opened the app, and the resume check is what saw it. */
+        const val APP_OPENED = "app-opened"
+
+        /** The boot receiver: the phone restarted. */
+        const val BOOT = "boot"
+
+        /** He pulled the shade or tapped the tile — present, but not in the app. */
+        const val GLANCED = "glanced"
+
+        /** An episode recorded before this field existed. Never guessed at. */
+        const val UNKNOWN = "unknown"
+
+        val ALL = setOf(BACKGROUND, APP_OPENED, BOOT, GLANCED, UNKNOWN)
+    }
+
     object DetectedBy {
         /** `serviceConnected == false` past the bind grace: the watcher is not there at all. */
         const val UNBOUND = "unbound"
@@ -143,6 +173,7 @@ object OutageLog {
         val versionCode: Long,
         /** Which arm concluded blocking had stopped — one of [DetectedBy]. */
         val detectedBy: String = DetectedBy.UNKNOWN,
+        val endedBy: String = EndedBy.UNKNOWN,
     ) {
         /**
          * A report-ready line. No content, by construction — every field here is a number.
@@ -161,7 +192,7 @@ object OutageLog {
             val detect = if (detectedAfterMs < 0) "?" else "${detectedAfterMs / 60_000}"
             return "at=${startedLabel()}  down=${mins}min  noticedAfter=${detect}min  " +
                 "deaf=$aliveButDeaf  after=$precededBy  rebooted=$rebooted  build=$versionCode  " +
-                "by=$detectedBy"
+                "by=$detectedBy  backBy=$endedBy"
         }
 
         /** `Sun 21:40`, or `?` when the stamp was never recorded. Never a date-with-year: the day
@@ -197,6 +228,7 @@ object OutageLog {
         precededBy: String,
         versionCode: Long,
         detectedBy: String = DetectedBy.UNKNOWN,
+        endedBy: String = EndedBy.UNKNOWN,
     ): Episode {
         val rebooted = bootAtOpen != bootNow
         // A reboot resets the monotonic clock, so the difference across one is not a duration.
@@ -215,6 +247,7 @@ object OutageLog {
             rebooted = rebooted,
             versionCode = versionCode,
             detectedBy = if (detectedBy in DetectedBy.ALL) detectedBy else DetectedBy.UNKNOWN,
+            endedBy = if (endedBy in EndedBy.ALL) endedBy else EndedBy.UNKNOWN,
         )
     }
 
@@ -343,7 +376,11 @@ object OutageLog {
      * The returned episode is what gets reported off the phone; the caller decides that, so this
      * stays a store rather than becoming a reporter.
      */
-    fun end(context: Context, now: Long = System.currentTimeMillis()): Episode? = runCatching {
+    fun end(
+        context: Context,
+        endedBy: String = EndedBy.UNKNOWN,
+        now: Long = System.currentTimeMillis(),
+    ): Episode? = runCatching {
         // Invariant 37 — same lock as begin(). A double close duplicated the line in his
         // log AND bumped KEY_TOTAL_COUNT and KEY_TOTAL_MS twice, so the two figures the
         // whole outage investigation rests on came out overstated.
@@ -362,6 +399,7 @@ object OutageLog {
                 precededBy = p.getString(KEY_OPEN_PRECEDED, Preceded.NOTHING) ?: Preceded.NOTHING,
                 versionCode = p.getLong(KEY_OPEN_VERSION, -1L),
                 detectedBy = p.getString(KEY_OPEN_DETECTED_BY, DetectedBy.UNKNOWN) ?: DetectedBy.UNKNOWN,
+                endedBy = endedBy,
             )
             val existing = p.getString(KEY_EPISODES, "").orEmpty()
                 .split(';').filter { it.isNotBlank() }
@@ -420,7 +458,7 @@ object OutageLog {
 
     internal fun encode(e: Episode): String = listOf(
         e.startedAt, e.durationMs, e.detectedAfterMs, e.aliveButDeaf,
-        e.precededBy, e.rebooted, e.versionCode, e.detectedBy,
+        e.precededBy, e.rebooted, e.versionCode, e.detectedBy, e.endedBy,
     ).joinToString("|")
 
     /**
@@ -434,7 +472,7 @@ object OutageLog {
      */
     internal fun decode(raw: String): Episode? {
         val p = raw.split('|')
-        if (p.size != 7 && p.size != 8) return null
+        if (p.size !in 7..9) return null
         return Episode(
             startedAt = p[0].toLongOrNull() ?: return null,
             durationMs = p[1].toLongOrNull() ?: return null,
@@ -444,6 +482,7 @@ object OutageLog {
             rebooted = p[5].toBoolean(),
             versionCode = p[6].toLongOrNull() ?: -1L,
             detectedBy = p.getOrNull(7)?.takeIf { it in DetectedBy.ALL } ?: DetectedBy.UNKNOWN,
+            endedBy = p.getOrNull(8)?.takeIf { it in EndedBy.ALL } ?: EndedBy.UNKNOWN,
         )
     }
 }

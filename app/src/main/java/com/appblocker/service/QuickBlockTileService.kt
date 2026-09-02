@@ -8,6 +8,7 @@ import android.service.quicksettings.TileService
 import com.appblocker.MainActivity
 import com.appblocker.data.BlockerDatabase
 import com.appblocker.data.DeviceBoot
+import com.appblocker.data.OutageLog
 import com.appblocker.data.SessionClock
 import com.appblocker.data.SettingsStore
 import kotlinx.coroutines.CoroutineScope
@@ -41,7 +42,7 @@ class QuickBlockTileService : TileService() {
         // down, so a watcher the phone killed is usually caught within seconds of the owner next
         // touching the phone, rather than waiting for the 15-minute worker. Unforced, so the
         // notification throttle still applies and this can't become a source of nagging.
-        ProtectionWatchdog.checkAndNotify(applicationContext)
+        ProtectionWatchdog.checkAndNotify(applicationContext, calledBy = OutageLog.EndedBy.GLANCED)
         refresh()
     }
 

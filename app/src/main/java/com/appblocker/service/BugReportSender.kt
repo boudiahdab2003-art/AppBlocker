@@ -252,6 +252,12 @@ object BugReportSender {
         field("revives") {
             "${ServiceHealth.reviveCount(ctx)}/${ServiceHealth.reviveFailCount(ctx)}"
         }
+        // ⚠️ The line that says whether the self-repair is a repair at all. `revives` counts
+        // nudges that did not throw — 67 of 67 on a phone losing hours of blocking. This counts
+        // the ones after which an event actually arrived. "3/24" is a placebo.
+        field("revivesHelped") {
+            "${ServiceHealth.reviveHelpedCount(ctx)}/${ServiceHealth.reviveFutileCount(ctx)}"
+        }
         // onInterrupt, which used to be an empty body. Not a failure by itself; a number that
         // moves either side of an outage is the first description anyone has of what precedes one.
         field("interrupts") { ServiceHealth.interruptCount(ctx).toString() }

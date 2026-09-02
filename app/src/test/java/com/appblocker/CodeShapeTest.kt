@@ -438,4 +438,29 @@ class CodeShapeTest {
             "keywordSnapshot.toList()" in text && "schedules.ifEmpty { scheduleSnapshot }" in text,
         )
     }
+    // ---- invariant 41 ------------------------------------------------------------------------
+
+    /**
+     * **Every caller of the watchdog says who it is.**
+     *
+     * `calledBy` is what lets a closed episode record whether blocking came back on its own or
+     * only once the app was opened — the question the whole recovery effort rests on. It has a
+     * default, so a new call site that forgets compiles perfectly and silently files its
+     * recoveries as `unknown`, quietly diluting the one measurement that matters.
+     */
+    @Test
+    fun `every watchdog call says who is asking`() {
+        val offenders = sourceTree()
+            .filter { it.name != "ProtectionWatchdog.kt" }
+            .flatMap { f -> f.readText().lines().map { f.name to it } }
+            .filter { (_, line) -> "checkAndNotify(" in line && "calledBy" !in line }
+            .map { (name, line) -> "$name: ${line.trim()}" }
+        assertEquals(
+            "these call the watchdog without saying who is asking, so any recovery they observe " +
+                "is filed as \"unknown\":" +
+                offenders.joinToString(System.lineSeparator(), System.lineSeparator()),
+            emptyList<String>(),
+            offenders,
+        )
+    }
 }
