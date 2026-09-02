@@ -491,4 +491,50 @@ class CodeShapeTest {
                 "if (canObserveEvents()) {" in before.takeLast(600),
         )
     }
+    // ---- invariant 43 ------------------------------------------------------------------------
+
+    /**
+     * **Nothing outside `CoverGate` works out for itself when the dismiss grace ends.**
+     *
+     * Two places used to. One added to `DISMISS_GRACE_MS`, one subtracted from
+     * `DISMISS_GRACE_STUCK_MS`, and each was correct only because of a property of the branch it
+     * happened to sit in — one because its branch had set `viaBack = true` two lines earlier,
+     * the other because its branch was reachable only from the HOME path. Neither said so.
+     *
+     * That is a rule copied into three places, which `CoverGate`'s own file header says is how
+     * this logic got broken twice before it was extracted. If the grace rule moves, a hand-rolled
+     * copy does not move with it: it keeps scheduling for a window that no longer exists, and the
+     * app goes quiet again in exactly the gap this was written to close. `graceRemainingMs` is
+     * the one answer; ask it.
+     */
+    @Test
+    fun `only CoverGate decides when the dismiss grace ends`() {
+        // Allow-listed, with the reason, the way this file's header requires.
+        //
+        // SilenceLog.isLate is not scheduling anything — it thresholds a decline to decide
+        // whether it was the suspicious kind, and its boundary is deliberately the SHORT grace.
+        // SilenceLogTest pins that: measured from the long one, the dial would read zero through
+        // exactly the bug it exists to show. It has to name the constant.
+        val allowed = listOf("fun isLate(")
+
+        val offenders = sourceTree()
+            .filter { it.name != "CoverGate.kt" }
+            .flatMap { f -> f.readText().lines().withIndex().map { (i, l) -> Triple(f.name, i + 1, l) } }
+            .filter { (_, _, line) ->
+                val mentions = "DISMISS_GRACE_MS" in line || "DISMISS_GRACE_STUCK_MS" in line
+                // A comment explaining why the constant is NOT used here is the opposite of the
+                // problem, so it is not one.
+                mentions && !line.trimStart().startsWith("//") &&
+                    !line.trimStart().startsWith("*") && allowed.none { it in line }
+            }
+            .map { (name, n, line) -> "$name:$n ${line.trim()}" }
+
+        assertEquals(
+            "these work out the end of the dismiss grace themselves instead of asking " +
+                "CoverGate.graceRemainingMs, so they silently stop agreeing with it:" +
+                offenders.joinToString(System.lineSeparator(), System.lineSeparator()),
+            emptyList<String>(),
+            offenders,
+        )
+    }
 }

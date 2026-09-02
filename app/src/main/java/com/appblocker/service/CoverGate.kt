@@ -200,6 +200,36 @@ internal object CoverGate {
     }
 
     /**
+     * **How much longer [inGrace] will keep saying yes** — 0 once it says no.
+     *
+     * The service needs this to schedule its own return. A cover declined by the grace used to
+     * schedule *nothing*: `showBlockScreen` returns at the decline, and the line that re-arms the
+     * 30-second re-check sits at the end of that function. So the grace ended at 1.5s or 8s and
+     * nothing looked again for up to another 28, with the blocked app still on screen and static
+     * enough to emit no events. That is invariant 20's closing question asked of the grace itself:
+     * *what ends it, and what is the user doing if that never happens?*
+     *
+     * ⚠️ **Derived from [inGrace] rather than re-deciding**, and that is the whole point of it
+     * living here. Two sites already computed this by hand — one adding to [DISMISS_GRACE_MS],
+     * one subtracting from [DISMISS_GRACE_STUCK_MS] — and each was correct only because of a
+     * property of the branch it sat in. A third copy, or any change to the rule above, and they
+     * drift apart silently, which reopens the under-block instead of closing it.
+     */
+    fun graceRemainingMs(
+        dismissedPkg: String?,
+        currentPkg: String?,
+        sinceDismissMs: Long,
+        viaBack: Boolean,
+    ): Long {
+        if (!inGrace(dismissedPkg, currentPkg, sinceDismissMs, viaBack)) return 0L
+        // Which window is holding it. The long one only ever applies to a trip Home that has not
+        // landed — the same two conditions inGrace tests, in the same order.
+        val stuck = !viaBack && currentPkg != null && currentPkg == dismissedPkg
+        val endsAt = if (stuck) DISMISS_GRACE_STUCK_MS else DISMISS_GRACE_MS
+        return (endsAt - sinceDismissMs).coerceAtLeast(0L)
+    }
+
+    /**
      * Whether a confirmed foreground change to [newPkg] means the dismiss grace recorded for
      * [dismissedPkg] has done its job and must be released.
      *

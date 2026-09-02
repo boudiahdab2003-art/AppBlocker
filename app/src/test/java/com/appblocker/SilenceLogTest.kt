@@ -48,7 +48,7 @@ class SilenceLogTest {
         // registry: a counter added without being listed is one nobody will ever read. The size is
         // hardcoded deliberately — it is what makes adding one an act rather than a line that
         // slips in unsurfaced, and it did its job for the two Shorts-exit counters.
-        assertEquals(5, SilenceLog.KINDS.size)
+        assertEquals(6, SilenceLog.KINDS.size)
         assertEquals(SilenceLog.KINDS.toSet().size, SilenceLog.KINDS.size)
         assertTrue(SilenceLog.KINDS.all { it.isNotBlank() })
     }

@@ -550,4 +550,74 @@ class CoverGateTest {
         assertFalse(CoverGate.backExitFailed("com.android.chrome", null, 500L))
         assertFalse(CoverGate.backExitFailed(null, "com.android.chrome", 500L))
     }
+    // ---- how long the grace still has to run ------------------------------------------------
+
+    private val APP = "com.example.app"
+
+    /**
+     * **The pin that stops the two rules drifting.** `graceRemainingMs` exists so the service can
+     * schedule its own return; if it ever disagreed with [CoverGate.inGrace] the app would either
+     * come back early (flicker) or not at all (the under-block this fixes).
+     */
+    @Test
+    fun `the remaining grace agrees with inGrace at every boundary`() {
+        val points = listOf(
+            0L,
+            CoverGate.DISMISS_GRACE_MS - 1,
+            CoverGate.DISMISS_GRACE_MS,
+            CoverGate.DISMISS_GRACE_STUCK_MS - 1,
+            CoverGate.DISMISS_GRACE_STUCK_MS,
+            CoverGate.DISMISS_GRACE_STUCK_MS + 1,
+        )
+        for (viaBack in listOf(true, false)) {
+            for (current in listOf(APP, "com.other.app", null)) {
+                for (since in points) {
+                    val holding = CoverGate.inGrace(APP, current, since, viaBack)
+                    val left = CoverGate.graceRemainingMs(APP, current, since, viaBack)
+                    assertEquals(
+                        "inGrace=$holding but remaining=$left at since=$since " +
+                            "viaBack=$viaBack current=$current",
+                        holding,
+                        left > 0L,
+                    )
+                }
+            }
+        }
+    }
+
+    /** A trip Home that has not landed is held for the long window, and says so. */
+    @Test
+    fun `a stuck app reports the long window`() {
+        assertEquals(
+            CoverGate.DISMISS_GRACE_STUCK_MS,
+            CoverGate.graceRemainingMs(APP, APP, 0L, viaBack = false),
+        )
+        assertEquals(
+            2_000L,
+            CoverGate.graceRemainingMs(APP, APP, CoverGate.DISMISS_GRACE_STUCK_MS - 2_000L, false),
+        )
+    }
+
+    /** Stepping BACK gets the short window only — the same asymmetry `inGrace` enforces. */
+    @Test
+    fun `a back exit reports only the short window`() {
+        assertEquals(
+            CoverGate.DISMISS_GRACE_MS,
+            CoverGate.graceRemainingMs(APP, APP, 0L, viaBack = true),
+        )
+        assertEquals(0L, CoverGate.graceRemainingMs(APP, APP, CoverGate.DISMISS_GRACE_MS, true))
+    }
+
+    /** Once the user is demonstrably elsewhere there is nothing left to wait for. */
+    @Test
+    fun `a released grace has nothing remaining`() =
+        assertEquals(
+            0L,
+            CoverGate.graceRemainingMs(APP, "com.other.app", CoverGate.DISMISS_GRACE_MS, false),
+        )
+
+    /** Never negative: a stale timestamp must not schedule a re-check in the past. */
+    @Test
+    fun `the remaining grace is never negative`() =
+        assertEquals(0L, CoverGate.graceRemainingMs(APP, APP, 60_000L, viaBack = false))
 }

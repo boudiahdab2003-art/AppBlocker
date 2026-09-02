@@ -294,6 +294,19 @@ class BlockerAccessibilityService : AccessibilityService() {
     // Per dismissal, not per event: a deaf spell that declines forty times is one page the user
     // was reading, and counting each decline would drown the number it exists to make legible.
     @Volatile private var dismissalCountedDeaf = false
+
+    /**
+     * When the grace re-check is already booked, or 0 when it is not.
+     *
+     * Every declined event would otherwise re-arm the timer and push it out, so a busy screen
+     * would never let it fire — the same shape as a debounce that never lapses. Booked once per
+     * dismissal, cleared with the dismissal.
+     */
+    @Volatile private var graceRecheckAt = 0L
+
+    /** True only while a booked grace re-check is running, so a cover it raises can be told from
+     *  every other cover — see [SilenceLog.GRACE_RECOVERS]. */
+    @Volatile private var graceRecheckFiring = false
     // Same, for the pre-rules window: one count per bind, not one per decision.
     @Volatile private var unreadyCounted = false
     // The current destination, tracked in the two units the covers use.
@@ -716,8 +729,17 @@ class BlockerAccessibilityService : AccessibilityService() {
          * see. Only a clean run may decide to stop.
          */
         override fun run() {
+            // The booking is spent the moment this fires, whatever it decides — otherwise one
+            // grace re-check would block every later one for the life of the dismissal.
+            val booked = graceRecheckAt != 0L
+            graceRecheckAt = 0L
             var again = true
-            guarded(applicationContext, "recheck") { again = runGuarded() }
+            graceRecheckFiring = booked
+            try {
+                guarded(applicationContext, "recheck") { again = runGuarded() }
+            } finally {
+                graceRecheckFiring = false
+            }
             if (again) handler.postDelayed(this, RECHECK_MS)
         }
 
@@ -2809,12 +2831,45 @@ class BlockerAccessibilityService : AccessibilityService() {
      * the number that would have shown it months earlier.
      */
     private fun recordDecline(sinceDismissMs: Long) {
+        // ⚠️ Booked for EVERY decline, including the ones inside the short grace, which the
+        // counting below deliberately ignores. The counters ask "was this suspicious"; this asks
+        // "who is going to look again", and the answer has to be someone whatever the reason.
+        bookGraceRecheck(sinceDismissMs)
         if (!SilenceLog.isLate(sinceDismissMs)) return
         SilenceLog.record(applicationContext, SilenceLog.LATE_DECLINES)
         if (!dismissalCountedDeaf) {
             dismissalCountedDeaf = true
             SilenceLog.record(applicationContext, SilenceLog.DEAF_DISMISSALS)
         }
+    }
+
+    /**
+     * **Come back and look the moment the grace lets go.**
+     *
+     * A cover declined by the grace used to schedule nothing at all: [showBlockScreen] returns at
+     * the decline, and its re-arm of [recheckRunnable] is the last line of that function. So the
+     * grace ended at 1.5s or 8s and the next look was the 30-second tick armed when the cover
+     * first went up — up to 28 seconds with the blocked app on screen and nothing watching it,
+     * on any screen static enough to stop emitting events. `deafSpells` counted those spells and
+     * nothing ever closed them.
+     *
+     * `finishExit(confirmed = true)` already did exactly this for the one case it could see; this
+     * is the same line for every other way a decline happens.
+     *
+     * The redraw is marked as a resume, so [CoverGate.shouldCount] treats it as the same sitting:
+     * one open is still one recorded attempt (invariant 5), and no fresh quote is rolled.
+     */
+    private fun bookGraceRecheck(sinceDismissMs: Long) {
+        if (graceRecheckAt != 0L) return
+        val left = CoverGate.graceRemainingMs(
+            dismissedPkg, lastForegroundPkg, sinceDismissMs, dismissedViaBack,
+        )
+        if (left <= 0L) return
+        val delay = left + GRACE_RECHECK_MARGIN_MS
+        graceRecheckAt = stopwatchNow() + delay
+        resumingOffence = lastCountedOffence
+        handler.removeCallbacks(recheckRunnable)
+        handler.postDelayed(recheckRunnable, delay)
     }
 
     /** Where the user is now, in the same unit the dismissed cover recorded — a host for a page
@@ -2826,6 +2881,7 @@ class BlockerAccessibilityService : AccessibilityService() {
     /** Forget the dismissed cover, so the next block lands immediately. */
     private fun clearDismissState() {
         dismissalCountedDeaf = false
+        graceRecheckAt = 0L
         dismissedViaBack = false
         dismissedKey = null
         dismissedPkg = null
@@ -2927,6 +2983,10 @@ class BlockerAccessibilityService : AccessibilityService() {
         val msg = message ?: label?.let { "$it is blocked" } ?: "This is blocked right now."
         // Instant overlay; fall back to the Activity only if the overlay can't be drawn.
         // Only app-rule blocks pass a package (see isAppBlock).
+        // A cover raised by the booked re-check is the deaf spell actually being closed. Counted
+        // here rather than at the booking, because a booking that fires and finds nothing to do is
+        // not a recovery.
+        if (graceRecheckFiring) SilenceLog.record(applicationContext, SilenceLog.GRACE_RECOVERS)
         val drawn = overlay.show(
             packageName = packageName,
             title = title,
@@ -3062,8 +3122,10 @@ class BlockerAccessibilityService : AccessibilityService() {
                 // hand.
                 val lockedPkg = lastForegroundPkg
                 if (lockedPkg != null && keywordLockoutRemaining(lockedPkg) > 0L) {
-                    handler.removeCallbacks(recheckRunnable)
-                    handler.postDelayed(recheckRunnable, CoverGate.DISMISS_GRACE_MS + 150L)
+                    // Derived, not "DISMISS_GRACE_MS + 150". That was right only because this
+                    // branch sets viaBack = true two lines above, which is exactly the kind of
+                    // coupling that rots when the rule moves. See CoverGate.graceRemainingMs.
+                    bookGraceRecheck(sinceDismissMs = 0L)
                 }
             } else {
                 // BACK has already been tried in this app and left him somewhere still worth
@@ -3201,14 +3263,19 @@ class BlockerAccessibilityService : AccessibilityService() {
             // grace lapses — otherwise the app would stay uncovered until the ordinary 30s
             // tick. Mark that redraw as a resume so it lands as the SAME block: no new attempt,
             // no new quote, without the plain cooldown having to be long enough to reach it.
-            resumingOffence = lastCountedOffence
-            val untilGraceEnds = CoverGate.DISMISS_GRACE_STUCK_MS -
-                (stopwatchNow() - dismissedAt)
-            handler.removeCallbacks(recheckRunnable)
-            handler.postDelayed(recheckRunnable, untilGraceEnds.coerceAtLeast(0L) + 250L)
+            // Derived rather than subtracting from DISMISS_GRACE_STUCK_MS by hand: that was
+            // correct only because this branch is reachable only from the HOME path.
+            bookGraceRecheck(stopwatchNow() - dismissedAt)
+        } else {
+            // ⚠️ **The blind give-up books one too, and used to book nothing.** The reasoning
+            // was "if the app really is still there it keeps emitting events" — but every one of
+            // those events reached the decline above and was turned away without arming anything,
+            // so the backstop was the 30-second tick rather than the grace. Blind is not the rare
+            // case either: it is what gesture navigation produces, because the window tree cannot
+            // be read. This gives up on knowing where the user is and asks again shortly, which
+            // is the honest version of the same intent.
+            bookGraceRecheck(stopwatchNow() - dismissedAt)
         }
-        // Blind non-exit: schedule nothing. If the app really is still there it keeps emitting
-        // events, and the ordinary re-check armed when the cover went up is the backstop.
         lastBlockedPkg = null
         overlay.remove()
     }
@@ -3335,6 +3402,12 @@ class BlockerAccessibilityService : AccessibilityService() {
 
         // How often to re-check the app the user is currently inside (mid-use enforcement).
         private const val RECHECK_MS = 30_000L
+
+        /**
+         * The margin added to a booked grace re-check, so it lands just AFTER the grace lets go
+         * rather than in the same millisecond it expires and being declined all over again.
+         */
+        private const val GRACE_RECHECK_MARGIN_MS = 250L
 
         /** How stale a filter reading may get on the foreground path. Well inside
          *  [NetworkFilter.SETTLE_MS], so the backstop can never delay a decision the settle

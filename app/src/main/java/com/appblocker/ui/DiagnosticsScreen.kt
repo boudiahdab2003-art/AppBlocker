@@ -310,6 +310,7 @@ private fun readSnapshot(context: Context): Snapshot {
 
     val deaf = SilenceLog.get(context, SilenceLog.DEAF_DISMISSALS)
     val declines = SilenceLog.get(context, SilenceLog.LATE_DECLINES)
+    val recovers = SilenceLog.get(context, SilenceLog.GRACE_RECOVERS)
     val unready = SilenceLog.get(context, SilenceLog.UNREADY_DECISIONS)
     val shortsShut = SilenceLog.get(context, SilenceLog.SHORTS_EXIT_CLOSED)
     val shortsBlind = SilenceLog.get(context, SilenceLog.SHORTS_EXIT_BLIND)
@@ -415,13 +416,31 @@ private fun readSnapshot(context: Context): Snapshot {
                 good = if (deaf.total == 0) true else null,
             ),
         )
-        if (declines.total > 0) {
+        if (declines.total > 0) {
+            add(
+                Fact(
+                    "Checks skipped in those spells: ${declines.today} today, ${declines.total} in total",
+                    "How many times it looked away during the spells above. A big number " +
+                        "against a small number of spells means one page you stayed on a while.",
+                    good = null,
+                ),
+            )
+        }
+        if (deaf.total > 0 || recovers.total > 0) {
             add(
                 Fact(
-                    "Checks skipped in those spells: ${declines.today} today, ${declines.total} in total",
-                    "How many times it looked away during the spells above. A big number " +
-                        "against a small number of spells means one page you stayed on a while.",
-                    good = null,
+                    "Blocks that came back on their own: ${recovers.today} today, " +
+                        "${recovers.total} in total",
+                    if (recovers.total == 0) {
+                        "None yet. Read this next to the spells above: if those keep climbing " +
+                            "and this stays at zero, the blocker is not coming back by itself " +
+                            "and I need to know."
+                    } else {
+                        "Each one is the blocker returning by itself after a quiet spell, " +
+                            "instead of waiting for you to switch apps. This is the number that " +
+                            "says the quiet spells above are being closed rather than counted."
+                    },
+                    good = if (recovers.total > 0) true else null,
                 ),
             )
         }

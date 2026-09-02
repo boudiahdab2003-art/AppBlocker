@@ -52,7 +52,18 @@ object SilenceLog {
 
     /** Binds during which a blocking decision had to be made before the rules had loaded.
      *  Non-zero means the window invariant 11's update is about is real on this phone. */
-    const val UNREADY_DECISIONS = "unready_decisions"
+    const val UNREADY_DECISIONS = "unready_decisions"
+
+    /**
+     * **Covers restored by the re-check booked when the grace turned one away.**
+     *
+     * The counter that says whether closing the deaf spell actually did anything. [DEAF_DISMISSALS]
+     * counts the silences; this counts the returns from them, and the pair is only readable
+     * together — a climbing deaf count beside a flat zero here means the booking never fires and
+     * the fix is decoration. The lesson is `revives`, which reported 67 successes out of 67 for
+     * weeks while the fault it treated carried on.
+     */
+    const val GRACE_RECOVERS = "grace_recovers"
 
     /**
      * Shorts dismissals where the reel was **confirmed shut** before leaving YouTube.
@@ -72,7 +83,7 @@ object SilenceLog {
 
     val KINDS = listOf(
         DEAF_DISMISSALS, LATE_DECLINES, UNREADY_DECISIONS,
-        SHORTS_EXIT_CLOSED, SHORTS_EXIT_BLIND,
+        SHORTS_EXIT_CLOSED, SHORTS_EXIT_BLIND, GRACE_RECOVERS,
     )
 
     fun get(context: Context, kind: String): Count {

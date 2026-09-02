@@ -163,6 +163,9 @@ object BugReportSender {
             val c = SilenceLog.get(ctx, SilenceLog.DEAF_DISMISSALS); "${c.today}/${c.total}"
         }
         field("lateSkips") { SilenceLog.get(ctx, SilenceLog.LATE_DECLINES).total.toString() }
+        // The other half of `deafSpells`: how many of those silences the app came back from on
+        // its own. A climbing deafSpells beside a flat zero here means the return never fires.
+        field("graceRecovers") { SilenceLog.get(ctx, SilenceLog.GRACE_RECOVERS).total.toString() }
         // "82% of 140, 3 slow" — the share that landed under half a second, how many blocks that
         // is out of, and how many took over two seconds. The tail is the part worth reading: a
         // good percentage with a growing tail is exactly what "sometimes it's slow" looks like.
