@@ -463,4 +463,32 @@ class CodeShapeTest {
             offenders,
         )
     }
+    // ---- invariant 42 ------------------------------------------------------------------------
+
+    /**
+     * **The revive verdict is only taken when an event could actually have arrived.**
+     *
+     * `revivesHelped` exists to answer whether the app's only self-repair does anything, and the
+     * recovery plan is built on that answer. The nudge fires after three minutes of silence, and
+     * the commonest cause of three minutes of silence is a phone nobody is holding — so judging
+     * on a dark screen scores `futile` for a reason unrelated to the repair, systematically, and
+     * would read as "the repair does nothing". Wrong, and wrong in the confident direction.
+     *
+     * Same rule as `probeScreen`: a state where the answer is not knowable is not evidence. Guard
+     * removed, the number keeps being produced and quietly stops meaning anything, which is the
+     * one failure a measurement must not have.
+     */
+    @Test
+    fun `the revive verdict waits for a screen that could produce an event`() {
+        val text = source("service/BlockerAccessibilityService.kt").readText()
+        val call = text.indexOf("ServiceHealth.recordReviveOutcome(")
+        assertTrue("the revive outcome is no longer recorded at all", call >= 0)
+        val before = text.substring(0, call)
+        assertTrue(
+            "recordReviveOutcome must sit behind canObserveEvents(), or a sleeping phone is " +
+                "counted as evidence that the self-repair failed.",
+            before.substringAfterLast("if (").startsWith("canObserveEvents()") ||
+                "if (canObserveEvents()) {" in before.takeLast(600),
+        )
+    }
 }

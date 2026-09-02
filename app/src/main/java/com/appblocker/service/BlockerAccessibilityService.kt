@@ -575,12 +575,30 @@ class BlockerAccessibilityService : AccessibilityService() {
                 // ServiceHealth.probeFailStreak on why a successful nudge must not.
                 // Has the last nudge earned its "success" yet? An event arriving after it is
                 // the only thing that shows the framework started talking to us again.
+                //
+                // ⚠️ **Only asked while the phone could actually produce an event.** A nudge
+                // fires after three minutes of silence, and the commonest reason for three
+                // minutes of silence is a phone nobody is touching — so judging on a dark
+                // screen would score `futile` for a reason that has nothing to do with the
+                // repair, systematically, and read as "the repair does nothing". That is the
+                // conclusion the whole recovery plan hangs on, measured wrong. Same rule as
+                // [probeScreen]: a state where the answer is not knowable is not evidence.
+                //
+                // So the verdict waits for a lit, unlocked screen, and is abandoned uncounted if
+                // one never comes. A missing number is honest; a wrong one is not.
                 if (reviveVerifyDueAt != 0L && stopwatchNow() >= reviveVerifyDueAt) {
-                    reviveVerifyDueAt = 0L
-                    ServiceHealth.recordReviveOutcome(
-                        applicationContext,
-                        helped = lastEventReceivedAt > reviveEventMark,
-                    )
+                    if (canObserveEvents()) {
+                        reviveVerifyDueAt = 0L
+                        reviveVerifyGiveUpAt = 0L
+                        ServiceHealth.recordReviveOutcome(
+                            applicationContext,
+                            helped = lastEventReceivedAt > reviveEventMark,
+                        )
+                    } else if (stopwatchNow() >= reviveVerifyGiveUpAt) {
+                        // Never became judgeable. Recorded as nothing at all.
+                        reviveVerifyDueAt = 0L
+                        reviveVerifyGiveUpAt = 0L
+                    }
                 }
                 if (silence < REVIVE_AFTER_SILENCE_MS) {
                     ServiceHealth.clearProbeStreak(applicationContext)
@@ -609,6 +627,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                     // Judge it later, on evidence. See reviveVerifyDueAt.
                     reviveEventMark = lastEventReceivedAt
                     reviveVerifyDueAt = stopwatchNow() + REVIVE_VERIFY_MS
+                    reviveVerifyGiveUpAt = stopwatchNow() + REVIVE_VERIFY_GIVE_UP_MS
                     // The pull half of liveness — see ServiceHealth.recordProbe. A nudge that
                     // threw is folded in here rather than counted as its own staleness arm: two
                     // counters that both mean "the watcher is deaf" is the drift shape this
@@ -638,6 +657,18 @@ class BlockerAccessibilityService : AccessibilityService() {
      * Only a lit, unlocked screen with no readable window counts as a failure, and even then one
      * failure means nothing: `PROBE_FAIL_LIMIT` of them, three minutes apart, is the verdict.
      */
+    /**
+     * Could an accessibility event plausibly arrive right now? A lit, unlocked screen is the only
+     * state where "no event arrived" says anything about us rather than about the phone being
+     * asleep. See the revive verdict in the heartbeat.
+     */
+    private fun canObserveEvents(): Boolean {
+        val pm = getSystemService(POWER_SERVICE) as? PowerManager ?: return false
+        if (!pm.isInteractive) return false
+        val km = getSystemService(KEYGUARD_SERVICE) as? KeyguardManager
+        return km?.isKeyguardLocked != true
+    }
+
     private fun probeScreen(): Boolean {
         val pm = getSystemService(POWER_SERVICE) as? PowerManager ?: return true
         if (!pm.isInteractive) return true
@@ -663,6 +694,7 @@ class BlockerAccessibilityService : AccessibilityService() {
      */
     @Volatile private var reviveVerifyDueAt = 0L
     @Volatile private var reviveEventMark = 0L
+    @Volatile private var reviveVerifyGiveUpAt = 0L
 
     // Periodic re-check of the app the user is sitting in, so time-based conditions take
     // effect mid-use instead of only on the next app switch: a daily limit crossing, a time
@@ -3296,6 +3328,10 @@ class BlockerAccessibilityService : AccessibilityService() {
          * demonstrably work", never as proof it failed.
          */
         private const val REVIVE_VERIFY_MS = 60_000L
+
+        /** How long a pending verdict waits for a usable screen before being abandoned
+         *  uncounted. A phone left alone for this long has told us nothing either way. */
+        private const val REVIVE_VERIFY_GIVE_UP_MS = 30 * 60_000L
 
         // How often to re-check the app the user is currently inside (mid-use enforcement).
         private const val RECHECK_MS = 30_000L
