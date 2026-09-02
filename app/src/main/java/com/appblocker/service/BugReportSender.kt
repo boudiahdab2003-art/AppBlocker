@@ -658,7 +658,9 @@ object BugReportSender {
                     // per report is what makes the KDoc's "backstop that cannot be reasoned
                     // around" true; what does not go out stays queued for tomorrow, which is the
                     // intended cost.
-                    for (report in BugReportQueue.pending(app)) {
+                    // Newest first. A backlog drains at MAX_PER_DAY, so the order decides
+                    // whether today's twelve describe this morning or last week.
+                    for (report in BugReportQueue.sendOrder(BugReportQueue.pending(app))) {
                         if (BugReportQueue.remainingToday(app) <= 0) break
                         val outcome = post(report)
                         // Recorded for every attempt, delivered or not. This is the line that

@@ -336,4 +336,31 @@ class CodeShapeTest {
             )
         }
     }
+    // ---- invariant 38 ------------------------------------------------------------------------
+
+    /**
+     * **A backlog is sent newest first, and `flush` must go through `sendOrder` to do it.**
+     *
+     * `MAX_PER_DAY` is 12. On 2 Sep 2026 exactly twelve reports went out and eleven stayed queued,
+     * oldest first — so what arrived described the previous week while the stoppage he had just
+     * watched happen sat behind them. He asked whether it had arrived. It had not.
+     *
+     * The ordering itself is pinned by `BugReportQueueOrderTest`; this stops `flush` quietly going
+     * back to iterating `pending()` directly, which is the shape that produced the wrong order and
+     * reads perfectly naturally.
+     */
+    @Test
+    fun `flush drains the queue through sendOrder`() {
+        val text = source("service/BugReportSender.kt").readText()
+        val start = text.indexOf("    fun flush(context: Context) {")
+        assertTrue("BugReportSender no longer has a flush(context) to check", start >= 0)
+        val tail = text.substring(start)
+        val body = tail.substringBefore(System.lineSeparator() + "    fun ", tail)
+        assertTrue(
+            "flush must iterate BugReportQueue.sendOrder(...), not pending() directly, or a " +
+                "backlog spends the whole daily cap on the oldest reports and the ones describing " +
+                "what the phone is doing now wait days.",
+            "sendOrder(" in body,
+        )
+    }
 }

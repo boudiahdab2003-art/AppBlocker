@@ -126,6 +126,25 @@ object BugReportQueue {
         true
     }.getOrDefault(false)
 
+    /**
+     * **The order a backlog goes out in: newest first.**
+     *
+     * The queue is written oldest-first and used to be drained that way, which is wrong the moment
+     * there is a backlog. [MAX_PER_DAY] is 12, so on 2 Sep 2026 exactly twelve week-old reports
+     * went out and eleven stayed queued — including every one describing what the phone is doing
+     * NOW. He asked whether the stoppage he had just seen had arrived. It had not, and on the old
+     * order it would not for days.
+     *
+     * Nothing is dropped by this: what does not fit today goes tomorrow either way. The only
+     * question is which end of the queue gets today's twelve, and the useful end is the recent
+     * one — a report is read to find out what is happening, and the oldest report in a backlog is
+     * the least likely to still be true.
+     *
+     * Generic and pure so it can be tested without a Context, which is what the rest of this file
+     * cannot manage.
+     */
+    internal fun <T> sendOrder(pending: List<T>): List<T> = pending.asReversed()
+
     fun pending(context: Context): List<BugReport> = runCatching {
         val raw = prefs(context).getString(KEY_PENDING, null) ?: return emptyList()
         decode(raw)

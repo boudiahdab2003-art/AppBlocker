@@ -13,6 +13,9 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.151", "Sep 2, 2026", "Your newest reports stop queueing behind old ones", listOf(
+        "**The report about what happened this morning no longer waits behind last week.** There is a limit on how many reports go out in a day, so it matters which end of the queue they come from — and it was taking the oldest first. Twelve week-old reports went out this morning and eleven stayed waiting, including every one describing the stoppage you had just watched happen. Newest first now. Nothing is lost either way; what does not fit today goes tomorrow.",
+    )),
     VersionLog("1.150", "Sep 1, 2026", "The backlog arrived, and it named the problem", listOf(
         "**Every report your phone had been holding is now in. They agree on one thing: blocking has been stopping because Android kills the app, not because anything in it breaks.** Eleven stoppages, none of them after an update, none of them after a reboot, every one of them the process being ended while the switch still read ON. That is the answer to “it stops working”, and it is the first time the phone has been able to say it.",
         "**The app was noticing fast and then sitting there.** It spotted the last eleven stoppages in about six minutes each — that part is fixed and stays fixed. But nine tenths of the time you spent unprotected came *after* it already knew. Knowing sooner is worth nothing on its own; getting back up is the work now, and it is what I am on next.",
