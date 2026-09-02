@@ -119,6 +119,8 @@ class BlockerAccessibilityService : AccessibilityService() {
     // first emission.
     @Volatile private var blockedSnapshot: Set<String> = emptySet()
     @Volatile private var strictSnapshot: StrictSnapshot.Session = StrictSnapshot.NONE
+    @Volatile private var keywordSnapshot: Set<String> = emptySet()
+    @Volatile private var scheduleSnapshot: List<Schedule> = emptyList()
     // The armed danger-zone hour, or null. Held in memory so a block decision never costs a
     // prefs read; the deadline itself is what decides whether it is still running.
     @Volatile private var dangerZone: GuardedDeadline? = null
@@ -183,6 +185,19 @@ class BlockerAccessibilityService : AccessibilityService() {
      */
     private fun updatePauseActive(): Boolean =
         updatePaused && strictRemaining() <= 0L
+
+    /**
+     * The blocked words to enforce right now. Empty before the flow emits does not mean "he has
+     * no words" — it means we have not been told. Invariant 11, same as [RuleSnapshot] and
+     * [StrictSnapshot]; his block log is full of `why=site`, so this window mattered.
+     */
+    private fun activeKeywords(): List<String> =
+        if (rulesLoaded) userKeywords
+        else userKeywords.ifEmpty { keywordSnapshot.toList() }
+
+    /** Schedules to enforce right now, for the same window and the same reason. */
+    private fun activeSchedules(): List<Schedule> =
+        if (rulesLoaded) schedules else schedules.ifEmpty { scheduleSnapshot }
 
     private fun strictRemaining(): Long {
         // Invariant 11 for the Strict session. Until the combine flow's first emission the five
@@ -1054,6 +1069,8 @@ class BlockerAccessibilityService : AccessibilityService() {
         blockedSnapshot = SettingsStore.blockedSnapshot(this)
         // And the Strict session, for the same window and the same reason. Five numbers.
         strictSnapshot = SettingsStore.strictSnapshot(this)
+        keywordSnapshot = SettingsStore.keywordSnapshot(this)
+        scheduleSnapshot = SettingsStore.scheduleSnapshot(this)
         unreadyCounted = false // one count per bind, and this is a bind
         // A fresh bind is a fresh question. Without this a streak left behind by a process that
         // died deaf would combine with a new `connected = true` and condemn a watcher that has
@@ -1138,6 +1155,17 @@ class BlockerAccessibilityService : AccessibilityService() {
             }
             userKeywords = keywords.map { it.keyword }
             schedules = scheduleList
+            // The same fallback the rules and the Strict session get. Invariant 11: all four
+            // of these arrive on THIS flow, so all four are empty until it first emits.
+            val kwNow = userKeywords.toSet()
+            if (kwNow != keywordSnapshot) {
+                keywordSnapshot = kwNow
+                runCatching { SettingsStore.setKeywordSnapshot(applicationContext, kwNow) }
+            }
+            if (scheduleList != scheduleSnapshot) {
+                scheduleSnapshot = scheduleList
+                runCatching { SettingsStore.setScheduleSnapshot(applicationContext, scheduleList) }
+            }
             // Location plumbing follows *enabled* location schedules only — and shuts down
             // when the last one is toggled off, so a disabled schedule can't keep GPS running.
             // Hop to the main thread: requestLocationUpdates needs a looper thread.
@@ -1423,7 +1451,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         // is where the widened word list actually does its work — and an hour that only watched
         // the browsers he cannot reach would be watching nothing.
         if (dangerZoneRemaining() <= 0L &&
-            ((userKeywords.isEmpty() && !adultPackOn) || !keywordsEverywhere)
+            ((activeKeywords().isEmpty() && !adultPackOn) || !keywordsEverywhere)
         ) return false
         return !isLauncherPkg(pkg) && pkg !in KEYWORD_SCAN_EXCLUDED
     }
@@ -1918,7 +1946,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                 rule = ruleFor(pkg),
                 allowlistMode = allowlistMode,
                 isEssential = { isEssentialAllowed(pkg) },
-                schedules = schedules,
+                schedules = activeSchedules(),
                 // "Unsupported" now means "we have never managed to read this one", not "it isn't
                 // Chrome". KNOWN_READABLE_BROWSERS seeds the answer with the toolbars we know how
                 // to read — needed because a blanket-blocked browser is never scanned, so without
@@ -1929,7 +1957,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                     pkg !in SettingsStore.readableBrowsers(this),
                 unsupportedBrowserBlockingActive = {
                     SettingsStore.blockUnsupportedBrowsers(this) &&
-                        (userKeywords.isNotEmpty() || adultPackOn || SettingsStore.blockAdult(this))
+                        (activeKeywords().isNotEmpty() || adultPackOn || SettingsStore.blockAdult(this))
                 },
                 usedMinutesToday = { UsageTracker.usedMinutesToday(this, it) },
                 opensToday = { LaunchCounter.opensToday(this, it) },
@@ -2358,7 +2386,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (DEBUG) Log.d(TAG, "urlScan[$pkg]: $url")
         // The user's own words pause after an update exactly as they do in the full scan; the
         // adult layer deliberately does not, since an update must not become the easy way out.
-        val ownWords = if (updatePauseActive()) emptyList() else userKeywords
+        val ownWords = if (updatePauseActive()) emptyList() else activeKeywords()
         val hit = filter.checkUrl(url, ownWords, autoSocialKeywords())
             ?: filter.checkUrlAdult(
                 url, adultPackOn, SettingsStore.blockAdult(applicationContext), learnedDomains,
@@ -2535,7 +2563,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         // the pack is whole-word matched so it's safe everywhere.
         // After-update pause: the user's own words pause with everything else; only the
         // adult layer (pack + adult sites) keeps matching.
-        val ownWords = if (updatePauseActive()) emptyList() else userKeywords
+        val ownWords = if (updatePauseActive()) emptyList() else activeKeywords()
         val hit = if (isBrowser) {
             filter.check(
                 text, address, ownWords, autoSocialKeywords(), adultPackOn,

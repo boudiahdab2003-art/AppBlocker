@@ -174,10 +174,15 @@ object ServiceHealth {
      *   keyguard up, no PowerManager — must pass; see the caller.
      */
     fun recordProbe(context: Context, ok: Boolean) {
-        val p = prefs(context)
-        val next = nextProbeStreak(p.getInt(KEY_PROBE_FAILS, 0), ok)
-        if (next != p.getInt(KEY_PROBE_FAILS, 0)) {
-            p.edit().putInt(KEY_PROBE_FAILS, next).apply()
+        // Read-then-write on the streak that decides when an outage is declared. Two probes
+        // landing together each read the same value and each wrote the same +1, so the streak
+        // advanced by one instead of two and the declaration came late. Same shape as invariants
+        // 36 and 37; here it costs detection time rather than a duplicate.
+        synchronized(this) {
+            val p = prefs(context)
+            val current = p.getInt(KEY_PROBE_FAILS, 0)
+            val next = nextProbeStreak(current, ok)
+            if (next != current) p.edit().putInt(KEY_PROBE_FAILS, next).apply()
         }
     }
 
@@ -207,8 +212,10 @@ object ServiceHealth {
     /** Forget the streak. Called on a fresh bind (a new question) and when silence breaks (the
      *  window this measures has ended — invariant 33). */
     fun clearProbeStreak(context: Context) {
-        val p = prefs(context)
-        if (p.getInt(KEY_PROBE_FAILS, 0) != 0) p.edit().putInt(KEY_PROBE_FAILS, 0).apply()
+        synchronized(this) {
+            val p = prefs(context)
+            if (p.getInt(KEY_PROBE_FAILS, 0) != 0) p.edit().putInt(KEY_PROBE_FAILS, 0).apply()
+        }
     }
 
     /**

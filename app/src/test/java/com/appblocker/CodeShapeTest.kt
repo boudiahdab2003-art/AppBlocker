@@ -395,4 +395,47 @@ class CodeShapeTest {
             "StrictSnapshot.sessionFor(" in body,
         )
     }
+    // ---- invariant 40 ------------------------------------------------------------------------
+
+    /**
+     * **Nothing decides anything from the raw `userKeywords` or `schedules` fields.**
+     *
+     * The companion to invariant 39. Rules, the Strict session, the blocked words and the
+     * schedules all arrive on one `combine` flow, so all four are empty until it first emits —
+     * and empty is not an answer, it is "we have not been told". `activeKeywords()` and
+     * `activeSchedules()` fall back to the last known value for that window; reading the fields
+     * directly walks straight back into the hole.
+     *
+     * The allow-list is the places that legitimately touch the raw field: its declaration, the
+     * flow assigning it, the snapshot write, and the accessor itself.
+     */
+    @Test
+    fun `the block decision reads keywords and schedules through the accessors`() {
+        val text = source("service/BlockerAccessibilityService.kt").readText()
+
+        // The two places a decision is actually made from these fields. Named exactly, because a
+        // word-frequency scan over this file is hopeless: "schedules" appears in a dozen comments
+        // and a debug log, and a check that cries wolf gets widened until it means nothing.
+        assertTrue(
+            "the BlockInputs built in blockReason must pass schedules = activeSchedules(). " +
+                "Passing the raw field leaves every schedule unenforced from each bind until " +
+                "Room's first emission.",
+            "schedules = activeSchedules()," in text,
+        )
+        assertTrue(
+            "the word scanners must take their list from activeKeywords(). Reading userKeywords " +
+                "directly leaves keyword and site blocking off for that same window.",
+            "else activeKeywords()" in text,
+        )
+        assertEquals(
+            "both word scanners must go through activeKeywords(), not just one of them.",
+            2,
+            Regex("""else activeKeywords\(\)""").findAll(text).count(),
+        )
+        assertTrue(
+            "activeKeywords()/activeSchedules() must actually consult the snapshots, or they are " +
+                "just the raw fields under a longer name.",
+            "keywordSnapshot.toList()" in text && "schedules.ifEmpty { scheduleSnapshot }" in text,
+        )
+    }
 }

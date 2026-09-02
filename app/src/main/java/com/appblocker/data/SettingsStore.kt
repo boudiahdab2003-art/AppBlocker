@@ -505,7 +505,48 @@ object SettingsStore {
             KEY_STRICT_SNAPSHOT,
             "${value.realtimeStart}|${value.realtimeEnd}|${value.wallStart}|" +
                 "${value.wallEnd}|${value.bootCount}",
-        ).apply()
+        ).apply()
+
+    private const val KEY_INSTALL_ID = "install_id"
+
+    /**
+     * A random id for THIS install, minted once and never sent anywhere but his own tracker.
+     *
+     * On 2 Sep 2026 two installs were reporting from what looked like one phone — same model,
+     * same Android, same boot count — and nothing in a report could tell them apart. The two had
+     * very different histories (10 stoppages against 14, the worst 13 hours), so reading them as
+     * one phone got the picture wrong until the stoppage lists were compared by hand.
+     *
+     * Random, not derived from anything about the device or the owner: it needs to distinguish
+     * two installs, which is all it does.
+     */
+    internal fun installId(context: Context): String {
+        val p = prefs(context)
+        p.getString(KEY_INSTALL_ID, null)?.let { return it }
+        val fresh = java.util.UUID.randomUUID().toString().take(8)
+        p.edit().putString(KEY_INSTALL_ID, fresh).apply()
+        return fresh
+    }
+
+    private const val KEY_KEYWORD_SNAPSHOT = "keyword_snapshot"
+
+    /** The blocked words the watcher was last told about. Same window, same reason as
+     *  [blockedSnapshot] — they arrive on the same flow. */
+    internal fun keywordSnapshot(context: Context): Set<String> =
+        prefs(context).getStringSet(KEY_KEYWORD_SNAPSHOT, emptySet()) ?: emptySet()
+
+    internal fun setKeywordSnapshot(context: Context, value: Set<String>) =
+        prefs(context).edit().putStringSet(KEY_KEYWORD_SNAPSHOT, value).apply()
+
+    private const val KEY_SCHEDULE_SNAPSHOT = "schedule_snapshot"
+
+    /** The schedules the watcher was last told about. See [ScheduleSnapshot]. */
+    internal fun scheduleSnapshot(context: Context): List<Schedule> =
+        ScheduleSnapshot.decode(prefs(context).getString(KEY_SCHEDULE_SNAPSHOT, null))
+
+    internal fun setScheduleSnapshot(context: Context, value: List<Schedule>) =
+        prefs(context).edit()
+            .putString(KEY_SCHEDULE_SNAPSHOT, ScheduleSnapshot.encode(value)).apply()
 
     private const val KEY_GUARD_OFF_SWITCH = "guard_off_switch"
 

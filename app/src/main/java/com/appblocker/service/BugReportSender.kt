@@ -148,6 +148,13 @@ object BugReportSender {
         // written after it.
         field("outageNow") { OutageLog.isOpen(ctx).toString() }
         field("guard") { SettingsStore.guardOffSwitch(ctx).toString() }
+        // Which install this is. Two were reporting from what looked like one phone on 2 Sep
+        // 2026 and nothing could separate them; their histories were nothing alike.
+        field("installId") { SettingsStore.installId(ctx) }
+        // Read off the snapshot, which is a plain string in prefs — the live list lives in Room
+        // and this builder is synchronous. Nothing knew whether he uses schedules at all, which
+        // is the first thing worth knowing before spending anything on them.
+        field("scheduleCount") { SettingsStore.scheduleSnapshot(ctx).size.toString() }
         field("blocksToday") { AttemptCounter.summary(ctx).sumOf { it.today }.toString() }
         // The other half of "blocksToday": the spells where it declined to block. A report that
         // only ever carries successes cannot describe an under-block, which is the failure this
