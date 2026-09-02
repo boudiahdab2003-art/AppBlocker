@@ -195,10 +195,24 @@ object AiCoach {
     internal val COACH_CHAIN = ModelChain(
         name = "coach",
         models = listOf(
-            // Verified against the owner's key (Jul 2026): the 3.x "pro" ids 404, so they cost a
-            // probe and buy nothing. 2.5-pro stays first as the preference — when its quota
-            // refills the coach uses it again, and 429 now falls through to flash meanwhile.
-            "gemini-2.5-pro",
+            // ⚠️ Re-verified against the owner's own key through his relay, 2 Sep 2026, because
+            // the Jul 2026 note below had gone stale in the way that matters.
+            //
+            // `gemini-2.5-pro` now answers **404 - "no longer available to new users"**. Not
+            // quota: gone, permanently. It sat first in this chain, so every coach request spent
+            // a guaranteed round trip failing before falling through, and the owner has been
+            // getting flash-quality coaching while the code believed it was temporarily degraded
+            // from pro. The AI Coach is the intended paid feature, so "quietly second-best
+            // forever" is the worst shape this could have taken.
+            //
+            // `gemini-3.1-pro-preview` — the id Google's own 404 body names as the replacement —
+            // answers **429** on that key: exhausted free-tier quota, which means the model EXISTS
+            // and is served. That is exactly the case this chain was built for, and the 429
+            // fall-through below is what makes preferring it free: on a day with quota he gets
+            // pro, on a day without he gets what he gets today.
+            //
+            // The other 3.x pro ids (3.1-pro, 3-pro, 3.5-pro) still 404 and stay out.
+            "gemini-3.1-pro-preview",
             "gemini-3.5-flash",
             "gemini-2.5-flash",
         ),
