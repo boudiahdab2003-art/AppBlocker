@@ -363,4 +363,36 @@ class CodeShapeTest {
             "sendOrder(" in body,
         )
     }
+    // ---- invariant 39 ------------------------------------------------------------------------
+
+    /**
+     * **Everything the rules flow carries needs a fallback for the window before it emits.**
+     *
+     * `RuleSnapshot` closed that hole for app rules in v1.143 and the reasoning was written down
+     * carefully. It was never applied to the other three things arriving on the same `combine`
+     * flow — the Strict session, the blocked words, the schedules — so all three stayed empty
+     * for the same window, beside a file explaining exactly why empty is not an answer.
+     *
+     * The Strict session is the one that bit. `strictRemaining()` read five zeroed fields, so
+     * `SessionClock` returned 0 and Strict Mode was simply not enforced on every bind. On the
+     * owner's phone that is his main protection — his block log is mostly `why=strict` — and
+     * the 2 Sep 2026 reports show 67 revives in two days, each one reopening it.
+     *
+     * This is the third time the shape has recurred (invariant 11, RuleSnapshot, here). Grep for
+     * it rather than trusting the next reader to remember the file.
+     */
+    @Test
+    fun `strictRemaining consults the Strict snapshot`() {
+        val text = source("service/BlockerAccessibilityService.kt").readText()
+        val start = text.indexOf("    private fun strictRemaining()")
+        assertTrue("the service no longer has a strictRemaining() to check", start >= 0)
+        val tail = text.substring(start)
+        val body = tail.substringBefore(System.lineSeparator() + "    private fun ", tail)
+        assertTrue(
+            "strictRemaining must go through StrictSnapshot.sessionFor. Reading the five focus " +
+                "fields directly means Strict is unenforced from every bind until Room's first " +
+                "emission, and the report only ever counted that window, never closed it.",
+            "StrictSnapshot.sessionFor(" in body,
+        )
+    }
 }

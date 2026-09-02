@@ -58,6 +58,7 @@ import com.appblocker.data.ScheduleType
 import com.appblocker.data.ServiceHealth
 import com.appblocker.data.SessionClock
 import com.appblocker.data.RuleSnapshot
+import com.appblocker.data.StrictSnapshot
 import com.appblocker.data.SettingsStore
 import com.appblocker.data.SilenceLog
 import com.appblocker.data.StrictEdits
@@ -117,6 +118,7 @@ class BlockerAccessibilityService : AccessibilityService() {
     // update, revive, Second Space switch) enforces from the first event rather than from the
     // first emission.
     @Volatile private var blockedSnapshot: Set<String> = emptySet()
+    @Volatile private var strictSnapshot: StrictSnapshot.Session = StrictSnapshot.NONE
     // The armed danger-zone hour, or null. Held in memory so a block decision never costs a
     // prefs read; the deadline itself is what decides whether it is still running.
     @Volatile private var dangerZone: GuardedDeadline? = null
@@ -182,11 +184,24 @@ class BlockerAccessibilityService : AccessibilityService() {
     private fun updatePauseActive(): Boolean =
         updatePaused && strictRemaining() <= 0L
 
-    private fun strictRemaining(): Long =
-        SessionClock.remaining(
-            focusRealtimeStart, focusRealtimeEnd, focusWallStart, focusWallEnd,
-            focusBootCount, DeviceBoot.count(applicationContext),
+    private fun strictRemaining(): Long {
+        // Invariant 11 for the Strict session. Until the combine flow's first emission the five
+        // focus fields are zero, and zero here does not mean "no session" — it means "we have not
+        // been told yet". Read that way, Strict Mode was simply not enforced for the whole window,
+        // on a phone the 2 Sep 2026 reports show being revived 67 times in two days. RuleSnapshot
+        // closed exactly this hole for app rules and left this one open beside it.
+        val session = StrictSnapshot.sessionFor(
+            loaded = rulesLoaded,
+            live = StrictSnapshot.Session(
+                focusRealtimeStart, focusRealtimeEnd, focusWallStart, focusWallEnd, focusBootCount,
+            ),
+            snapshot = strictSnapshot,
         )
+        return SessionClock.remaining(
+            session.realtimeStart, session.realtimeEnd, session.wallStart, session.wallEnd,
+            session.bootCount, DeviceBoot.count(applicationContext),
+        )
+    }
 
     /**
      * The clock every in-memory timer in this service measures elapsed time against.
@@ -1037,6 +1052,8 @@ class BlockerAccessibilityService : AccessibilityService() {
         essentialPackages = findEssentialPackages(this)
         // Before the rule flow below has emitted anything. Cheap by design: one string set.
         blockedSnapshot = SettingsStore.blockedSnapshot(this)
+        // And the Strict session, for the same window and the same reason. Five numbers.
+        strictSnapshot = SettingsStore.strictSnapshot(this)
         unreadyCounted = false // one count per bind, and this is a bind
         // A fresh bind is a fresh question. Without this a streak left behind by a process that
         // died deaf would combine with a new `connected = true` and condemn a watcher that has
@@ -1105,6 +1122,14 @@ class BlockerAccessibilityService : AccessibilityService() {
             focusWallStart = focus?.startTimeMillis ?: 0L
             focusWallEnd = focus?.endTimeMillis ?: 0L
             focusBootCount = focus?.bootCount ?: -1
+            // Same fallback the rules get, written whenever it changes. Cheap: five numbers.
+            val strictNow = StrictSnapshot.Session(
+                focusRealtimeStart, focusRealtimeEnd, focusWallStart, focusWallEnd, focusBootCount,
+            )
+            if (strictNow != strictSnapshot) {
+                strictSnapshot = strictNow
+                runCatching { SettingsStore.setStrictSnapshot(applicationContext, strictNow) }
+            }
             // Arm a one-shot clear for when this session expires (fires immediately for a
             // session that already expired, e.g. while the phone was off). See the runnable.
             handler.removeCallbacks(focusClearRunnable)

@@ -481,6 +481,32 @@ object SettingsStore {
     internal fun setBlockedSnapshot(context: Context, value: Set<String>) =
         prefs(context).edit().putStringSet(KEY_BLOCKED_SNAPSHOT, value).apply()
 
+    private const val KEY_STRICT_SNAPSHOT = "strict_snapshot"
+
+    /**
+     * The last Strict session the watcher was told about, kept for the window before Room answers.
+     * See [StrictSnapshot] — the same fallback [blockedSnapshot] is, for the field that turned out
+     * to matter more on the owner's phone.
+     */
+    internal fun strictSnapshot(context: Context): StrictSnapshot.Session {
+        val raw = prefs(context).getString(KEY_STRICT_SNAPSHOT, null) ?: return StrictSnapshot.NONE
+        val p = raw.split('|')
+        if (p.size != 5) return StrictSnapshot.NONE
+        return runCatching {
+            StrictSnapshot.Session(
+                realtimeStart = p[0].toLong(), realtimeEnd = p[1].toLong(),
+                wallStart = p[2].toLong(), wallEnd = p[3].toLong(), bootCount = p[4].toInt(),
+            )
+        }.getOrDefault(StrictSnapshot.NONE)
+    }
+
+    internal fun setStrictSnapshot(context: Context, value: StrictSnapshot.Session) =
+        prefs(context).edit().putString(
+            KEY_STRICT_SNAPSHOT,
+            "${value.realtimeStart}|${value.realtimeEnd}|${value.wallStart}|" +
+                "${value.wallEnd}|${value.bootCount}",
+        ).apply()
+
     private const val KEY_GUARD_OFF_SWITCH = "guard_off_switch"
 
     /**

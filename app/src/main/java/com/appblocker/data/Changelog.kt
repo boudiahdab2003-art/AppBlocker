@@ -13,6 +13,10 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.152", "Sep 2, 2026", "Strict Mode no longer has a gap when the app restarts", listOf(
+        "**When Android restarts the blocker, there was a moment before it remembered you were in Strict Mode — and in that moment Strict was not enforced.** The app reads your settings from its database, and for the fraction of a second before the answer arrives it was treating “I have not been told yet” as “nothing is switched on”. Your blocked apps were already protected through that gap. Strict was not, and Strict is what raises most of your blocks.",
+        "**It matters because of how often your phone restarts the app** — your last reports show it happening 67 times in two days, and every one of those reopened the gap. The app now keeps its own note of the Strict session and reads that in the meantime. A stale note can only ever block *more*, never less, and it cannot bring back a session that has genuinely ended.",
+    )),
     VersionLog("1.151", "Sep 2, 2026", "Your newest reports stop queueing behind old ones", listOf(
         "**The report about what happened this morning no longer waits behind last week.** There is a limit on how many reports go out in a day, so it matters which end of the queue they come from — and it was taking the oldest first. Twelve week-old reports went out this morning and eleven stayed waiting, including every one describing the stoppage you had just watched happen. Newest first now. Nothing is lost either way; what does not fit today goes tomorrow.",
     )),
