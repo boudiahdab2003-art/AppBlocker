@@ -13,7 +13,7 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
-    VersionLog("1.153", "Sep 2, 2026", "Finding out what actually gets blocking back", listOf(
+    VersionLog("1.153", "Sep 3, 2026", "Finding out what actually gets blocking back", listOf(
         "**This is the start of the real fix — the one for blocking stopping in the first place.** Everything so far has been about the app telling the truth. This is about the thing you actually notice. It is not the fix yet: it is the two measurements the fix has to be built on, because guessing here would cost a week and probably be wrong.",
         "**The app does already try to repair itself — and it has been reporting perfect success while you lost hours of blocking.** It nudges the system 67 times in two days and counted every one as a win, because “win” only meant the nudge did not throw an error. Nothing ever checked whether the app started receiving anything afterwards. Now it waits a minute and asks exactly that. If it turns out the nudge does nothing, that is the most useful thing I could learn.",
         "**And a stoppage now records what ended it.** Until now the log said blocking came back but never what brought it back. If it turns out it comes back only when you open the app, then every hour you do not is an hour unprotected — and that is a completely different fix from one where it recovers on its own. I would rather find out than assume.",
