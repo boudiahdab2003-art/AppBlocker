@@ -13,6 +13,10 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.154", "Sep 3, 2026", "Telling your two Spaces apart", listOf(
+        "**Reports now say which Space they came from, and that changes what your numbers mean.** You have AppBlocker in both Spaces, and until now nothing in a report could tell them apart — same phone model, same Android, even the same restart count. So I have been reading two different installations as one phone for two days.",
+        "**It probably means the worst number I showed you was not real.** A Space you are not in is suspended by the phone, so the copy living there records long stretches of “not blocking” that are not failures at all — nothing was running because nothing needed to be. The thirteen-hour stoppage that looked alarming is most likely the Space you were not using. I would rather correct that than let it stand.",
+    )),
     VersionLog("1.153", "Sep 3, 2026", "Finding out what actually gets blocking back", listOf(
         "**This is the start of the real fix — the one for blocking stopping in the first place.** Everything so far has been about the app telling the truth. This is about the thing you actually notice. It is not the fix yet: it is the two measurements the fix has to be built on, because guessing here would cost a week and probably be wrong.",
         "**The app does already try to repair itself — and it has been reporting perfect success while you lost hours of blocking.** It nudges the system 67 times in two days and counted every one as a win, because “win” only meant the nudge did not throw an error. Nothing ever checked whether the app started receiving anything afterwards. Now it waits a minute and asks exactly that. If it turns out the nudge does nothing, that is the most useful thing I could learn.",

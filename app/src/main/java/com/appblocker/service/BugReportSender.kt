@@ -150,7 +150,20 @@ object BugReportSender {
         field("guard") { SettingsStore.guardOffSwitch(ctx).toString() }
         // Which install this is. Two were reporting from what looked like one phone on 2 Sep
         // 2026 and nothing could separate them; their histories were nothing alike.
-        field("installId") { SettingsStore.installId(ctx) }
+        field("installId") { SettingsStore.installId(ctx) }
+        // ⚠️ **Which Xiaomi Space this copy lives in.** He confirmed on 3 Sep 2026 that the
+        // second install is Second Space, not a second phone — and the two had been read as one
+        // device for two days, because model, Android version and boot count are all identical
+        // across spaces.
+        //
+        // It matters far more than a label. A space that is not the active one is SUSPENDED, so
+        // the copy living there records long "outages" that are not failures of blocking at all;
+        // the 13-hour stoppage that looked alarming is most likely a space he simply was not in.
+        // Reading those next to the active space's overstates the problem and hides the real one.
+        //
+        // Android encodes the user id in the UID: uid / 100000 is 0 for the owner and 10, 11 …
+        // for the spaces after it. No permission, no reflection, no API level to guard.
+        field("space") { (android.os.Process.myUid() / 100_000).toString() }
         // Read off the snapshot, which is a plain string in prefs — the live list lives in Room
         // and this builder is synchronous. Nothing knew whether he uses schedules at all, which
         // is the first thing worth knowing before spending anything on them.
