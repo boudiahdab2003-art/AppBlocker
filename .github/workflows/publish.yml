@@ -200,7 +200,16 @@ jobs:
           git add app/build.gradle.kts CHANGELOG.md
           git commit -m "Release $tag"
           git tag "$tag"
-          git push origin "HEAD:${{ github.ref_name }}"
+          # ⚠️ THE TAG GOES FIRST, and the branch push is a separate step at the end.
+          #
+          # On 3 Sep 2026 this pushed the branch first. Someone pushed to master during the
+          # ten-minute run, the branch push was rejected, `set -e` ended the step, and the
+          # release step never ran — discarding a built, signed, verified APK over bookkeeping.
+          # The release needs only the tag, so nothing that can be lost should happen before it.
+          #
+          # And the tag is pushed BEFORE any rebase, deliberately: rebasing first would move it
+          # onto a tree carrying commits this APK was never built from — a tag that lies about
+          # its own contents. The bump runs before the build, so this commit IS what shipped.
           git push origin "$tag"
 
       - name: Publish GitHub release
@@ -211,3 +220,26 @@ jobs:
           gh release create "$tag" AppBlocker.apk \
             --repo "${{ github.repository }}" -t "AppBlocker $tag" -n "$NOTE"
           echo "Release $tag is live: https://github.com/${{ github.repository }}/releases/latest"
+
+      # Last, because it is the only thing here that another push can defeat, and by now the
+      # release exists whatever happens. Rebased so an unrelated commit landing mid-run is
+      # absorbed instead of fatal — that is the ordinary case, not a conflict.
+      #
+      # ⚠️ Still fails the job if it cannot land: master would keep the old version, so the
+      # next run would compute this same version and collide on an existing tag. A red job here
+      # means "the release shipped, now fast-forward master by hand" — not "the release failed".
+      - name: Push the version bump to master
+        run: |
+          tag="${{ steps.bump.outputs.tag }}"
+          branch="${{ github.ref_name }}"
+          # No `set -e`: every failure here has to reach the message below, because the
+          # message is the whole point — the release is already out and the reader needs to
+          # know this is bookkeeping, not a failed release.
+          if git pull --rebase origin "$branch" && git push origin "HEAD:$branch"; then
+            echo "Version bump pushed to $branch."
+            exit 0
+          fi
+          echo "::error::Release $tag IS PUBLISHED. Only the version bump failed to reach
+          $branch. Fast-forward it by hand before the next release, or that run will compute
+          $tag again and collide on an existing tag."
+          exit 1
