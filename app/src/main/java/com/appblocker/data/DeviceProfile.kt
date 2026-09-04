@@ -52,6 +52,26 @@ import com.appblocker.service.findRealBrowserPackages
  */
 object DeviceProfile {
 
+    /**
+     * "there are none", written once.
+     *
+     * It was four literals here and a fifth in [BugReport], where the report decides whether a row
+     * is worth acting on — so a change to the wording would silently stop that check matching and
+     * the report would start naming a fault the phone does not have. Same reason the "row is bad"
+     * rule is one function.
+     */
+    const val NONE = "(none)"
+
+    /**
+     * A lookup that resolved nowhere — the value, written once.
+     *
+     * Produced here for two rows and matched in [BugReport], which decides from `keepAlive` whether
+     * the whole profile counts as healthy and titles the issue accordingly. Two producers and a
+     * consumer, all spelling the same string by hand: reword one and the report goes on saying
+     * "profile OK" for a phone whose keep-alive button goes nowhere.
+     */
+    const val UNRESOLVED = "NONE RESOLVED"
+
     /** The `where` tag that marks a report as a profile rather than a fault. */
     const val WHERE = BugReport.PROFILE_WHERE
 
@@ -132,7 +152,7 @@ object DeviceProfile {
         buildMap {
             put("brand", advice.brand.ifBlank { "(unrecognised — generic advice)" })
             put("uninstallHandler", handler ?: "(did not resolve)")
-            put("accessibilityScreen", accessibilityScreen(context) ?: "NONE RESOLVED")
+            put("accessibilityScreen", accessibilityScreen(context) ?: UNRESOLVED)
             put(
                 "uninstallGuard",
                 uninstallGuardVerdict(handler, GuardPackages.INSTALLERS).name,
@@ -143,21 +163,21 @@ object DeviceProfile {
                     advice.deepLinks.isEmpty() -> "(no deep link by design)"
                     else -> keepAliveTarget(context, advice)
                         ?.let { "${it.first}/${it.second.substringAfterLast('.')}" }
-                        ?: "NONE RESOLVED"
+                        ?: UNRESOLVED
                 },
             )
-            put("browsersKnown", browsers.sorted().joinToString().ifBlank { "(none)" })
+            put("browsersKnown", browsers.sorted().joinToString().ifBlank { NONE })
             put(
                 "browsersClaimedReadable",
                 browsers.filter { it in KNOWN_READABLE_BROWSERS }.sorted()
-                    .joinToString().ifBlank { "(none)" },
+                    .joinToString().ifBlank { NONE },
             )
             // The interesting one: a browser we claim we can read and never have. This is where
             // the Mi Browser bug lived for months, and it is invisible from anywhere else.
             put(
                 "browsersClaimUnproven",
                 browsers.filter { it in KNOWN_READABLE_BROWSERS && it !in confirmed }.sorted()
-                    .joinToString().ifBlank { "(none)" },
+                    .joinToString().ifBlank { NONE },
             )
         }
     }.getOrDefault(emptyMap())

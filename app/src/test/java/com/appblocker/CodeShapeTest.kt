@@ -502,6 +502,55 @@ class CodeShapeTest {
             offenders,
         )
     }
+    /**
+     * **Every profile key the report acts on must be one the phone actually produces.**
+     *
+     * `DeviceProfile` writes the rows with `put("keepAlive", ...)`; `BugReport` decides from
+     * `context["keepAlive"]` whether the phone is healthy, what to mark with a cross and what fix
+     * to print. The name is spelled by hand at both ends and nothing joins them, so a rename on
+     * the producing side does not break a build, does not throw, and does not empty the report --
+     * the row simply stops matching, every phone reads healthy, and the report that exists to
+     * catch a wrong guess about a phone becomes a report that can never catch one.
+     *
+     * A silent, permanent blindness is the worst failure this file guards against, and it is the
+     * one that leaves the least evidence.
+     */
+    @Test
+    fun `the report only acts on profile keys the device profile writes`() {
+        val produced = source("data/DeviceProfile.kt").readText()
+            .split("put(").drop(1)
+            .map { it.trimStart().removePrefix("\n").trim().substringBefore(",").trim() }
+            .filter { it.startsWith("\"") }
+            .map { it.trim('"') }
+            .toSet()
+        assertTrue(
+            "no put(\"key\", ...) rows found in DeviceProfile; this check is reading nothing",
+            produced.size >= 5,
+        )
+        val report = source("data/BugReport.kt").readText()
+        // The keys the report makes a DECISION from, not every string it happens to contain.
+        val consumed = (
+            Regex("""context\["(\w+)"\]""").findAll(report).map { it.groupValues[1] } +
+                Regex("""key == "(\w+)"""").findAll(report).map { it.groupValues[1] } +
+                Regex(""""(\w+)" in todo""").findAll(report).map { it.groupValues[1] }
+            ).toSet()
+        val profileish = consumed.filter { it in PROFILE_ONLY }
+        assertTrue("expected the report to read some profile rows", profileish.isNotEmpty())
+        val orphans = profileish.filterNot { it in produced }
+        assertEquals(
+            "these profile keys are read by BugReport and written by nothing in DeviceProfile, " +
+                "so the row silently stops matching and every phone reports healthy: $orphans",
+            emptyList<String>(),
+            orphans,
+        )
+    }
+
+    /** The profile rows the report reasons about, named here so the check above cannot drift. */
+    private val PROFILE_ONLY = setOf(
+        "uninstallGuard", "keepAlive", "browsersClaimUnproven", "uninstallHandler",
+        "accessibilityScreen", "brand", "browsersKnown", "browsersClaimedReadable",
+    )
+
     // ---- invariant 44 ------------------------------------------------------------------------
 
     /**

@@ -1669,9 +1669,16 @@ class BlockerAccessibilityService : AccessibilityService() {
             // "No reason" is only an answer once we have been told the rules. Before Room's first
             // emission it means "we do not know yet", and taking a live cover down on it is how a
             // Second Space switch used to uncover a blocked app (RuleSnapshot, invariant 11). The
-            // snapshot above usually answers, but it carries only HARD blocks — a schedule or a
-            // limit still reads as null here, so hold what is up and re-decide when the flow
-            // lands. Nothing is stranded: the ordinary re-check tick re-runs this.
+            // snapshot above usually answers, but it carries only HARD blocks, so hold what is up
+            // and re-decide when the flow lands. Nothing is stranded: the re-check tick re-runs this.
+            //
+            // ⚠️ **Schedules are no longer part of this gap** — `ScheduleSnapshot` closed that in
+            // v1.152, alongside Strict and the blocked words, and this comment went on naming them
+            // for two releases after it stopped being true. What is still open is a **daily limit
+            // or open-count** configured on a rule: those live on the Room row and the snapshot does
+            // not carry them, so for the moment between a bind and Room's first emission a
+            // limit-blocked app reads as unblocked. `unreadyDecisions` counts the window (once per
+            // bind, not once per decision), and it is the last thing left inside it.
             if (!rulesLoaded) {
                 // The window invariant 11's update is about, now counted rather than merely
                 // survived: a non-zero total here says a rebind on this phone really does make

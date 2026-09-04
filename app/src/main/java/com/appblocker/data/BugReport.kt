@@ -208,8 +208,10 @@ data class BugReport(
      * profile look broken and the flag would stop meaning anything within a week.
      */
     private val profileIsClean: Boolean
-        get() = context["uninstallGuard"] != UninstallGuardVerdict.UNRECOGNISED.name &&
-            context["keepAlive"] != "NONE RESOLVED"
+        // ⚠️ **The same rule the table marks with a cross and the advice acts on**, not a third
+        // copy of it. There were three, and only the table's was ever exercised — so a change to
+        // one could leave the issue titled "profile OK" above a row printed with a cross beside it.
+        get() = context.none { (k, v) -> profileRowIsBad(k, v) }
 
     /**
      * The issue body, in GitHub markdown.
@@ -452,24 +454,51 @@ data class BugReport(
         appendLine("| Android | SDK $androidSdk |")
         appendLine("| Version | $appVersion ($flavor) |")
         context.toSortedMap().forEach { (k, v) ->
-            val bad = (k == "uninstallGuard" && v == UninstallGuardVerdict.UNRECOGNISED.name) ||
-                (k == "keepAlive" && v == "NONE RESOLVED")
-            appendLine("| $k | " + (if (bad) "❌ `$v`" else "`$v`") + " |")
+            appendLine("| $k | " + (if (profileRowIsBad(k, v)) "❌ `$v`" else "`$v`") + " |")
         }
+        val todo = context.filter { (k, v) -> profileRowIsBad(k, v) }.keys
+        val unproven = context["browsersClaimUnproven"].orEmpty()
+            .takeIf { it.isNotBlank() && it != DeviceProfile.NONE }
         appendLine()
-        appendLine("### What to do about each row")
+        appendLine("### What to do about it")
         appendLine()
-        appendLine("- `uninstallGuard` **UNRECOGNISED** — Strict Mode cannot stop an uninstall on")
-        appendLine("  this phone. Add the `uninstallHandler` value to `GuardPackages.INSTALLERS`.")
-        appendLine("- `keepAlive` **NONE RESOLVED** — the keep-alive button opens the app's own")
-        appendLine("  settings page while its label promises this brand's battery screen. Add the")
-        appendLine("  real activity to this brand's `DeviceVendor` entry, and its package to")
-        appendLine("  `<queries>` in AndroidManifest.xml.")
-        appendLine("- `browsersClaimUnproven` — browsers we *claim* we can read the address bar in")
-        appendLine("  and never have on this phone. Not a fault by itself; it is where the Mi")
-        appendLine("  Browser bug lived for months, so it is where to look when a site block on")
-        appendLine("  this brand does nothing.")
+        // ⚠️ **Only the rows that are actually wrong.** This used to print all three pieces of
+        // guidance unconditionally, so a phone whose `uninstallGuard` read RECOGNISED was still
+        // told "UNRECOGNISED — Strict Mode cannot stop an uninstall on this phone", directly under
+        // a heading saying the phone was healthy. Every `profile OK` report contradicted itself,
+        // and profile reports are most of them.
+        if (todo.isEmpty() && unproven == null) {
+            appendLine("Nothing. Every guess this app makes about this phone is right — which is")
+            appendLine("the finding, and the only way that sentence ever gets written.")
+        }
+        if ("uninstallGuard" in todo) {
+            appendLine("- `uninstallGuard` **UNRECOGNISED** — Strict Mode cannot stop an uninstall on")
+            appendLine("  this phone. Add the `uninstallHandler` value to `GuardPackages.INSTALLERS`.")
+        }
+        if ("keepAlive" in todo) {
+            appendLine("- `keepAlive` **NONE RESOLVED** — the keep-alive button opens the app's own")
+            appendLine("  settings page while its label promises this brand's battery screen. Add the")
+            appendLine("  real activity to this brand's `DeviceVendor` entry, and its package to")
+            appendLine("  `<queries>` in AndroidManifest.xml.")
+        }
+        if (unproven != null) {
+            appendLine("- `browsersClaimUnproven` — browsers we *claim* we can read the address bar in")
+            appendLine("  and never have on this phone. Not a fault by itself; it is where the Mi")
+            appendLine("  Browser bug lived for months, so it is where to look when a site block on")
+            appendLine("  this brand does nothing.")
+        }
     }
+
+    /**
+     * **One rule for "this row is wrong", asked by both the table and the advice.**
+     *
+     * They were two copies, and only the table's was ever applied — so the guidance below it
+     * described failures the phone did not have. The same shape this file already carries a
+     * warning about: a rule stated twice is a rule that will disagree with itself.
+     */
+    private fun profileRowIsBad(key: String, value: String): Boolean =
+        (key == "uninstallGuard" && value == UninstallGuardVerdict.UNRECOGNISED.name) ||
+            (key == "keepAlive" && value == DeviceProfile.UNRESOLVED)
 
     private fun faultBody(): String = buildString {
         // `isNotBlank`, not `!= null`. The text box is optional now, so an empty note is the

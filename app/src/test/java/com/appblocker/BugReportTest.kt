@@ -1,6 +1,7 @@
 package com.appblocker
 
 import com.appblocker.data.BugReport
+import com.appblocker.data.DeviceProfile
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -966,5 +967,73 @@ class DeviceProfileReportTest {
         assertTrue(stored.isProfile)
         assertEquals(profile(clean).context, stored.context)
         assertTrue(stored.title().contains("profile OK"))
+    }
+
+    // --- the report must not contradict itself ------------------------------------------------
+
+    /**
+     * **A healthy profile is not told to go and fix things.**
+     *
+     * The "what to do" list used to be printed whole, unconditionally, under a heading saying the
+     * phone was healthy. Issue #82 on 4 Sep 2026 read `uninstallGuard: RECOGNISED` in its own
+     * table and then instructed the reader, two inches below, that it was `UNRECOGNISED` and that
+     * "Strict Mode cannot stop an uninstall on this phone". Every `profile OK` report contradicted
+     * itself that way, and profile reports are most of them.
+     *
+     * The cost is not the words. It is that a report which cries wolf on every healthy phone
+     * cannot be used to spot the unhealthy one, which is the entire reason it is filed.
+     */
+    @Test
+    fun `a healthy profile is not given advice about faults it does not have`() {
+        val body = profile(clean).body()
+        assertTrue(body.contains("profile OK") || profile(clean).title().contains("profile OK"))
+        assertFalse(body, body.contains("Strict Mode cannot stop an uninstall"))
+        assertFalse(body, body.contains("the keep-alive button opens the app's own"))
+    }
+
+    /** And a phone that really is wrong still gets told exactly what to do about it. */
+    @Test
+    fun `a broken row still prints its own fix and only its own`() {
+        val guard = profile(clean + ("uninstallGuard" to "UNRECOGNISED")).body()
+        assertTrue(guard.contains("Strict Mode cannot stop an uninstall"))
+        assertFalse(guard, guard.contains("the keep-alive button opens the app's own"))
+
+        val keep = profile(clean + ("keepAlive" to DeviceProfile.UNRESOLVED)).body()
+        assertTrue(keep.contains("the keep-alive button opens the app's own"))
+        assertFalse(keep, keep.contains("Strict Mode cannot stop an uninstall"))
+    }
+
+    /**
+     * **The title, the cross in the table and the advice all come from one rule.**
+     *
+     * They were three separate copies of "is this row wrong", and only the table's was ever under
+     * test. Three copies of a rule is three chances for the report to say two different things
+     * about the same phone, and this one is read months later by someone who cannot re-run it.
+     */
+    @Test
+    fun `the title never disagrees with the cross in the table`() {
+        listOf(
+            clean,
+            clean + ("uninstallGuard" to "UNRECOGNISED"),
+            clean + ("keepAlive" to DeviceProfile.UNRESOLVED),
+            clean + ("uninstallGuard" to "UNRECOGNISED") + ("keepAlive" to DeviceProfile.UNRESOLVED),
+        ).forEach { ctx ->
+            val r = profile(ctx)
+            val marked = r.body().lines().any { it.startsWith("|") && it.contains("❌") }
+            val titledBad = r.title().contains("something is wrong")
+            assertEquals("$ctx titled bad=$titledBad but marked=$marked", titledBad, marked)
+        }
+    }
+
+    /**
+     * ⚠️ "there are none" is one string, produced in `DeviceProfile` and matched here. Spelled by
+     * hand in both places, a reworded producer would silently start printing browser advice for
+     * every phone that has nothing to report.
+     */
+    @Test
+    fun `no unproven browser claim means no browser advice`() {
+        val none = profile(clean + ("browsersClaimUnproven" to DeviceProfile.NONE)).body()
+        assertFalse(none, none.contains("browsers we *claim* we can read"))
+        assertTrue(profile(clean).body().contains("browsers we *claim* we can read"))
     }
 }
