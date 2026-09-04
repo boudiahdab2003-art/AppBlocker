@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.155
+- The reports stop crying wolf. Every manual update used to file a report that led with a red line saying an update pause was stuck and blocking could switch itself off - and nothing was wrong; the app raises that flag when it starts and clears it a moment later, and the report was written in the gap. A healthy phone was also being handed a list of repairs it did not need, printed under its own table saying those exact things were fine. Whether a row counts as a problem was decided in three separate places and only one was ever checked; now there is one, and the build fails if the title and the table can ever disagree. Nothing about blocking itself changed.
+
 ## v1.154
 - The stoppages were shorter than I told you. Nothing in the app was watching for the moment blocking came back - it waited for a background check that your phone throttles heavily, so the time you were shown was the real stoppage plus however long it took something to look. The blocker now stops its own clock the instant it is reconnected, or the instant it is spoken to again. Also: five measurements added over the last two releases were being dropped at the last step before sending, including whether the app's own self-repair does anything at all.
 
