@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.154
+- The stoppages were shorter than I told you. Nothing in the app was watching for the moment blocking came back - it waited for a background check that your phone throttles heavily, so the time you were shown was the real stoppage plus however long it took something to look. The blocker now stops its own clock the instant it is reconnected, or the instant it is spoken to again. Also: five measurements added over the last two releases were being dropped at the last step before sending, including whether the app's own self-repair does anything at all.
+
 ## v1.153
 - The blocker comes back on its own
 
