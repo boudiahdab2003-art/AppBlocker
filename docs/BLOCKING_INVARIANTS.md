@@ -784,6 +784,40 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     something it could go and ask?**
 
 
+44. **The thing that knows a fault is over must be what ends it.** `OutageLog.end` had exactly one
+    caller, `ProtectionWatchdog.checkAndNotify`, and that had six of its own — boot, the worker,
+    the alarm, the notification listener, the tile, the app's resume. **Not one of them was the
+    watcher.** So an episode stayed open until an *outside* observer happened to run, and all of
+    those but the 25-minute alarm are WorkManager jobs — including `scheduleStalledRepeat`, the
+    five-minute re-check — on a phone reporting `workerSilent: 140` and climbing.
+
+    `outageMin` was therefore not how long blocking was down. It was **how long until something
+    noticed it was back**, and the difference went into the total the owner is shown: three
+    episodes on 4 Sep 2026 ran 15, 36 and 55 minutes against detection times of 2, 7 and 10.
+
+    `onServiceConnected` firing *is* blocking coming back, known instantly and for free, and the
+    heartbeat hearing an event again *is* the end of a deaf spell. Both now close the episode
+    themselves (`ProtectionWatchdog.noteWatcherAlive`, `EndedBy.REBOUND` / `HEARTBEAT`).
+
+    ⚠️ **It must not re-read the state to confirm what it already knows.** `checkAndNotify` would
+    land on the `bindPending` grace — the process is seconds old at exactly that moment — and
+    defer to a `scheduleRecheckSoon` WorkManager job, which is the throttled path the change
+    exists to stop depending on. Same family as invariant 11: *do not ask an async source for a
+    fact you are already holding.*
+
+    **The standing question: when this ends, what is the first thing that knows — and is that what
+    stops the clock?** An instrument whose resolution is coarser than the thing it measures
+    reports its own latency as the phenomenon, and it looks like data the whole time.
+
+    Two shapes to grep for: **a duration whose end is decided by a poller**, and **a measurement
+    taken by everything except the component that owns the fact.**
+
+⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
+`CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
+during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused
+number.
+
+
 ## Device quirks these invariants exist for
 
 - Gesture-nav Home on HyperOS often emits **no accessibility event at all**, so the foreground

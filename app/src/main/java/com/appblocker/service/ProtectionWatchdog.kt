@@ -192,6 +192,33 @@ object ProtectionWatchdog {
     }
 
     /**
+     * **The watcher itself saying blocking is back**, for the two moments it knows first and for
+     * free: Android rebinding it ([OutageLog.EndedBy.REBOUND]) and an event arriving after a
+     * spell of silence ([OutageLog.EndedBy.HEARTBEAT]).
+     *
+     * Until this existed, [OutageLog.end] had exactly one caller — [checkAndNotify] — and
+     * [checkAndNotify] had six, none of them the service. So an episode stayed open until an
+     * *outside* observer happened to run, and every one of those except the 25-minute alarm is a
+     * WorkManager job, including the five-minute stalled repeat, on a phone reporting
+     * `workerSilent: 140` and climbing. `outageMin` was therefore not how long blocking was down;
+     * it was how long until something noticed it was back, and the difference went into the total
+     * he is shown. Three episodes on 4 Sep 2026 ran 15, 36 and 55 minutes against detection times
+     * of 2, 7 and 10.
+     *
+     * ⚠️ **It deliberately does not call [read].** `onServiceConnected` *is* the proof that the
+     * watcher is bound — there is nothing to work out. Reading would land on the `bindPending`
+     * grace, because the process is seconds old at exactly that moment, and defer to
+     * [ProtectionScheduler.scheduleRecheckSoon] — a WorkManager job, which is the throttled path
+     * this whole entry point exists to stop depending on. Do not re-derive a fact already held.
+     *
+     * Free when nothing is wrong: [OutageLog.end] returns null unless an episode is open, and
+     * [endOpenOutage]'s other work is cancelling things that were never scheduled.
+     */
+    fun noteWatcherAlive(context: Context, calledBy: String) = guarded(context, "watcherAlive") {
+        endOpenOutage(context, ProtectionState.OK, calledBy)
+    }
+
+    /**
      * Closes an open outage episode and takes the stalled alert down with it. Called on **every**
      * exit from STALLED, not only the one that means blocking is back.
      *

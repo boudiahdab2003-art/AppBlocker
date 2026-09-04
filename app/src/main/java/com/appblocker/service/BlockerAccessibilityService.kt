@@ -55,6 +55,7 @@ import com.appblocker.data.OwnUi
 import com.appblocker.data.QuickSession
 import com.appblocker.data.Schedule
 import com.appblocker.data.ScheduleType
+import com.appblocker.data.OutageLog
 import com.appblocker.data.ServiceHealth
 import com.appblocker.data.SessionClock
 import com.appblocker.data.RuleSnapshot
@@ -615,6 +616,24 @@ class BlockerAccessibilityService : AccessibilityService() {
                 }
                 if (silence < REVIVE_AFTER_SILENCE_MS) {
                     ServiceHealth.clearProbeStreak(applicationContext)
+                    // The end of a deaf spell, told by the only thing that can see it.
+                    // `aliveButDeaf` outages never unbind, so onServiceConnected cannot fire and
+                    // nothing in this process closed the episode at all -- it stayed open until an
+                    // outside check happened to run, and all but one of those are WorkManager
+                    // jobs on a phone reporting `workerSilent: 140`. The duration that reached
+                    // the report was the outage plus the wait for somebody to look.
+                    //
+                    // This loop is a Handler.postDelayed inside our own process: the one timer
+                    // here that throttling cannot reach. Events coming back is the evidence, and
+                    // this is the edge where that becomes true.
+                    if (silenceSpellOpen) {
+                        silenceSpellOpen = false
+                        ProtectionWatchdog.noteWatcherAlive(
+                            applicationContext, OutageLog.EndedBy.HEARTBEAT,
+                        )
+                    }
+                } else {
+                    silenceSpellOpen = true
                 }
                 if (silence >= REVIVE_AFTER_SILENCE_MS &&
                     stopwatchNow() - lastReviveAttemptAt >= REVIVE_AFTER_SILENCE_MS
@@ -708,6 +727,19 @@ class BlockerAccessibilityService : AccessibilityService() {
     @Volatile private var reviveVerifyDueAt = 0L
     @Volatile private var reviveEventMark = 0L
     @Volatile private var reviveVerifyGiveUpAt = 0L
+
+    /**
+     * **Is a spell of silence currently open?** Set the moment a heartbeat tick finds nothing has
+     * arrived for [REVIVE_AFTER_SILENCE_MS], cleared by the first tick that finds events flowing
+     * again -- and it is that clearing edge, not the aliveness of this loop, that says the watcher
+     * is being spoken to. A deaf service runs its own timers perfectly well; only delivery is
+     * evidence, the same rule [ServiceHealth.recordReviveOutcome] is written to.
+     *
+     * In memory on purpose. It exists so the ordinary healthy tick does no work at all: without
+     * it, telling the watchdog "still fine" every three minutes would be a prefs read on a phone
+     * where nothing is wrong, for an answer that is almost always "nothing was open".
+     */
+    @Volatile private var silenceSpellOpen = false
 
     // Periodic re-check of the app the user is sitting in, so time-based conditions take
     // effect mid-use instead of only on the next app switch: a daily limit crossing, a time
@@ -1158,6 +1190,16 @@ class BlockerAccessibilityService : AccessibilityService() {
         // and a rebind is a free chance to repair that, right after the events most likely to
         // have broken it (a boot, an update, a space switch).
         runCatching { ProtectionScheduler.ensureAlarmScheduled(applicationContext) }
+        // **Blocking is back, and this line is the moment it happened.** Being here at all is the
+        // proof: Android has just bound the watcher. Everything else that could close the episode
+        // had to come looking -- and all of it but the 25-minute alarm is a WorkManager job, which
+        // this phone throttles hard -- so `outageMin` was measuring our own notice lag on top of
+        // the real stoppage. See ProtectionWatchdog.noteWatcherAlive for why it must not re-read
+        // the state instead: the process is seconds old here and would defer on the bind grace.
+        silenceSpellOpen = false
+        runCatching {
+            ProtectionWatchdog.noteWatcherAlive(applicationContext, OutageLog.EndedBy.REBOUND)
+        }
         // Restore unexpired keyword lockouts — a service rebind must not unlock an app early.
         // Filtered on the same reckoning that decides whether one is running, not on the wall
         // clock, or a clock change could drop a live lockout here instead of at the check.
@@ -3384,7 +3426,8 @@ class BlockerAccessibilityService : AccessibilityService() {
         /** Silence this long means the service may be bound but deaf, and is worth a nudge.
          *  Generous: a phone genuinely left alone produces no events either, and the nudge is
          *  only ever a re-post of state we already hold. */
-        private const val REVIVE_AFTER_SILENCE_MS = 3 * 60_000L
+        private const val REVIVE_AFTER_SILENCE_MS = 3 * 60_000L
+
         /**
          * How long a nudge gets to prove itself before the answer is recorded.
          *

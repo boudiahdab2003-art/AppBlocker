@@ -334,8 +334,10 @@ class OutageLogTest {
         )
         assertEquals(e, OutageLog.decode(OutageLog.encode(e)))
         assertTrue(e.render().contains("by=probe"))
-    }
-
+    }
+
+
+
     /**
      * **The version in a stoppage line is a BUILD number, and it is not the 1.x version.**
      *
@@ -406,4 +408,47 @@ class OutageLogTest {
             OutageLog.EndedBy.UNKNOWN,
             OutageLog.decode("$now|60000|60000|true|nothing|false|143|probe|telepathy")?.endedBy,
         )
+
+    /**
+     * **Every ending this app can record must decode back to itself.**
+     *
+     * `decode` maps any value not in `EndedBy.ALL` to `UNKNOWN`, which is right for a value some
+     * older build wrote and wrong for one we ship: adding a constant and forgetting the set is
+     * not a compile error, not a crash, and not visible in a report -- it is an episode that
+     * silently forgets how it ended, which is the single thing the field exists to record.
+     *
+     * The same trap as the sanitiser's allow-list, one layer down.
+     */
+    @Test fun everyEndingIsDecodable() {
+        val declared = OutageLog.EndedBy::class.java.declaredFields
+            .filter { it.type == String::class.java }
+            .mapNotNull { it.isAccessible = true; it.get(OutageLog.EndedBy) as? String }
+        assertTrue("no EndedBy constants found; this check is reading nothing", declared.size >= 5)
+        val missing = declared.filterNot { it in OutageLog.EndedBy.ALL }
+        assertEquals(
+            "these EndedBy values are declared but not in ALL, so an episode ending that way " +
+                "decodes as \"unknown\" and the ending is lost: $missing",
+            emptyList<String>(),
+            missing,
+        )
+    }
+
+    /**
+     * The watcher closing its own episode is the honest ending, and it has to survive the round
+     * trip like any other -- it is the one the next release's whole comparison rests on.
+     */
+    @Test fun theWatcherCanEndItsOwnOutage() {
+        val e = OutageLog.Episode(
+            startedAt = now, durationMs = 4 * minute, detectedAfterMs = 2 * minute,
+            aliveButDeaf = false, precededBy = OutageLog.Preceded.NOTHING, rebooted = false,
+            versionCode = 154, detectedBy = OutageLog.DetectedBy.UNBOUND,
+            endedBy = OutageLog.EndedBy.REBOUND,
+        )
+        assertEquals(OutageLog.EndedBy.REBOUND, OutageLog.decode(OutageLog.encode(e))?.endedBy)
+        assertTrue(e.render().contains("backBy=rebound"))
+        val deaf = e.copy(aliveButDeaf = true, endedBy = OutageLog.EndedBy.HEARTBEAT)
+        assertEquals(OutageLog.EndedBy.HEARTBEAT, OutageLog.decode(OutageLog.encode(deaf))?.endedBy)
+        assertTrue(deaf.render().contains("backBy=heard-again"))
+    }
 }
+

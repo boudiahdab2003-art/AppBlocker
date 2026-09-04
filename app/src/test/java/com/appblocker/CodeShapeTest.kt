@@ -259,6 +259,45 @@ class CodeShapeTest {
             stripped.isEmpty(),
         )
     }
+    /**
+     * **Every field the report builder writes must survive `sanitizeContext`.**
+     *
+     * The check above guards only the keys `dedupeKey` reads. The general rule was available when
+     * it was written and was not taken: a `field("x")` in `BugReportSender` whose name is on no
+     * allow-list is built correctly and then thrown away one step later — silently, with the
+     * report still arriving and still looking complete.
+     *
+     * It happened again immediately. `installId`, `space`, `scheduleCount`, `graceRecovers` and
+     * `revivesHelped` — the two fields that separate the Second Space install from the main one,
+     * and the two instruments the recovery investigation was waiting on — shipped in v1.152 and
+     * v1.153 and reached no report at all. Reports #63-#80 carry `revives: 92/0` and nothing to
+     * read it against. A release's worth of measurement produced no measurement, and the loss was
+     * only visible by counting rows in a table that looked full.
+     *
+     * A wrong key here is not a crash and not a visibly broken report; it is a number nobody
+     * collected, found weeks later. This covers the keys not yet written.
+     */
+    @Test
+    fun `every reported field survives the sanitiser`() {
+        val text = source("service/BugReportSender.kt").readText()
+        val written = text.split("field(\"").drop(1).map { it.substringBefore(Char(34)) }
+        assertTrue(
+            "Expected BugReportSender to write its fields through field(\"name\"). If that helper " +
+                "has been renamed, this check is reading nothing and must be rewritten rather " +
+                "than left passing.",
+            written.size > 20,
+        )
+        val allowed = BugReport.ALLOWED_CONTEXT_KEYS + BugReport.PROFILE_CONTEXT_KEYS
+        val stripped = written.filterNot { it in allowed }.distinct()
+        assertTrue(
+            "BugReportSender writes $stripped, which sanitizeContext strips before the report is " +
+                "sent. Nothing fails: the report still arrives and still looks complete, so the " +
+                "number is simply never collected. Add each key to ALLOWED_CONTEXT_KEYS with the " +
+                "reason it is safe to send — do not stop writing the field.",
+            stripped.isEmpty(),
+        )
+    }
+
     // ---- invariant 36 ------------------------------------------------------------------------
 
     /**
@@ -463,6 +502,69 @@ class CodeShapeTest {
             offenders,
         )
     }
+    // ---- invariant 44 ------------------------------------------------------------------------
+
+    /**
+     * **The watcher must close its own outage the moment Android binds it again.**
+     *
+     * `OutageLog.end` has one caller, `ProtectionWatchdog.checkAndNotify`, and `checkAndNotify`
+     * had six — the boot receiver, the worker, the alarm, the notification listener, the tile and
+     * the app's own resume. Not one of them was the watcher. So an episode stayed open until an
+     * *outside* observer happened to run, and every one of those but the 25-minute alarm is a
+     * WorkManager job, including the five-minute stalled repeat, on a phone reporting
+     * `workerSilent: 140` and climbing.
+     *
+     * `outageMin` was therefore not how long blocking was down. It was how long until something
+     * noticed it was back, and the difference went into the total the owner is shown: on
+     * 4 Sep 2026 three episodes ran 15, 36 and 55 minutes against detection times of 2, 7 and 10.
+     *
+     * `onServiceConnected` running IS blocking coming back. Take that line out and the app is
+     * back to guessing from the outside, silently, with every number still looking plausible.
+     */
+    @Test
+    fun `the watcher closes its own outage when it is bound again`() {
+        val text = source("service/BlockerAccessibilityService.kt").readText()
+        val connect = text.substringAfter("override fun onServiceConnected() {", "")
+        assertTrue("onServiceConnected is gone; this check is reading nothing", connect.isNotEmpty())
+        val body = connect.substringBefore("override fun ")
+        assertTrue(
+            "onServiceConnected must tell the watchdog blocking is back " +
+                "(ProtectionWatchdog.noteWatcherAlive with EndedBy.REBOUND). Without it the " +
+                "episode stays open until some WorkManager job happens to look, and every " +
+                "duration in the stoppage history is inflated by that wait.",
+            "noteWatcherAlive" in body && "EndedBy.REBOUND" in body,
+        )
+    }
+
+    /**
+     * **And every such call says which honest ending it is.**
+     *
+     * The point of the entry point is to separate durations the app measured itself from ones it
+     * inferred after the fact. A call that let the parameter fall to `unknown` would put an
+     * accurate duration in the same bucket as the guesses, which is worse than not measuring:
+     * the comparison the next release is judged on is exactly between those two buckets.
+     */
+    @Test
+    fun `every watcher-alive call names how the outage ended`() {
+        val calls = sourceTree()
+            .filter { it.name != "ProtectionWatchdog.kt" }
+            .flatMap { f ->
+                f.readText().split("noteWatcherAlive(").drop(1)
+                    .map { f.name to it.substringBefore(")").trim() }
+            }
+        assertTrue("nothing calls noteWatcherAlive; this check is reading nothing", calls.isNotEmpty())
+        val offenders = calls
+            .filterNot { (_, args) -> "EndedBy." in args && "EndedBy.UNKNOWN" !in args }
+            .map { (name, args) -> "$name: noteWatcherAlive($args)" }
+        assertEquals(
+            "these close an outage without saying how it ended, so a duration the app measured " +
+                "itself is filed with the ones it only inferred:" +
+                offenders.joinToString(System.lineSeparator(), System.lineSeparator()),
+            emptyList<String>(),
+            offenders,
+        )
+    }
+
     // ---- invariant 42 ------------------------------------------------------------------------
 
     /**

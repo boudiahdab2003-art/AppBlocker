@@ -348,6 +348,15 @@ data class BugReport(
         appendLine("recovered with nobody looking, **app-opened** means it waited for the app to be")
         appendLine("opened. That difference is the whole of the recovery question.")
         appendLine()
+        appendLine("⚠️ **`down=` does not mean the same thing on every line.** Only **rebound**")
+        appendLine("(the watcher was bound again) and **heard-again** (it started being sent events")
+        appendLine("again) are the app stopping its own clock at the moment blocking returned —")
+        appendLine("those durations are real. **background**, **app-opened**, **glanced** and")
+        appendLine("**boot** are something that came *looking*, mostly WorkManager jobs on a phone")
+        appendLine("that throttles them, so those durations are the stoppage PLUS however long")
+        appendLine("nothing happened to check. Read them as upper bounds and do not average the")
+        appendLine("two kinds together.")
+        appendLine()
         appendLine("⚠️ `build=` is the build NUMBER, and it is one ahead of the 1.x version in")
         appendLine("this report's own heading: build 150 is version 1.149. They are not the same")
         appendLine("number, and reading them as the same names the wrong release.")
@@ -552,6 +561,10 @@ data class BugReport(
             // What this phone is set up to block — counts and named settings only.
             "updatePaused",
             "ruleCount",
+            // How many schedules exist on this phone. A count, no times and no app names.
+            // Nothing knew whether the owner uses schedules at all, which is the first thing
+            // worth knowing before spending a release on them.
+            "scheduleCount",
             "lockouts",
             "browsersRead",
             "autoBlockNew",
@@ -569,6 +582,12 @@ data class BugReport(
             "learnedCount",
             "deafSpells",
             "lateSkips",
+            // The other half of `deafSpells`: how many of those silences the blocker came back
+            // from on its own. Read the two together or neither means anything — a climbing
+            // `deafSpells` beside a flat zero here says the booked return never fires and the
+            // v1.153 fix is decoration. A count of our own decisions; nothing about what was on
+            // screen when one was taken.
+            "graceRecovers",
             "unreadyDecisions",
             // How long blocks took to appear (BlockLatency) — a percentage, a total and a tail
             // count, and nothing about what was blocked. The report could describe every block
@@ -603,6 +622,17 @@ data class BugReport(
             "serviceOn",
             "protection",
             "guard",
+            // Which install this is: eight random characters, derived from nothing about the
+            // device or the owner. Two installs were reporting from what looked like one phone
+            // on 2 Sep 2026 and their histories were nothing alike; reading them as one phone
+            // got the picture wrong for two days.
+            "installId",
+            // Which Xiaomi Space this copy lives in (`uid / 100000`, 0 = the main space). A
+            // space that is not the active one is SUSPENDED, so the copy living there logs long
+            // stretches of "not blocking" that are not failures at all. Without this the two
+            // spaces' stoppages get read together, which both overstates the problem and hides
+            // the real one. A small integer, and the same one for every user of that space.
+            "space",
             "blocksToday",
             "adultPack",
             "scanEverywhere",
@@ -641,6 +671,12 @@ data class BugReport(
             // is a watcher that keeps going deaf while running, a flat zero alongside outages is
             // one that is being killed outright. Two of our own integers, nothing from the phone.
             "revives",
+            // "3/24" — nudges after which an event actually arrived, against nudges that
+            // demonstrably changed nothing. `revives` only ever counted whether the re-post
+            // threw, and read 67/0 on a phone losing hours of blocking; this is the number that
+            // says whether the app's only self-repair repairs anything. A quiet screen is not
+            // counted either way, so read it as "how often did it demonstrably work".
+            "revivesHelped",
             // How many times Android called onInterrupt on the watcher. Our own integer.
             "interrupts",
             // Foreground minutes since the watcher last saw anything, or `?` when usage access

@@ -133,10 +133,40 @@ object OutageLog {
         /** He pulled the shade or tapped the tile — present, but not in the app. */
         const val GLANCED = "glanced"
 
+        /**
+         * **Android rebound the watcher, and the watcher said so itself.** The end of a
+         * `deaf=false` outage is `onServiceConnected` firing, and that is the only observer that
+         * knows the moment it happens rather than discovering it later.
+         *
+         * Every other value on this list is something that had to come *looking*, and all but
+         * [BOOT] and the 25-minute alarm are WorkManager jobs — on a phone reporting
+         * `workerSilent: 140`. So a duration ending [BACKGROUND] or [APP_OPENED] is an upper
+         * bound made of the real outage plus however long nothing happened to check; one ending
+         * here is the real thing.
+         */
+        const val REBOUND = "rebound"
+
+        /**
+         * **The watcher was never gone — it started being spoken to again.** The `deaf=true`
+         * case, where no rebind happens because nothing unbound, so [REBOUND] can never fire and
+         * before this nothing in the process closed the episode at all.
+         *
+         * An event arriving is the only evidence that counts, the same rule
+         * `recordReviveOutcome` is written to: a service the framework has stopped talking to
+         * still runs its own timers, so aliveness proves nothing and only delivery does.
+         */
+        const val HEARTBEAT = "heard-again"
+
         /** An episode recorded before this field existed. Never guessed at. */
         const val UNKNOWN = "unknown"
 
-        val ALL = setOf(BACKGROUND, APP_OPENED, BOOT, GLANCED, UNKNOWN)
+        /**
+         * ⚠️ **Every constant above must be in here.** `decode` maps anything not on this set to
+         * [UNKNOWN], so a new ending left out is not a compile error and not a crash — it is an
+         * episode that silently forgets how it ended, which is the one thing this object exists
+         * to record. `everyEndingIsDecodable` fails the build on the omission.
+         */
+        val ALL = setOf(BACKGROUND, APP_OPENED, BOOT, GLANCED, REBOUND, HEARTBEAT, UNKNOWN)
     }
 
     object DetectedBy {
