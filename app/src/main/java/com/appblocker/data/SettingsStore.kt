@@ -222,8 +222,22 @@ object SettingsStore {
 
     fun setUpdatePausePending(context: Context, value: Boolean) =
         prefs(context).edit().putBoolean(KEY_UPDATE_PAUSE_PENDING, value)
+            // **When it was raised**, so a `pending` that is milliseconds old can be told from one
+            // that is stuck. `UpdatePause.resolvePendingPause` clears it asynchronously — it reads
+            // the Strict row out of Room first — and `MainActivity` files the profile report on the
+            // very next line of the same launch. So the report always won the race and every manual
+            // update filed "an update pause is half-cleared" as a fault, at the top of the list,
+            // for a state that is the machine working. Worse, it made the genuinely stuck case
+            // unreadable: both printed the same line.
+            .putLong(KEY_UPDATE_PAUSE_PENDING_AT, if (value) System.currentTimeMillis() else 0L)
             .remove("strict_clear_pending") // retired; an update no longer ends a Strict session
             .apply()
+
+    /** When [setUpdatePausePending] last raised the flag, or 0 if it is not raised. */
+    fun updatePausePendingAt(context: Context): Long =
+        prefs(context).getLong(KEY_UPDATE_PAUSE_PENDING_AT, 0L)
+
+    private const val KEY_UPDATE_PAUSE_PENDING_AT = "update_pause_pending_at"
 
     /** Both flags as one value, so a decision is made about the pair rather than about one of them. */
     fun updatePauseState(context: Context): UpdatePause.PauseState = UpdatePause.PauseState(
@@ -249,6 +263,13 @@ object SettingsStore {
         prefs(context).edit()
             .putBoolean(KEY_UPDATE_PAUSED, state.paused)
             .putBoolean(KEY_UPDATE_PAUSE_PENDING, state.pending)
+            // Moves with the flag it describes, in the same transaction, for the same reason the
+            // two flags do: a stamp left behind by a cleared `pending` would age into a fault
+            // report about a pause that no longer exists.
+            .putLong(
+                KEY_UPDATE_PAUSE_PENDING_AT,
+                if (state.pending) System.currentTimeMillis() else 0L,
+            )
             .remove("strict_clear_pending") // retired; an update no longer ends a Strict session
             .commit()
     }
@@ -505,8 +526,10 @@ object SettingsStore {
             KEY_STRICT_SNAPSHOT,
             "${value.realtimeStart}|${value.realtimeEnd}|${value.wallStart}|" +
                 "${value.wallEnd}|${value.bootCount}",
-        ).apply()
-
+        ).apply()
+
+
+
     private const val KEY_INSTALL_ID = "install_id"
 
     /**

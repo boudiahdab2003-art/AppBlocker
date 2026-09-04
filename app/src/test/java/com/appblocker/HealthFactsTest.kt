@@ -382,4 +382,55 @@ class HealthFactsTest {
                 .all { it.group == HealthFacts.Group.REPORTING },
         )
     }
+
+    // --- the update pause, which every update used to report as broken ------------------------
+
+    /**
+     * **A pause still being resolved is not a fault.**
+     *
+     * `UpdatePause.resolvePendingPause` clears `pending` from a coroutine that reads the Strict
+     * session out of Room, and `MainActivity` raises the flag in `onCreate` and files the profile
+     * report from `onResume` on the same launch. The report therefore won that race every time,
+     * so **every manual update produced "An update pause is half-cleared" as the top line of its
+     * own report** — for the state machine working correctly, on 4 Sep 2026 in issue #82.
+     *
+     * The cost is not the noise. It is that the genuinely stuck case — a `pending` nothing ever
+     * clears, which really does switch blocking off again on the next service connect — printed
+     * exactly the same sentence and could no longer be picked out.
+     */
+    @Test
+    fun `a pause that is still resolving is not reported as a fault`() {
+        val resolving = healthy.copy(updatePausePending = true, updatePausePendingMs = 40L)
+        assertTrue(problems(resolving).toString(), problems(resolving).isEmpty())
+    }
+
+    /** Past the resolve window nothing is going to clear it, and that is worth saying. */
+    @Test
+    fun `a pause that never resolved is still reported`() {
+        val stuck = healthy.copy(
+            updatePausePending = true,
+            updatePausePendingMs = HealthFacts.PAUSE_RESOLVE_GRACE_MS + 1,
+        )
+        assertTrue(problems(stuck).any { "half-cleared" in it })
+    }
+
+    /**
+     * ⚠️ **No stamp means it survived an install, not that it is new.** The stamp is written by the
+     * same call that raises the flag, so a raised flag without one was raised by a build that did
+     * not have it. Reading "unknown" as "fine" would retire this check for exactly the phone that
+     * already has the fault.
+     */
+    @Test
+    fun `a pause with no stamp at all counts as stuck`() {
+        val legacy = healthy.copy(updatePausePending = true, updatePausePendingMs = -1L)
+        assertTrue(problems(legacy).any { "half-cleared" in it })
+    }
+
+    /** The deliberate pause is unchanged: it is a state, not a fault, and it still speaks up. */
+    @Test
+    fun `a real pause after an update is still announced and is not called a fault`() {
+        val paused = healthy.copy(updatePaused = true, updatePausePendingMs = -1L)
+        assertTrue(HealthFacts.verdicts(paused).any { it.title.contains("paused after an update") })
+        assertTrue(problems(paused).toString(), problems(paused).isEmpty())
+    }
 }

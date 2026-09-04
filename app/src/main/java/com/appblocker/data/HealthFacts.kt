@@ -68,6 +68,20 @@ object HealthFacts {
         val processAgeMs: Long,
         val updatePaused: Boolean,
         val updatePausePending: Boolean,
+        /**
+         * How long [updatePausePending] has been raised, or 0 when it is not.
+         *
+         * The pause resolves asynchronously (it reads the Strict row out of Room first), so a
+         * pending that is milliseconds old is the state machine mid-step, not a fault -- and a
+         * report written on the same launch as the update always caught it there.
+         *
+         * ⚠️ **Defaults to -1, "no stamp", which counts as STUCK rather than as new** --
+         * the same sentinel `HealthReader.since` returns for a stamp that was never written. A
+         * flag raised without one was raised by a build that predates it, so it has survived an
+         * install; defaulting to 0 would have read that as "raised at the epoch"... and worse,
+         * would have made every caller that omits the argument silently healthy.
+         */
+        val updatePausePendingMs: Long = -1L,
         val foundDead: Int,
         val outageOpen: Boolean,
         val outageCount: Int,
@@ -112,6 +126,17 @@ object HealthFacts {
     const val QUICK_SHARE_TARGET = 80
 
     /**
+     * How long the update pause may sit `pending` before that is a finding.
+     *
+     * The resolve is a coroutine that reads the Strict session out of Room, and the profile report
+     * is filed from the same launch that raised the flag -- so the honest answer is "milliseconds",
+     * and a minute is generous by three orders of magnitude on purpose. What it must not do is
+     * stretch far enough to hide a `pending` that never resolves, because that one really does
+     * switch blocking off again on the next service connect.
+     */
+    const val PAUSE_RESOLVE_GRACE_MS = 60_000L
+
+    /**
      * The verdicts, most serious first.
      *
      * Order is load-bearing: a reader who stops after the first line should have read the worst
@@ -145,7 +170,21 @@ object HealthFacts {
         quietFact(r)?.let { add(it) }
         // `paused` and `pending` are two halves of one state machine, and the half-open case is a
         // real, silent, blocking-is-off condition that neither flag describes alone.
-        if (r.updatePaused || r.updatePausePending) {
+        // A `pending` still inside the resolve window is not a finding, the same rule `bindPending`
+        // already applies to STALLED: "we have not finished deciding yet" is not "something is
+        // wrong". Without this, every manual update filed a fault at the top of its own report --
+        // guaranteed, because `MainActivity` raises the flag in onCreate and files the profile
+        // report from onResume while the resolver is still on its way to Room. The genuinely stuck
+        // case is the one worth seeing, and it was wearing the same words.
+        //
+        // A pending with NO stamp counts as stuck, not as young: the stamp is written by the same
+        // call that raises the flag, so its absence means the flag was raised by a build that did
+        // not have it -- it has survived an install, which is exactly the case worth reporting.
+        // Reading "unknown" as "fine" would have quietly retired the check for the one phone that
+        // already had the fault.
+        val pauseStuck = r.updatePausePending &&
+            (r.updatePausePendingMs < 0L || r.updatePausePendingMs > PAUSE_RESOLVE_GRACE_MS)
+        if (r.updatePaused || pauseStuck) {
             add(
                 Fact(
                     if (r.updatePaused) "Blocking is paused after an update" else

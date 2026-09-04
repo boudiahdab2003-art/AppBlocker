@@ -58,6 +58,7 @@ object HealthReader {
                 ?: safe(0L) { SystemClock.elapsedRealtime() },
             updatePaused = safe(false) { SettingsStore.updatePaused(ctx) },
             updatePausePending = safe(false) { SettingsStore.updatePausePending(ctx) },
+            updatePausePendingMs = since(now) { SettingsStore.updatePausePendingAt(ctx) },
             foundDead = safe(0) { ServiceHealth.foundDeadCount(ctx) },
             outageOpen = safe(false) { OutageLog.isOpen(ctx) },
             outageCount = totals.count,
