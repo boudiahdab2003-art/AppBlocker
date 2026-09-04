@@ -13,6 +13,11 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.156", "Sep 4, 2026", "A report is never thrown away again", listOf(
+        "**There is a limit of twelve reports a day, and reports made after it was spent were being deleted rather than held.** I told you the opposite in the notes for 1.151 — “nothing is lost either way; what does not fit today goes tomorrow” — and the code that actually sends them says the same thing in its own comment. Both were wrong. The report was refused the moment it was created and there was no getting it back.",
+        "**It cost us today.** Two updates and a backlog spent the twelve, and the very first report from the version I built to answer the question we have been chasing all day — whether those long stoppages were real or were just me looking late — was thrown away instead of waiting until tomorrow.",
+        "**Now the limit only decides what goes out, never what gets kept.** Your phone holds the newest twenty and sends what it can each day. A limit is allowed to make you wait. It is not allowed to destroy the thing you were waiting for.",
+    )),
     VersionLog("1.155", "Sep 4, 2026", "The reports stop crying wolf", listOf(
         "**Your reports have been telling you things were broken when they were not, and I would rather they said nothing than said that.** Every time you update the app by hand, the report filed on that same launch led with a red line saying an update pause was stuck and blocking could switch itself off. Nothing was wrong. The app raises that flag when it starts and clears it a moment later after checking your database — and the report was written in the gap between the two, every single time.",
         "**The reason it matters is not the noise.** There is a real version of that fault, where the flag never clears and blocking genuinely does switch itself back off. It was printing the exact same sentence as the harmless one. So the warning worth reading was hidden behind a warning that appeared on every update. It now waits a minute before it says anything, and anything still stuck after that is real.",

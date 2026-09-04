@@ -3,6 +3,7 @@ package com.appblocker
 import com.appblocker.data.BugReport
 import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -550,6 +551,50 @@ class CodeShapeTest {
         "uninstallGuard", "keepAlive", "browsersClaimUnproven", "uninstallHandler",
         "accessibilityScreen", "brand", "browsersKnown", "browsersClaimedReadable",
     )
+
+    /**
+     * **The daily cap may delay a report. It may never refuse one.**
+     *
+     * `enqueue` used to return false when `remainingToday` was spent, so a report was destroyed at
+     * the door instead of being held — while `flush` already enforces the same cap per report on
+     * the way out, and its own comment promises "what does not go out stays queued for tomorrow,
+     * which is the intended cost". The changelog told the owner the same thing in his own words.
+     * Both were false.
+     *
+     * It cost exactly the measurement the day was spent building: on 4 Sep 2026 two releases and a
+     * backlog spent the twelve, and the first report from the build written to answer the open
+     * question was refused here and is gone. There is no recovering it — that is what makes this a
+     * check rather than a paragraph.
+     *
+     * A throttle may delay evidence. It may not delete it. The queue's own `MAX_PENDING` is what
+     * bounds growth, and it drops the oldest rather than the newest.
+     */
+    @Test
+    fun `the daily cap never refuses a report at the door`() {
+        val text = source("data/BugReportQueue.kt").readText()
+        val body = text.substringAfter("fun enqueue(", "").substringBefore("\n    }")
+        assertTrue("BugReportQueue no longer has an enqueue to check", body.isNotEmpty())
+        assertFalse(
+            "enqueue consults the daily cap, so a report created once the day's sends are spent " +
+                "is thrown away instead of waiting for tomorrow. The cap belongs in flush, which " +
+                "already applies it per report on the way out. Delete the check here.",
+            "remainingToday" in body || "MAX_PER_DAY" in body,
+        )
+    }
+
+    /** And the send path must keep applying it, or the cap stops existing altogether. */
+    @Test
+    fun `the daily cap is still applied when sending`() {
+        val text = source("service/BugReportSender.kt").readText()
+        val at = text.indexOf("BugReportQueue.sendOrder(")
+        assertTrue("flush no longer drains the queue in sendOrder; rewrite this check", at >= 0)
+        val loop = text.substring(at, minOf(text.length, at + 600))
+        assertTrue(
+            "the send loop must stop once remainingToday is spent, or removing the check from " +
+                "enqueue leaves no cap at all.",
+            "remainingToday" in loop,
+        )
+    }
 
     // ---- invariant 44 ------------------------------------------------------------------------
 

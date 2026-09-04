@@ -108,14 +108,28 @@ object BugReportQueue {
     }
 
     /**
-     * Queues a report unless it duplicates one already sent, or today's cap is spent.
+     * Queues a report unless it duplicates one already sent or one already waiting.
      * Returns false when it was dropped, for logging only — no caller should care.
+     *
+     * ⚠️ **[MAX_PER_DAY] is a sending limit and must never be an admission test.** This used to
+     * refuse the report outright when today's twelve were spent, so a report was **destroyed at
+     * the door** rather than held — while [BugReportSender.flush] already enforces the same cap
+     * per report, on the way out, and its own comment promises "what does not go out stays queued
+     * for tomorrow, which is the intended cost". The changelog told the owner the same thing:
+     * "nothing is lost either way; what does not fit today goes tomorrow."
+     *
+     * Both were false, and it cost the measurement the whole day was spent building: on
+     * 4 Sep 2026 two releases and a backlog spent the twelve, and every report after that —
+     * including the first one from the build written to answer the open question — was refused
+     * here and is gone. **A throttle may delay evidence. It may not delete it.**
+     *
+     * Nothing runs away: [MAX_PENDING] bounds the queue and drops the oldest, so a long capped
+     * spell keeps the twenty newest, which is the same reasoning that made sending newest-first.
      */
     fun enqueue(context: Context, report: BugReport): Boolean = runCatching {
         val p = prefs(context)
         val key = report.dedupeKey()
         if (key in sentKeys(context)) return false
-        if (remainingToday(context) <= 0) return false
 
         val pending = pending(context).toMutableList()
         // Same bug already waiting to go — don't stack copies while offline either.
