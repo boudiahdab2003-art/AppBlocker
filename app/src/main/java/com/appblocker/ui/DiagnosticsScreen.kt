@@ -312,6 +312,7 @@ private fun readSnapshot(context: Context): Snapshot {
     val declines = SilenceLog.get(context, SilenceLog.LATE_DECLINES)
     val recovers = SilenceLog.get(context, SilenceLog.GRACE_RECOVERS)
     val unready = SilenceLog.get(context, SilenceLog.UNREADY_DECISIONS)
+    val unreadyBlind = SilenceLog.get(context, SilenceLog.UNREADY_BLIND)
     val shortsShut = SilenceLog.get(context, SilenceLog.SHORTS_EXIT_CLOSED)
     val shortsBlind = SilenceLog.get(context, SilenceLog.SHORTS_EXIT_BLIND)
     val boot = DeviceBoot.count(context)
@@ -416,16 +417,26 @@ private fun readSnapshot(context: Context): Snapshot {
                 good = if (deaf.total == 0) true else null,
             ),
         )
-        if (declines.total > 0) {
-            add(
-                Fact(
-                    "Checks skipped in those spells: ${declines.today} today, ${declines.total} in total",
-                    "How many times it looked away during the spells above. A big number " +
-                        "against a small number of spells means one page you stayed on a while.",
-                    good = null,
-                ),
-            )
-        }
+        if (declines.total > 0) {
+
+            add(
+
+                Fact(
+
+                    "Checks skipped in those spells: ${declines.today} today, ${declines.total} in total",
+
+                    "How many times it looked away during the spells above. A big number " +
+
+                        "against a small number of spells means one page you stayed on a while.",
+
+                    good = null,
+
+                ),
+
+            )
+
+        }
+
         if (deaf.total > 0 || recovers.total > 0) {
             add(
                 Fact(
@@ -459,6 +470,21 @@ private fun readSnapshot(context: Context): Snapshot {
                 good = if (unready.total == 0) true else null,
             ),
         )
+        // ⚠️ This screen has always said the row above was survivable while the report called it
+        // a fault — two readings of one counter, and the wrong one was the one being sent home.
+        // They agree now, and the genuinely bad case gets a row of its own rather than being
+        // averaged into the ordinary one.
+        if (unreadyBlind.total > 0) {
+            add(
+                Fact(
+                    "Decisions made with nothing to go on: ${unreadyBlind.total}",
+                    "The blocker restarted, was asked about an app before its list had loaded, " +
+                        "and had no remembered copy either. Those are moments lost, not moments " +
+                        "survived.",
+                    good = false,
+                ),
+            )
+        }
         if (shortsShut.total > 0 || shortsBlind.total > 0) {
             add(
                 Fact(

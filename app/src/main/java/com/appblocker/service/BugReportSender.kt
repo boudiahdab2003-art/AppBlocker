@@ -150,7 +150,8 @@ object BugReportSender {
         field("guard") { SettingsStore.guardOffSwitch(ctx).toString() }
         // Which install this is. Two were reporting from what looked like one phone on 2 Sep
         // 2026 and nothing could separate them; their histories were nothing alike.
-        field("installId") { SettingsStore.installId(ctx) }
+        field("installId") { SettingsStore.installId(ctx) }
+
         // ⚠️ **Which Xiaomi Space this copy lives in.** He confirmed on 3 Sep 2026 that the
         // second install is Second Space, not a second phone — and the two had been read as one
         // device for two days, because model, Android version and boot count are all identical
@@ -217,6 +218,12 @@ object BugReportSender {
         }
         field("unreadyDecisions") {
             SilenceLog.get(ctx, SilenceLog.UNREADY_DECISIONS).total.toString()
+        }
+        // ⚠️ The half of `unreadyDecisions` that is actually a fault: the window was entered with
+        // an EMPTY snapshot, so "not blocked" was a shrug rather than an answer. Read the pair
+        // together — the first alone says only how often the watcher restarts.
+        field("unreadyBlind") {
+            SilenceLog.get(ctx, SilenceLog.UNREADY_BLIND).total.toString()
         }
         // "12 shut, 2 blind" — Shorts dismissals where the reel was confirmed closed before
         // leaving, against ones where it could not be confirmed and the walk pressed nothing.

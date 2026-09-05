@@ -618,6 +618,7 @@ data class BugReport(
             // screen when one was taken.
             "graceRecovers",
             "unreadyDecisions",
+            "unreadyBlind",
             // How long blocks took to appear (BlockLatency) — a percentage, a total and a tail
             // count, and nothing about what was blocked. The report could describe every block
             // this phone raised and not one thing about how fast any of them arrived, which is

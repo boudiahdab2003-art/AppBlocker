@@ -62,6 +62,47 @@ class HealthFactsTest {
         assertEquals(true, HealthFacts.verdicts(healthy).first().good)
     }
 
+    // --- the restart window: covered is not the same as blind ---------------------------------
+
+    /**
+     * **Entering the unready window is not a fault, and reporting it as one buried the real ones.**
+     *
+     * Every restart has a moment before Room answers, and this phone restarts around thirty times
+     * a day, so the count is never zero. Four snapshots answer inside that window. Until 5 Sep 2026
+     * the report marked the count `good = false` regardless — so "Decisions made before the block
+     * list had loaded: 13" led the *worst first* section of a report whose own conclusion was that
+     * the phone was healthy. The Diagnostics screen had said the honest thing all along, forty
+     * lines of a different file away, which is this project's most repeated bug shape.
+     */
+    @Test
+    fun `a restart window the saved rules covered is not a problem`() {
+        val covered = healthy.copy(unreadyDecisions = 13, unreadyBlind = 0)
+        assertTrue(problems(covered).toString(), problems(covered).isEmpty())
+        val fact = HealthFacts.verdicts(covered).first { "before the block list" in it.title }
+        assertEquals(null, fact.good)
+        assertTrue(fact.detail, "covered every one of them" in fact.detail)
+    }
+
+    /**
+     * The other half, which nothing could see before: the window was entered with an EMPTY
+     * snapshot, so "this app is not blocked" was a shrug. That one really is lost protection.
+     */
+    @Test
+    fun `a restart window with no saved rules to fall back on is a problem`() {
+        val blind = healthy.copy(unreadyDecisions = 13, unreadyBlind = 2)
+        assertTrue(problems(blind).any { "no rules and no saved copy" in it })
+        assertEquals(false, HealthFacts.verdicts(blind).first { "no saved copy" in it.title }.good)
+    }
+
+    /** The covered row must not claim a clean sweep while the blind row contradicts it two lines
+     *  above — the pair is read together or not at all. */
+    @Test
+    fun `the covered wording backs off when some of the window was blind`() {
+        val blind = healthy.copy(unreadyDecisions = 13, unreadyBlind = 2)
+        val fact = HealthFacts.verdicts(blind).first { "before the block list" in it.title }
+        assertFalse(fact.detail, "covered every one of them" in fact.detail)
+    }
+
     // --- the failure this app was blind to ---------------------------------------------------
 
     /**

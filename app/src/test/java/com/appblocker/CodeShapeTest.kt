@@ -733,4 +733,94 @@ class CodeShapeTest {
             offenders,
         )
     }
+
+    // ---- invariant 45 ------------------------------------------------------------------------
+
+    /**
+     * **The fallback the watcher enforces from must not be written only by the watcher.**
+     *
+     * Four snapshots defend the seconds between a bind and Room's first emission, and on
+     * 5 Sep 2026 all four were written from one place: the service's own collector. The watcher on
+     * the owner's phone dies around thirty times a day, so every rule changed while it was dead —
+     * including an app auto-blocked by `NewAppWatcher`, which does not run in the service at all —
+     * reached Room and nothing else. The next bind then enforced the previous state through the
+     * exact window the snapshot exists to cover.
+     *
+     * Same family as invariant 11 and the sanitiser check: a value built correctly in one place and
+     * silently absent one step later. The registration hangs off `BlockerDatabase.get` because that
+     * is the one door every writer already goes through, present and future.
+     */
+    @Test
+    fun `the pre-Room fallbacks are maintained from the database, not from the watcher`() {
+        // Comments stripped first. Proving this check could fail was what found that it could
+        // not: the registration was commented out and the check stayed green, because the words
+        // were still in the file. A check satisfied by a comment describing the thing is the same
+        // bug as the one it is guarding against.
+        val live = source("data/BlockerDatabase.kt").readText().lines()
+            .map { it.trim() }
+            .filterNot { it.startsWith("//") || it.startsWith("*") || it.startsWith("/*") }
+        assertTrue(
+            "BlockerDatabase.get must call Snapshots.start, or the snapshot is a side effect of " +
+                "watching and goes stale exactly when the watcher is not there to write it.",
+            live.any { "Snapshots.start(" in it },
+        )
+    }
+
+    /**
+     * **Every table a snapshot is derived from has to be a table the observer watches.**
+     *
+     * A fifth snapshot added without its table in `WATCHED` would be refreshed only while the
+     * service happens to be alive, which is the whole bug back again — and it would look correct,
+     * because the service still writes it. So the two lists are compared rather than trusted.
+     */
+    @Test
+    fun `every table a snapshot is read from is watched for changes`() {
+        val text = source("data/Snapshots.kt").readText()
+        val quote = Char(34)
+        val watched = text.substringAfter("WATCHED = arrayOf(").substringBefore(")")
+            .split(quote).filterIndexed { i, _ -> i % 2 == 1 }.toSet()
+        assertTrue("Snapshots.WATCHED could not be read", watched.isNotEmpty())
+
+        val daos = text.split("db.").drop(1)
+            .map { it.substringBefore("(") }
+            .filter { it.endsWith("Dao") && it.all { c -> c.isLetter() } }
+            .toSet()
+        assertTrue("Snapshots reads no DAO at all, so this check proves nothing", daos.isNotEmpty())
+
+        val missing = daos.mapNotNull { dao ->
+            val file = "data/" + dao.replaceFirstChar { c -> c.uppercaseChar() } + ".kt"
+            val table = source(file).readText().substringAfter("FROM ")
+                .takeWhile { c -> c.isLetterOrDigit() || c == '_' }
+            if (table.isNotEmpty() && table !in watched) "$dao -> $table" else null
+        }.sorted()
+
+        assertEquals(
+            "these tables feed a snapshot but are not in Snapshots.WATCHED, so a change to them " +
+                "would not refresh the fallback and the next restart would enforce stale rules: " +
+                missing,
+            emptyList<String>(),
+            missing,
+        )
+    }
+
+    /**
+     * **The blind counter has to be the blind case, or it is just a second copy of the other one.**
+     *
+     * `unreadyDecisions` counts entering the window and is ordinary; `unreadyBlind` counts entering
+     * it with an empty snapshot and is the only half that means blocking was lost. Recorded
+     * unconditionally the pair says the same thing twice, and the report goes back to leading with
+     * a fault on a healthy phone — which is the reading it was split up to end.
+     */
+    @Test
+    fun `the blind counter is only recorded when the snapshot is actually empty`() {
+        val text = source("service/BlockerAccessibilityService.kt").readText()
+        val at = text.indexOf("SilenceLog.UNREADY_BLIND")
+        assertTrue("UNREADY_BLIND is never recorded by the watcher", at > 0)
+        assertTrue(
+            "UNREADY_BLIND must sit behind blockedSnapshot.isEmpty(): recorded on every entry " +
+                "into the unready window it is a duplicate of unreadyDecisions, and the one " +
+                "number that says protection was actually lost stops meaning anything.",
+            "blockedSnapshot.isEmpty()" in text.substring(maxOf(0, at - 300), at),
+        )
+    }
 }

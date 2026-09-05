@@ -857,8 +857,11 @@ class BlockerAccessibilityService : AccessibilityService() {
      *
      * The window this closes is real and counted: `SilenceLog.UNREADY_DECISIONS` records decisions
      * taken before the rule flow emitted, and it is entered on every boot, every update, every
-     * Second Space switch and every revive. `blockedSnapshot` carries HARD blocks through it, so
-     * Quick Block survived; **a schedule or a daily limit did not**, and nothing re-asked afterwards.
+     * Second Space switch and every revive. When this was written `blockedSnapshot` carried HARD
+     * blocks through it and nothing else, so Quick Block survived and **a schedule did not** —
+     * `ScheduleSnapshot` has since closed that half (v1.152). What no snapshot can do is re-ask
+     * the question afterwards, which is this function's whole job and is still needed: a cover
+     * the snapshot could not raise has to be raised the moment Room finally answers.
      *
      * Two things had to be missing at once for that to be invisible. `handleAppBlock` returns
      * without a cover while `!rulesLoaded` (correctly — it does not know yet), and no re-check tick
@@ -1672,20 +1675,27 @@ class BlockerAccessibilityService : AccessibilityService() {
             // snapshot above usually answers, but it carries only HARD blocks, so hold what is up
             // and re-decide when the flow lands. Nothing is stranded: the re-check tick re-runs this.
             //
-            // ⚠️ **Schedules are no longer part of this gap** — `ScheduleSnapshot` closed that in
-            // v1.152, alongside Strict and the blocked words, and this comment went on naming them
-            // for two releases after it stopped being true. What is still open is a **daily limit
-            // or open-count** configured on a rule: those live on the Room row and the snapshot does
-            // not carry them, so for the moment between a bind and Room's first emission a
-            // limit-blocked app reads as unblocked. `unreadyDecisions` counts the window (once per
-            // bind, not once per decision), and it is the last thing left inside it.
+            // ⚠️ **Nothing configurable is left uncovered in this gap.** `ScheduleSnapshot`
+            // closed schedules in v1.152, alongside Strict and the blocked words, and this comment
+            // went on naming them for two releases after it stopped being true. It then named a
+            // daily limit or open-count instead, which was no truer: `BlockMode.LIMIT` is set by
+            // no screen in the app — the column is reserved for a milestone that has not shipped —
+            // so the snapshot restoring HARD cannot be dropping a limit the owner set.
+            //
+            // What IS still open is the snapshot being *empty* when the window opens, which is a
+            // different failure with a different fix ([Snapshots]) and its own counter below.
             if (!rulesLoaded) {
-                // The window invariant 11's update is about, now counted rather than merely
-                // survived: a non-zero total here says a rebind on this phone really does make
-                // decisions before Room has answered.
+                // Two counts, because they mean opposite things. Entering the window is ordinary
+                // on a phone that rebinds thirty times a day and says nothing about protection —
+                // the snapshot answers. Entering it with an EMPTY snapshot is the one that loses
+                // blocking, because then "not blocked" was never an answer. Counted once per bind,
+                // not once per decision.
                 if (!unreadyCounted) {
                     unreadyCounted = true
                     SilenceLog.record(applicationContext, SilenceLog.UNREADY_DECISIONS)
+                    if (blockedSnapshot.isEmpty()) {
+                        SilenceLog.record(applicationContext, SilenceLog.UNREADY_BLIND)
+                    }
                 }
                 if (overlay.isShowing) return
             }

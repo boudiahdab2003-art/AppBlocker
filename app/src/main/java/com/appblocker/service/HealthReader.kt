@@ -75,6 +75,7 @@ object HealthReader {
             deafSpells = safe(0) { SilenceLog.get(ctx, SilenceLog.DEAF_DISMISSALS).total },
             lateSkips = safe(0) { SilenceLog.get(ctx, SilenceLog.LATE_DECLINES).total },
             unreadyDecisions = safe(0) { SilenceLog.get(ctx, SilenceLog.UNREADY_DECISIONS).total },
+            unreadyBlind = safe(0) { SilenceLog.get(ctx, SilenceLog.UNREADY_BLIND).total },
             shortsBlind = safe(0) { SilenceLog.get(ctx, SilenceLog.SHORTS_EXIT_BLIND).total },
             queuedReports = safe(0) { BugReportQueue.pending(ctx).size },
             reportsLeftToday = safe(0) { BugReportQueue.remainingToday(ctx) },

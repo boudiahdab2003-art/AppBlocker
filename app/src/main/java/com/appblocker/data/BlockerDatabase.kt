@@ -130,6 +130,12 @@ abstract class BlockerDatabase : RoomDatabase() {
                     // Only wipe on a downgrade (installing an older APK) — never on upgrade.
                     .fallbackToDestructiveMigrationOnDowngrade()
                     .build().also { INSTANCE = it }
+            }.also {
+                // The fallbacks the watcher enforces from before Room answers are maintained from
+                // here, not from the watcher — see [Snapshots]. This is the one door every
+                // component goes through to reach these tables, which is what makes the guarantee
+                // hold for a writer nobody has written yet.
+                Snapshots.start(it, context)
             }
     }
 }

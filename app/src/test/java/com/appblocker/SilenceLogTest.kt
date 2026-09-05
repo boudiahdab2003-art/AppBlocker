@@ -47,8 +47,10 @@ class SilenceLogTest {
         // The diagnostics screen and the bug report read these counters by name, so KINDS is the
         // registry: a counter added without being listed is one nobody will ever read. The size is
         // hardcoded deliberately — it is what makes adding one an act rather than a line that
-        // slips in unsurfaced, and it did its job for the two Shorts-exit counters.
-        assertEquals(6, SilenceLog.KINDS.size)
+        // slips in unsurfaced, and it did its job for the two Shorts-exit counters and again for
+        // UNREADY_BLIND on 5 Sep 2026 — bumped only after checking the new counter is read by both
+        // the diagnostics screen and the report, which is the whole point of the registry.
+        assertEquals(7, SilenceLog.KINDS.size)
         assertEquals(SilenceLog.KINDS.toSet().size, SilenceLog.KINDS.size)
         assertTrue(SilenceLog.KINDS.all { it.isNotBlank() })
     }

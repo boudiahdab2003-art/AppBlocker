@@ -98,6 +98,9 @@ object HealthFacts {
         val deafSpells: Int,
         val lateSkips: Int,
         val unreadyDecisions: Int,
+        /** The half of [unreadyDecisions] that had no snapshot to answer from. Defaults to 0 so a
+         *  reading taken by an older caller cannot invent a fault. */
+        val unreadyBlind: Int = 0,
         val shortsBlind: Int,
         /** Reports written but not yet delivered, and how many more may be sent today. */
         val queuedReports: Int,
@@ -351,13 +354,35 @@ object HealthFacts {
                 ),
             )
         }
+        // ⚠️ Two facts, because the counter had been saying the wrong one. Entering the window
+        // is ordinary — a phone that rebinds thirty times a day enters it constantly and the
+        // saved copy of the rules answers every time — but it was reported as a failure, and on
+        // 5 Sep 2026 it sat at the top of "what looks wrong here" on a phone with nothing wrong
+        // with it. Only the blind half is a fault, and it is the one nobody could see.
+        if (r.unreadyBlind > 0) {
+            add(
+                Fact(
+                    "Decisions made with no rules and no saved copy: ${r.unreadyBlind}",
+                    "The blocker restarted, was asked about an app before the rules arrived, and " +
+                        "had no saved copy to fall back on. Those are the moments blocking is " +
+                        "genuinely off.",
+                    good = false,
+                    group = Group.SILENCE,
+                ),
+            )
+        }
         if (r.unreadyDecisions > 0) {
             add(
                 Fact(
                     "Decisions made before the block list had loaded: ${r.unreadyDecisions}",
-                    "Every restart has a moment before the rules arrive. A decision taken in it " +
-                        "is a decision taken without knowing what to block.",
-                    good = false,
+                    if (r.unreadyBlind > 0) {
+                        "Every restart has a moment before the rules arrive. The saved copy of " +
+                            "your rules covers it — except for the ones counted above."
+                    } else {
+                        "Every restart has a moment before the rules arrive. The saved copy of " +
+                            "your rules covered every one of them, so nothing was let through."
+                    },
+                    good = null,
                     group = Group.SILENCE,
                 ),
             )

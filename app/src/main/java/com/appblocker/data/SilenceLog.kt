@@ -51,9 +51,30 @@ object SilenceLog {
     const val LATE_DECLINES = "late_declines"
 
     /** Binds during which a blocking decision had to be made before the rules had loaded.
-     *  Non-zero means the window invariant 11's update is about is real on this phone. */
-    const val UNREADY_DECISIONS = "unready_decisions"
-
+     *  Non-zero means the window invariant 11's update is about is real on this phone.
+     *
+     *  ⚠️ **On its own this is a number, not a fault.** Four snapshots answer inside that window,
+     *  so entering it is ordinary on a phone whose watcher is restarted often. [UNREADY_BLIND] is
+     *  the half that is actually wrong. Reported as a failure until 5 Sep 2026, where it sat at
+     *  the top of "what looks wrong here" on a phone with nothing wrong with it. */
+    const val UNREADY_DECISIONS = "unready_decisions"
+
+    /**
+     * **Decisions taken in that window with no fallback to take them from.**
+     *
+     * [UNREADY_DECISIONS] counts entering the window; this counts entering it blind — `rules` had
+     * not arrived *and* [RuleSnapshot]'s stored copy was empty, so "this app is not blocked" was
+     * not an answer, it was a shrug. That is the only version of this window that loses blocking,
+     * and it is the one worth a red mark.
+     *
+     * Zero is the expected reading. A non-zero one means the snapshot is not surviving to the
+     * moment it is needed — check [Snapshots] first, since before 5 Sep 2026 the snapshot was
+     * written only while the watcher was alive.
+     */
+    const val UNREADY_BLIND = "unready_blind"
+
+
+
     /**
      * **Covers restored by the re-check booked when the grace turned one away.**
      *
@@ -82,7 +103,7 @@ object SilenceLog {
     const val SHORTS_EXIT_BLIND = "shorts_exit_blind"
 
     val KINDS = listOf(
-        DEAF_DISMISSALS, LATE_DECLINES, UNREADY_DECISIONS,
+        DEAF_DISMISSALS, LATE_DECLINES, UNREADY_DECISIONS, UNREADY_BLIND,
         SHORTS_EXIT_CLOSED, SHORTS_EXIT_BLIND, GRACE_RECOVERS,
     )
 

@@ -812,6 +812,32 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     Two shapes to grep for: **a duration whose end is decided by a poller**, and **a measurement
     taken by everything except the component that owns the fact.**
 
+45. **A fallback may not be written only by the component it is a fallback for.** Four snapshots
+    (`RuleSnapshot`, `StrictSnapshot`, the keyword set, `ScheduleSnapshot`) defend the window
+    between a bind and Room’s first emission, and every one of them was written from a single
+    place: the accessibility service’s own `combine` collector. The watcher on the owner’s phone
+    dies around thirty times a day, so anything he changed while it was dead — a newly blocked
+    app, a Strict session, a word — reached Room and nothing else, and the next bind enforced the
+    previous state through the exact window the snapshot exists to cover. `NewAppWatcher` and
+    `PackageInstallReceiver` write rules from outside the service entirely.
+
+    Fixed by `Snapshots`, registered from `BlockerDatabase.get` and driven by Room’s
+    `InvalidationTracker`: the snapshot is now a consequence of **writing**, not of watching, so
+    a future writer cannot forget it — there is nothing to remember. `CodeShapeTest` compares the
+    watched-table list against the tables the refresh actually reads, so a fifth snapshot cannot
+    be added quietly to the old shape.
+
+    **The standing question: if the component that writes this value is the one that fails, what
+    is left holding it?** Same family as invariant 11 and the report-sanitiser check — a value
+    built correctly in one place and silently absent one step later.
+
+    A second half of the same day’s finding, worth its own line: **a count of entering a
+    defended window is not a fault.** `unreadyDecisions` was reported `good = false` while the
+    Diagnostics screen, in a different file, called the same number "moments survived, not
+    moments lost" — the correct sibling forty lines away, again. The counter is now split:
+    `UNREADY_BLIND` (the window entered with an empty snapshot) is the fault; the plain count is
+    a number.
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused
