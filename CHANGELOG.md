@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.157
+- The saved copy of your rules stops going stale, the unprotected total says which half of it is a measurement, and two bugs found before you hit them.
+
 ## v1.156
 - A report is never thrown away again. There is a limit of twelve reports a day, and reports made after it was spent were being deleted rather than held - the opposite of what the 1.151 notes promised and of what the sending code's own comment says. It cost today's measurement: two updates and a backlog spent the twelve, and the first report from the version built to answer the open question was refused at the door. The limit now decides only what goes out, never what gets kept: the phone holds the newest twenty and sends what it can each day.
 
