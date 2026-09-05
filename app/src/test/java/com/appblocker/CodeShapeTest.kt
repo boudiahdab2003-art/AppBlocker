@@ -875,4 +875,41 @@ class CodeShapeTest {
             "KEY_TIMED_MS" in edit && "KEY_TIMED_COUNT" in edit,
         )
     }
+
+    // ---- invariant 47 ------------------------------------------------------------------------
+
+    /**
+     * **The two screen probes may not work out "is this state judgeable" for themselves.**
+     *
+     * They did, four lines apart, and both made the same mistake on the same half: a null
+     * `KeyguardManager` was read as "not locked" while a null `PowerManager` correctly meant
+     * "cannot tell". One rule, two copies, one of them wrong — the shape `CoverGate` and the
+     * report's `profileRowIsBad` were both extracted for. `screenIsJudgeable` is the answer now,
+     * and the nulls must reach it unflattened, because flattening them at the call site *was* the
+     * bug.
+     */
+    @Test
+    fun `nothing decides for itself whether the screen state is judgeable`() {
+        val text = source("service/BlockerAccessibilityService.kt").readText()
+        val offenders = text.lines().withIndex()
+            .filter { (_, l) ->
+                val bare = l.trim()
+                val reads = "isKeyguardLocked" in bare || "isInteractive" in bare
+                // The two one-line accessors that exist to hand the raw nullable straight over are
+                // the intended readers; a comment about them is not a reader at all.
+                reads && !bare.startsWith("//") && !bare.startsWith("*") &&
+                    !bare.startsWith("private fun interactive()") &&
+                    !bare.startsWith("private fun keyguardLocked()") &&
+                    !bare.startsWith("(getSystemService(")
+            }
+            .map { (i, l) -> "${i + 1} ${l.trim()}" }
+
+        assertEquals(
+            "these read the screen services directly instead of passing the raw nullables to " +
+                "screenIsJudgeable, which is how the two probes came to disagree about what a " +
+                "missing service means: " + offenders,
+            emptyList<String>(),
+            offenders,
+        )
+    }
 }

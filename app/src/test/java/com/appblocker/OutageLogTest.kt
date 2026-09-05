@@ -473,4 +473,25 @@ class OutageLogTest {
                 it in OutageLog.EndedBy.SELF_TIMED)
         }
     }
+    /**
+     * **"We timed this one" needs a time, not just the right kind of ending.**
+     *
+     * A reboot mid-outage makes the duration unknowable and the log reports `-1` rather than
+     * guessing (invariant 9). The total flattens that to zero — so a self-timed episode across a
+     * reboot would have added one to the count of measured stoppages and nothing to the measured
+     * minutes, and the report would have said "36 min over 3 of them" where only two were ever
+     * measured. Fixed within the hour it was written, and only because the guard was missing when
+     * the bug was put back on purpose.
+     */
+    @Test
+    fun `an episode with no knowable length is not counted as timed`() {
+        assertFalse(OutageLog.countsAsTimed(OutageLog.EndedBy.REBOUND, -1L))
+        assertFalse(OutageLog.countsAsTimed(OutageLog.EndedBy.HEARTBEAT, -1L))
+        // A genuine zero-minute stoppage IS a measurement and must still count.
+        assertTrue(OutageLog.countsAsTimed(OutageLog.EndedBy.REBOUND, 0L))
+        assertTrue(OutageLog.countsAsTimed(OutageLog.EndedBy.HEARTBEAT, 90_000L))
+        // And a real length behind a poller-driven ending is still a ceiling, not a measurement.
+        assertFalse(OutageLog.countsAsTimed(OutageLog.EndedBy.BACKGROUND, 90_000L))
+        assertFalse(OutageLog.countsAsTimed(OutageLog.EndedBy.APP_OPENED, 90_000L))
+    }
 }

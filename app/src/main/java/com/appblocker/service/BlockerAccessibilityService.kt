@@ -694,20 +694,22 @@ class BlockerAccessibilityService : AccessibilityService() {
      * state where "no event arrived" says anything about us rather than about the phone being
      * asleep. See the revive verdict in the heartbeat.
      */
-    private fun canObserveEvents(): Boolean {
-        val pm = getSystemService(POWER_SERVICE) as? PowerManager ?: return false
-        if (!pm.isInteractive) return false
-        val km = getSystemService(KEYGUARD_SERVICE) as? KeyguardManager
-        return km?.isKeyguardLocked != true
-    }
+    private fun canObserveEvents(): Boolean = screenIsJudgeable(interactive(), keyguardLocked())
 
     private fun probeScreen(): Boolean {
-        val pm = getSystemService(POWER_SERVICE) as? PowerManager ?: return true
-        if (!pm.isInteractive) return true
-        val km = getSystemService(KEYGUARD_SERVICE) as? KeyguardManager
-        if (km?.isKeyguardLocked == true) return true
+        // Not judgeable is a PASS here and an abstention there, which is the same decision read
+        // from the two ends: neither may blame the watcher for a state it did not cause.
+        if (!screenIsJudgeable(interactive(), keyguardLocked())) return true
         return rootInActiveWindow != null
     }
+
+    /** Null when the system service is absent, which is a different answer from "the screen is
+     *  off" — see [screenIsJudgeable], where flattening the two was the bug. */
+    private fun interactive(): Boolean? =
+        (getSystemService(POWER_SERVICE) as? PowerManager)?.isInteractive
+
+    private fun keyguardLocked(): Boolean? =
+        (getSystemService(KEYGUARD_SERVICE) as? KeyguardManager)?.isKeyguardLocked
 
     /** When an accessibility event last reached us, monotonically (invariant 9). */
     @Volatile private var lastEventReceivedAt = Long.MIN_VALUE / 2

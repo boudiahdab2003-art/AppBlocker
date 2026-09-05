@@ -856,6 +856,32 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     Same rule as `recordReviveOutcome` behind `canObserveEvents()`: a state where the answer is
     not knowable is not evidence.
 
+47. **A null system service is not an answer about the thing it reports.** `canObserveEvents` and
+    `probeScreen` each worked out "is this screen state judgeable" for themselves, four lines
+    apart, and both got the same half wrong: a null `PowerManager` correctly meant *cannot tell*,
+    while `km?.isKeyguardLocked != true` read a null `KeyguardManager` as **not locked** and went
+    on to judge. The KDoc directly above already said *"every can't-tell passes"*. One rule, two
+    copies, the wrong one in the same expression as the right one — `CoverGate` and
+    `profileRowIsBad` were both extracted for this exact shape.
+
+    It gates `recordReviveOutcome`, so it decides `revivesHelped` — the number that showed the
+    self-repair is real. Scoring `futile` because a service was missing is the failure that
+    KDoc exists to prevent, arriving through the door beside the one it was watching.
+
+    `screenIsJudgeable(interactive, keyguardLocked)` is now the only copy, both nulls reach it
+    **unflattened** (flattening at the call site was the bug), and `CodeShapeTest` fails the
+    build if anything in the watcher reads those two properties outside the accessors that pass
+    them straight through.
+
+    **The standing question: for every `?:` and `?.x != y` on a system service, is the fallback
+    an answer or an admission?** Enumerate the nulls in one expression together — the sibling is
+    where the inconsistency lives.
+
+    Found in the same pass, in code an hour old: `timedCount` counted a self-timed episode whose
+    duration was unknowable (`-1` across a reboot) as a measurement, so the report could have
+    said "36 min over 3 of them" with only two ever measured. `OutageLog.countsAsTimed` is the
+    rule, and it had **no guard at all** until reintroducing the bug showed nothing went red.
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused
@@ -1797,6 +1823,36 @@ they were worth fixing before the data starts arriving rather than after.
 The boot path is sound — `BootReceiver` is not direct-boot-aware and takes only `BOOT_COMPLETED`,
 so nothing runs before credential storage is available, and WorkManager re-arms the watchdog two
 ways. The rule flow cannot die permanently: `SupervisorJob` plus `retryWhen` close that.
+
+### Swept (5 Sep 2026) — "where does a null mean no instead of don't know", finally enumerated
+
+The candidate this list has named as the best one since it was written, and the only one that had
+already produced a real report before anyone swept it (invariant 20). Method: grep the primitive —
+`getOrDefault(false)`, `getOrNull()`, `?: false`, `?: return`, `?: 0L` — across the watcher, the
+decision code, the web filter and the screen readers, then ask of each whether the fallback is an
+answer or an admission.
+
+- **`canObserveEvents` / `probeScreen` — 1 bug** (invariant 47 above). The only one in the
+  enumeration that was wrong, and it was wrong in the sibling-null shape.
+- `isProtectiveApp` fails toward auto-blocking and says so; `stillOnScreen` returns true on an
+  unreadable root, which is the blocking direction; `WebContentFilter.check` distinguishes
+  `Blank` (a measurement) from `Unreadable` (a failure) and only the failure falls back;
+  `ProtectionWatchdog.read` returns null usage minutes so a failed read can never say STALLED;
+  `OutageLog.shape` reports `-1` rather than guessing a duration. **All clean, all documented at
+  the site.** A clean enumeration is a result: this file may stop listing the question as open.
+- Still permissive by choice, and recorded rather than fixed: a Wi-Fi schedule whose SSID cannot
+  be read does not match, and `handlePurchaseBlock` is className-only. Both were judged in
+  earlier sweeps; neither applies to the owner, who runs no schedules (`scheduleCount: 0`).
+- `BugReportQueue`: **the daily cap is spent only by `markSent`**, so a run of failed sends can
+  never burn the budget — checked because a silent day looked exactly like that. One stale
+  comment in `flush` still claimed the cap was also checked at enqueue, which stopped being true
+  in v1.156; corrected. Third stale comment in two days, all three in code that had just been
+  changed correctly.
+
+**Yield: 2 bugs, one of them an hour old, from an enumeration of ~40 sites.** That is thin, and
+the thinness is the finding — this area has been swept out. The next hunt should take the second
+named candidate (*where else does a lookup have exactly one spelling?*) or the ~8,300 lines of
+reporting and recovery code written since 30 Aug, which no sweep has touched.
 
 ### Not yet swept
 

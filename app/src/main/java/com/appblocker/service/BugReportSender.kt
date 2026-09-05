@@ -701,7 +701,10 @@ object BugReportSender {
         scope.launch {
             try {
                 runCatching {
-                    // **The daily cap is checked here as well as at enqueue, and it has to be.**
+                    // **This is the ONLY place the daily cap applies, and that is deliberate.**
+                    // It used to be checked at enqueue as well, where it was not a throttle but a
+                    // shredder: a report past the twelfth was refused at the door and gone (fixed
+                    // v1.156). A limit may delay evidence; it may not destroy it.
                     // `remainingToday` only moves when a report is *sent*, and nothing is sent
                     // until the next app open — so a bad day queues reports against a counter that
                     // is still reading zero spent, and one flush then posts the whole queue at

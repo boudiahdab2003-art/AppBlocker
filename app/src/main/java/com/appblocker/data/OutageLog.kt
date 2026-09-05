@@ -465,6 +465,7 @@ object OutageLog {
                 .split(';').filter { it.isNotBlank() }
             val trimmed = (existing + encode(episode)).takeLast(MAX)
             val known = episode.durationMs.coerceAtLeast(0L)
+            val timed = countsAsTimed(endedBy, episode.durationMs)
             p.edit()
                 .putString(KEY_EPISODES, trimmed.joinToString(";"))
                 // Totals live outside the ring so twenty-one outages don't erase the first one's cost.
@@ -474,14 +475,14 @@ object OutageLog {
                 // Only the endings that are the watcher stopping its own clock — see EndedBy.
                 // Written in the same edit as the totals they are a share of, so the pair cannot
                 // come apart the way a second write would let them.
-                .putLong(
-                    KEY_TIMED_MS,
-                    p.getLong(KEY_TIMED_MS, 0L) + if (endedBy in EndedBy.SELF_TIMED) known else 0L,
-                )
-                .putInt(
-                    KEY_TIMED_COUNT,
-                    p.getInt(KEY_TIMED_COUNT, 0) + if (endedBy in EndedBy.SELF_TIMED) 1 else 0,
-                )
+                //
+                // ⚠️ **And only when there is a duration to count.** A reboot mid-outage makes
+                // `durationMs` -1, which `known` flattens to 0 — so a self-timed episode across a
+                // reboot would have added 1 to the count and nothing to the minutes, and the
+                // report would have described a measurement that does not exist. `timed` is the
+                // ending AND a knowable length, because that is what "we timed this" means.
+                .putLong(KEY_TIMED_MS, p.getLong(KEY_TIMED_MS, 0L) + if (timed) known else 0L)
+                .putInt(KEY_TIMED_COUNT, p.getInt(KEY_TIMED_COUNT, 0) + if (timed) 1 else 0)
                 .remove(KEY_OPEN_STARTED)
                 .remove(KEY_OPEN_STARTED_RT)
                 .remove(KEY_OPEN_DETECTED)
@@ -536,6 +537,21 @@ object OutageLog {
             timedCount = p.getInt(KEY_TIMED_COUNT, 0),
         )
     }.getOrDefault(Totals(0, 0L, 0L))
+
+    /**
+     * **Does this episode contribute to the "timed by the blocker itself" share of the total?**
+     *
+     * Two conditions, and the second is the one that was missed. The ending has to be the watcher
+     * stopping its own clock ([EndedBy.SELF_TIMED]) **and** there has to be a length to count: a
+     * reboot mid-outage leaves `durationMs` at -1, which the total flattens to zero, so counting
+     * it would add one to "we measured N of them" and nothing to the minutes — a measurement
+     * described in a report and not actually taken.
+     *
+     * Pure so the rule can be tested without a device, and so `end` has one expression to call
+     * rather than a condition to restate.
+     */
+    internal fun countsAsTimed(endedBy: String, durationMs: Long): Boolean =
+        endedBy in EndedBy.SELF_TIMED && durationMs >= 0L
 
     internal fun encode(e: Episode): String = listOf(
         e.startedAt, e.durationMs, e.detectedAfterMs, e.aliveButDeaf,
