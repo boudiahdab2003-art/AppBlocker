@@ -707,6 +707,7 @@ data class BugReport(
             // says whether the app's only self-repair repairs anything. A quiet screen is not
             // counted either way, so read it as "how often did it demonstrably work".
             "revivesHelped",
+            "reboundWake",
             // How many times Android called onInterrupt on the watcher. Our own integer.
             "interrupts",
             // Foreground minutes since the watcher last saw anything, or `?` when usage access
@@ -732,6 +733,8 @@ data class BugReport(
             // about the owner's actual complaint, shown on his screen and never sent until now.
             "outageTotalMin",
             "outageWorstMin",
+            "outageTimedMin",
+            "outageTimedCount",
             // Minutes since the background scheduler last ran — the live gap, against
             // `workerSilent`'s lifetime count. `?` when it has never been seen to run at all.
             "workerSilentMin",

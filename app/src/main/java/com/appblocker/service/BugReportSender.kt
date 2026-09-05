@@ -202,6 +202,13 @@ object BugReportSender {
         // owner's actual complaint.
         field("outageTotalMin") { (OutageLog.totals(ctx).totalMs / 60_000L).toString() }
         field("outageWorstMin") { (OutageLog.totals(ctx).longestMs / 60_000L).toString() }
+        // ⚠️ The share of `outageTotalMin` that is a measurement rather than a ceiling. Without
+        // it the headline is two quantities added together: stoppages the watcher timed itself,
+        // and stoppages that also contain however long it took a throttled job to come looking.
+        // `outageTimedCount` says how many of `outageCount` that covers — a small count against a
+        // big one means most of the total is still an upper bound.
+        field("outageTimedMin") { (OutageLog.totals(ctx).timedMs / 60_000L).toString() }
+        field("outageTimedCount") { OutageLog.totals(ctx).timedCount.toString() }
         // The live gap since the background scheduler last ran, against `workerSilent`'s lifetime
         // count. "It has been quiet for six hours" is a different statement from "it has gone
         // quiet nine times", and only the first describes right now.
@@ -280,6 +287,14 @@ object BugReportSender {
         // the ones after which an event actually arrived. "3/24" is a placebo.
         field("revivesHelped") {
             "${ServiceHealth.reviveHelpedCount(ctx)}/${ServiceHealth.reviveFutileCount(ctx)}"
+        }
+        // ⚠️ **Read this first on any recovery question.** warm/cold: warm means our process was
+        // already awake when Android reconnected the watcher, so something woke it and the
+        // reconnection followed — a lever the app could pull itself instead of waiting a quarter
+        // of an hour. Cold means the reconnection is what started us and Android acted alone.
+        // Counted only on a rebind that ended a real stoppage.
+        field("reboundWake") {
+            "${ServiceHealth.reboundWarmCount(ctx)}/${ServiceHealth.reboundColdCount(ctx)}"
         }
         // onInterrupt, which used to be an empty body. Not a failure by itself; a number that
         // moves either side of an outage is the first description anyone has of what precedes one.

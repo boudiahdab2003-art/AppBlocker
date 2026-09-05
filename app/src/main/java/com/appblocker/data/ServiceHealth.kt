@@ -149,6 +149,49 @@ object ServiceHealth {
     private const val KEY_REVIVE_HELPED = "health_revive_helped"
     private const val KEY_REVIVE_FUTILE = "health_revive_futile"
 
+    private const val KEY_REBOUND_WARM = "health_rebound_warm"
+    private const val KEY_REBOUND_COLD = "health_rebound_cold"
+
+    /**
+     * A process this old at the moment of a rebind was already running before it. Ten seconds is
+     * well past the point where the bind could plausibly have started us — cold binds report an
+     * age in the low hundreds of milliseconds — and well short of anything that would make a
+     * genuinely idle process look busy.
+     */
+    const val REBOUND_WARM_AFTER_MS = 10_000L
+
+    /** Pure so it can be tested without a device: the classification is the whole instrument. */
+    fun isWarmRebound(processAgeMs: Long): Boolean = processAgeMs >= REBOUND_WARM_AFTER_MS
+
+    /**
+     * **The one question standing between us and the recovery problem.**
+     *
+     * On 5 Sep 2026 the first honestly-timed stoppages came back at twenty and sixteen minutes,
+     * both recovered with nobody looking. Nothing in this app can reconnect its own accessibility
+     * service — Android decides that — so all it does on detecting a stoppage is put up a
+     * notification. Something else brings blocking back a quarter of an hour later, and we do not
+     * know what.
+     *
+     * This is the cheapest thing that could tell us. **Warm** means our process was already awake
+     * when Android reconnected us: something woke it and the reconnection followed, which is a
+     * lever — the app could pull it deliberately instead of waiting. **Cold** means the
+     * reconnection is what created the process, and Android acted alone with nothing to trigger.
+     *
+     * Recorded only on a rebind that actually ended an outage, so an ordinary boot or update does
+     * not dilute it.
+     */
+    fun recordReboundWake(context: Context, processAgeMs: Long) {
+        synchronized(this) {
+            val key = if (isWarmRebound(processAgeMs)) KEY_REBOUND_WARM else KEY_REBOUND_COLD
+            val p = prefs(context)
+            p.edit().putInt(key, p.getInt(key, 0) + 1).apply()
+        }
+    }
+
+    fun reboundWarmCount(context: Context): Int = prefs(context).getInt(KEY_REBOUND_WARM, 0)
+
+    fun reboundColdCount(context: Context): Int = prefs(context).getInt(KEY_REBOUND_COLD, 0)
+
     /**
      * **Did the nudge actually bring events back?** — asked, rather than inferred from the
      * re-post not throwing.

@@ -86,6 +86,11 @@ object HealthFacts {
         val outageOpen: Boolean,
         val outageCount: Int,
         val outageTotalMs: Long,
+        /** The share of [outageTotalMs] the watcher timed itself, and over how many stoppages.
+         *  Defaults to nothing measured, which is what every phone's history looks like before
+         *  v1.157 — and the report has to say that rather than imply the total is exact. */
+        val outageTimedMs: Long = 0L,
+        val outageTimedCount: Int = 0,
         val outageLongestMs: Long,
         val probeFailStreak: Int,
         val bindDeferrals: Int,
@@ -304,8 +309,23 @@ object HealthFacts {
         return Fact(
             "Blocking has stopped ${r.outageCount} times, and been found dead ${r.foundDead} times",
             if (r.outageTotalMs > 0L) {
-                "Unprotected for ${minutesText(r.outageTotalMs)} in total; the worst single one " +
-                    "was ${minutesText(r.outageLongestMs)}."
+                // ⚠️ One number, two quantities, and it took until 5 Sep 2026 to notice. Invariant
+                // 44 put the measured/upper-bound distinction on every line of the episode list
+                // and then left the summary — the sentence he actually reads — as a flat total.
+                val head = "Unprotected for ${minutesText(r.outageTotalMs)} in total; the worst " +
+                    "single one was ${minutesText(r.outageLongestMs)}."
+                when {
+                    r.outageTimedCount >= r.outageCount -> head
+                    r.outageTimedCount > 0 -> head +
+                        " Of that, ${minutesText(r.outageTimedMs)} over " +
+                        "${r.outageTimedCount} of them was timed by the blocker itself. The rest " +
+                        "is a maximum: it includes however long it took something to notice " +
+                        "blocking was back."
+                    else -> head +
+                        " Treat it as a maximum — none of it was timed by the blocker itself, so " +
+                        "each one includes however long it took something to notice blocking was " +
+                        "back."
+                }
             } else {
                 "No length was ever measured for these, so only the count is known."
             },

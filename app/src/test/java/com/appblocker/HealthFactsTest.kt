@@ -62,6 +62,53 @@ class HealthFactsTest {
         assertEquals(true, HealthFacts.verdicts(healthy).first().good)
     }
 
+    // --- the total he actually reads ----------------------------------------------------------
+
+    /**
+     * **"Unprotected for 19 h 34 min" was two different quantities added together.**
+     *
+     * Invariant 44 put the measured / upper-bound distinction on every line of the episode list and
+     * then left the summary sentence — the one number he has been shown for weeks, and the one I
+     * have been quoting back at him — as a flat total with no note on it. A stoppage closed by a
+     * throttled background job contains the stoppage *plus* the wait for something to look.
+     */
+    @Test
+    fun `a total with nothing timed by the app says so`() {
+        val r = healthy.copy(
+            outageCount = 30, foundDead = 42,
+            outageTotalMs = 70_440_000L, outageLongestMs = 17_760_000L,
+            outageTimedMs = 0L, outageTimedCount = 0,
+        )
+        val fact = HealthFacts.verdicts(r).first { "Blocking has stopped" in it.title }
+        assertTrue(fact.detail, "Treat it as a maximum" in fact.detail)
+        assertEquals(null, fact.good)
+    }
+
+    @Test
+    fun `a partly timed total names the share that is a measurement`() {
+        val r = healthy.copy(
+            outageCount = 30, foundDead = 42,
+            outageTotalMs = 70_440_000L, outageLongestMs = 17_760_000L,
+            outageTimedMs = 2_160_000L, outageTimedCount = 2,
+        )
+        val detail = HealthFacts.verdicts(r).first { "Blocking has stopped" in it.title }.detail
+        assertTrue(detail, "36 min" in detail && "2 of them" in detail)
+        assertTrue(detail, "the rest is a maximum" in detail.lowercase())
+    }
+
+    /** Once every stoppage is self-timed the caveat is no longer true, and a warning that outlives
+     *  its reason is the thing this whole pass is about. */
+    @Test
+    fun `a fully timed total carries no caveat`() {
+        val r = healthy.copy(
+            outageCount = 2, foundDead = 2,
+            outageTotalMs = 2_160_000L, outageLongestMs = 1_200_000L,
+            outageTimedMs = 2_160_000L, outageTimedCount = 2,
+        )
+        val detail = HealthFacts.verdicts(r).first { "Blocking has stopped" in it.title }.detail
+        assertFalse(detail, "maximum" in detail)
+    }
+
     // --- the restart window: covered is not the same as blind ---------------------------------
 
     /**

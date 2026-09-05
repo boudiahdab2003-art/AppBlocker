@@ -240,6 +240,16 @@ object ProtectionWatchdog {
         ProtectionNotifier.cancelStalled(context)
         // Returns null in the ordinary case, where nothing was down.
         OutageLog.end(context, endedBy = calledBy)?.let {
+            // Only on the ending that IS a reconnection, and only when it closed a real stoppage:
+            // recorded on every bind this would count boots and updates as recoveries. The age is
+            // taken from the OS rather than a field of our own (invariant 9), and read here rather
+            // than passed in because this is the moment it means something.
+            if (calledBy == OutageLog.EndedBy.REBOUND) {
+                ServiceHealth.recordReboundWake(
+                    context,
+                    SystemClock.elapsedRealtime() - Process.getStartElapsedRealtime(),
+                )
+            }
             BugReportSender.reportOutage(context, it, outageEndedBy(state))
         }
     }

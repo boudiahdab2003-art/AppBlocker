@@ -838,6 +838,24 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     `UNREADY_BLIND` (the window entered with an empty snapshot) is the fault; the plain count is
     a number.
 
+46. **A summary of a measurement inherits the measurement’s caveats.** Invariant 44 split outage
+    durations into ones the watcher timed itself and ones a poller closed, put the distinction on
+    every line of the episode list — and left the one-sentence total ("unprotected for 19 h 34 min")
+    as a flat figure with no note on it. That sentence is the one the owner reads and the one that
+    got quoted back at him. `EndedBy.SELF_TIMED` and `OutageLog.Totals.timedMs/timedCount` now name
+    the share that is a measurement; the fact says "treat it as a maximum" while none of it is.
+
+    **The standing question: when a number is qualified, what else prints it?** Grep for the value,
+    not the caveat — the caveat is exactly what the second copy is missing.
+
+    Also here: **`reboundWake`**, the instrument that decides whether the ~15-20 min recovery is
+    fixable. Warm = our process was already awake when Android rebound the watcher, so something
+    woke it and the reconnection followed (a lever the app can pull itself); cold = the bind
+    created the process and Android acted alone. Recorded only on a `REBOUND` that closed a real
+    episode — on every bind it would be dominated by boots and updates, which are not recoveries.
+    Same rule as `recordReviveOutcome` behind `canObserveEvents()`: a state where the answer is
+    not knowable is not evidence.
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused

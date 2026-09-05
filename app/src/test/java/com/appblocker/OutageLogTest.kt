@@ -450,5 +450,27 @@ class OutageLogTest {
         assertEquals(OutageLog.EndedBy.HEARTBEAT, OutageLog.decode(OutageLog.encode(deaf))?.endedBy)
         assertTrue(deaf.render().contains("backBy=heard-again"))
     }
+    /**
+     * **Only the endings that ARE the moment blocking returned may count as measured.**
+     *
+     * `SELF_TIMED` decides what goes into the "timed by the blocker itself" share of the total he
+     * reads. Letting a poller-driven ending in would put its notice lag back into the number that
+     * exists to be free of it — the same mistake as before, with a new name.
+     */
+    @Test
+    fun `self-timed endings are exactly the two the watcher records itself`() {
+        assertEquals(
+            setOf(OutageLog.EndedBy.REBOUND, OutageLog.EndedBy.HEARTBEAT),
+            OutageLog.EndedBy.SELF_TIMED,
+        )
+        // And every one of them has to be a real, decodable ending, not a string nothing produces.
+        assertTrue(OutageLog.EndedBy.SELF_TIMED.all { it in OutageLog.EndedBy.ALL })
+        listOf(
+            OutageLog.EndedBy.BACKGROUND, OutageLog.EndedBy.APP_OPENED,
+            OutageLog.EndedBy.BOOT, OutageLog.EndedBy.GLANCED, OutageLog.EndedBy.UNKNOWN,
+        ).forEach {
+            assertFalse("$it went looking, so its duration is a ceiling, not a measurement",
+                it in OutageLog.EndedBy.SELF_TIMED)
+        }
+    }
 }
-

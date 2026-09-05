@@ -76,6 +76,22 @@ object OutageLog {
     private const val KEY_LONGEST_MS = "longest_ms"
 
     /**
+     * ⚠️ **The share of [KEY_TOTAL_MS] the app timed itself.**
+     *
+     * "Unprotected for 19 h 34 min" is the sentence the owner has actually been reading, and until
+     * 5 Sep 2026 it silently mixed two different quantities: episodes closed by a poller, where the
+     * duration is the stoppage PLUS however long it took something to look, and episodes closed by
+     * the watcher itself, where it is the stoppage. Invariant 44 added the distinction to the
+     * per-episode list and then left the one number he reads as a single figure with no note on it.
+     *
+     * These accumulate only the self-timed half, so the two can finally be named apart. The split
+     * for episodes recorded before this existed is simply not knowable, and the report says so
+     * rather than assuming.
+     */
+    private const val KEY_TIMED_MS = "timed_ms"
+    private const val KEY_TIMED_COUNT = "timed_count"
+
+    /**
      * How many finished episodes are kept. Twenty is enough to see a pattern in a week of them
      * and small enough that the whole log fits in a report without crowding out the block log.
      */
@@ -167,6 +183,20 @@ object OutageLog {
          * to record. `everyEndingIsDecodable` fails the build on the omission.
          */
         val ALL = setOf(BACKGROUND, APP_OPENED, BOOT, GLANCED, REBOUND, HEARTBEAT, UNKNOWN)
+
+        /**
+         * ⚠️ **The endings whose `durationMs` is a measurement rather than a ceiling.**
+         *
+         * [REBOUND] and [HEARTBEAT] are the watcher stopping its own clock at the moment blocking
+         * returned. Every other ending is something that came *looking* — mostly WorkManager jobs
+         * on a phone that throttles them — so the duration is the stoppage plus the wait for the
+         * look. Averaging the two kinds together is how "unprotected for 19 h 34 min" came to be a
+         * number nobody could act on.
+         *
+         * A new ending belongs here only if the thing recording it *is* the thing that knows the
+         * fault is over (invariant 44). If it had to go and check, it does not.
+         */
+        val SELF_TIMED = setOf(REBOUND, HEARTBEAT)
     }
 
     object DetectedBy {
@@ -441,6 +471,17 @@ object OutageLog {
                 .putInt(KEY_TOTAL_COUNT, p.getInt(KEY_TOTAL_COUNT, 0) + 1)
                 .putLong(KEY_TOTAL_MS, p.getLong(KEY_TOTAL_MS, 0L) + known)
                 .putLong(KEY_LONGEST_MS, maxOf(p.getLong(KEY_LONGEST_MS, 0L), known))
+                // Only the endings that are the watcher stopping its own clock — see EndedBy.
+                // Written in the same edit as the totals they are a share of, so the pair cannot
+                // come apart the way a second write would let them.
+                .putLong(
+                    KEY_TIMED_MS,
+                    p.getLong(KEY_TIMED_MS, 0L) + if (endedBy in EndedBy.SELF_TIMED) known else 0L,
+                )
+                .putInt(
+                    KEY_TIMED_COUNT,
+                    p.getInt(KEY_TIMED_COUNT, 0) + if (endedBy in EndedBy.SELF_TIMED) 1 else 0,
+                )
                 .remove(KEY_OPEN_STARTED)
                 .remove(KEY_OPEN_STARTED_RT)
                 .remove(KEY_OPEN_DETECTED)
@@ -475,7 +516,15 @@ object OutageLog {
     }.getOrNull()
 
     /** Lifetime totals: how many, how long in all, and the worst one — all in millis. */
-    data class Totals(val count: Int, val totalMs: Long, val longestMs: Long)
+    data class Totals(
+        val count: Int,
+        val totalMs: Long,
+        val longestMs: Long,
+        /** The share of [totalMs] the watcher timed itself, and how many episodes that was.
+         *  Zero on a phone whose whole history predates [EndedBy.SELF_TIMED]. */
+        val timedMs: Long = 0L,
+        val timedCount: Int = 0,
+    )
 
     fun totals(context: Context): Totals = runCatching {
         val p = prefs(context)
@@ -483,6 +532,8 @@ object OutageLog {
             count = p.getInt(KEY_TOTAL_COUNT, 0),
             totalMs = p.getLong(KEY_TOTAL_MS, 0L),
             longestMs = p.getLong(KEY_LONGEST_MS, 0L),
+            timedMs = p.getLong(KEY_TIMED_MS, 0L),
+            timedCount = p.getInt(KEY_TIMED_COUNT, 0),
         )
     }.getOrDefault(Totals(0, 0L, 0L))
 

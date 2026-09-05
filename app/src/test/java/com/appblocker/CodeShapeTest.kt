@@ -823,4 +823,56 @@ class CodeShapeTest {
             "blockedSnapshot.isEmpty()" in text.substring(maxOf(0, at - 300), at),
         )
     }
+
+    // ---- invariant 46 ------------------------------------------------------------------------
+
+    /**
+     * **The rebound-wake instrument must count only rebinds that ended a real stoppage.**
+     *
+     * `reboundWake` is the one measurement that decides whether the fifteen-to-twenty minutes a
+     * stoppage now genuinely lasts is fixable at all: warm says something woke our process and the
+     * reconnection followed (a lever), cold says the reconnection created us (Android alone).
+     * Recorded on every `onServiceConnected` it would be dominated by boots and updates, which are
+     * not recoveries, and it would read "cold" for a reason that has nothing to do with the
+     * question. Same rule as `recordReviveOutcome` sitting behind `canObserveEvents()`: a state
+     * where the answer is not knowable is not evidence.
+     */
+    @Test
+    fun `the rebound wake is only recorded when a rebind ended an outage`() {
+        val text = source("service/ProtectionWatchdog.kt").readText()
+        assertTrue(
+            "recordReboundWake is never called, so reboundWake can only ever read 0/0",
+            "ServiceHealth.recordReboundWake(" in text,
+        )
+        // Bounded by the two ends of the ?.let branch rather than by a character count: the first
+        // version of this check measured 400 characters back from the call and went red because a
+        // five-line comment had been written above it. A check that a comment can break is a check
+        // that will be widened until it means nothing.
+        val branch = text.substringAfter("OutageLog.end(").substringBefore("reportOutage(")
+        assertTrue(
+            "recordReboundWake must sit inside the OutageLog.end(...)?.let branch, behind an " +
+                "EndedBy.REBOUND test — outside it, every boot and update counts as a recovery.",
+            "recordReboundWake(" in branch && "EndedBy.REBOUND" in branch,
+        )
+    }
+
+    /**
+     * **A share of a total may not be written separately from the total.**
+     *
+     * `timed_ms` is the part of the unprotected total the watcher measured itself. In its own
+     * `edit()` it could be committed while the total's was not — a share larger than the whole, or
+     * a total that grew without it — and the report would print the contradiction as fact. Invariant
+     * 37 is the same lesson from the other direction: the double close that overstated these very
+     * numbers happened because one transition was recorded twice.
+     */
+    @Test
+    fun `the timed share is written in the same edit as the total it is part of`() {
+        val text = source("data/OutageLog.kt").readText()
+        val edit = text.substringAfter("KEY_TOTAL_COUNT, p.getInt").substringBefore(".apply()")
+        assertTrue(
+            "KEY_TIMED_MS and KEY_TIMED_COUNT must be set in the same edit() as KEY_TOTAL_MS, or " +
+                "the share and the total it is a share of can disagree.",
+            "KEY_TIMED_MS" in edit && "KEY_TIMED_COUNT" in edit,
+        )
+    }
 }

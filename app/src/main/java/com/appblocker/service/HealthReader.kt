@@ -63,6 +63,8 @@ object HealthReader {
             outageOpen = safe(false) { OutageLog.isOpen(ctx) },
             outageCount = totals.count,
             outageTotalMs = totals.totalMs,
+            outageTimedMs = totals.timedMs,
+            outageTimedCount = totals.timedCount,
             outageLongestMs = totals.longestMs,
             probeFailStreak = safe(0) { ServiceHealth.probeFailStreak(ctx) },
             bindDeferrals = safe(0) { SettingsStore.bindDeferrals(ctx) },
