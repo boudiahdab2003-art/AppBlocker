@@ -109,7 +109,7 @@ data class BugReport(
     fun dedupeKey(): String = when {
         // One profile per phone per build. Not per launch: the point is one report per *thing we
         // might have got wrong*, and that only changes when the phone or our guesses do.
-        isProfile -> "profile:$device|$appVersion"
+        isProfile -> profileKey(device, appVersion)
         // One per episode, keyed on when it started. Deliberately NOT collapsed the way faults
         // are: two outages are two outages even when they look identical, and the rate is the
         // measurement being taken. The start stamp is what makes them distinguishable at all.
@@ -977,6 +977,17 @@ data class BugReport(
             recentOutages = recentOutages,
             healthFacts = healthFacts,
         )
+
+        /**
+         * The key a profile for this phone and build **will** have, without building one.
+         *
+         * ⚠️ **[dedupeKey] calls this rather than spelling the format again**, so a caller that
+         * asks the queue in advance — see `BugReportQueue.alreadyHave` — cannot drift from the
+         * answer the queue will actually give. It exists because a profile is filed on every app
+         * resume and is expensive to construct: its health facts take the usage-stream walk, and
+         * `enqueue` can only refuse something that has already been built.
+         */
+        fun profileKey(device: String, appVersion: String): String = "profile:$device|$appVersion"
 
         /**
          * A report about the phone itself, sent **whether or not anything is wrong**.

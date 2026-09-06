@@ -129,15 +129,34 @@ object BugReportQueue {
     fun enqueue(context: Context, report: BugReport): Boolean = runCatching {
         val p = prefs(context)
         val key = report.dedupeKey()
-        if (key in sentKeys(context)) return false
+        // The same question [alreadyHave] answers, asked by the one function that answers it —
+        // a caller that checks before building must not carry a second copy of this rule.
+        if (alreadyHave(context, key)) return false
 
         val pending = pending(context).toMutableList()
-        // Same bug already waiting to go — don't stack copies while offline either.
-        if (pending.any { it.dedupeKey() == key }) return false
         pending += report
         while (pending.size > MAX_PENDING) pending.removeAt(0)
         p.edit().putString(KEY_PENDING, encode(pending)).apply()
         true
+    }.getOrDefault(false)
+
+    /**
+     * **Would [enqueue] refuse a report with this key?** Cheap: two prefs reads and no report.
+     *
+     * ⚠️ **For callers whose report is expensive to BUILD.** `enqueue` can only dedupe something
+     * that already exists, and the profile report is constructed on every single app resume just
+     * to be thrown away here — including its health facts, which take the usage-stream walk that
+     * is the most expensive read in the app. Four comments across `reportDeviceProfile` and
+     * `MainActivity.onResume` promised that resume "costs one lookup after the first send"; it
+     * had cost a full usage walk on every resume since v1.148, when the profile started carrying
+     * health facts. This is what makes those sentences true.
+     *
+     * Covers both halves of the refusal — already sent, and already waiting — because a caller
+     * that skipped only the first would still rebuild the expensive report while one sits in the
+     * queue offline.
+     */
+    fun alreadyHave(context: Context, key: String): Boolean = runCatching {
+        key in sentKeys(context) || pending(context).any { it.dedupeKey() == key }
     }.getOrDefault(false)
 
     /**

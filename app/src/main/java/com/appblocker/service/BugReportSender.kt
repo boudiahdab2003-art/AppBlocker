@@ -509,10 +509,26 @@ object BugReportSender {
      */
     fun reportDeviceProfile(context: Context) {
         if (!enabled()) return
-        // No watchdog reading here on purpose: a profile is about what this phone IS, not how
-        // blocking is doing, and it is filed from `onResume` on every launch. Taking the usage
-        // walk for a report that would not print it would be paying the most expensive read in
-        // the file for nothing.
+        // ⚠️ **Asked BEFORE the report is built, and that is the whole point of this line.**
+        //
+        // This runs on every `onResume`. The queue dedupes on the key, and both this function and
+        // MainActivity said that made the repeat cost "one lookup after the first send" — but
+        // `enqueue` can only refuse a report that already exists, and building one evaluates
+        // `healthLines`, which takes `ProtectionWatchdog.read`, which walks the usage-event
+        // stream. So every single app open since v1.148 (when the profile started carrying health
+        // facts) paid the most expensive read in the app and then threw the result away, against
+        // an explicit "keep the battery as it is". `takeReading = false` below was saving one walk
+        // while the line under it took another.
+        //
+        // The key needs only the two cheap facts, and comes from `BugReport.profileKey` so it
+        // cannot drift from the answer `enqueue` would give.
+        if (BugReportQueue.alreadyHave(
+                context,
+                BugReport.profileKey(describeDevice(), BuildConfig.VERSION_NAME),
+            )
+        ) {
+            return
+        }
         runCatching {
             BugReportQueue.enqueue(
                 context,
@@ -526,12 +542,15 @@ object BugReportSender {
                     // phone whose counters say whether the last fix worked. Without this they only
                     // appeared alongside a stoppage, so a week with no stoppages reported nothing
                     // about the instruments built to explain the stoppages.
-                    // `takeReading = false` keeps the promise above: no usage walk for a profile.
+                    // `takeReading = false` stops THIS half taking a walk of its own.
                     context = DeviceProfile.reportContext(context) +
                         appContext(context, takeReading = false),
-                    // No watchdog reading is taken for a profile, so this passes none — the
-                    // health facts still gather cheaply from prefs, and they include the delivery
-                    // verdicts, which is the whole reason a profile is worth reading right now.
+                    // ⚠️ **This half DOES take one**, because `HealthReader.read` takes its own
+                    // reading when it is handed none — `watch = null` means "I have no reading",
+                    // not "do not take one". Three comments here used to claim the opposite. It is
+                    // paid once per phone per build now rather than on every resume, which is what
+                    // makes it worth paying: the facts include the quiet reading and the delivery
+                    // verdicts, and a profile is the only report a healthy phone ever files.
                     healthFacts = healthLines(context, watch = null),
                 ),
             )

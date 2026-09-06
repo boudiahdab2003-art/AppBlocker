@@ -1175,6 +1175,52 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     at all, so the permission is checked before the call and the fact renders as a plain `•` when
     use cannot be measured — never ✅, and never dropped. Invariant 47 in a new place.
 
+61. **A dedupe that happens inside `enqueue` does not make *building* the report free.** The
+    profile report is filed from `MainActivity.onResume`, and four comments — three in
+    `reportDeviceProfile`, one at the call site — said the repeat cost "one lookup after the first
+    send" because the queue dedupes on the key. But `enqueue` can only refuse a report that
+    already exists, and constructing one evaluates `healthLines`, which calls `HealthReader.read`,
+    which takes its own `ProtectionWatchdog.read` when handed none — **the usage-event walk, the
+    most expensive read in the app, on every single app open since v1.148**, thrown away
+    immediately afterwards. Against a locked "keep the battery as it is".
+
+    ⚠️ **`watch = null` means "I have no reading", not "do not take one".** That is the whole
+    defect in one line, and the comment beside it asserted the second reading.
+
+    ⚠️ **And the shape check made it invisible.** `a profile report … takes no reading` pinned
+    `takeReading = false`, which stops *one* of the two walks. It verified the flag while the thing
+    it was named for happened by another route on the next line. **A check that names a property
+    and tests a proxy for it is worse than no check** — it is the reason nobody looked for six
+    days. It now asserts that `BugReportQueue.alreadyHave` is called *before* `fromProfile`.
+
+    **The standing question: for anything skipped by a dedupe, a cap or a throttle — what has
+    already been paid for by the time the skip happens?**
+
+62. **A round-trip fixture that leaves a field at its default cannot see that field.**
+    `anEpisodeSurvivesTheRoundTrip` compared the whole data class, which is the right shape, but
+    built its `Episode` with four of eleven fields defaulted — so `encode` could drop `detectedBy`,
+    `endedBy`, `usedDuringMin` or `fromBoot`, `decode` would restore the identical default, and the
+    test would pass. `usedDuringMin` is the field answering what a stoppage actually cost.
+
+    This is invariant-by-restatement: `ReportRoundTripTest` had exactly this hole, it was found on
+    31 Aug 2026 and fixed *there*, and the sibling serializer one file away was never looked at.
+    Both now assert reflectively that no field is left at a default before comparing.
+
+63. **A rule written for one constant set must be grepped for its siblings.** `decode` validates
+    `precededBy`, `detectedBy` and `endedBy` against three `ALL` sets in the same way — and only
+    `EndedBy.ALL` carried the ⚠️ comment and only `everyEndingIsDecodable` tested it. Adding a
+    constant and forgetting its set is not a compile error and not a crash.
+
+    ⚠️ **`Preceded` is the one that lies in the dangerous direction.** A missing `DetectedBy`
+    decodes to `UNKNOWN`, which admits it does not know; a missing `Preceded` decodes to
+    `NOTHING`, which *asserts nothing had just happened* — and `after=update` is the whole
+    evidence for the update hypothesis, the thing that showed installing v1.160 cost a 33-minute
+    stoppage. `BlockLog.Window.ALL` is the same shape, checked and left: a wrong value there
+    renders as `na` in a diagnostic line and decides nothing.
+
+    This is the doc's own opening diagnosis turned on itself for the sixth time — *"the rule had
+    been written down as a fact about one screen and never grepped for."*
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused
@@ -2146,6 +2192,45 @@ answer or an admission.
 the thinness is the finding — this area has been swept out. The next hunt should take the second
 named candidate (*where else does a lookup have exactly one spelling?*) or the ~8,300 lines of
 reporting and recovery code written since 30 Aug, which no sweep has touched.
+
+### Swept (6 Sep 2026, evening) — the reporting layer's sentinels and serializers
+
+**The area:** the ~5,400 lines of `OutageLog` / `BootAudit` / `ProtectionPulse` / `BlockLatency` /
+`SilenceLog` / `HealthFacts` / `BugReport` / `BugReportQueue` / `HealthReader` / `BugReportSender`
+that the 5 Sep sweep named as never having been swept.
+
+**The primitive, not the feature.** The 5 Sep sweep asked where `null` means "no" instead of "don't
+know". This layer does not run on nulls, it runs on **sentinels** — `-1`, `NEVER` (-2), `MISSED`,
+`UNKNOWN`, `UNKNOWN_USE`. So: enumerate every sentinel constant, then every read of a value that
+can carry one, and ask whether each reader distinguishes the sentinel from a real number. Then the
+same question of every zero-on-failure reader (`UsageTracker.totalMinutesInRange` answers `0` when
+it cannot read the stream at all). Three findings — **invariants 61, 62, 63**.
+
+**Clean, and worth keeping as clean:**
+
+- **Every sentinel read in the protection path is guarded.** `ProtectionAlarmReceiver` excludes
+  `UNKNOWN` explicitly before comparing; `agoText`/`minutesText` answer "never"/"an unknown time"
+  for negatives; `BlockLog.render` prints `ms=?`; `HealthFacts` splits `>= 0` / `MISSED` / `NEVER`
+  into three branches; `OutageLog.Totals` sums `coerceAtLeast(0)` **and** carries a separate count
+  of how many were real, so "12 minutes lost" can never silently include unmeasured stoppages.
+- ⭐ **Every `totalMinutesInRange` caller in this layer checks `hasUsageAccess` first**, which is
+  what stops a phone without the permission recording an outage as costing zero minutes — the one
+  place where a zero would read as "harmless". (`AiCoach`'s "by this time yesterday" comparison
+  does not, and is left alone: a different feature, and a wrong comparison there is a worse
+  sentence, not weaker blocking.)
+- **`DayStamp`** — one `todayStamp()` for the whole app, `dayGap`/`stampDaysAgo` going through an
+  absolute ordinal so the year boundary cannot be subtracted across, and every "today" counter
+  reading the same function.
+- **The other three report shapes do not have invariant 59's contradiction.** `outageBody` opens
+  with a statement about the stoppage that agrees with the crosses above it; `weeklyBody` opens
+  with a heading; `faultBody` opens with the owner's own words. Only the profile asserted health.
+- **`BlockLog.Window.ALL`** has invariant 63's shape and was deliberately left: a value missing
+  from it renders as `na` in a diagnostic line and decides nothing.
+
+**Not fixed, recorded:** `WebContentFilter.check` calls `checkUrlAdult` **without**
+`learnedDomains` while the undebounced `scanBrowserUrl` passes them, so a host this phone learned
+for itself is caught by the fast path and not by the page scan. Older than this sweep, and widening
+blocking under cover of a different change is how a sweep produces a bug.
 
 ### Not yet swept
 

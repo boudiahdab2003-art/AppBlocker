@@ -861,6 +861,25 @@ class DeviceProfileReportTest {
     }
 
     /**
+     * The key a caller can ask for in advance is the key the queue will use.
+     *
+     * ⚠️ **This assertion cannot fail on its own and is not the guard** — `dedupeKey` calls
+     * `profileKey`, so changing one changes both and they agree by construction. That is the
+     * point: it documents the relationship, and `CodeShapeTest.the profile dedupe key is not
+     * spelled twice` is what stops someone restoring the inline string and letting the two drift.
+     * Proving it: swapping `profileKey`'s format left this green, which is how it was found.
+     */
+    @Test
+    fun `the key a profile can be looked up by is the key it dedupes on`() {
+        val r = profile(clean)
+
+        assertEquals(
+            r.dedupeKey(),
+            BugReport.profileKey("samsung SM-S911B", "1.136"),
+        )
+    }
+
+    /**
      * ⚠️ **The report may not contradict itself between two adjacent sections.**
      *
      * A real profile from his phone opened with `❌ The background scheduler last ran 44 min ago`

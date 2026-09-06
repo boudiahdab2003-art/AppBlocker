@@ -1170,13 +1170,19 @@ class CodeShapeTest {
      * `graceRecovers` and the outage totals were visible only alongside a stoppage. On 6 Sep 2026
      * the owner restarted his phone, it kept working, and nothing in any report could say so.
      *
-     * `takeReading = false` is the other half: the promise a profile does not pay for the usage
-     * walk. Both are checked, because dropping either turns this into the bug it replaced — one
-     * way the numbers vanish again, the other way every app open takes the most expensive read in
-     * the file.
+     * `takeReading = false` is the other half: it stops `appContext` taking a usage walk of its
+     * own. Both are checked, because dropping either turns this into the bug it replaced.
+     *
+     * ⚠️ **This check used to be named "and takes no reading", and that was not true.** It pinned
+     * the flag and the flag was never the whole cost: `healthLines(context, watch = null)` on the
+     * line below made `HealthReader.read` take its own `ProtectionWatchdog.read`, so every app
+     * resume since v1.148 walked the usage-event stream and then threw the report away at the
+     * queue's dedupe. **A check that verifies the flag while the thing it names happens by another
+     * route is worse than no check** — it is the reason nobody looked. The third assertion is the
+     * one that actually holds the promise: the key is asked for before the report is built.
      */
     @Test
-    fun `a profile report carries the standing questions and takes no reading`() {
+    fun `a profile report carries the standing questions and is skipped before it is built`() {
         val body = source("service/BugReportSender.kt").readText()
             .substringAfter("fun reportDeviceProfile(")
             .substringBefore(Char(10) + "    /**")
@@ -1189,9 +1195,21 @@ class CodeShapeTest {
             "appContext(" in live,
         )
         assertTrue(
-            "it must pass takeReading = false, or a profile filed on every app open takes the " +
-                "watchdog's usage walk with it.",
+            "it must pass takeReading = false, or appContext takes the watchdog's usage walk.",
             "takeReading = false" in live,
+        )
+        val asked = live.indexOf("BugReportQueue.alreadyHave(")
+        val built = live.indexOf("BugReport.fromProfile(")
+        assertTrue(
+            "reportDeviceProfile must ask BugReportQueue.alreadyHave before building anything. " +
+                "enqueue can only refuse a report that already exists, and building one takes " +
+                "the usage walk on every single app resume.",
+            asked >= 0,
+        )
+        assertTrue(
+            "the check must come BEFORE the report is constructed, or it saves nothing at all: " +
+                "alreadyHave at $asked, fromProfile at $built",
+            built < 0 || asked < built,
         )
     }
 
@@ -1252,6 +1270,43 @@ class CodeShapeTest {
             instant.size >= 3 &&
                 instant.any { "handleAppBlock(" in it } &&
                 instant.any { "scanBrowserUrl(" in it },
+        )
+    }
+
+    /**
+     * **The profile dedupe key is spelled once.**
+     *
+     * `BugReportSender` asks the queue whether it already has this profile *before* building one,
+     * because building one takes the usage-stream walk on every app resume (invariant 61). That
+     * check is worth nothing if the key it asks about is not the key `enqueue` will compute, so
+     * `dedupeKey` calls `BugReport.profileKey` rather than spelling `"profile:…"` again.
+     *
+     * ⚠️ **A unit test cannot hold this.** Asserting `dedupeKey() == profileKey(...)` passes by
+     * construction while one calls the other — swapping `profileKey`'s format left that assertion
+     * green, which is how this check came to exist. The thing that can actually regress is the
+     * *shape*: someone restores the inline string, both spellings compile, and they drift apart in
+     * silence. Third ornamental check caught this week by putting the bug back.
+     */
+    @Test
+    fun `the profile dedupe key is not spelled twice`() {
+        val text = source("data/BugReport.kt").readText()
+        val live = text.lines().map { it.trim() }
+            .filterNot { it.startsWith("//") || it.startsWith("*") || it.startsWith("/*") }
+        val spellings = live.filter { "\"profile:" in it }
+        assertEquals(
+            "the \"profile:\" format may appear exactly once, inside profileKey — a second " +
+                "spelling is a rule with two copies, and the queue would go on refusing a report " +
+                "the caller thought it had already checked for: $spellings",
+            1,
+            spellings.size,
+        )
+        assertTrue(
+            "the one spelling must be profileKey's own body: " + spellings.first(),
+            "fun profileKey(" in spellings.first(),
+        )
+        assertTrue(
+            "dedupeKey must call profileKey rather than build the string itself",
+            live.any { "isProfile ->" in it && "profileKey(" in it },
         )
     }
 
