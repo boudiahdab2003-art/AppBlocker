@@ -2,6 +2,7 @@ package com.appblocker
 
 import com.appblocker.data.BootAudit
 import com.appblocker.data.HealthFacts
+import com.appblocker.data.ProtectionPulse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -61,6 +62,47 @@ class HealthFactsTest {
     fun `a healthy phone still says something, so the section is never empty by accident`() {
         assertTrue(HealthFacts.verdicts(healthy).isNotEmpty())
         assertEquals(true, HealthFacts.verdicts(healthy).first().good)
+    }
+
+    // --- the scheduler, judged by the app's own definition ------------------------------------
+
+    /**
+     * **The report called the scheduler healthy in a state the app had already counted as broken.**
+     *
+     * `ProtectionAlarmReceiver` treats 25 minutes of quiet as the worker having stopped and counts
+     * a silent spell. This verdict used an hour of its own, so "✅ The background scheduler last
+     * ran 51 min ago" appeared on a phone whose silent-spell count was 185 and climbing. One rule,
+     * two copies, disagreeing — and the number they disagree about is the one that decides how
+     * fast a stoppage gets noticed.
+     */
+    @Test
+    fun `a scheduler quiet past the app's own silence threshold is a problem`() {
+        val r = healthy.copy(workerSilentMs = 51 * 60_000L)
+        assertTrue(problems(r).any { "background scheduler" in it })
+        assertEquals(
+            false,
+            HealthFacts.verdicts(r).first { "background scheduler" in it.title }.good,
+        )
+    }
+
+    @Test
+    fun `a scheduler running on time is healthy`() {
+        val r = healthy.copy(workerSilentMs = 8 * 60_000L)
+        assertTrue(problems(r).toString(), problems(r).isEmpty())
+        assertEquals(
+            true,
+            HealthFacts.verdicts(r).first { "background scheduler" in it.title }.good,
+        )
+    }
+
+    /** The boundary is the app's constant, not a number retyped here: if the threshold moves, this
+     *  moves with it, which is the whole point of there being one of them. */
+    @Test
+    fun `the verdict turns exactly where the app says silence begins`() {
+        val justUnder = healthy.copy(workerSilentMs = ProtectionPulse.SILENT_AFTER_MS - 1)
+        val exactly = healthy.copy(workerSilentMs = ProtectionPulse.SILENT_AFTER_MS)
+        assertEquals(true, HealthFacts.verdicts(justUnder).first { "scheduler" in it.title }.good)
+        assertEquals(false, HealthFacts.verdicts(exactly).first { "scheduler" in it.title }.good)
     }
 
     // --- did our own start-up run after the restart -------------------------------------------

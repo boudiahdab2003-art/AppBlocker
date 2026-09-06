@@ -41,6 +41,24 @@ object ProtectionPulse {
     /** "Can't tell" — no stamp yet, or a reboot since. Never treated as silence. */
     const val UNKNOWN = -1L
 
+    /**
+     * **How long the scheduler has to be quiet before that is silence — the one definition.**
+     *
+     * The periodic worker is on a fifteen-minute cycle and WorkManager is allowed to be late, so
+     * twenty-five minutes is "later than late" rather than "not exactly on time". The alarm at
+     * `ALARM_INTERVAL_MS` sits just under it, so a genuinely stopped worker is caught on the first
+     * firing rather than the second.
+     *
+     * ⚠️ **It lives here because two places were answering the same question differently.** The
+     * alarm treated 25 minutes as silence and counted a spell; `HealthFacts` called anything under
+     * an HOUR healthy. So a report could say "✅ the background scheduler last ran 51 min ago"
+     * while the app had already counted that same state as a failure — and it did, on 6 Sep 2026,
+     * on a phone whose silent-spell count was 185 and climbing. The number that matters most for
+     * how fast a stoppage is noticed was being reported as fine by one half of the app and as
+     * broken by the other.
+     */
+    const val SILENT_AFTER_MS = 25 * 60_000L
+
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 

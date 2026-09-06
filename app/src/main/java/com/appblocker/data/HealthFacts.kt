@@ -266,8 +266,14 @@ object HealthFacts {
                 Fact(
                     "The background scheduler last ran ${agoText(r.workerSilentMs)}",
                     "Every background check in this app is one of its jobs, so when it stops, the " +
-                        "checks that would notice a problem stop with it.",
-                    good = r.workerSilentMs < 3_600_000L,
+                        "checks that would notice a problem stop with it. It is meant to run every " +
+                        "quarter of an hour, and the app treats " +
+                        "${ProtectionPulse.SILENT_AFTER_MS / 60_000} minutes of quiet as it " +
+                        "having stopped.",
+                    // ⚠️ The app's OWN threshold, not a second opinion. This said an hour while
+                    // the alarm said twenty-five minutes, so a report could call the scheduler
+                    // healthy in exactly the state the app had already counted as a failure.
+                    good = r.workerSilentMs < ProtectionPulse.SILENT_AFTER_MS,
                 ),
             )
         }

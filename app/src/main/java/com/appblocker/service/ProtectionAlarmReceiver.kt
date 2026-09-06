@@ -51,11 +51,11 @@ class ProtectionAlarmReceiver : BroadcastReceiver() {
 /**
  * How long WorkManager has to have been quiet before the alarm does anything.
  *
- * The periodic worker is on a fifteen-minute cycle and WorkManager is allowed to be late, so
- * twenty-five minutes is "later than late" rather than "not exactly on time" — the alarm must not
- * become a second copy of a check that is merely running a few minutes behind.
+ * ⚠️ **An alias, not a second definition.** `HealthFacts` asked the same question with its own
+ * number — an hour — so the app reported the scheduler healthy in a state it had already counted
+ * as a failure. The threshold now lives with the thing that measures the silence.
  */
-internal const val WORKER_SILENT_MS = 25 * 60_000L
+internal const val WORKER_SILENT_MS = ProtectionPulse.SILENT_AFTER_MS
 
 /**
  * How often the alarm fires.

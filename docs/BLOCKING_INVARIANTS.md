@@ -1025,6 +1025,24 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     **The standing question for every counter: does this measure what the code DID, or what it
     ACHIEVED — and which one did I promise somebody it meant?**
 
+54. **Two halves of the app may not answer the same question with different numbers.**
+    `ProtectionAlarmReceiver` treated 25 minutes of scheduler silence as the worker having
+    stopped — counting a spell and running a full check. `HealthFacts` used an hour of its own.
+    So on 6 Sep 2026 a report read **"✅ The background scheduler last ran 51 min ago"** on a
+    phone whose silent-spell count was **185 and climbing**: the app calling a state healthy that
+    it had already recorded as a failure, about the number that decides how fast a stoppage is
+    noticed.
+
+    `ProtectionPulse.SILENT_AFTER_MS` is the one definition, living with the thing that measures
+    the silence; `WORKER_SILENT_MS` is now an alias. The test asserts the boundary **against the
+    constant, not against a number retyped in the test** — a test with its own copy of the
+    threshold is a third opinion, which is the same bug wearing a lab coat.
+
+    Fifth occurrence of one shape this week (`profileRowIsBad`, `lastSendSucceeded`,
+    `screenIsJudgeable`, `SILENT_AFTER_MS`, and the `blindLooks` pair). **The standing question:
+    for every threshold, who else decides the same thing — and does a test compare them, or does
+    it just repeat one of them?**
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused
