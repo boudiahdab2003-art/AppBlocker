@@ -3,6 +3,8 @@ package com.appblocker
 import com.appblocker.data.BootAudit
 import com.appblocker.data.HealthFacts
 import com.appblocker.data.ProtectionPulse
+import com.appblocker.service.STALE_AFTER_MS
+import com.appblocker.service.STALE_MIN_USED_MINUTES
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -62,6 +64,40 @@ class HealthFactsTest {
     fun `a healthy phone still says something, so the section is never empty by accident`() {
         assertTrue(HealthFacts.verdicts(healthy).isNotEmpty())
         assertEquals(true, HealthFacts.verdicts(healthy).first().good)
+    }
+
+    // --- the report and the watchdog, on the same question ------------------------------------
+
+    /**
+     * **The use half is one rule, and it was two literals agreeing by luck.**
+     *
+     * `QUIET_WITH_USE_MIN` carried a comment saying it matched `ProtectionState`'s rule; nothing
+     * checked, and invariant 54 was that exact situation one release after the comment stopped
+     * being true. Compared, not repeated — a test with its own copy of the number is a third
+     * opinion.
+     */
+    @Test
+    fun `the report and the watchdog need the same minutes of use`() {
+        assertEquals(STALE_MIN_USED_MINUTES, HealthFacts.QUIET_WITH_USE_MIN)
+    }
+
+    /**
+     * **And the window is deliberately shorter, which is the part the old comment got wrong.**
+     *
+     * It claimed the report would never call broken what the watchdog calls OK, and then reported
+     * at fifteen minutes against the watchdog's two hours. The difference is kept on purpose —
+     * describing is not concluding, and quiet paired with real use is the one signal that
+     * separates a stoppage from a phone on a table. Pinned so nobody "fixes" it in either
+     * direction without meeting this.
+     */
+    @Test
+    fun `the report describes quiet sooner than the watchdog concludes it`() {
+        assertTrue(HealthFacts.QUIET_ONLY_DESCRIBES)
+        assertTrue(
+            "the reporting window must stay under the watchdog's stale window, or the signal " +
+                "that separates a stoppage from an idle phone is suppressed for two hours",
+            HealthFacts.QUIET_MIN_MS < STALE_AFTER_MS,
+        )
     }
 
     // --- the scheduler, judged by the app's own definition ------------------------------------

@@ -1043,6 +1043,32 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     for every threshold, who else decides the same thing — and does a test compare them, or does
     it just repeat one of them?**
 
+55. **A comment asserting two things agree is not agreement, and one asserting they agree while
+    they do not is worse than no comment.** `HealthFacts.QUIET_WITH_USE_MIN` said it "matches
+    `ProtectionState`'s own stale window rather than inventing a second opinion — if the
+    watchdog would not call this stalled, a report must not call it broken". Two separate things
+    were wrong with that.
+
+    The **use** half really was meant to match and did — as two literal `15`s in two packages
+    with nothing comparing them. Invariant 54 is what that becomes when one of them moves.
+    `HealthFactsTest` compares the constants now; a test carrying its own copy of the number
+    would be a third opinion.
+
+    The **window** half was simply false. The watchdog needs `STALE_AFTER_MS` — two hours —
+    before quiet means anything; the report spoke at fifteen minutes. So it could call blocking
+    broken in a state the watchdog calls OK, at one eighth of the threshold, under a comment
+    saying that must never happen.
+
+    **The divergence is KEPT**, and that is the interesting half. Describing is not concluding:
+    the two hours is the bar for *acting*, set high because a false alarm there is expensive,
+    while quiet paired with real use is the one signal that separated a stoppage from a phone on
+    a table — the finding this whole month turned on. Suppressing it for two hours to satisfy a
+    comment would have hidden it. `QUIET_ONLY_DESCRIBES` marks the difference as intended so a
+    future reader cannot quietly "fix" either number.
+
+    **The standing question: when two thresholds differ, is that drift or design — and which one
+    does the code say?** Both need a test; only one of them needs the numbers to be equal.
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused

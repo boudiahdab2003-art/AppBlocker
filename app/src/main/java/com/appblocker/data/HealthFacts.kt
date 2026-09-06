@@ -139,12 +139,37 @@ object HealthFacts {
     )
 
     /**
-     * How long the watcher may be quiet, with real use happening, before that is a finding.
+     * **Measured minutes of use before quiet counts against the watcher.**
      *
-     * Matches `ProtectionState`'s own stale window rather than inventing a second opinion — if the
-     * watchdog would not call this stalled, a report must not call it broken.
+     * ⚠️ **This must equal `ProtectionState.STALE_MIN_USED_MINUTES`, and for a long time it only
+     * did by luck** — two literal `15`s in two packages with a comment asserting they matched and
+     * nothing checking. `HealthFactsTest` compares them now, which is the only version of "these
+     * agree" worth writing: invariant 54 was exactly this, one release after the comment claiming
+     * agreement had stopped being true.
+     *
+     * ⚠️ **The KDoc here used to claim it matched the watchdog's stale WINDOW too, and that was
+     * simply false.** The watchdog needs `STALE_AFTER_MS` — two hours — before quiet means
+     * anything; this section reports at [QUIET_MIN_MS], fifteen minutes. So a report could call
+     * blocking broken in a state the watchdog calls OK, at one eighth of its threshold, under a
+     * comment saying that must never happen.
+     *
+     * The divergence is kept, deliberately, and the reason is the week that found it: **describing
+     * is not concluding.** The watchdog's two hours is the bar for ACTING — opening an outage,
+     * raising an alert — and it is set high because a false alarm there is expensive. Quiet paired
+     * with real use is the one signal that separated a stoppage from a phone on a table, and
+     * suppressing it for two hours would hide the exact thing this month was spent learning to
+     * see. [QUIET_ONLY_DESCRIBES] pins that this is a deliberate difference rather than another
+     * pair of numbers drifting apart.
      */
     const val QUIET_WITH_USE_MIN = 15
+
+    /** How long quiet has to run before this section says anything at all. Deliberately shorter
+     *  than the watchdog's `STALE_AFTER_MS` — see [QUIET_WITH_USE_MIN]. */
+    const val QUIET_MIN_MS = 600_000L
+
+    /** Marks [QUIET_MIN_MS] being under the watchdog's stale window as intended, so a test can
+     *  assert the difference on purpose rather than a future reader "fixing" one of them. */
+    const val QUIET_ONLY_DESCRIBES = true
 
     /** Under this share of covers appearing in half a second, blocking stops feeling like an answer. */
     const val QUICK_SHARE_TARGET = 80
@@ -331,13 +356,16 @@ object HealthFacts {
     private fun quietFact(r: Reading): Fact? {
         if (!r.serviceEnabled || r.sinceLastEventMs < 0L) return null
         val used = r.usedMinutes ?: return null
-        if (r.sinceLastEventMs < 600_000L) return null
+        if (r.sinceLastEventMs < QUIET_MIN_MS) return null
         val quiet = agoText(r.sinceLastEventMs)
         return if (used >= QUIET_WITH_USE_MIN) {
             Fact(
                 "The blocker has seen nothing for $quiet, through $used minutes of use",
                 "The phone was in use and the watcher was told about none of it. This is the " +
-                    "measurement that separates a stoppage from an idle phone.",
+                    "measurement that separates a stoppage from an idle phone. It is reported " +
+                    "sooner than the app acts on it: the watchdog waits two hours before calling " +
+                    "blocking stopped, because acting on a false alarm is expensive and saying " +
+                    "what was seen is not.",
                 good = false,
             )
         } else {
