@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.160
+- A second pair of eyes that costs nothing when your phone is fine, and eight fixes to what the app was telling us.
+
 ## v1.159
 - A stoppage stops counting the hours your phone was off, and the blocker can repair its own background checks.
 
