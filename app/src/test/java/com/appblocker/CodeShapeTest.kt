@@ -1114,4 +1114,40 @@ class CodeShapeTest {
             live.any { "ProtectionScheduler.ensureScheduled(" in it },
         )
     }
+
+    // ---- invariant 52 ------------------------------------------------------------------------
+
+    /**
+     * **A profile report has to carry the standing questions.**
+     *
+     * It is the report filed on every app open, including on a phone where nothing has gone
+     * wrong — which is exactly the phone whose counters say whether the last fix worked. It used
+     * to carry `PROFILE_CONTEXT_KEYS` alone, so `blindLooks`, `revivesHelped`, `bootHeard`,
+     * `graceRecovers` and the outage totals were visible only alongside a stoppage. On 6 Sep 2026
+     * the owner restarted his phone, it kept working, and nothing in any report could say so.
+     *
+     * `takeReading = false` is the other half: the promise a profile does not pay for the usage
+     * walk. Both are checked, because dropping either turns this into the bug it replaced — one
+     * way the numbers vanish again, the other way every app open takes the most expensive read in
+     * the file.
+     */
+    @Test
+    fun `a profile report carries the standing questions and takes no reading`() {
+        val body = source("service/BugReportSender.kt").readText()
+            .substringAfter("fun reportDeviceProfile(")
+            .substringBefore(Char(10) + "    /**")
+        val live = body.lines().map { it.trim() }
+            .filterNot { it.startsWith("//") || it.startsWith("*") || it.startsWith("/*") }
+            .joinToString(" ")
+        assertTrue(
+            "reportDeviceProfile must include appContext, or every instrument built to answer a " +
+                "standing question is invisible on a phone that is working.",
+            "appContext(" in live,
+        )
+        assertTrue(
+            "it must pass takeReading = false, or a profile filed on every app open takes the " +
+                "watchdog's usage walk with it.",
+            "takeReading = false" in live,
+        )
+    }
 }

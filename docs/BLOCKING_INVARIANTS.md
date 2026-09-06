@@ -998,6 +998,15 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     **The standing question for any new instrument: in the case you most want it to describe,
     which report carries it — and could it have answered before the answer existed?**
 
+    **The same finding one level up, found by asking it of every instrument rather than one:**
+    a *profile* report is filed on every app open — including on a phone where nothing has
+    gone wrong, which is exactly the phone whose counters say whether the last fix worked —
+    and it carried `PROFILE_CONTEXT_KEYS` alone. So `blindLooks`, `revivesHelped`,
+    `graceRecovers`, `bootHeard` and the outage totals were all visible only beside a
+    stoppage. `appContext(takeReading = false)` fixes it: everything in that map except four
+    fields is a prefs read costing nothing, and the whole map had been gated behind the one
+    expensive call it contains.
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused

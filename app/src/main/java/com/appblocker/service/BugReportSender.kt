@@ -103,6 +103,21 @@ object BugReportSender {
     internal fun appContext(
         ctx: Context,
         watch: ProtectionWatchdog.Reading? = null,
+        /**
+         * Whether to take a watchdog reading when the caller has not supplied one.
+         *
+         * ⚠️ **false is how a PROFILE report gets the standing questions.** Everything here except
+         * four fields is a prefs read costing nothing, but the whole map was gated behind the one
+         * expensive call — so a profile report carried `PROFILE_CONTEXT_KEYS` and nothing else,
+         * and every instrument built to answer a standing question (`blindLooks`, `revivesHelped`,
+         * `bootHeard`, `graceRecovers`, the outage totals) was invisible unless something had
+         * gone wrong enough to file a stoppage report.
+         *
+         * That is backwards. A phone that has stopped stopping is exactly the phone whose numbers
+         * decide whether a fix worked — and on 6 Sep 2026 his restart went well, so nothing could
+         * say so. See invariant 52; this is the same finding one level up.
+         */
+        takeReading: Boolean = true,
     ): Map<String, String> {
         val out = mutableMapOf<String, String>()
         var failed = 0
@@ -126,8 +141,14 @@ object BugReportSender {
         // walk. Doing that twice per report would have put two of them inside the uncaught-
         // exception handler, in a process that is already dying — the exact cost this method's
         // KDoc refuses Room for.
-        val reading = watch ?: runCatching { ProtectionWatchdog.read(ctx) }.getOrNull()
-        field("protection") { reading?.state?.name ?: ProtectionWatchdog.state(ctx).name }
+        val reading = watch
+            ?: if (takeReading) runCatching { ProtectionWatchdog.read(ctx) }.getOrNull() else null
+        field("protection") {
+            // The fallback takes its own reading, so it has to respect the same decision — else
+            // "don't take a reading" would take one anyway, by the slower route.
+            reading?.state?.name
+                ?: if (takeReading) ProtectionWatchdog.state(ctx).name else "?"
+        }
         // **The number the STALLED verdict actually turns on**, and it was computed on every check
         // and thrown away. Quiet is only evidence when something was happening: `lastEventMin 240`
         // beside `usedMinutes 90` is four unprotected hours, and beside `usedMinutes 0` it is a
@@ -481,7 +502,14 @@ object BugReportSender {
                     flavor = BuildConfig.FLAVOR,
                     androidSdk = Build.VERSION.SDK_INT,
                     device = describeDevice(),
-                    context = DeviceProfile.reportContext(context),
+                    // ⚠️ **Plus the standing questions.** A profile is filed on every app open,
+                    // including on a phone where nothing has gone wrong — which is precisely the
+                    // phone whose counters say whether the last fix worked. Without this they only
+                    // appeared alongside a stoppage, so a week with no stoppages reported nothing
+                    // about the instruments built to explain the stoppages.
+                    // `takeReading = false` keeps the promise above: no usage walk for a profile.
+                    context = DeviceProfile.reportContext(context) +
+                        appContext(context, takeReading = false),
                     // No watchdog reading is taken for a profile, so this passes none — the
                     // health facts still gather cheaply from prefs, and they include the delivery
                     // verdicts, which is the whole reason a profile is worth reading right now.
