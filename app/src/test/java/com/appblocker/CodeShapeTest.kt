@@ -1096,6 +1096,22 @@ class CodeShapeTest {
                 "phone pays for a full page scan every minute for nothing.",
             "front != lastBlindScanPkg" in body,
         )
+        // ⚠️ And the LOOK counter has to sit behind the same gate. blindLooks and blindCovers are
+        // read as a pair; counting looks per tick and covers per screen makes the ratio describe
+        // how long he read an article rather than whether the net helped, which is invariant 53
+        // again in the other half of the same pair.
+        // ⚠️ The first version of this check could not fail: it asked whether `firstLookHere`
+        // appeared anywhere before the record, and the flag is DECLARED before it either way. A
+        // check satisfied by a variable's declaration is the same class of hole as one satisfied
+        // by a comment. Structural instead — the gate must open before the record and not close
+        // in between, which no amount of moving the declaration can fake.
+        val beforeLooks = body.substringBefore("SilenceLog.BLIND_LOOKS")
+        val gate = beforeLooks.lastIndexOf("if (firstLookHere) {")
+        assertTrue(
+            "BLIND_LOOKS must be recorded INSIDE the firstLookHere gate, or it counts ticks " +
+                "while BLIND_COVERS counts screens and the pair stops meaning anything.",
+            gate >= 0 && "}" !in beforeLooks.substring(gate),
+        )
         listOf("scheduleUrlScan()", "scheduleWebScan()", "scheduleShortsScan()").forEach {
             assertTrue(
                 "coverBlindly must re-arm $it as well, or that layer stays blind for the whole " +

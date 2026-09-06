@@ -1090,6 +1090,25 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     **The standing question for anything periodic: what does this cost on the phone where
     nothing is wrong, and how often is that phone in the state that triggers it?**
 
+57. **Two counters read as a pair must count the same kind of thing.** Invariant 56 moved the
+    blind fallback's scans behind "the foreground app changed" and left `BLIND_LOOKS` on the
+    clock. So `blindLooks` counted minutes of quiet while `blindCovers` counted screens, and the
+    pair built as the acceptance test for the whole fallback would have read **"looked 500
+    times, covered twice"** on a phone where it looked at five screens and covered two of them —
+    the net dismissed as useless on the strength of a number measuring how long the owner read an
+    article. Invariant 53 again, one hour later, in the other half of the same pair.
+
+    ⚠️ **And the check written to guard it could not fail.** It asked whether `firstLookHere`
+    appeared anywhere before the record — and the flag is *declared* before it either way, so it
+    passed against the bug. Same class of hole as the check satisfied by a commented-out call
+    (invariant 45). It is structural now: the gate must open before the record and not close in
+    between. **Third check this week that needed the bug put back before anyone knew it was
+    ornamental** — that step is not a formality, it is the only thing separating a guard from a
+    comment that compiles.
+
+    **The standing question: when a fix changes what one counter counts, what is it compared
+    against — and does that still count the same thing?**
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused

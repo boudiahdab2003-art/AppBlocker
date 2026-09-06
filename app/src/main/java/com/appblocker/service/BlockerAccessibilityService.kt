@@ -2877,7 +2877,18 @@ class BlockerAccessibilityService : AccessibilityService() {
                     // Adopt it the way an event would, or the mid-use re-check has nothing to
                     // work from and the next cover decision reads a stale foreground.
                     lastForegroundPkg = front
-                    SilenceLog.record(applicationContext, SilenceLog.BLIND_LOOKS)
+                    // ⚠️ **A look is a look at a SCREEN, not a tick of the clock**, and it has to
+                    // be counted the same way `blindCovers` is or the pair they were built to be
+                    // read as means nothing. Left per-tick when the scans moved behind this gate,
+                    // it would have read "looked 500 times, covered twice" on a phone where the
+                    // net looked at five screens and covered two of them — the net dismissed as
+                    // useless on the strength of a counter measuring how long he read an article.
+                    // Same mistake as invariant 53, one hour after fixing it, in the other half of
+                    // the same pair.
+                    val firstLookHere = front != lastBlindScanPkg
+                    if (firstLookHere) {
+                        SilenceLog.record(applicationContext, SilenceLog.BLIND_LOOKS)
+                    }
                     // ⚠️ **Read before, so the outcome can be told from the attempt.** A look is
                     // not a catch: this runs once a minute for as long as a silence spell lasts,
                     // whether or not anything needed blocking, so `blindLooks` alone climbs on a
@@ -2924,7 +2935,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                     // The package changing IS new information, and it is the one thing a deaf
                     // watcher would otherwise miss entirely: usage stats see the switch that no
                     // event announced. So the scans follow the package, not the clock.
-                    if (front != lastBlindScanPkg) {
+                    if (firstLookHere) {
                         lastBlindScanPkg = front
                         if (!overlay.isShowing && shouldScanPkg(front)) {
                             scheduleUrlScan()
