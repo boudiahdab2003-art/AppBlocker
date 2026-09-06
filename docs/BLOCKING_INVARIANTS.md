@@ -976,6 +976,28 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     there is nothing to block — but a large `bootHeard` lag is going to look exactly like a
     fault. Read it against `outageUsedMin`, never on its own.
 
+52. **An instrument must be visible in the case it was built to explain, and must not judge
+    before the thing it is judging could have happened.** Both halves broken in `BootAudit`, one
+    day old, found the first time a restart actually went well.
+
+    **Invisible:** `bootHeard` reached the report as a context field only, and a *profile* report
+    — the one filed on every app open — carries `PROFILE_CONTEXT_KEYS` and nothing else. A
+    restart that WORKS produces no stoppage report, so the number built to answer "did our
+    start-up run after a reboot" could only ever be seen when it had not. The plan for it said to
+    add a health fact; half the plan shipped. Health facts ride on every report shape, which is
+    why they are where a standing question belongs.
+
+    **Premature:** `noteRun` judged on first sight. Android binds an enabled accessibility
+    service early, so `onServiceConnected` reaches it before `BOOT_COMPLETED` is delivered — and
+    on a file-based-encryption phone that broadcast waits for the first unlock, hours later.
+    `bootsMissed` would have climbed on **every restart** and reported the exact opposite of the
+    truth. `judge()` now returns `WAIT` until the receiver has had two minutes, and `WAIT` has to
+    stay reachable: a verdict taken before the event could have happened is a guess with a number
+    attached. Same rule as `recordReviveOutcome` abstaining on a dark screen.
+
+    **The standing question for any new instrument: in the case you most want it to describe,
+    which report carries it — and could it have answered before the answer existed?**
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused

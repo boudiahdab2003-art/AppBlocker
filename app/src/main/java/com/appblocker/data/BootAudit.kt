@@ -42,6 +42,38 @@ object BootAudit {
     private const val KEY_NOTED_BOOT = "noted_boot"
     private const val KEY_MISSED = "missed_count"
 
+    /** When something of ours was FIRST seen running on this boot. See [judge]. */
+    private const val KEY_SEEN_BOOT = "seen_boot"
+    private const val KEY_SEEN_RT = "seen_rt"
+
+    /**
+     * ⚠️ **How long [heard] gets to arrive before a boot is called missed.**
+     *
+     * The first version judged on first sight, and that is a race this loses more often than not:
+     * Android binds an enabled accessibility service early, so `onServiceConnected` reaches
+     * `noteRun` before `BOOT_COMPLETED` is ever delivered — and on a file-based-encryption phone
+     * that broadcast waits for the first unlock, which can be hours later. The counter would have
+     * climbed on every single restart and reported the exact opposite of the truth, about the one
+     * question it exists to answer.
+     */
+    private const val JUDGE_AFTER_MS = 2 * 60_000L
+
+    enum class Judgement { HEARD, WAIT, MISSED }
+
+    /**
+     * Pure, because the whole instrument is this decision.
+     *
+     * [WAIT][Judgement.WAIT] is the honest answer on first sight and it must stay reachable: a
+     * verdict taken before the receiver could plausibly have run is not evidence, it is a guess
+     * with a number attached — the same rule `recordReviveOutcome` follows on a dark screen.
+     */
+    internal fun judge(heard: Boolean, firstSeenRt: Long, nowRt: Long): Judgement = when {
+        heard -> Judgement.HEARD
+        firstSeenRt <= 0L -> Judgement.WAIT
+        nowRt - firstSeenRt >= JUDGE_AFTER_MS -> Judgement.MISSED
+        else -> Judgement.WAIT
+    }
+
     /** No stamp for the boot being asked about. */
     const val MISSED = -1L
 
@@ -108,15 +140,27 @@ object BootAudit {
             val p = prefs(context)
             val now = DeviceBoot.count(context)
             if (p.getInt(KEY_NOTED_BOOT, -2) == now) return@runCatching
-            val missed = lagFor(
+            val nowRt = SystemClock.elapsedRealtime()
+            // First sighting of this boot: remember when, and judge nothing yet.
+            val seen = if (p.getInt(KEY_SEEN_BOOT, -2) == now) p.getLong(KEY_SEEN_RT, 0L) else 0L
+            val heard = lagFor(
                 storedBoot = p.getInt(KEY_HEARD_BOOT, -2),
                 storedRt = p.getLong(KEY_HEARD_RT, 0L),
                 nowBoot = now,
-            ) == MISSED
-            p.edit()
-                .putInt(KEY_NOTED_BOOT, now)
-                .apply { if (missed) putInt(KEY_MISSED, p.getInt(KEY_MISSED, 0) + 1) }
-                .apply()
+            ) >= 0L
+            when (judge(heard, seen, nowRt)) {
+                Judgement.WAIT -> if (seen <= 0L) {
+                    p.edit()
+                        .putInt(KEY_SEEN_BOOT, now)
+                        .putLong(KEY_SEEN_RT, nowRt.coerceAtLeast(1L))
+                        .apply()
+                }
+                Judgement.HEARD -> p.edit().putInt(KEY_NOTED_BOOT, now).apply()
+                Judgement.MISSED -> p.edit()
+                    .putInt(KEY_NOTED_BOOT, now)
+                    .putInt(KEY_MISSED, p.getInt(KEY_MISSED, 0) + 1)
+                    .apply()
+            }
         }
     }
 

@@ -99,6 +99,12 @@ object HealthFacts {
         val outageLongestMs: Long,
         val probeFailStreak: Int,
         val bindDeferrals: Int,
+        /** ⚠️ **How long after the last restart the app's own start-up ran**, or
+         *  [BootAudit.MISSED] / [BootAudit.NEVER]. A health fact rather than only a report field,
+         *  because a restart that WORKS produces no stoppage report — so the number built to
+         *  answer "did we start after a reboot" was invisible in exactly the case it answers. */
+        val bootHeardMs: Long = BootAudit.NEVER,
+        val bootsMissed: Int = 0,
         /** Millis since the background scheduler last ran, or [ProtectionPulse.UNKNOWN]. */
         val workerSilentMs: Long,
         /** Share of covers that appeared in under half a second, or null when none measured. */
@@ -215,6 +221,32 @@ object HealthFacts {
                             "switch itself back off next time the watcher reconnects."
                     },
                     good = if (r.updatePaused) null else false,
+                ),
+            )
+        }
+        // ⚠️ A long lag here is NORMAL and must not read as a fault. Android delivers
+        // BOOT_COMPLETED only after the first unlock on a file-based-encryption phone, so a
+        // restart at night is heard in the morning — and nothing is lost, because a locked phone
+        // cannot open anything that needs blocking.
+        if (r.bootHeardMs >= 0L) {
+            add(
+                Fact(
+                    "The blocker started itself after the last restart",
+                    "It was running ${r.bootHeardMs / 1000}s after the phone came back — or " +
+                        "after you first unlocked it, which is when Android hands out that " +
+                        "signal. A long wait here is normal and costs nothing: a locked phone " +
+                        "cannot open anything that needs blocking.",
+                    good = true,
+                ),
+            )
+        } else if (r.bootHeardMs == BootAudit.MISSED) {
+            add(
+                Fact(
+                    "The blocker's own start-up did not run after the last restart",
+                    "Nothing re-armed the background checks until the app was opened, so a " +
+                        "stoppage in that time would have gone unnoticed" +
+                        if (r.bootsMissed > 1) " — ${r.bootsMissed} restarts so far." else ".",
+                    good = false,
                 ),
             )
         }

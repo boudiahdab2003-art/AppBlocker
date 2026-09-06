@@ -13,6 +13,11 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.160", "Sep 6, 2026", "Your restart worked, and the app could not say so", listOf(
+        "**You restarted your phone, blocking kept working, and you told me before the app could.** That is the bug. Yesterday I added something to record whether the blocker starts itself again after a restart — and it only reached the kind of report that gets sent when something goes WRONG. A restart that works produces no such report, so the one number built to answer your question was invisible in exactly the case where the answer was good news.",
+        "**And it would have lied to you the first time it did appear.** It decided whether the start-up had run the instant anything else woke up — but Android reconnects the blocker before it sends the start-up signal, and on a phone like yours that signal waits until you first unlock. So it would have marked every single restart as a failure, including the one you just did successfully. It now waits before deciding, and a long gap is treated as normal rather than as a fault — because until you unlock the phone, there is nothing to block.",
+        "Both were mine, both a day old, and both only showed up because your restart went well. A test that can only fire when things are broken is not much of a test."
+    )),
     VersionLog("1.159", "Sep 6, 2026", "A stoppage stops counting the hours your phone was off", listOf(
         "**You asked me to hunt for anything that could make the blocker stop after a restart. The worst thing I found was not the blocker stopping — it was the app counting time your phone was switched off as time you were unprotected.**",
         "When blocking stops, the app dates the stoppage from the last thing the blocker saw. After a restart, that moment is from before the phone was even on. It was measuring from there anyway. Switch your phone off overnight and those eight hours would have been recorded as eight hours unprotected — on a phone that was not running.",

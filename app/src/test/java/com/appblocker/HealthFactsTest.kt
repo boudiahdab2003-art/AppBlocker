@@ -1,5 +1,6 @@
 package com.appblocker
 
+import com.appblocker.data.BootAudit
 import com.appblocker.data.HealthFacts
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -60,6 +61,54 @@ class HealthFactsTest {
     fun `a healthy phone still says something, so the section is never empty by accident`() {
         assertTrue(HealthFacts.verdicts(healthy).isNotEmpty())
         assertEquals(true, HealthFacts.verdicts(healthy).first().good)
+    }
+
+    // --- did our own start-up run after the restart -------------------------------------------
+
+    /**
+     * **A restart that WORKS produces no stoppage report**, so the number built to answer "did we
+     * start after a reboot" was invisible in exactly the case it answers. It reached the report as
+     * a context field only, and a profile report — the one filed on every app open — carries none
+     * of those. He restarted his phone on 6 Sep 2026, it kept working, and nothing could say so.
+     */
+    @Test
+    fun `a start-up that ran after the restart is reported as healthy`() {
+        val r = healthy.copy(bootHeardMs = 14_000L)
+        val fact = HealthFacts.verdicts(r).first { "after the last restart" in it.title }
+        assertEquals(true, fact.good)
+        assertTrue(fact.detail, "14s" in fact.detail)
+    }
+
+    /**
+     * ⚠️ And a long wait is NOT a fault. Android delivers BOOT_COMPLETED only after the first
+     * unlock on a file-based-encryption phone, so a restart at night is heard in the morning —
+     * and nothing is lost, because a locked phone cannot open anything that needs blocking. The
+     * wording has to say so, or the next report teaches him to distrust a healthy row.
+     */
+    @Test
+    fun `a long wait after a night-time restart is not a fault`() {
+        val r = healthy.copy(bootHeardMs = 6 * 3_600_000L)
+        val fact = HealthFacts.verdicts(r).first { "after the last restart" in it.title }
+        assertEquals(true, fact.good)
+        assertTrue(fact.detail, "normal" in fact.detail)
+        assertTrue(problems(r).toString(), problems(r).isEmpty())
+    }
+
+    @Test
+    fun `a start-up that never ran is a fault`() {
+        val r = healthy.copy(bootHeardMs = BootAudit.MISSED, bootsMissed = 3)
+        assertTrue(problems(r).any { "did not run after the last restart" in it })
+        val fact = HealthFacts.verdicts(r).first { "did not run" in it.title }
+        assertEquals(false, fact.good)
+        assertTrue(fact.detail, "3 restarts" in fact.detail)
+    }
+
+    /** Nothing recorded yet says nothing at all — a fresh install has not seen a restart, and a
+     *  row claiming either answer would be inventing one. */
+    @Test
+    fun `no boot record yet produces no row`() {
+        val r = healthy.copy(bootHeardMs = BootAudit.NEVER)
+        assertTrue(HealthFacts.verdicts(r).none { "last restart" in it.title })
     }
 
     // --- a fault that can never clear is not a fault ------------------------------------------

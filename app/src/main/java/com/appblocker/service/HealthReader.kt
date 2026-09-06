@@ -3,6 +3,7 @@ package com.appblocker.service
 import android.content.Context
 import android.os.SystemClock
 import com.appblocker.data.BlockLatency
+import com.appblocker.data.BootAudit
 import com.appblocker.data.BugReportQueue
 import com.appblocker.data.HealthFacts
 import com.appblocker.data.OutageLog
@@ -70,6 +71,8 @@ object HealthReader {
             outageLongestMs = totals.longestMs,
             probeFailStreak = safe(0) { ServiceHealth.probeFailStreak(ctx) },
             bindDeferrals = safe(0) { SettingsStore.bindDeferrals(ctx) },
+            bootHeardMs = safe(BootAudit.NEVER) { BootAudit.lagMsForThisBoot(ctx) },
+            bootsMissed = safe(0) { BootAudit.missedCount(ctx) },
             // UNKNOWN (-1) means the scheduler has never been seen to run at all, which is not the
             // same as "ran a long time ago" — pass it through rather than flattening to a duration.
             workerSilentMs = safe(ProtectionPulse.UNKNOWN) { ProtectionPulse.silentFor(ctx) },

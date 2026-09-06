@@ -38,6 +38,52 @@ class BootAuditTest {
         assertEquals(BootAudit.NEVER, BootAudit.lagFor(storedBoot = 61, storedRt = 0L, nowBoot = 61))
     }
 
+    // --- judging a boot missed ----------------------------------------------------------------
+
+    /**
+     * ⚠️ **The first thing that runs after a boot must not be the thing that judges it.**
+     *
+     * The first version did, and that is a race it loses more often than it wins: Android binds an
+     * enabled accessibility service early, so `onServiceConnected` reaches `noteRun` before
+     * `BOOT_COMPLETED` is delivered — and on a file-based-encryption phone that broadcast waits
+     * for the first unlock, hours later. `bootsMissed` would have climbed on every restart and
+     * reported the exact opposite of the truth, about the one question the instrument exists for.
+     */
+    @Test
+    fun `first sight of a boot judges nothing`() {
+        assertEquals(
+            BootAudit.Judgement.WAIT,
+            BootAudit.judge(heard = false, firstSeenRt = 0L, nowRt = 4_000L),
+        )
+    }
+
+    @Test
+    fun `a boot is only missed once the receiver has had its chance`() {
+        // Seen at 4s, asked again at 30s — still inside the grace, still not evidence.
+        assertEquals(
+            BootAudit.Judgement.WAIT,
+            BootAudit.judge(heard = false, firstSeenRt = 4_000L, nowRt = 30_000L),
+        )
+        // Seen at 4s, asked again three minutes later: the receiver was never coming.
+        assertEquals(
+            BootAudit.Judgement.MISSED,
+            BootAudit.judge(heard = false, firstSeenRt = 4_000L, nowRt = 184_000L),
+        )
+    }
+
+    @Test
+    fun `a heard boot is settled immediately, whenever it was heard`() {
+        assertEquals(
+            BootAudit.Judgement.HEARD,
+            BootAudit.judge(heard = true, firstSeenRt = 0L, nowRt = 1_000L),
+        )
+        // The FBE case: heard hours later, at the first unlock. Still heard, never missed.
+        assertEquals(
+            BootAudit.Judgement.HEARD,
+            BootAudit.judge(heard = true, firstSeenRt = 4_000L, nowRt = 6 * 3_600_000L),
+        )
+    }
+
     /**
      * `DeviceBoot.count` returns -1 when the counter cannot be read, on both sides of the
      * comparison. Equal is the right answer: "can't tell" must not invent a missed boot and put a
