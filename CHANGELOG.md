@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.159
+- A stoppage stops counting the hours your phone was off, and the blocker can repair its own background checks.
+
 ## v1.158
 - A second way to block that does not need the watcher, and a stoppage now records what it actually cost you.
 
