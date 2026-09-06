@@ -244,6 +244,50 @@ object UsageTracker {
      * overlapping stretches while the third merged them. Returns null when there is no
      * UsageStatsManager at all.
      */
+    /**
+     * **What is in front right now, asked of Android instead of of our own watcher.**
+     *
+     * The blocker learns the foreground app from accessibility events. When the framework stops
+     * sending them — the `aliveButDeaf` case, four of six stoppages on 2 Sep 2026 — our process is
+     * still running and still perfectly able to draw a cover; it has simply gone blind. Every
+     * instrument in this app agrees the watcher is healthy, because from the inside it is.
+     *
+     * This is the second pair of eyes. Usage stats come from the system, not from our binding, so
+     * they keep answering through a deaf spell, through the seconds after a rebind before the
+     * first event lands, and through the window where the rule flow has not emitted yet.
+     *
+     * ⚠️ **Only ever called while the watcher is already known to be silent** — see the heartbeat.
+     * A query per minute on a healthy phone would be a real battery cost for nothing, and "keep
+     * the battery as it is" is the owner's standing constraint.
+     *
+     * Returns null when usage access is off, when nothing resumed inside the window, or when the
+     * query failed — never a guess. [lookBackMs] is deliberately short: this asks *what is on
+     * screen*, and an hour-old answer would be a different question.
+     */
+    fun currentForegroundPackage(
+        context: Context,
+        lookBackMs: Long = 2 * 60_000L,
+        now: Long = System.currentTimeMillis(),
+    ): String? = runCatching {
+        val usm = usageStatsManager(context) ?: return@runCatching null
+        val fgEvent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+            UsageEvents.Event.ACTIVITY_RESUMED
+        else @Suppress("DEPRECATION") UsageEvents.Event.MOVE_TO_FOREGROUND
+        val events = usm.queryEvents(now - lookBackMs, now)
+        val e = UsageEvents.Event()
+        var newest: String? = null
+        var newestAt = Long.MIN_VALUE
+        while (events.getNextEvent(e)) {
+            // The LAST resume wins, and the events are not guaranteed to arrive in order, so this
+            // compares timestamps rather than trusting the iteration.
+            if (e.eventType == fgEvent && e.timeStamp >= newestAt) {
+                newestAt = e.timeStamp
+                newest = e.packageName
+            }
+        }
+        newest
+    }.getOrNull()
+
     private fun walkForeground(context: Context, start: Long, end: Long): Walk? {
         val usm = usageStatsManager(context) ?: return null
         // Same event values pre/post API 29; the constants were just renamed.

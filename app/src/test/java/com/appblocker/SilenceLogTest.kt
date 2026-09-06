@@ -50,7 +50,7 @@ class SilenceLogTest {
         // slips in unsurfaced, and it did its job for the two Shorts-exit counters and again for
         // UNREADY_BLIND on 5 Sep 2026 — bumped only after checking the new counter is read by both
         // the diagnostics screen and the report, which is the whole point of the registry.
-        assertEquals(7, SilenceLog.KINDS.size)
+        assertEquals(8, SilenceLog.KINDS.size)
         assertEquals(SilenceLog.KINDS.toSet().size, SilenceLog.KINDS.size)
         assertTrue(SilenceLog.KINDS.all { it.isNotBlank() })
     }

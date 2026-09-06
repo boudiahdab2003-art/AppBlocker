@@ -634,6 +634,27 @@ class BlockerAccessibilityService : AccessibilityService() {
                     }
                 } else {
                     silenceSpellOpen = true
+                    // ⭐ **The second pair of eyes, and the only enforcement in this app that does
+                    // not depend on the watcher being spoken to.**
+                    //
+                    // Everything above this line reacts to accessibility events. When the
+                    // framework stops sending them the process is still here and still perfectly
+                    // able to draw a cover — it has just gone blind, and every instrument reports
+                    // it healthy because from the inside it is. That is the failure the owner
+                    // actually feels: he opens something, and nothing happens.
+                    //
+                    // Usage stats come from the system rather than from our binding, so they keep
+                    // answering right through it. Same decision, same policy: it goes through
+                    // handleAppBlock, so Strict, Quick Block, the update pause and the rules all
+                    // apply exactly as they would to an event.
+                    //
+                    // ⚠️ Gated three ways, because this is the expensive path. Only during a
+                    // silence spell (never on a healthy phone), only on a lit unlocked screen
+                    // (nothing to block on a dark one, and the query would be waste), and at most
+                    // once a minute because that is the heartbeat's own pace. The owner's
+                    // constraint is "keep the battery as it is" — on a working phone this line
+                    // costs nothing at all.
+                    if (canObserveEvents()) coverBlindly()
                 }
                 if (silence >= REVIVE_AFTER_SILENCE_MS &&
                     stopwatchNow() - lastReviveAttemptAt >= REVIVE_AFTER_SILENCE_MS
@@ -2811,6 +2832,41 @@ class BlockerAccessibilityService : AccessibilityService() {
         val actual = rootInActiveWindow?.packageName?.toString() ?: return true
         if (actual == pkg) return true
         return actual == packageName && !OwnUi.visible
+    }
+
+    /**
+     * **Block from what Android says is in front, when the watcher has stopped being told.**
+     *
+     * Reads the foreground app from usage stats and runs it through the ordinary decision. It
+     * cannot replace the event path — it is a minute coarse where events are instant — and it is
+     * not meant to: it exists for the stretch where the event path is delivering nothing at all,
+     * which until now was simply unprotected time on a phone that looked healthy.
+     *
+     * The query is off the main thread (a binder call, and this runs on the main looper), the
+     * decision comes back to it, because [handleAppBlock] and the overlay are main-thread only.
+     *
+     * Nothing here decides *whether* to block. `handleAppBlock` does, from the same rules and the
+     * same snapshots as every event — one policy, one place. This only answers "what is in front".
+     */
+    private fun coverBlindly() {
+        scope.launch {
+            val front = runCatching {
+                UsageTracker.currentForegroundPackage(applicationContext)
+            }.getOrNull() ?: return@launch
+            // Our own package covers two different things and only one of them is a mistake: a
+            // cover we already raised (leave it alone) and our own settings screens (blocking
+            // those was a real bug once). Neither is something to block, so both are dropped here.
+            if (front == packageName || isLauncherPkg(front)) return@launch
+            handler.post {
+                guarded(applicationContext, "coverBlindly") {
+                    // Adopt it the way an event would, or the mid-use re-check has nothing to
+                    // work from and the next cover decision reads a stale foreground.
+                    lastForegroundPkg = front
+                    SilenceLog.record(applicationContext, SilenceLog.BLIND_LOOKS)
+                    handleAppBlock(front)
+                }
+            }
+        }
     }
 
     /**

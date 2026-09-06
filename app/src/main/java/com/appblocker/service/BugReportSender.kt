@@ -261,6 +261,12 @@ object BugReportSender {
         field("unreadyBlind") {
             SilenceLog.get(ctx, SilenceLog.UNREADY_BLIND).total.toString()
         }
+        // ⭐ The second pair of eyes doing its job: covers decided from usage stats while the
+        // watcher was being told nothing. Read against `deafSpells` — a climbing deaf count with
+        // a flat zero here means the fallback never runs and is decoration.
+        field("blindLooks") {
+            SilenceLog.get(ctx, SilenceLog.BLIND_LOOKS).total.toString()
+        }
         // "12 shut, 2 blind" — Shorts dismissals where the reel was confirmed closed before
         // leaving, against ones where it could not be confirmed and the walk pressed nothing.
         // Whether BACK actually pops YouTube's reel is a fact about someone else's app on his

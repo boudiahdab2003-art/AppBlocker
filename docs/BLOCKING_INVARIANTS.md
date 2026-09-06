@@ -907,6 +907,26 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     failed" and printed *could not be delivered* in red under *the last report was delivered*.
     Invariant 47's sibling shape, for the second release running.
 
+49. **Enforcement had exactly one source of truth about what is on screen, and it is one Android
+    can stop feeding.** Every cover in this app is raised in reaction to an accessibility event.
+    When the framework stops delivering them — `aliveButDeaf`, four of six stoppages on 2 Sep
+    2026 — the process is alive, the overlay works, the rules are loaded, and nothing blocks.
+    From the inside every instrument reads healthy, because from the inside it *is*. That is the
+    failure the owner has been reporting since the beginning and the one nothing here could see.
+
+    `UsageTracker.currentForegroundPackage` is a second channel — the system's own record, not
+    our binding — and `coverBlindly` runs it through the ordinary `handleAppBlock`. **It decides
+    WHAT is in front and never WHETHER to block it**: a second verdict would be a second copy of
+    every rule in the app, which is the shape that produced a finding in every release this week.
+
+    Gated on a silence spell AND `canObserveEvents()`, so on a healthy phone it never runs — the
+    owner's "keep the battery as it is" is a hard constraint, and a binder query per minute for
+    an answer the event path already gave would break it. `CodeShapeTest` pins both gates and the
+    single call site.
+
+    **The standing question: what does each defence depend on, and what happens to it when that
+    thing stops?** A layer whose only input can be switched off by someone else is not a layer.
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused

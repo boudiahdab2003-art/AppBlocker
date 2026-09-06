@@ -73,6 +73,20 @@ object SilenceLog {
      */
     const val UNREADY_BLIND = "unready_blind"
 
+    /**
+     * **Times the blocker decided what to cover without being told anything.**
+     *
+     * The count of the second pair of eyes doing its job: a silence spell was running, the screen
+     * was lit and unlocked, and the app asked Android what was in front instead of waiting for an
+     * event that was not coming. Every one of these is a moment that used to be unprotected on a
+     * phone reporting itself healthy.
+     *
+     * Read against `deafSpells`. A climbing deaf count with a flat zero here means the fallback
+     * never runs and is decoration — the lesson `revives` taught, reporting 67 successes out of 67
+     * for weeks while the fault it treated carried on.
+     */
+    const val BLIND_LOOKS = "blind_looks"
+
 
 
     /**
@@ -103,7 +117,7 @@ object SilenceLog {
     const val SHORTS_EXIT_BLIND = "shorts_exit_blind"
 
     val KINDS = listOf(
-        DEAF_DISMISSALS, LATE_DECLINES, UNREADY_DECISIONS, UNREADY_BLIND,
+        DEAF_DISMISSALS, LATE_DECLINES, UNREADY_DECISIONS, UNREADY_BLIND, BLIND_LOOKS,
         SHORTS_EXIT_CLOSED, SHORTS_EXIT_BLIND, GRACE_RECOVERS,
     )
 

@@ -1000,4 +1000,72 @@ class CodeShapeTest {
             "hasUsageAccess" in call,
         )
     }
+
+    // ---- invariant 49 ------------------------------------------------------------------------
+
+    /**
+     * **The blind fallback may only run while the watcher is already silent, and only on a lit
+     * unlocked screen.**
+     *
+     * `coverBlindly` asks Android what is in front instead of waiting for an accessibility event.
+     * That is the whole point of it — and it is a binder query on the heartbeat, so running it on
+     * a healthy phone would be a real battery cost for an answer the event path already gave, and
+     * the owner's standing constraint is "keep the battery as it is". Called unconditionally this
+     * stops being a safety net and becomes a second, slower blocker running all day.
+     *
+     * Both gates live on the same line in the heartbeat's silence branch, so this checks the call
+     * site rather than the method.
+     */
+    @Test
+    fun `the blind fallback only runs during a silence spell on a lit screen`() {
+        val text = source("service/BlockerAccessibilityService.kt").readText()
+        val calls = text.lines().map { it.trim() }.filter {
+            "coverBlindly()" in it && !it.startsWith("*") && !it.startsWith("//") &&
+                // the declaration is not a call site
+                !it.startsWith("private fun")
+        }
+        assertEquals("coverBlindly must have exactly one call site: $calls", 1, calls.size)
+        assertTrue(
+            "coverBlindly must be gated on canObserveEvents(), or it queries usage stats on a " +
+                "dark screen every minute for an answer that cannot matter.",
+            "canObserveEvents()" in calls.first(),
+        )
+        // The silence branch is the `else` of the "events are flowing again" test, so the call has
+        // to sit after `silenceSpellOpen = true` and before the revive block.
+        val spell = text.indexOf("silenceSpellOpen = true")
+        val call = text.indexOf("coverBlindly()")
+        assertTrue("coverBlindly is never called", call > 0)
+        assertTrue(
+            "coverBlindly must sit inside the silence branch (after silenceSpellOpen = true), " +
+                "or it runs while events are arriving normally.",
+            spell in 1 until call,
+        )
+    }
+
+    /**
+     * **The fallback decides WHAT is in front, never WHETHER to block it.**
+     *
+     * `handleAppBlock` holds the policy — Strict, Quick Block, the update pause, the rules, the
+     * snapshots. A second path that reached its own verdict would be a second copy of every rule
+     * in this app, and copies of one rule disagreeing is the shape that has produced a finding in
+     * every release this week.
+     */
+    @Test
+    fun `the blind fallback asks handleAppBlock rather than deciding for itself`() {
+        // Bounded by the next method's KDoc rather than by the next `private fun`: the method
+        // after this one is introduced by a doc comment, so the naive boundary swallowed it and
+        // the check failed on somebody else's showBlockScreen. Third time this week a source
+        // check has been wrong about where a method ends — bound on the doc boundary.
+        val body = source("service/BlockerAccessibilityService.kt").readText()
+            .substringAfter("private fun coverBlindly()")
+            .substringBefore(Char(10) + "    /**")
+        assertTrue("coverBlindly must route through handleAppBlock", "handleAppBlock(" in body)
+        listOf("blockReason(", "showBlockScreen(", "overlay.remove()").forEach {
+            assertFalse(
+                "coverBlindly calls $it directly, which puts a second copy of the blocking " +
+                    "decision beside the real one.",
+                it in body,
+            )
+        }
+    }
 }
