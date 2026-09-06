@@ -19,8 +19,14 @@ import com.appblocker.data.ProtectionPulse
  * re-posting it — miss one firing and the chain is over for the life of the install, with nothing
  * anywhere to notice. That is invariant 35 (a loop that re-arms inside its own error handler) at
  * the process level, and worse, because there is no `postDelayed` to fall back on. It is also
- * armed from `ProtectionScheduler.ensureScheduled`, `BootReceiver` and `onServiceConnected`, so a
- * broken chain repairs itself the next time the app is opened or the phone restarts.
+ * armed from `ProtectionScheduler.ensureScheduled`, which `BootReceiver`, `MainActivity` and the
+ * watcher's `onServiceConnected` all call, so a broken chain repairs itself the next time the app
+ * is opened, the phone restarts, or Android simply binds the watcher again.
+ *
+ * ⚠️ That last one was not true when this was written: `onServiceConnected` called
+ * `ensureAlarmScheduled` alone, so the rebind repaired the alarm and left the periodic check and
+ * the update check to the two rarest entry points. This paragraph listed the three as equivalent
+ * for two releases while they were not.
  */
 class ProtectionAlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {

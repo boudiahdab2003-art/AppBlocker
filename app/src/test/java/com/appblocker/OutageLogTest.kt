@@ -494,4 +494,64 @@ class OutageLogTest {
         assertFalse(OutageLog.countsAsTimed(OutageLog.EndedBy.BACKGROUND, 90_000L))
         assertFalse(OutageLog.countsAsTimed(OutageLog.EndedBy.APP_OPENED, 90_000L))
     }
+    /**
+     * **An outage may not begin before the phone did.**
+     *
+     * `startedAt` is the last event the watcher saw, in wall clock, and after a restart it
+     * routinely predates the current boot. Subtracting the wall gap from `elapsedRealtime()` then
+     * lands before zero, and the duration measured from there includes **the time the phone was
+     * switched off** — reported to the owner as time he was unprotected.
+     *
+     * Neither existing guard catches it. `rebooted` compares the boot count at open with the one
+     * at close, so it sees a reboot during an episode and not one before its start; `blame` only
+     * says BOOT when the start falls within its window of the boot, which an overnight shutdown
+     * does not.
+     */
+    @Test
+    fun `an episode that began before this boot is measured from the boot`() {
+        // Phone up for 5 minutes; last event was 8 hours ago, i.e. long before it was switched on.
+        val a = OutageLog.startAnchor(
+            startedAt = 100_000_000L - 8 * 3_600_000L,
+            now = 100_000_000L,
+            nowRt = 5 * 60_000L,
+        )
+        assertEquals(0L, a.startedRt)
+        assertTrue("an eight-hour power-off must be flagged, not silently measured", a.fromBoot)
+    }
+
+    @Test
+    fun `an episode inside this boot is left exactly as it was`() {
+        // Phone up for 2 hours; last event 20 minutes ago.
+        val a = OutageLog.startAnchor(
+            startedAt = 100_000_000L - 20 * 60_000L,
+            now = 100_000_000L,
+            nowRt = 2 * 3_600_000L,
+        )
+        assertEquals(2 * 3_600_000L - 20 * 60_000L, a.startedRt)
+        assertFalse(a.fromBoot)
+    }
+
+    /** The exact boundary, because a start at the boot instant is measurable and must not be
+     *  labelled a floor — a caveat on a sound number teaches the reader to ignore caveats. */
+    @Test
+    fun `a start exactly at the boot is not flagged`() {
+        val a = OutageLog.startAnchor(startedAt = 100_000_000L - 60_000L, now = 100_000_000L, nowRt = 60_000L)
+        assertEquals(0L, a.startedRt)
+        assertFalse(a.fromBoot)
+    }
+
+    /** And the flag has to reach the report, or the clamp is invisible and a floor reads as a
+     *  measurement anyway. */
+    @Test
+    fun `a boot-clamped episode says so in its line and survives storage`() {
+        val e = OutageLog.shape(
+            startedAt = 1_700_000_000_000L, startedRt = 0L, detectedAt = 1_700_000_060_000L,
+            nowRt = 20 * 60_000L, bootAtOpen = 7, bootNow = 7, aliveButDeaf = false,
+            precededBy = OutageLog.Preceded.NOTHING, versionCode = 159,
+            detectedBy = OutageLog.DetectedBy.STALE, endedBy = OutageLog.EndedBy.BACKGROUND,
+            fromBoot = true,
+        )
+        assertTrue(e.render(), "fromBoot" in e.render())
+        assertEquals(true, OutageLog.decode(OutageLog.encode(e))?.fromBoot)
+    }
 }

@@ -946,6 +946,36 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     reports beside it so a slide is visible without making the verdict flip on a handful of
     covers.
 
+51. **A duration anchored to the monotonic clock must refuse to start before the clock did.**
+    `OutageLog.begin` computed `startedRt = nowRt - (now - startedAt)` and clamped the *gap*,
+    not the result. `startedAt` is the last event in wall clock and after a restart it routinely
+    predates the boot, so the anchor landed below zero and `end()` measured from before the
+    phone was running — **reporting the hours it spent switched off as hours he was
+    unprotected.** Neither existing guard sees it: `rebooted` compares the boot count at open
+    with the one at close, so it catches a reboot DURING an episode and not one before its
+    start; `blame` only says BOOT within `BLAME_WINDOW_MS` of the boot, which an overnight
+    shutdown is not. `bootedAt` was already computed in that function, for `blame`, and unread.
+
+    Clamped, and the clamp is *reported* (`fromBoot`, rendered `down=348min+fromBoot`): "at
+    least this long, and it began before the phone did" is a different claim from a measurement.
+
+    **The standing question: for every stored `elapsedRealtime`, what makes it meaningless, and
+    does the reader check for that or only for the obvious half?** Checked clean in the same
+    pass and recorded so nobody re-hunts them: `QuickSession` (bootCount + wall fallback via
+    `SessionClock`), `ProtectionPulse` (`last_run_boot`), `GuardedDeadline`, `UpdatePause`.
+
+    Found beside it: **`onServiceConnected` re-armed the alarm alone**, so the periodic check and
+    the update check were repairable only by `BootReceiver` or by the app being opened — the two
+    rarest events — while a rebind, the commonest by far, could not touch them, on a phone whose
+    reports say `workerSilent: 185`. `ProtectionAlarmReceiver`'s KDoc had listed the three entry
+    points as equivalent for two releases. Now `ensureScheduled`, pinned by `CodeShapeTest`.
+
+    ⚠️ **Not a bug, and the wrong conclusion is one report away:** `ACTION_BOOT_COMPLETED` is
+    delivered only after the FIRST UNLOCK on a file-based-encryption device, so nothing of ours
+    runs between a restart and that unlock. That is harmless — a locked phone cannot be used, so
+    there is nothing to block — but a large `bootHeard` lag is going to look exactly like a
+    fault. Read it against `outageUsedMin`, never on its own.
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused

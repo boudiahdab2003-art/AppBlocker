@@ -1088,4 +1088,30 @@ class CodeShapeTest {
             )
         }
     }
+
+    // ---- invariant 51 ------------------------------------------------------------------------
+
+    /**
+     * **A rebind must repair the whole scheduler, not the alarm alone.**
+     *
+     * `onServiceConnected` called `ensureAlarmScheduled`, so the periodic check and the update
+     * check could only be re-enqueued by `BootReceiver` or by the owner opening the app — the two
+     * rarest events on his phone — while a rebind, by far the commonest (`unbindSeen: 41` in four
+     * days), could not touch them. On a phone whose reports say `workerSilent: 185`, the scheduler
+     * is exactly the thing that keeps not running.
+     */
+    @Test
+    fun `a rebind re-arms the whole scheduler`() {
+        val body = source("service/BlockerAccessibilityService.kt").readText()
+            .substringAfter("override fun onServiceConnected()")
+            .substringBefore(Char(10) + "    /**")
+        val live = body.lines().map { it.trim() }
+            .filterNot { it.startsWith("//") || it.startsWith("*") || it.startsWith("/*") }
+        assertTrue(
+            "onServiceConnected must call ProtectionScheduler.ensureScheduled. The alarm alone " +
+                "leaves the periodic check and the update check repairable only by a boot or by " +
+                "the app being opened, which are the two things that happen least.",
+            live.any { "ProtectionScheduler.ensureScheduled(" in it },
+        )
+    }
 }

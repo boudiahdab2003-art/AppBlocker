@@ -1211,11 +1211,20 @@ class BlockerAccessibilityService : AccessibilityService() {
         // died deaf would combine with a new `connected = true` and condemn a watcher that has
         // just started working.
         runCatching { ServiceHealth.clearProbeStreak(applicationContext) }
-        // Re-arm the alarm that watches WorkManager. An inexact alarm is re-armed only by its
-        // own firing, so a single missed one would end the chain for the life of the install --
-        // and a rebind is a free chance to repair that, right after the events most likely to
-        // have broken it (a boot, an update, a space switch).
-        runCatching { ProtectionScheduler.ensureAlarmScheduled(applicationContext) }
+        // Re-arm everything that watches this app from outside it. An inexact alarm is re-armed
+        // only by its own firing, so a single missed one would end the chain for the life of the
+        // install -- and a rebind is a free chance to repair that, right after the events most
+        // likely to have broken it (a boot, an update, a space switch).
+        //
+        // ⚠️ **The full `ensureScheduled`, not just the alarm.** It was the alarm alone, which
+        // left the periodic check and the update check repairable only by `BootReceiver` or by him
+        // opening the app -- the two rarest events -- while a rebind, the commonest by far
+        // (`unbindSeen: 41` in four days), could not touch them. On a phone reporting
+        // `workerSilent: 185` the scheduler is precisely the thing that keeps not running, so the
+        // component with the most chances to fix it was the one that didn't.
+        // `enqueueUniquePeriodicWork` is KEEP and idempotent, and already runs on every
+        // MainActivity resume, so this costs a WorkManager lookup per bind.
+        runCatching { ProtectionScheduler.ensureScheduled(applicationContext) }
         // **Blocking is back, and this line is the moment it happened.** Being here at all is the
         // proof: Android has just bound the watcher. Everything else that could close the episode
         // had to come looking -- and all of it but the 25-minute alarm is a WorkManager job, which

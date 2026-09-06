@@ -94,6 +94,10 @@ object OutageLog {
     const val UNKNOWN_USE = -1
 
     /** Minutes of real use across every stoppage — the total that means something. */
+    /** The episode began before this boot, so its length is measured from the boot and is a
+     *  floor rather than a measurement — see [startAnchor]. */
+    private const val KEY_OPEN_FROM_BOOT = "open_from_boot"
+
     private const val KEY_TOTAL_USED_MIN = "total_used_min"
 
     /** How many stoppages the use figure actually covers. Without it, "0 minutes of use" and
@@ -263,6 +267,10 @@ object OutageLog {
          * not zero (invariant 11), and zero here would read as "this one was harmless".
          */
         val usedDuringMin: Int = UNKNOWN_USE,
+        /** The episode began before this boot, so [durationMs] runs from the boot and is a floor.
+         *  See [startAnchor]: without it, time the phone spent switched off was reported as time
+         *  the owner was unprotected. */
+        val fromBoot: Boolean = false,
     ) {
         /**
          * A report-ready line. No content, by construction — every field here is a number.
@@ -280,7 +288,10 @@ object OutageLog {
             val mins = if (durationMs < 0) "?" else "${durationMs / 60_000}"
             val detect = if (detectedAfterMs < 0) "?" else "${detectedAfterMs / 60_000}"
             val used = if (usedDuringMin < 0) "?" else "$usedDuringMin"
-            return "at=${startedLabel()}  down=${mins}min  used=${used}min  " +
+            // `fromBoot` marks a length that is a floor rather than a measurement, so the two can
+            // never be read as the same number — the rule `backBy` already follows for endings.
+            val span = if (fromBoot) "${mins}min+fromBoot" else "${mins}min"
+            return "at=${startedLabel()}  down=$span  used=${used}min  " +
                 "noticedAfter=${detect}min  deaf=$aliveButDeaf  after=$precededBy  " +
                 "rebooted=$rebooted  build=$versionCode  by=$detectedBy  backBy=$endedBy"
         }
@@ -322,6 +333,7 @@ object OutageLog {
         /** Minutes of real use during the window, or [UNKNOWN_USE]. Carried straight through: the
          *  caller took the reading where both ends were known, and this must not second-guess it. */
         usedDuringMin: Int = UNKNOWN_USE,
+        fromBoot: Boolean = false,
     ): Episode {
         val rebooted = bootAtOpen != bootNow
         // A reboot resets the monotonic clock, so the difference across one is not a duration.
@@ -342,6 +354,7 @@ object OutageLog {
             detectedBy = if (detectedBy in DetectedBy.ALL) detectedBy else DetectedBy.UNKNOWN,
             endedBy = if (endedBy in EndedBy.ALL) endedBy else EndedBy.UNKNOWN,
             usedDuringMin = usedDuringMin,
+            fromBoot = fromBoot,
         )
     }
 
@@ -352,6 +365,33 @@ object OutageLog {
      * the more specific answer. Both windows are measured against when blocking *stopped*, not
      * when the app noticed — the gap between those two is exactly what this file exists to expose.
      */
+    /**
+     * Where on the monotonic clock this episode starts — **and never before the clock did.**
+     *
+     * `startedAt` is the last event the watcher saw, in wall clock, and it routinely predates the
+     * current boot: that is the ordinary shape of "he restarted the phone". Subtracting the wall
+     * gap from `elapsedRealtime()` then lands *before zero*, and `end()` measures from there — so
+     * the hours the phone spent switched OFF were being counted as hours he was unprotected.
+     *
+     * On the 5 Sep 2026 episode the damage was three minutes, because he restarted almost
+     * immediately after the last event. It scales with the time powered down: an overnight
+     * shutdown would have reported eight hours unprotected on a phone that was not running.
+     * `rebooted` cannot catch it — it compares the boot count at `begin` with the one at `end`, so
+     * it sees a reboot DURING an episode and is blind to one before its recorded start. Neither
+     * can `blame`, whose BOOT verdict needs the start to fall within [BLAME_WINDOW_MS] of the boot.
+     *
+     * Clamped to zero, and the clamp is reported rather than hidden: "at least this long, and it
+     * began before the phone did" is a different claim from a measurement, and this app's whole
+     * week has been about not printing the second when it means the first.
+     */
+    internal fun startAnchor(startedAt: Long, now: Long, nowRt: Long): Anchor {
+        val raw = nowRt - (now - startedAt).coerceAtLeast(0L)
+        return Anchor(startedRt = raw.coerceAtLeast(0L), fromBoot = raw < 0L)
+    }
+
+    /** @param fromBoot the episode is measured from the boot because it began before it. */
+    internal data class Anchor(val startedRt: Long, val fromBoot: Boolean)
+
     internal fun blame(startedAt: Long, lastUpdateAt: Long, bootedAt: Long): String = when {
         // ⚠️ The window is on BOTH sides of the start, and that is the whole point.
         //
@@ -435,11 +475,12 @@ object OutageLog {
                 // saw. It is up to a minute stale (ServiceHealth throttles its writes) and it is
                 // still far closer than the moment a 15-minute worker happened to look.
                 val startedAt = if (lastEventAt > 0L) lastEventAt else now
-                val startedRt = nowRt - (now - startedAt).coerceAtLeast(0L)
+                val anchor = startAnchor(startedAt, now, nowRt)
                 val bootedAt = now - nowRt
                 p.edit()
                     .putLong(KEY_OPEN_STARTED, startedAt)
-                    .putLong(KEY_OPEN_STARTED_RT, startedRt)
+                    .putLong(KEY_OPEN_STARTED_RT, anchor.startedRt)
+                    .putBoolean(KEY_OPEN_FROM_BOOT, anchor.fromBoot)
                     .putLong(KEY_OPEN_DETECTED, now)
                     .putBoolean(
                         KEY_OPEN_DEAF,
@@ -499,6 +540,7 @@ object OutageLog {
                 bootAtOpen = p.getInt(KEY_OPEN_BOOT, -1),
                 bootNow = DeviceBoot.count(context),
                 aliveButDeaf = p.getBoolean(KEY_OPEN_DEAF, false),
+                fromBoot = p.getBoolean(KEY_OPEN_FROM_BOOT, false),
                 precededBy = p.getString(KEY_OPEN_PRECEDED, Preceded.NOTHING) ?: Preceded.NOTHING,
                 versionCode = p.getLong(KEY_OPEN_VERSION, -1L),
                 detectedBy = p.getString(KEY_OPEN_DETECTED_BY, DetectedBy.UNKNOWN) ?: DetectedBy.UNKNOWN,
@@ -549,6 +591,7 @@ object OutageLog {
                 .remove(KEY_OPEN_STARTED_RT)
                 .remove(KEY_OPEN_DETECTED)
                 .remove(KEY_OPEN_DEAF)
+                .remove(KEY_OPEN_FROM_BOOT)
                 .remove(KEY_OPEN_PRECEDED)
                 .remove(KEY_OPEN_BOOT)
                 .remove(KEY_OPEN_VERSION)
@@ -626,6 +669,7 @@ object OutageLog {
     internal fun encode(e: Episode): String = listOf(
         e.startedAt, e.durationMs, e.detectedAfterMs, e.aliveButDeaf,
         e.precededBy, e.rebooted, e.versionCode, e.detectedBy, e.endedBy, e.usedDuringMin,
+        e.fromBoot,
     ).joinToString("|")
 
     /**
@@ -639,7 +683,7 @@ object OutageLog {
      */
     internal fun decode(raw: String): Episode? {
         val p = raw.split('|')
-        if (p.size !in 7..10) return null
+        if (p.size !in 7..11) return null
         return Episode(
             startedAt = p[0].toLongOrNull() ?: return null,
             durationMs = p[1].toLongOrNull() ?: return null,
@@ -654,6 +698,9 @@ object OutageLog {
             // than 0 — those really were not measured, and a zero would quietly claim they were
             // harmless. Same rule as a rebooted duration reporting -1.
             usedDuringMin = p.getOrNull(9)?.toIntOrNull() ?: UNKNOWN_USE,
+            // Absent on every episode stored before this shipped, and false is the right default:
+            // those were measured the old way and inventing a caveat for them would be a guess.
+            fromBoot = p.getOrNull(10)?.toBoolean() ?: false,
         )
     }
 }
