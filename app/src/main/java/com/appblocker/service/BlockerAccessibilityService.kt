@@ -2864,6 +2864,21 @@ class BlockerAccessibilityService : AccessibilityService() {
                     lastForegroundPkg = front
                     SilenceLog.record(applicationContext, SilenceLog.BLIND_LOOKS)
                     handleAppBlock(front)
+                    // ⭐ **The site layer has the same single point of failure the app layer above
+                    // just stopped having**, and on this phone it is the one that matters more —
+                    // his block log is mostly `why=site`. Page scanning is only ever armed by an
+                    // event, so a deaf watcher never looks at a page again however long he stays
+                    // on it.
+                    //
+                    // It can still SEE, though: `rootInActiveWindow` is a direct query rather than
+                    // a delivery, which is exactly what `probeScreen` has been proving readable
+                    // all along. So the deaf case needs no new way of reading a page, only
+                    // something left to ask — and the heartbeat is something.
+                    //
+                    // Same gate as the event path a few hundred lines up, deliberately identical:
+                    // `shouldScanPkg` decides what is worth reading (browsers, the update-pause
+                    // rules, the adult layer) and a cover already up owns the screen.
+                    if (!overlay.isShowing && shouldScanPkg(front)) scheduleWebScan()
                 }
             }
         }

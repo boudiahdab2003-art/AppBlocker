@@ -1060,6 +1060,20 @@ class CodeShapeTest {
             .substringAfter("private fun coverBlindly()")
             .substringBefore(Char(10) + "    /**")
         assertTrue("coverBlindly must route through handleAppBlock", "handleAppBlock(" in body)
+        // Both layers or neither. Page scanning is armed only by an event too, so a deaf watcher
+        // stops looking at pages as completely as it stops looking at apps — and on this phone the
+        // site layer is the one that catches most things. Covering only the app half would look
+        // like a fix while leaving the bigger hole open.
+        assertTrue(
+            "coverBlindly must re-arm the page scan as well, or the site and keyword layers stay " +
+                "blind for the whole silence spell.",
+            "scheduleWebScan()" in body,
+        )
+        assertTrue(
+            "the page scan must keep the event path's own gate (shouldScanPkg, and a cover " +
+                "already up owns the screen), or this becomes a second scanning policy.",
+            "shouldScanPkg(" in body && "overlay.isShowing" in body,
+        )
         listOf("blockReason(", "showBlockScreen(", "overlay.remove()").forEach {
             assertFalse(
                 "coverBlindly calls $it directly, which puts a second copy of the blocking " +
