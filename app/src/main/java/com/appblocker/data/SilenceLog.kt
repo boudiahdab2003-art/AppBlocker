@@ -87,6 +87,21 @@ object SilenceLog {
      */
     const val BLIND_LOOKS = "blind_looks"
 
+    /**
+     * **Covers actually raised by that look** — the half that says whether it protects anything.
+     *
+     * ⚠️ [BLIND_LOOKS] counts the fallback *running*, which it does once a minute for as long as a
+     * silence spell lasts, whether or not there was anything to block. Read alone it climbs on a
+     * phone the net has never once helped, and it was written down as the acceptance test for the
+     * whole fix before anybody noticed that.
+     *
+     * Which is `revives` again, in the counter built to judge the replacement for `revives`: 67
+     * successes out of 67 while the fault it treated carried on for weeks. **A remedy may not
+     * count its own attempts as its results.** So this counts the outcome — a cover that was not
+     * up before the blind decision and was after it — and the pair is read together or not at all.
+     */
+    const val BLIND_COVERS = "blind_covers"
+
 
 
     /**
@@ -118,6 +133,7 @@ object SilenceLog {
 
     val KINDS = listOf(
         DEAF_DISMISSALS, LATE_DECLINES, UNREADY_DECISIONS, UNREADY_BLIND, BLIND_LOOKS,
+        BLIND_COVERS,
         SHORTS_EXIT_CLOSED, SHORTS_EXIT_BLIND, GRACE_RECOVERS,
     )
 

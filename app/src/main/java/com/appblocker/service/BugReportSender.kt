@@ -288,6 +288,12 @@ object BugReportSender {
         field("blindLooks") {
             SilenceLog.get(ctx, SilenceLog.BLIND_LOOKS).total.toString()
         }
+        // ⚠️ **The one that matters: covers RAISED by that look, not looks taken.** blindLooks
+        // climbs once a minute through any silence spell whether or not there was anything to
+        // block, so on its own it would report the net working on a phone it has never helped.
+        field("blindCovers") {
+            SilenceLog.get(ctx, SilenceLog.BLIND_COVERS).total.toString()
+        }
         // "12 shut, 2 blind" — Shorts dismissals where the reel was confirmed closed before
         // leaving, against ones where it could not be confirmed and the walk pressed nothing.
         // Whether BACK actually pops YouTube's reel is a fact about someone else's app on his

@@ -1007,6 +1007,24 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     fields is a prefs read costing nothing, and the whole map had been gated behind the one
     expensive call it contains.
 
+53. **A remedy may not count its own attempts as its results.** `blindLooks` counted the blind
+    fallback *running* — which it does once a minute for as long as a silence spell lasts,
+    whether or not there was anything to block. So it climbs on a phone the net has never once
+    helped, and it had already been written down, in a message to the owner, as **the acceptance
+    test for the whole fix**: "if it climbs, it is catching moments that used to be unprotected".
+    It would not have been.
+
+    That is `revives` for the second time — 67 successes out of 67 while the fault it treated
+    carried on for weeks — committed inside the counter built to judge the *replacement* for
+    `revives`, by the same person who had just written that lesson down twice. Knowing the shape
+    is not the same as checking for it.
+
+    `BLIND_COVERS` is the outcome: a cover that was not up before the blind decision and was
+    after it. Read as a pair with `blindLooks`, never alone.
+
+    **The standing question for every counter: does this measure what the code DID, or what it
+    ACHIEVED — and which one did I promise somebody it meant?**
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused

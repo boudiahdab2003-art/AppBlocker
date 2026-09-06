@@ -1060,6 +1060,23 @@ class CodeShapeTest {
             .substringAfter("private fun coverBlindly()")
             .substringBefore(Char(10) + "    /**")
         assertTrue("coverBlindly must route through handleAppBlock", "handleAppBlock(" in body)
+        // ⚠️ **A remedy may not count its own attempts as its results.** `blindLooks` counts the
+        // fallback running, which it does once a minute through any silence spell whether or not
+        // there was anything to block — so alone it climbs on a phone this has never helped, and
+        // it was written down as the acceptance test for the whole fix. `revives` reported 67
+        // successes out of 67 while the fault it treated carried on for weeks; this is that same
+        // mistake inside the counter built to judge the replacement for it. The outcome has to be
+        // read from the overlay either side of the decision.
+        assertTrue(
+            "coverBlindly must record BLIND_COVERS, or the only number judging this fix counts " +
+                "attempts rather than results.",
+            "BLIND_COVERS" in body,
+        )
+        assertTrue(
+            "BLIND_COVERS must be conditional on the overlay changing state across " +
+                "handleAppBlock, or it is a second copy of blindLooks under a better name.",
+            "coveredBefore" in body && "!coveredBefore && overlay.isShowing" in body,
+        )
         // Both layers or neither. Page scanning is armed only by an event too, so a deaf watcher
         // stops looking at pages as completely as it stops looking at apps — and on this phone the
         // site layer is the one that catches most things. Covering only the app half would look

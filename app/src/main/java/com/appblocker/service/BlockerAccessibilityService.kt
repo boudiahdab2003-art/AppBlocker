@@ -2872,7 +2872,17 @@ class BlockerAccessibilityService : AccessibilityService() {
                     // work from and the next cover decision reads a stale foreground.
                     lastForegroundPkg = front
                     SilenceLog.record(applicationContext, SilenceLog.BLIND_LOOKS)
+                    // ⚠️ **Read before, so the outcome can be told from the attempt.** A look is
+                    // not a catch: this runs once a minute for as long as a silence spell lasts,
+                    // whether or not anything needed blocking, so `blindLooks` alone climbs on a
+                    // phone this has never helped — and it was written down as the acceptance test
+                    // for the whole fix. That is `revives` a second time (67 of 67 while the fault
+                    // carried on), inside the counter built to judge the fix for `revives`.
+                    val coveredBefore = overlay.isShowing
                     handleAppBlock(front)
+                    if (!coveredBefore && overlay.isShowing) {
+                        SilenceLog.record(applicationContext, SilenceLog.BLIND_COVERS)
+                    }
                     // ⭐ **The site layer has the same single point of failure the app layer above
                     // just stopped having**, and on this phone it is the one that matters more —
                     // his block log is mostly `why=site`. Page scanning is only ever armed by an
