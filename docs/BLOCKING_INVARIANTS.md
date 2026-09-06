@@ -1069,6 +1069,27 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     **The standing question: when two thresholds differ, is that drift or design — and which one
     does the code say?** Both need a test; only one of them needs the numbers to be equal.
 
+56. **A fallback that cannot tell a fault from an ordinary quiet screen must not charge for one
+    every minute.** `coverBlindly` was armed by three minutes of silence with the screen on, and
+    re-ran every heartbeat tick for as long as the silence lasted — including the whole time the
+    owner reads something static, which is not a fault at all. Nothing in the app can distinguish
+    "the framework stopped talking to us" from "nothing on screen has changed"; that is inherent,
+    and it means the cost has to be justified for the innocent case, not the guilty one.
+
+    The repeat bought nothing even in the guilty case: **a page cannot change without an
+    accessibility event, and a silence spell is the absence of those**, so a second scan of the
+    same screen can only find what the first found — at the price of a full node walk. The
+    foreground package changing IS new information, and it is precisely what a deaf watcher
+    misses, so the scans follow the package (`lastBlindScanPkg`) rather than the clock. The
+    usage-stats read stays per tick, because that is how the change is seen at all.
+
+    ⚠️ Added by me two days earlier, against a **locked** constraint ("keep the battery as it
+    is"), without measuring. The gating that made it safe on a healthy phone — a silence spell
+    and a lit screen — was reasoned about only for the phone that is broken.
+
+    **The standing question for anything periodic: what does this cost on the phone where
+    nothing is wrong, and how often is that phone in the state that triggers it?**
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused

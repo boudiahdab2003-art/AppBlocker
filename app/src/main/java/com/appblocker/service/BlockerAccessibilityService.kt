@@ -628,6 +628,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                     // this is the edge where that becomes true.
                     if (silenceSpellOpen) {
                         silenceSpellOpen = false
+                        lastBlindScanPkg = null
                         ProtectionWatchdog.noteWatcherAlive(
                             applicationContext, OutageLog.EndedBy.HEARTBEAT,
                         )
@@ -763,6 +764,11 @@ class BlockerAccessibilityService : AccessibilityService() {
      * where nothing is wrong, for an answer that is almost always "nothing was open".
      */
     @Volatile private var silenceSpellOpen = false
+
+    /** The app the blind fallback last scanned, so one silence spell scans each screen once
+     *  rather than once a minute. Cleared when events return — the next spell starts fresh,
+     *  because by then the event path has been looking and what it saw is no longer known. */
+    @Volatile private var lastBlindScanPkg: String? = null
 
     // Periodic re-check of the app the user is sitting in, so time-based conditions take
     // effect mid-use instead of only on the next app switch: a daily limit crossing, a time
@@ -2904,11 +2910,28 @@ class BlockerAccessibilityService : AccessibilityService() {
                     // scan is the only thing that sees a reel. Each self-gates on
                     // `lastForegroundPkg`, set above, so a non-browser or a phone not on YouTube
                     // costs a comparison.
-                    if (!overlay.isShowing && shouldScanPkg(front)) {
-                        scheduleUrlScan()
-                        scheduleWebScan()
+                    // ⚠️ **Once per app per spell, not once a minute.**
+                    //
+                    // A page cannot change without an accessibility event, and a silence spell is
+                    // by definition the absence of those — so a second scan of the same screen can
+                    // only find what the first one found. Re-running it every tick was pure cost,
+                    // and the cost is the expensive kind: a full node walk of whatever is on
+                    // screen. On a healthy phone this branch is reached whenever he reads
+                    // something static for three minutes, which is not a fault and must not be
+                    // charged like one — "keep the battery as it is" is the owner's standing
+                    // constraint, and this was added without measuring against it.
+                    //
+                    // The package changing IS new information, and it is the one thing a deaf
+                    // watcher would otherwise miss entirely: usage stats see the switch that no
+                    // event announced. So the scans follow the package, not the clock.
+                    if (front != lastBlindScanPkg) {
+                        lastBlindScanPkg = front
+                        if (!overlay.isShowing && shouldScanPkg(front)) {
+                            scheduleUrlScan()
+                            scheduleWebScan()
+                        }
+                        scheduleShortsScan()
                     }
-                    scheduleShortsScan()
                 }
             }
         }

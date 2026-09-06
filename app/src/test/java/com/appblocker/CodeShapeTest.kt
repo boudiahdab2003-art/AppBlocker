@@ -1085,6 +1085,17 @@ class CodeShapeTest {
         // `scheduleWebScan`, `scheduleShortsScan` on one line of onAccessibilityEvent). A subset
         // leaves a hole shaped like whichever was left out, and the first draft of this fix
         // restored only the middle one.
+        // ⚠️ And the scans run once per screen per spell, not once a minute. A page cannot
+        // change without an accessibility event and a silence spell is the absence of those, so a
+        // repeat scan of the same screen can only find what the first one found — at the cost of a
+        // full node walk, on a healthy phone, every minute the owner reads something static. The
+        // package changing is the one thing that IS new, and the one a deaf watcher would
+        // otherwise miss, so the scans follow the package rather than the clock.
+        assertTrue(
+            "the blind scans must be gated on the foreground package having changed, or a quiet " +
+                "phone pays for a full page scan every minute for nothing.",
+            "front != lastBlindScanPkg" in body,
+        )
         listOf("scheduleUrlScan()", "scheduleWebScan()", "scheduleShortsScan()").forEach {
             assertTrue(
                 "coverBlindly must re-arm $it as well, or that layer stays blind for the whole " +
