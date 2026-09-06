@@ -1064,11 +1064,17 @@ class CodeShapeTest {
         // stops looking at pages as completely as it stops looking at apps — and on this phone the
         // site layer is the one that catches most things. Covering only the app half would look
         // like a fix while leaving the bigger hole open.
-        assertTrue(
-            "coverBlindly must re-arm the page scan as well, or the site and keyword layers stay " +
-                "blind for the whole silence spell.",
-            "scheduleWebScan()" in body,
-        )
+        // All three, because the event path arms all three together (`scheduleUrlScan`,
+        // `scheduleWebScan`, `scheduleShortsScan` on one line of onAccessibilityEvent). A subset
+        // leaves a hole shaped like whichever was left out, and the first draft of this fix
+        // restored only the middle one.
+        listOf("scheduleUrlScan()", "scheduleWebScan()", "scheduleShortsScan()").forEach {
+            assertTrue(
+                "coverBlindly must re-arm $it as well, or that layer stays blind for the whole " +
+                    "silence spell while the others recover.",
+                it in body,
+            )
+        }
         assertTrue(
             "the page scan must keep the event path's own gate (shouldScanPkg, and a cover " +
                 "already up owns the screen), or this becomes a second scanning policy.",

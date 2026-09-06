@@ -62,6 +62,36 @@ class HealthFactsTest {
         assertEquals(true, HealthFacts.verdicts(healthy).first().good)
     }
 
+    // --- a fault that can never clear is not a fault ------------------------------------------
+
+    /**
+     * **One deaf spell, ever, kept the top of "what looks wrong here" occupied forever.**
+     *
+     * The counter is a lifetime total and the cause was closed in v1.153 — a declined cover now
+     * books its own return — so the row was red in every report since, describing something that
+     * had stopped happening. The section is ordered worst-first, so it was also displacing things
+     * that were actually wrong. Same family as the stale "could not be delivered" and the stale
+     * restart-window fault: a warning that outlives its cause.
+     */
+    @Test
+    fun `a deaf spell that has not happened again is history, not a fault`() {
+        val r = healthy.copy(deafSpells = 1, deafSpellsToday = 0)
+        assertTrue(problems(r).toString(), problems(r).isEmpty())
+        val fact = HealthFacts.verdicts(r).first { "went quiet after a block" in it.title }
+        assertEquals(null, fact.good)
+        assertTrue(fact.detail, "None today" in fact.detail)
+    }
+
+    /** And one that happened today still is, because that is the state worth acting on. */
+    @Test
+    fun `a deaf spell today is still a fault`() {
+        val r = healthy.copy(deafSpells = 4, deafSpellsToday = 2)
+        assertTrue(problems(r).any { "went quiet after a block" in it })
+        val fact = HealthFacts.verdicts(r).first { "went quiet after a block" in it.title }
+        assertEquals(false, fact.good)
+        assertTrue(fact.detail, "2 today" in fact.detail)
+    }
+
     // --- the cost of a stoppage, as opposed to its length -------------------------------------
 
     /**

@@ -106,6 +106,11 @@ object HealthFacts {
         val blocksMeasured: Int,
         val slowBlocks: Int,
         val deafSpells: Int,
+        /** ⚠️ **How many of [deafSpells] happened TODAY.** The lifetime count alone kept a fault at
+         *  the top of "what looks wrong" forever: one spell, from before v1.153 closed the cause,
+         *  and the row could never clear again however long it went without recurring. A warning
+         *  that outlives what caused it is the shape this whole week has been about. */
+        val deafSpellsToday: Int = 0,
         val lateSkips: Int,
         val unreadyDecisions: Int,
         /** The half of [unreadyDecisions] that had no snapshot to answer from. Defaults to 0 so a
@@ -383,9 +388,18 @@ object HealthFacts {
             add(
                 Fact(
                     "Times it went quiet after a block was dismissed: ${r.deafSpells}",
-                    "Each is a spell where a cover was dismissed and the blocker then stopped " +
-                        "watching instead of looking again.",
-                    good = false,
+                    if (r.deafSpellsToday > 0) {
+                        "Each is a spell where a cover was dismissed and the blocker then stopped " +
+                            "watching instead of looking again. ${r.deafSpellsToday} today."
+                    } else {
+                        "Each is a spell where a cover was dismissed and the blocker then stopped " +
+                            "watching instead of looking again. None today — v1.153 made a " +
+                            "declined cover book its own return, and this is the count from " +
+                            "before that."
+                    },
+                    // Only today's is a fault. The lifetime count is history, and history that
+                    // can never clear teaches the reader to skip the section it leads.
+                    good = if (r.deafSpellsToday > 0) false else null,
                     group = Group.SILENCE,
                 ),
             )

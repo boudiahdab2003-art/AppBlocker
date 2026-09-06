@@ -77,6 +77,7 @@ object HealthReader {
             blocksMeasured = buckets.sum(),
             slowBlocks = buckets.lastOrNull() ?: 0,
             deafSpells = safe(0) { SilenceLog.get(ctx, SilenceLog.DEAF_DISMISSALS).total },
+            deafSpellsToday = safe(0) { SilenceLog.get(ctx, SilenceLog.DEAF_DISMISSALS).today },
             lateSkips = safe(0) { SilenceLog.get(ctx, SilenceLog.LATE_DECLINES).total },
             unreadyDecisions = safe(0) { SilenceLog.get(ctx, SilenceLog.UNREADY_DECISIONS).total },
             unreadyBlind = safe(0) { SilenceLog.get(ctx, SilenceLog.UNREADY_BLIND).total },

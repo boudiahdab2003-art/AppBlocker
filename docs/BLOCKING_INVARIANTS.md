@@ -927,6 +927,25 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     **The standing question: what does each defence depend on, and what happens to it when that
     thing stops?** A layer whose only input can be switched off by someone else is not a layer.
 
+50. **A fault judged on a lifetime counter can never clear, and one that cannot clear is not a
+    fault.** `deafSpells` is a lifetime total. The cause was closed in v1.153 — a declined cover
+    now books its own return — and the single spell recorded before that kept *"Times it went
+    quiet after a block was dismissed: 1"* red at the top of **worst first** in every report
+    since, displacing things that were actually wrong. It is judged on today's count now, with
+    the lifetime figure kept as context.
+
+    Third instance in two days of one shape: a warning that outlives its cause. The others were
+    the restart window (defended since the snapshots, still printed as a fault) and *"could not
+    be delivered"* (printed about a channel whose last send succeeded).
+
+    **The standing question: for every `good = false`, what has to happen for it to go away —
+    and can that thing actually happen?** If the answer is "the counter would have to decrease",
+    it is history rather than a finding. Checked in the same pass and left alone: `bindDeferrals`
+    resets when the watcher binds, `shortsBlind` is already `null`, and `quickSharePercent` is a
+    cumulative quality average where a lifetime verdict is the honest one — `blockSpeedToday` now
+    reports beside it so a slide is visible without making the verdict flip on a handful of
+    covers.
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused

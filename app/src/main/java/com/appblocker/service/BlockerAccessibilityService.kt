@@ -2878,7 +2878,18 @@ class BlockerAccessibilityService : AccessibilityService() {
                     // Same gate as the event path a few hundred lines up, deliberately identical:
                     // `shouldScanPkg` decides what is worth reading (browsers, the update-pause
                     // rules, the adult layer) and a cover already up owns the screen.
-                    if (!overlay.isShowing && shouldScanPkg(front)) scheduleWebScan()
+                    //
+                    // ⚠️ All THREE, because the event path arms all three together and picking a
+                    // subset here would leave a hole shaped like whichever one was left out. The
+                    // address-bar check is the fast one that catches a navigation, and the Shorts
+                    // scan is the only thing that sees a reel. Each self-gates on
+                    // `lastForegroundPkg`, set above, so a non-browser or a phone not on YouTube
+                    // costs a comparison.
+                    if (!overlay.isShowing && shouldScanPkg(front)) {
+                        scheduleUrlScan()
+                        scheduleWebScan()
+                    }
+                    scheduleShortsScan()
                 }
             }
         }
