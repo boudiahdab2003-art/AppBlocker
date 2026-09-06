@@ -1274,6 +1274,42 @@ class CodeShapeTest {
     }
 
     /**
+     * **The keyword scanner and the uninstall guard agree on what an app-management screen is.**
+     *
+     * `KEYWORD_SCAN_EXCLUDED` exists so a blocked word that is also an *app name* cannot cover the
+     * screen the owner manages his phone from — Settings → Apps lists every app installed. It was
+     * `setOf("com.android.systemui", "com.android.settings")`, AOSP's two, while
+     * `GuardPackages.GUARD` in the same companion object already knew that **Xiaomi routes app
+     * management through `com.miui.securitycenter`** and said so in its own KDoc. Two lists, one
+     * question, and the shorter one was the one on the hot path — so on the owner's own phone that
+     * screen and all eight package installers were keyword scanned.
+     *
+     * The danger zone makes it sharper: `danger_words.txt` is 353 deliberately ordinary words
+     * matched against every app for an hour, and a list of every app on the phone is the likeliest
+     * place for one of them to appear.
+     *
+     * ⚠️ **This is the shape `docs/BLOCKING_INVARIANTS.md` opens by naming** — a rule written down
+     * as a fact about one screen, with the correct sibling twenty lines away in the same file.
+     */
+    @Test
+    fun `the keyword scanner excludes every screen the guard calls app management`() {
+        val live = source("service/BlockerAccessibilityService.kt").readText()
+            .lines().map { it.trim() }
+            .filterNot { it.startsWith("//") || it.startsWith("*") || it.startsWith("/*") }
+        val decl = live.firstOrNull { it.startsWith("private val KEYWORD_SCAN_EXCLUDED") }
+        assertTrue("KEYWORD_SCAN_EXCLUDED must still exist", decl != null)
+        assertTrue(
+            "KEYWORD_SCAN_EXCLUDED must be derived from the guard's own set, not listed again — " +
+                "a second list of management screens is how the Xiaomi one got left out: $decl",
+            "GuardPackages.GUARD" in decl!! || "GUARD_PACKAGES" in decl,
+        )
+        assertFalse(
+            "it must not spell package names of its own beyond the system-UI one: $decl",
+            Regex("\"com\\.android\\.settings\"|\"com\\.miui\\.").containsMatchIn(decl),
+        )
+    }
+
+    /**
      * **The profile dedupe key is spelled once.**
      *
      * `BugReportSender` asks the queue whether it already has this profile *before* building one,

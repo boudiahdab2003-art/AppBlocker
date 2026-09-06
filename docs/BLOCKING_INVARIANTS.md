@@ -1221,6 +1221,25 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     This is the doc's own opening diagnosis turned on itself for the sixth time — *"the rule had
     been written down as a fact about one screen and never grepped for."*
 
+64. **Two lists that answer the same question are one list.** `KEYWORD_SCAN_EXCLUDED` names the
+    screens that must never be keyword-scanned, because Settings → Apps lists every app installed
+    and a blocked word that is also an app name would cover the screen the owner manages his phone
+    from. It held AOSP's two, `com.android.systemui` and `com.android.settings`. Twenty lines below
+    it in the same companion object, `GUARD_PACKAGES = GuardPackages.GUARD` already knew that
+    **Xiaomi routes app management through `com.miui.securitycenter`** — and said exactly that in
+    its own KDoc, because the uninstall guard had already been through this.
+
+    So on the owner's own phone, MIUI's app-management screen and all eight package installers were
+    keyword-scanned. Sharper during an armed danger hour: `danger_words.txt` is 353 deliberately
+    ordinary words matched against **every** app for an hour, and a list of every app on the phone
+    is the likeliest place for one of them to appear — the block screen landing on the screen he
+    would need to fix it.
+
+    ⚠️ **This is the doc's opening diagnosis, verbatim, for the seventh time**: *the rule had been
+    written down as a fact about one screen and never grepped for*, with the correct sibling
+    implementation a few lines away in the same file. Derived from the guard's set now, with a
+    `CodeShapeTest` that fails on a second list of package literals.
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused
@@ -2241,10 +2260,22 @@ blocking under cover of a different change is how a sweep produces a bug.
   invariant 20): it was written here as a prediction and arrived as a report before anybody swept
   it, which is the best argument this list has for being worked through rather than admired. The
   remaining ones have still never been enumerated.
-- **Where else does a lookup have exactly one spelling?** The 13 Aug report was a hardcoded
-  vendor string that silently meant "off". `SHORTS_ID_MARKERS` is the same shape and admits it
-  ("exact ids vary by YouTube version"); so are the launcher, IME and dialer detections, though
-  those fail *loudly* because the phone stops working. Nobody has enumerated the rest.
+- ~~**Where else does a lookup have exactly one spelling?**~~ **Partly swept, 6 Sep 2026 (late).**
+  Enumerated every hardcoded package/class/view-id literal in `service/` and `data/`. One finding
+  — `KEYWORD_SCAN_EXCLUDED` was AOSP's two while `GuardPackages.GUARD` in the same companion object
+  already knew Xiaomi's, invariant 64. **Checked and clean:** browser detection is *structural*
+  (`CATEGORY_BROWSABLE` and `CATEGORY_APP_BROWSER` intent queries, plus the default browser, with
+  `KNOWN_BROWSERS` only as a supplement), so an unknown browser is still found; `GuardPackages`
+  covers six OEM installers with the reasoning for each; the omnibox tiers are three deep by
+  design and tier 2 catches what tier 1's single `url_bar` spelling misses.
+  ⚠️ **Still open, and it needs a device fact rather than a guess:** `isTransientSurface` is
+  `pkg in TRANSIENT_SURFACES || pkg == imePackage()` and **has no structural fallback at all**.
+  The set holds System UI, `android`, and **three Samsung packages — and nothing for Xiaomi, which
+  is the owner's phone.** The documented cost of a miss is real: an overlay panel drawn over a
+  blocked app reads as *leaving* it, which books a phantom open against that app's daily limit and
+  cancels the mid-use re-check. Do not guess MIUI package names — a wrong entry makes a cover
+  linger. **Ask him first:** *"with a blocked app covered, swipe out MIUI's side panel / Game
+  Turbo — does the cover come down?"* If it does, get the package from a report before adding it.
 
 - ~~The rest of `BlockOverlay`.~~ **Swept in the eighteenth hunt** — all eleven readers traced, the
   set-before-`addView` window confirmed unreachable, one latent trap (`onClose`) recorded. See that

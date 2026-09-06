@@ -3705,9 +3705,25 @@ class BlockerAccessibilityService : AccessibilityService() {
         // browser detection it belongs with; see KNOWN_READABLE_BROWSERS.
 
         // Never keyword-scanned even with "every app" on: System UI (notification shade,
-        // recents — shows app labels) and Settings (Settings→Apps lists every app's name; a
-        // keyword that's also an app name would lock the user out of managing the phone).
-        private val KEYWORD_SCAN_EXCLUDED = setOf("com.android.systemui", "com.android.settings")
+        // recents — shows app labels) and every surface that hosts app management (Settings→Apps
+        // lists every app's name; a keyword that is also an app name would lock the owner out of
+        // managing his own phone).
+        //
+        // ⚠️ **Derived from [GUARD_PACKAGES], not listed a second time.** It was
+        // `setOf("com.android.systemui", "com.android.settings")` — AOSP's two — while
+        // `GuardPackages.GUARD`, twenty lines below in this same object, already knew that Xiaomi
+        // routes app management through `com.miui.securitycenter` and says exactly that in its own
+        // KDoc. So on a Xiaomi the app-management screen and all eight package installers WERE
+        // keyword scanned, and a blocked word that happens to also be an app name covers the very
+        // screen this exclusion exists to keep reachable. Worse during an armed danger hour:
+        // `danger_words.txt` is 353 deliberately ordinary words matched against every app, and a
+        // list of every app on the phone is the likeliest place on it for one of them to appear.
+        //
+        // Both lists answer one question — *which screens are about managing this phone rather
+        // than about content* — so there is one of them now. The guard still reads these screens
+        // through its own path and its own budget (see the KDoc on the guard's text extractor);
+        // not keyword-scanning them takes nothing away from it.
+        private val KEYWORD_SCAN_EXCLUDED = GuardPackages.GUARD + "com.android.systemui"
 
         // Packages whose windows sit on top of whatever app is open instead of replacing it —
         // System UI (shade, volume dialog, heads-up notifications, recents) and the system
