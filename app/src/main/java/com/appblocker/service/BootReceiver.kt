@@ -3,6 +3,7 @@ package com.appblocker.service
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import com.appblocker.data.BootAudit
 import com.appblocker.data.OutageLog
 import com.appblocker.data.UpdatePause
 
@@ -16,6 +17,11 @@ class BootReceiver : BroadcastReceiver() {
             intent.action != Intent.ACTION_MY_PACKAGE_REPLACED
         ) return
         val appContext = context.applicationContext
+        // ⚠️ **First, before anything else in this method.** Everything below reaches
+        // BootAudit.noteRun, which looks for this stamp — so a later call would have the receiver
+        // record its own boot as one it missed, an instrument reporting the exact opposite of what
+        // happened. CodeShapeTest fails the build on the ordering.
+        if (intent.action == Intent.ACTION_BOOT_COMPLETED) BootAudit.heard(appContext)
         if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
             UpdatePause.checkVersionChange(appContext)
             // Look again at three minutes. The check below runs seconds after the install, inside

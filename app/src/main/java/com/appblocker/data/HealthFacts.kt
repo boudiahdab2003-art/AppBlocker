@@ -91,6 +91,11 @@ object HealthFacts {
          *  v1.157 — and the report has to say that rather than imply the total is exact. */
         val outageTimedMs: Long = 0L,
         val outageTimedCount: Int = 0,
+        /** ⚠️ **Minutes of real phone use lost across every stoppage, and how many stoppages that
+         *  covers.** The cost, as opposed to the length — see [com.appblocker.data.OutageLog.Episode.usedDuringMin].
+         *  A count of zero means nothing has been measured yet and must not read as "no use lost". */
+        val outageUsedMin: Int = 0,
+        val outageUsedCount: Int = 0,
         val outageLongestMs: Long,
         val probeFailStreak: Int,
         val bindDeferrals: Int,
@@ -314,18 +319,39 @@ object HealthFacts {
                 // and then left the summary — the sentence he actually reads — as a flat total.
                 val head = "Unprotected for ${minutesText(r.outageTotalMs)} in total; the worst " +
                     "single one was ${minutesText(r.outageLongestMs)}."
-                when {
-                    r.outageTimedCount >= r.outageCount -> head
-                    r.outageTimedCount > 0 -> head +
-                        " Of that, ${minutesText(r.outageTimedMs)} over " +
-                        "${r.outageTimedCount} of them was timed by the blocker itself. The rest " +
-                        "is a maximum: it includes however long it took something to notice " +
-                        "blocking was back."
-                    else -> head +
-                        " Treat it as a maximum — none of it was timed by the blocker itself, so " +
-                        "each one includes however long it took something to notice blocking was " +
-                        "back."
+                // ⚠️ **The cost comes first, because the length on its own misled us for a week.**
+                // On 6 Sep 2026 every stoppage on record turned out to have happened on a phone
+                // nobody was touching, and "unprotected for 26 hours" had been read — and quoted
+                // back to him — as if it were exposure. A blocker that is down while he is asleep
+                // costs him nothing. Length is the size of the fault; this is what it took from
+                // him, and only one of the two is worth being alarmed by.
+                val cost = when {
+                    r.outageUsedCount <= 0 ->
+                        " How much of that happened while you were actually using the phone was " +
+                            "never recorded. From this version every stoppage measures it."
+                    r.outageUsedMin <= 0 ->
+                        " **None of it happened while you were using the phone.** All " +
+                            "${r.outageUsedCount} measured so far were on a phone that was not " +
+                            "being touched, and a blocker that is off while the phone is idle " +
+                            "costs you nothing — there is nothing to block."
+                    else ->
+                        " Of that, ${r.outageUsedMin} minute(s) were while you were actually " +
+                            "using the phone, across ${r.outageUsedCount} measured stoppages. " +
+                            "That is the part that cost you something."
                 }
+                val timing = when {
+                    r.outageTimedCount >= r.outageCount -> ""
+                    r.outageTimedCount > 0 ->
+                        " Of the length, ${minutesText(r.outageTimedMs)} over " +
+                            "${r.outageTimedCount} of them was timed by the blocker itself; the " +
+                            "rest is a maximum that includes however long it took something to " +
+                            "notice blocking was back."
+                    else ->
+                        " Treat the length as a maximum — none of it was timed by the blocker " +
+                            "itself, so each one includes however long it took something to " +
+                            "notice blocking was back."
+                }
+                head + cost + timing
             } else {
                 "No length was ever measured for these, so only the count is known."
             },
@@ -429,6 +455,19 @@ object HealthFacts {
      * this one did not get through, which is a fact about the channel that only the channel can
      * tell us.
      */
+    /**
+     * **Did the last delivery attempt succeed?** `null` when nothing has ever been tried.
+     *
+     * One rule, because there were two. [queueFact] tested `lastSendResult == null` and treated
+     * *any* recorded result as a failure — so on 5 Sep 2026 a report said "✅ The last report was
+     * delivered, 10 h ago" and "❌ 2 reports … could not be delivered" about the same working
+     * channel, and the red one led the worst-first section. `lastSendResult` being non-null means
+     * an attempt HAPPENED, not that it failed; [deliveryFacts] forty lines below already knew
+     * that. Invariant 47's shape again: the correct sibling sitting beside the incorrect one.
+     */
+    internal fun lastSendSucceeded(result: String?): Boolean? =
+        result?.let { it.toIntOrNull()?.let { code -> code in 200..299 } ?: false }
+
     private fun queueFact(r: Reading): Fact? {
         if (r.queuedReports <= 1 && r.reportsLeftToday > 0) return null
         return Fact(
@@ -436,19 +475,36 @@ object HealthFacts {
                 "${r.queuedReports} reports are waiting to be sent",
             if (r.reportsLeftToday <= 0) {
                 "Anything else recorded today stays on the phone until tomorrow."
-            } else if (r.lastSendResult == null) {
-                "They are written and waiting. Nothing has been attempted yet, so this is not a " +
-                    "failure — opening the app is what starts a delivery."
-            } else {
-                "They were written and could not be delivered. If this report arrived, the ones " +
-                    "behind it should be arriving too — if they are not, the route is broken " +
-                    "rather than the phone."
+            } else when (lastSendSucceeded(r.lastSendResult)) {
+                null ->
+                    "They are written and waiting. Nothing has been attempted yet, so this is " +
+                        "not a failure — opening the app is what starts a delivery."
+                true ->
+                    "They are waiting their turn. The last one went through, so the route is " +
+                        "working — anything over today's limit goes out tomorrow."
+                false ->
+                    "They were written and could not be delivered. If this report arrived, the " +
+                        "ones behind it should be arriving too — if they are not, the route is " +
+                        "broken rather than the phone."
             },
             // ⚠️ A backlog is only a *fault* once a delivery has been tried and failed. Saying
             // "could not be delivered" about reports nothing has attempted yet is a claim the app
             // cannot support — and a finding that fires on ordinary behaviour teaches the reader
             // to skip the section, which is how the real failure stayed invisible for six days.
-            good = if (r.lastSendResult == null && r.reportsLeftToday > 0) null else false,
+            // A backlog is a fault only when a delivery was tried and FAILED. Nothing tried yet
+            // is not one, a successful send with reports still queued behind today's limit is not
+            // one either, and calling ordinary throttling a failure is how a section meant for
+            // real findings teaches its reader to skip it.
+            // A spent daily cap stays a finding: it is the one state where evidence is being held
+            // back, and I need to know I am not seeing everything. Untouched here on purpose.
+            // What changed is only the case this was wrong about — a backlog waiting behind a
+            // send that WORKED, which is ordinary throttling and was printing "could not be
+            // delivered" in red under "the last report was delivered".
+            good = if (r.reportsLeftToday > 0 && lastSendSucceeded(r.lastSendResult) != false) {
+                null
+            } else {
+                false
+            },
             group = Group.REPORTING,
         )
     }
@@ -502,7 +558,7 @@ object HealthFacts {
         val code = result.toIntOrNull()
         add(
             when {
-                code != null && code in 200..299 -> Fact(
+                lastSendSucceeded(result) == true -> Fact(
                     "The last report was delivered, $ago",
                     "The route from this phone to the developer is working.",
                     good = true,

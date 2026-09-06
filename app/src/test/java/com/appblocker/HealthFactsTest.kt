@@ -62,6 +62,86 @@ class HealthFactsTest {
         assertEquals(true, HealthFacts.verdicts(healthy).first().good)
     }
 
+    // --- the cost of a stoppage, as opposed to its length -------------------------------------
+
+    /**
+     * **The finding that reframed a week of work.** On 6 Sep 2026 every stoppage on record turned
+     * out to have happened on a phone nobody was touching — 61, 191, 351 and 1181 minutes, all
+     * with zero measured use. "Unprotected for 26 hours" had been read, and quoted back to him, as
+     * if it were exposure. A blocker that is off while he is asleep costs him nothing.
+     */
+    @Test
+    fun `a total with no use behind it says so plainly`() {
+        val r = healthy.copy(
+            outageCount = 30, foundDead = 42,
+            outageTotalMs = 95_220_000L, outageLongestMs = 21_060_000L,
+            outageUsedMin = 0, outageUsedCount = 4,
+        )
+        val detail = HealthFacts.verdicts(r).first { "Blocking has stopped" in it.title }.detail
+        assertTrue(detail, "None of it happened while you were using the phone" in detail)
+        assertTrue(detail, "4 measured" in detail)
+    }
+
+    /** Nothing measured yet is a different sentence from nothing lost, and rendering them alike
+     *  would announce a clean bill of health the app has not earned. */
+    @Test
+    fun `no use measured yet never reads as no use lost`() {
+        val r = healthy.copy(
+            outageCount = 30, foundDead = 42,
+            outageTotalMs = 95_220_000L, outageLongestMs = 21_060_000L,
+            outageUsedMin = 0, outageUsedCount = 0,
+        )
+        val detail = HealthFacts.verdicts(r).first { "Blocking has stopped" in it.title }.detail
+        assertTrue(detail, "never recorded" in detail)
+        assertFalse(detail, "None of it happened while you were using the phone" in detail)
+    }
+
+    @Test
+    fun `use that was actually lost is named as the part that cost something`() {
+        val r = healthy.copy(
+            outageCount = 30, foundDead = 42,
+            outageTotalMs = 95_220_000L, outageLongestMs = 21_060_000L,
+            outageUsedMin = 12, outageUsedCount = 4,
+        )
+        val detail = HealthFacts.verdicts(r).first { "Blocking has stopped" in it.title }.detail
+        assertTrue(detail, "12 minute(s) were while you were actually using" in detail)
+        assertTrue(detail, "cost you something" in detail)
+    }
+
+    // --- a backlog behind a working channel is not a delivery failure -------------------------
+
+    /**
+     * Report #99 said "✅ The last report was delivered, 10 h ago" and "❌ 2 reports … could not be
+     * delivered" about the same channel, and the red one led the worst-first section.
+     * `lastSendResult` being non-null means an attempt happened, not that it failed — which the
+     * reader forty lines below already knew.
+     */
+    @Test
+    fun `reports queued behind a successful send are not a failure`() {
+        val r = healthy.copy(queuedReports = 2, reportsLeftToday = 3, lastSendResult = "201")
+        val fact = HealthFacts.verdicts(r).first { "waiting to be sent" in it.title }
+        assertEquals(null, fact.good)
+        assertFalse(fact.detail, "could not be delivered" in fact.detail)
+        assertTrue(fact.detail, "the route is working" in fact.detail)
+    }
+
+    @Test
+    fun `reports queued behind a failed send still are a failure`() {
+        val r = healthy.copy(queuedReports = 2, reportsLeftToday = 3, lastSendResult = "500")
+        val fact = HealthFacts.verdicts(r).first { "waiting to be sent" in it.title }
+        assertEquals(false, fact.good)
+        assertTrue(fact.detail, "could not be delivered" in fact.detail)
+    }
+
+    @Test
+    fun `the two readers of a send result agree`() {
+        assertEquals(null, HealthFacts.lastSendSucceeded(null))
+        assertEquals(true, HealthFacts.lastSendSucceeded("200"))
+        assertEquals(true, HealthFacts.lastSendSucceeded("201"))
+        assertEquals(false, HealthFacts.lastSendSucceeded("403"))
+        assertEquals(false, HealthFacts.lastSendSucceeded("UnknownHostException"))
+    }
+
     // --- the total he actually reads ----------------------------------------------------------
 
     /**
@@ -80,7 +160,7 @@ class HealthFactsTest {
             outageTimedMs = 0L, outageTimedCount = 0,
         )
         val fact = HealthFacts.verdicts(r).first { "Blocking has stopped" in it.title }
-        assertTrue(fact.detail, "Treat it as a maximum" in fact.detail)
+        assertTrue(fact.detail, "Treat the length as a maximum" in fact.detail)
         assertEquals(null, fact.good)
     }
 
@@ -94,6 +174,7 @@ class HealthFactsTest {
         val detail = HealthFacts.verdicts(r).first { "Blocking has stopped" in it.title }.detail
         assertTrue(detail, "36 min" in detail && "2 of them" in detail)
         assertTrue(detail, "the rest is a maximum" in detail.lowercase())
+        assertTrue(detail, "Of the length" in detail)
     }
 
     /** Once every stoppage is self-timed the caveat is no longer true, and a warning that outlives

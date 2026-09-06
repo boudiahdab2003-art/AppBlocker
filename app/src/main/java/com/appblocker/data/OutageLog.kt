@@ -88,6 +88,18 @@ object OutageLog {
      * for episodes recorded before this existed is simply not knowable, and the report says so
      * rather than assuming.
      */
+    /** "Nobody could tell how much of this outage the phone was in use for." Usage access is
+     *  optional, so this is an ordinary answer rather than a failure — and it is deliberately NOT
+     *  zero, because zero is the reading that means "this stoppage cost nothing". */
+    const val UNKNOWN_USE = -1
+
+    /** Minutes of real use across every stoppage — the total that means something. */
+    private const val KEY_TOTAL_USED_MIN = "total_used_min"
+
+    /** How many stoppages the use figure actually covers. Without it, "0 minutes of use" and
+     *  "nothing has been measured yet" are the same reading — and they are opposite findings. */
+    private const val KEY_TOTAL_USED_COUNT = "total_used_count"
+
     private const val KEY_TIMED_MS = "timed_ms"
     private const val KEY_TIMED_COUNT = "timed_count"
 
@@ -234,6 +246,23 @@ object OutageLog {
         /** Which arm concluded blocking had stopped — one of [DetectedBy]. */
         val detectedBy: String = DetectedBy.UNKNOWN,
         val endedBy: String = EndedBy.UNKNOWN,
+        /**
+         * ⚠️ **Minutes the phone was actually USED while blocking was down** — or [UNKNOWN_USE].
+         *
+         * The number this whole log should have been reporting from the start. On 6 Sep 2026 every
+         * stoppage on record turned out to have happened on a phone nobody was touching: 61 min,
+         * 191 min, 1181 min, all with zero measured use, and the six-hour one caught by a detector
+         * that needs fifteen minutes of use before it will conclude anything. "Unprotected for
+         * 26 hours" was, as far as anything here can tell, a phone on a table.
+         *
+         * A blocker that is down while the owner is asleep costs him nothing — there is nothing to
+         * block. So wall-clock minutes are the size of the outage and these are its **cost**, and
+         * only one of the two is worth a headline or a week of releases.
+         *
+         * [UNKNOWN_USE] when usage access is off or the query failed: an unanswerable question is
+         * not zero (invariant 11), and zero here would read as "this one was harmless".
+         */
+        val usedDuringMin: Int = UNKNOWN_USE,
     ) {
         /**
          * A report-ready line. No content, by construction — every field here is a number.
@@ -250,9 +279,10 @@ object OutageLog {
         fun render(): String {
             val mins = if (durationMs < 0) "?" else "${durationMs / 60_000}"
             val detect = if (detectedAfterMs < 0) "?" else "${detectedAfterMs / 60_000}"
-            return "at=${startedLabel()}  down=${mins}min  noticedAfter=${detect}min  " +
-                "deaf=$aliveButDeaf  after=$precededBy  rebooted=$rebooted  build=$versionCode  " +
-                "by=$detectedBy  backBy=$endedBy"
+            val used = if (usedDuringMin < 0) "?" else "$usedDuringMin"
+            return "at=${startedLabel()}  down=${mins}min  used=${used}min  " +
+                "noticedAfter=${detect}min  deaf=$aliveButDeaf  after=$precededBy  " +
+                "rebooted=$rebooted  build=$versionCode  by=$detectedBy  backBy=$endedBy"
         }
 
         /** `Sun 21:40`, or `?` when the stamp was never recorded. Never a date-with-year: the day
@@ -289,6 +319,9 @@ object OutageLog {
         versionCode: Long,
         detectedBy: String = DetectedBy.UNKNOWN,
         endedBy: String = EndedBy.UNKNOWN,
+        /** Minutes of real use during the window, or [UNKNOWN_USE]. Carried straight through: the
+         *  caller took the reading where both ends were known, and this must not second-guess it. */
+        usedDuringMin: Int = UNKNOWN_USE,
     ): Episode {
         val rebooted = bootAtOpen != bootNow
         // A reboot resets the monotonic clock, so the difference across one is not a duration.
@@ -308,6 +341,7 @@ object OutageLog {
             versionCode = versionCode,
             detectedBy = if (detectedBy in DetectedBy.ALL) detectedBy else DetectedBy.UNKNOWN,
             endedBy = if (endedBy in EndedBy.ALL) endedBy else EndedBy.UNKNOWN,
+            usedDuringMin = usedDuringMin,
         )
     }
 
@@ -440,6 +474,15 @@ object OutageLog {
         context: Context,
         endedBy: String = EndedBy.UNKNOWN,
         now: Long = System.currentTimeMillis(),
+        /**
+         * Minutes the phone was used between the two instants, or [UNKNOWN_USE].
+         *
+         * Passed in rather than looked up: `UsageTracker` lives in `service` and needs usage
+         * access, and this object has to stay testable on a JVM. Same shape as `BlockInputs`.
+         * The default answers "nobody asked", never "zero" — a caller that forgets must not be
+         * able to record every stoppage as harmless.
+         */
+        usedMinutes: (from: Long, to: Long) -> Int = { _, _ -> UNKNOWN_USE },
     ): Episode? = runCatching {
         // Invariant 37 — same lock as begin(). A double close duplicated the line in his
         // log AND bumped KEY_TOTAL_COUNT and KEY_TOTAL_MS twice, so the two figures the
@@ -460,6 +503,13 @@ object OutageLog {
                 versionCode = p.getLong(KEY_OPEN_VERSION, -1L),
                 detectedBy = p.getString(KEY_OPEN_DETECTED_BY, DetectedBy.UNKNOWN) ?: DetectedBy.UNKNOWN,
                 endedBy = endedBy,
+                // Asked once, here, where both ends of the window are known. Read at report time
+                // instead it would span the wrong range entirely — the 5 Sep six-hour episode
+                // reported `usedMinutes 0` measured over the ONE minute since the phone woke up,
+                // which is true and says nothing about the outage.
+                usedDuringMin = runCatching { usedMinutes(startedAt, now) }
+                    .getOrDefault(UNKNOWN_USE)
+                    .coerceAtLeast(UNKNOWN_USE),
             )
             val existing = p.getString(KEY_EPISODES, "").orEmpty()
                 .split(';').filter { it.isNotBlank() }
@@ -483,6 +533,18 @@ object OutageLog {
                 // ending AND a knowable length, because that is what "we timed this" means.
                 .putLong(KEY_TIMED_MS, p.getLong(KEY_TIMED_MS, 0L) + if (timed) known else 0L)
                 .putInt(KEY_TIMED_COUNT, p.getInt(KEY_TIMED_COUNT, 0) + if (timed) 1 else 0)
+                // Only a real reading adds to it. An unknown one leaves the total where it was,
+                // so "12 minutes of use lost" never quietly includes stoppages nobody measured.
+                .putInt(
+                    KEY_TOTAL_USED_MIN,
+                    p.getInt(KEY_TOTAL_USED_MIN, 0) +
+                        episode.usedDuringMin.coerceAtLeast(0),
+                )
+                .putInt(
+                    KEY_TOTAL_USED_COUNT,
+                    p.getInt(KEY_TOTAL_USED_COUNT, 0) +
+                        if (episode.usedDuringMin >= 0) 1 else 0,
+                )
                 .remove(KEY_OPEN_STARTED)
                 .remove(KEY_OPEN_STARTED_RT)
                 .remove(KEY_OPEN_DETECTED)
@@ -525,6 +587,12 @@ object OutageLog {
          *  Zero on a phone whose whole history predates [EndedBy.SELF_TIMED]. */
         val timedMs: Long = 0L,
         val timedCount: Int = 0,
+        /** Minutes of actual phone use across every stoppage. **The number that means something**
+         *  — see [Episode.usedDuringMin]. */
+        val usedMin: Int = 0,
+        /** How many of [count] that figure covers. Zero means nothing has been measured yet, which
+         *  is not the same finding as zero minutes of use and must never render as it. */
+        val usedCount: Int = 0,
     )
 
     fun totals(context: Context): Totals = runCatching {
@@ -535,6 +603,8 @@ object OutageLog {
             longestMs = p.getLong(KEY_LONGEST_MS, 0L),
             timedMs = p.getLong(KEY_TIMED_MS, 0L),
             timedCount = p.getInt(KEY_TIMED_COUNT, 0),
+            usedMin = p.getInt(KEY_TOTAL_USED_MIN, 0),
+            usedCount = p.getInt(KEY_TOTAL_USED_COUNT, 0),
         )
     }.getOrDefault(Totals(0, 0L, 0L))
 
@@ -555,7 +625,7 @@ object OutageLog {
 
     internal fun encode(e: Episode): String = listOf(
         e.startedAt, e.durationMs, e.detectedAfterMs, e.aliveButDeaf,
-        e.precededBy, e.rebooted, e.versionCode, e.detectedBy, e.endedBy,
+        e.precededBy, e.rebooted, e.versionCode, e.detectedBy, e.endedBy, e.usedDuringMin,
     ).joinToString("|")
 
     /**
@@ -569,7 +639,7 @@ object OutageLog {
      */
     internal fun decode(raw: String): Episode? {
         val p = raw.split('|')
-        if (p.size !in 7..9) return null
+        if (p.size !in 7..10) return null
         return Episode(
             startedAt = p[0].toLongOrNull() ?: return null,
             durationMs = p[1].toLongOrNull() ?: return null,
@@ -580,6 +650,10 @@ object OutageLog {
             versionCode = p[6].toLongOrNull() ?: -1L,
             detectedBy = p.getOrNull(7)?.takeIf { it in DetectedBy.ALL } ?: DetectedBy.UNKNOWN,
             endedBy = p.getOrNull(8)?.takeIf { it in EndedBy.ALL } ?: EndedBy.UNKNOWN,
+            // Absent on every episode stored before 6 Sep 2026, and that is UNKNOWN_USE rather
+            // than 0 — those really were not measured, and a zero would quietly claim they were
+            // harmless. Same rule as a rebooted duration reporting -1.
+            usedDuringMin = p.getOrNull(9)?.toIntOrNull() ?: UNKNOWN_USE,
         )
     }
 }

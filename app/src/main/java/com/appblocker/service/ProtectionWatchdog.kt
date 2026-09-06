@@ -3,6 +3,7 @@ package com.appblocker.service
 import android.content.Context
 import android.os.Process
 import android.os.SystemClock
+import com.appblocker.data.BootAudit
 import com.appblocker.data.OutageLog
 import com.appblocker.data.ServiceHealth
 import com.appblocker.data.SettingsStore
@@ -116,6 +117,11 @@ object ProtectionWatchdog {
         // open from the resume path. The thing that tells the user blocking has stopped must not
         // itself be able to take the app down. Failures land in ServiceHealth, which the Profile
         // screen now shows.
+        // Every out-of-process check passes through here — boot, worker, alarm, notification
+        // listener, tile, app resume and the watcher itself — which makes this the one place that
+        // can notice a boot our own receiver never heard. Lazy by necessity: a missed boot only
+        // becomes knowable when something finally does run.
+        BootAudit.noteRun(context)
         val reading = read(context)
         // Too early to tell: our process is seconds old and Android has not bound the watcher
         // yet — the normal shape of a check that WorkManager cold-started in order to run. There
@@ -239,7 +245,23 @@ object ProtectionWatchdog {
         ProtectionScheduler.cancelStalledRepeat(context)
         ProtectionNotifier.cancelStalled(context)
         // Returns null in the ordinary case, where nothing was down.
-        OutageLog.end(context, endedBy = calledBy)?.let {
+        //
+        // ⚠️ The usage probe is what turns a stoppage from a length into a cost. It is asked HERE,
+        // at the close, because this is the only moment both ends of the window are known — and
+        // `hasUsageAccess` is checked first so a phone without the permission records
+        // UNKNOWN_USE rather than a zero that would read as "this one was harmless".
+        OutageLog.end(
+            context,
+            endedBy = calledBy,
+            usedMinutes = { from, to ->
+                if (hasUsageAccess(context)) {
+                    runCatching { UsageTracker.totalMinutesInRange(context, from, to) }
+                        .getOrDefault(OutageLog.UNKNOWN_USE)
+                } else {
+                    OutageLog.UNKNOWN_USE
+                }
+            },
+        )?.let {
             // Only on the ending that IS a reconnection, and only when it closed a real stoppage:
             // recorded on every bind this would count boots and updates as recoveries. The age is
             // taken from the OS rather than a field of our own (invariant 9), and read here rather

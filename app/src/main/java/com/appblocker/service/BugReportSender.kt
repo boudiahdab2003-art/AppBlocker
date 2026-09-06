@@ -12,6 +12,7 @@ import com.appblocker.data.AttemptCounter
 import com.appblocker.data.BlockLayouts
 import com.appblocker.data.BlockLatency
 import com.appblocker.data.BlockLog
+import com.appblocker.data.BootAudit
 import com.appblocker.data.BlockThemes
 import com.appblocker.data.BugReportQueue
 import com.appblocker.data.DeviceProfile
@@ -190,6 +191,17 @@ object BugReportSender {
                 "$quick% of ${counts.sum()}, ${counts.last()} slow"
             }
         }
+        // ⚠️ Today only. The lifetime figure above moves a point at a time once there are a
+        // hundred covers behind it, so a bad day reads as noise — 82% to 78% over 5-6 Sep 2026
+        // was about half the recent covers being slow, and nothing said so until it crossed a
+        // threshold. Read the pair: a today far under the lifetime is a slide in progress.
+        field("blockSpeedToday") {
+            val quick = BlockLatency.quickShareToday(ctx)
+            if (quick == null) "none yet" else {
+                val counts = (0 until BlockLatency.SIZE).map { BlockLatency.get(ctx, it).today }
+                "$quick% of ${counts.sum()}"
+            }
+        }
         // The same measurement without the collapse: every bucket, fastest to slowest. The summary
         // above can read 90% while the middle of the distribution walks steadily to the right, and
         // "sometimes it's slow" is a claim about the shape rather than the headline. Eleven
@@ -209,6 +221,23 @@ object BugReportSender {
         // big one means most of the total is still an upper bound.
         field("outageTimedMin") { (OutageLog.totals(ctx).timedMs / 60_000L).toString() }
         field("outageTimedCount") { OutageLog.totals(ctx).timedCount.toString() }
+        // ⚠️ **READ THIS BEFORE outageTotalMin.** Minutes of real phone use lost across every
+        // stoppage, and how many stoppages that covers. On 6 Sep 2026 every episode on record
+        // turned out to have happened on a phone nobody was touching — the length was never the
+        // cost, and a week of work was aimed by the wrong number. A count of 0 means nothing has
+        // been measured yet, which is NOT the same finding as zero minutes lost.
+        field("outageUsedMin") { OutageLog.totals(ctx).usedMin.toString() }
+        field("outageUsedCount") { OutageLog.totals(ctx).usedCount.toString() }
+        // Did our own start-up run after the last restart, and how long after — see BootAudit.
+        // "missed" is the reading that would explain a stoppage nothing noticed for six hours.
+        field("bootHeard") {
+            when (val lag = BootAudit.lagMsForThisBoot(ctx)) {
+                BootAudit.NEVER -> "never"
+                BootAudit.MISSED -> "missed"
+                else -> "${lag / 1000}s"
+            }
+        }
+        field("bootsMissed") { BootAudit.missedCount(ctx).toString() }
         // The live gap since the background scheduler last ran, against `workerSilent`'s lifetime
         // count. "It has been quiet for six hours" is a different statement from "it has gone
         // quiet nine times", and only the first describes right now.

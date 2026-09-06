@@ -624,6 +624,7 @@ data class BugReport(
             // this phone raised and not one thing about how fast any of them arrived, which is
             // the only question the owner has actually asked twice.
             "blockSpeed",
+            "blockSpeedToday",
             // Two counts of the app's own exit walk after a Shorts block: how often the reel was
             // confirmed shut before leaving, and how often it could not be. Says nothing about
             // what was watched — not a video id, not a channel, not a word. It exists because
@@ -735,6 +736,10 @@ data class BugReport(
             "outageWorstMin",
             "outageTimedMin",
             "outageTimedCount",
+            "outageUsedMin",
+            "outageUsedCount",
+            "bootHeard",
+            "bootsMissed",
             // Minutes since the background scheduler last ran — the live gap, against
             // `workerSilent`'s lifetime count. `?` when it has never been seen to run at all.
             "workerSilentMin",

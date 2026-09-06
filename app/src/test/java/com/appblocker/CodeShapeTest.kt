@@ -912,4 +912,92 @@ class CodeShapeTest {
             offenders,
         )
     }
+
+    // ---- invariant 48 ------------------------------------------------------------------------
+
+    /**
+     * **`BootAudit.heard` must be the first call in `BootReceiver`.**
+     *
+     * Everything else the receiver does reaches `BootAudit.noteRun`, which looks for the stamp
+     * `heard` writes. Called later, the receiver records its own boot as one it missed — an
+     * instrument reporting the exact opposite of what happened, and reporting it about the one
+     * question it exists to answer. Compared by position among the call sites, not by character
+     * distance: the last check written this way went red because somebody added a comment.
+     */
+    @Test
+    fun `the boot receiver stamps before it does anything else`() {
+        val body = source("service/BootReceiver.kt").readText()
+            .substringAfter("override fun onReceive")
+        val calls = listOf(
+            "BootAudit.heard(",
+            "UpdatePause.checkVersionChange(",
+            "ProtectionScheduler.",
+            "ProtectionWatchdog.checkAndNotify(",
+        ).mapNotNull { c -> body.indexOf(c).takeIf { it >= 0 }?.let { c to it } }
+
+        val stamp = calls.firstOrNull { it.first == "BootAudit.heard(" }
+        assertTrue("BootReceiver never calls BootAudit.heard", stamp != null)
+        val later = calls.filter { it.second < stamp!!.second }.map { it.first }
+        assertEquals(
+            "these run before BootAudit.heard, so the receiver records its own boot as missed: " +
+                later,
+            emptyList<String>(),
+            later,
+        )
+    }
+
+    /**
+     * **One reader of "did the last send succeed".**
+     *
+     * There were two, forty lines apart, and only one was right: `queueFact` treated any recorded
+     * result as a failure, so a working channel with a throttled backlog printed "could not be
+     * delivered" in red directly under "the last report was delivered". Invariant 47's shape, and
+     * the sibling reader is always where the disagreement lives.
+     */
+    @Test
+    fun `only one rule decides whether the last send succeeded`() {
+        val text = source("data/HealthFacts.kt").readText()
+        val offenders = text.lines().withIndex()
+            .filter { (_, l) ->
+                val bare = l.trim()
+                "lastSendResult" in bare && !bare.startsWith("//") && !bare.startsWith("*") &&
+                    // the field itself, and the one call that asks the question
+                    !bare.startsWith("val lastSendResult") &&
+                    "lastSendSucceeded(" !in bare &&
+                    "val result = r.lastSendResult" !in bare
+            }
+            .map { (i, l) -> "${i + 1} ${l.trim()}" }
+        assertEquals(
+            "these read lastSendResult directly instead of asking lastSendSucceeded, which is " +
+                "how one report came to call the same channel working and broken at once: " +
+                offenders,
+            emptyList<String>(),
+            offenders,
+        )
+    }
+
+    /**
+     * **The cost of a stoppage has to be asked for where both ends of it are known.**
+     *
+     * `usedDuringMin` is minutes of real use during the outage, and it is the number that showed
+     * every stoppage on record happened on an untouched phone. Read at report time instead it
+     * spans the wrong window entirely — the 5 Sep six-hour episode reported `usedMinutes 0`
+     * measured across the ONE minute since the phone woke, which is true and answers nothing. So
+     * the probe is supplied by `OutageLog.end`'s caller, at the close.
+     */
+    @Test
+    fun `the outage cost is measured at the close, from the episode's own window`() {
+        val watchdog = source("service/ProtectionWatchdog.kt").readText()
+        val call = watchdog.substringAfter("OutageLog.end(").substringBefore("?.let")
+        assertTrue(
+            "ProtectionWatchdog must pass a usedMinutes probe to OutageLog.end, or every episode " +
+                "records UNKNOWN_USE and the one number worth having is never taken.",
+            "usedMinutes" in call && "totalMinutesInRange" in call,
+        )
+        assertTrue(
+            "the probe must check usage access first: without it a phone that cannot answer " +
+                "records 0, which reads as \"this stoppage cost nothing\".",
+            "hasUsageAccess" in call,
+        )
+    }
 }

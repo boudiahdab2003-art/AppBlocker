@@ -65,6 +65,8 @@ object HealthReader {
             outageTotalMs = totals.totalMs,
             outageTimedMs = totals.timedMs,
             outageTimedCount = totals.timedCount,
+            outageUsedMin = totals.usedMin,
+            outageUsedCount = totals.usedCount,
             outageLongestMs = totals.longestMs,
             probeFailStreak = safe(0) { ServiceHealth.probeFailStreak(ctx) },
             bindDeferrals = safe(0) { SettingsStore.bindDeferrals(ctx) },

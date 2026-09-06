@@ -108,8 +108,22 @@ object BlockLatency {
      * need five rows to answer. Half a second is the line because that is roughly the point the
      * cover stops feeling like a response to what he did and starts feeling like a delay.
      */
-    fun quickShare(context: Context): Int? {
-        val counts = (0 until SIZE).map { get(context, it).total }
+    fun quickShare(context: Context): Int? = share { get(context, it).total }
+
+    /**
+     * The same share over **today's** covers only, or null when there are none yet.
+     *
+     * A lifetime percentage over a hundred blocks moves by one point when a whole day goes badly,
+     * so a real slide reads as noise: 82% -> 79% -> 78% across 5-6 Sep 2026 was roughly half of
+     * the recent covers being slow, and the lifetime figure hid it until it crossed a threshold.
+     * The per-bucket `today` counts already exist beside the totals, so this is a second reading
+     * of storage the recorder is keeping either way — no new writes, and nothing about how the
+     * blocker scans changes.
+     */
+    fun quickShareToday(context: Context): Int? = share { get(context, it).today }
+
+    private inline fun share(count: (Int) -> Int): Int? {
+        val counts = (0 until SIZE).map(count)
         val all = counts.sum()
         if (all == 0) return null
         val quick = counts[0] + counts[1]

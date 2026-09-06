@@ -882,6 +882,31 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     said "36 min over 3 of them" with only two ever measured. `OutageLog.countsAsTimed` is the
     rule, and it had **no guard at all** until reintroducing the bug showed nothing went red.
 
+48. **The size of a fault is not its cost, and only one of the two is worth alarming anyone with.**
+    `OutageLog` measured stoppages in wall-clock minutes from the first version, and every
+    conclusion for a week — including three releases and a plan — was aimed by that number. On
+    6 Sep 2026 the owner asked why every change was measurement rather than a fix, and checking
+    that answered it: **every stoppage on record happened on a phone nobody was touching.** 61
+    minutes, 191, 1181, all `usedMinutes 0`; the 351-minute one was caught by the detector that
+    needs fifteen measured minutes of use, and took nearly six hours to accumulate them. Android
+    sleeps the process with the phone and rebinds on wake. A blocker that is off while nobody is
+    using the phone has not failed.
+
+    `Episode.usedDuringMin` is the cost, taken by `OutageLog.end`'s caller **at the close**,
+    where both ends of the window are known — the report-time reading spanned the wrong range
+    entirely (`usedMinutes 0` measured across the one minute since the phone woke). `UNKNOWN_USE`
+    is -1, never 0, because zero here reads as "this one was harmless"; `usedCount` exists so
+    "nothing measured yet" cannot render as "nothing lost".
+
+    **The standing question: for every number this app reports, is it the size of the problem or
+    the harm it did?** Grep for totals that sum a duration and ask what was happening during it.
+
+    Also here: `BootAudit`, because `boots` looked like evidence our start-up had run and is
+    Android's own `Settings.Global.BOOT_COUNT` read on demand — it says nothing about us. And
+    `HealthFacts.lastSendSucceeded`, after `queueFact` read "an attempt happened" as "the attempt
+    failed" and printed *could not be delivered* in red under *the last report was delivered*.
+    Invariant 47's sibling shape, for the second release running.
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused
