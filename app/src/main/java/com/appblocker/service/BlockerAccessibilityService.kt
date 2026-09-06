@@ -481,7 +481,11 @@ class BlockerAccessibilityService : AccessibilityService() {
             val queuedAt = webScanQueuedAt
             webScanQueuedAt = 0L
             webScanJob?.cancel()
-            webScanJob = scope.launch { scanWebContent(queuedAt) }
+            webScanJob = scope.launch {
+                // SETTLED: this path deliberately waited before doing anything — see
+                // BlockLatency.Path. The wait is inside every number it records.
+                scanWebContent(BlockLatency.Start(queuedAt, BlockLatency.Path.SETTLED))
+            }
         }
     }
 
@@ -1555,7 +1559,7 @@ class BlockerAccessibilityService : AccessibilityService() {
             // pages), then in-app purchase sheet, then normal app blocking.
             if (!handleSettingsGuard(pkg, className) &&
                 !handlePurchaseBlock(pkg, className)
-            ) handleAppBlock(pkg, eventArrivedAt)
+            ) handleAppBlock(pkg, BlockLatency.Start(eventArrivedAt, BlockLatency.Path.INSTANT))
         }
         // (Re)arm the mid-use re-check for the new foreground app; a neutral app
         // (no rules, no session, no cover) costs nothing.
@@ -1669,14 +1673,14 @@ class BlockerAccessibilityService : AccessibilityService() {
         val queuedAt = stopwatchNow()
         urlScanJob = scope.launch {
             urlScanDirty = false
-            scanBrowserUrl(pkg, queuedAt)
+            scanBrowserUrl(pkg, BlockLatency.Start(queuedAt, BlockLatency.Path.INSTANT))
             // **One repeat at most.** The flag means "it moved while we were reading", and one
             // more read settles that; anything arriving after belongs to the next burst and will
             // schedule its own. Looping until the flag stays clear would let a churning page turn
             // the fast path into a spin, which is the cost this single-flight exists to prevent.
             if (urlScanDirty && lastForegroundPkg == pkg) {
                 urlScanDirty = false
-                scanBrowserUrl(pkg, stopwatchNow())
+                scanBrowserUrl(pkg, BlockLatency.Start(stopwatchNow(), BlockLatency.Path.INSTANT))
             }
         }
     }
@@ -1704,7 +1708,7 @@ class BlockerAccessibilityService : AccessibilityService() {
 
     // --- App blocking (unchanged behaviour) ---
 
-    private fun handleAppBlock(pkg: String, startedAt: Long = 0L) {
+    private fun handleAppBlock(pkg: String, start: BlockLatency.Start? = null) {
         val reason = blockReason(pkg)
         if (reason == null) {
             // "No reason" is only an answer once we have been told the rules. Before Room's first
@@ -1759,7 +1763,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         lastBlockAt = now
         showBlockScreen(
             title = reason.title, message = reason.message, packageName = pkg,
-            counterKey = pkg, why = reason.why, startedAt = startedAt,
+            counterKey = pkg, why = reason.why, start = start,
         )
     }
 
@@ -2516,7 +2520,7 @@ class BlockerAccessibilityService : AccessibilityService() {
      * already on screen — and because the full scan is untouched, this one is free to decline
      * whenever it is unsure: the worst case is the old speed, never a miss.
      */
-    private suspend fun scanBrowserUrl(pkg: String, startedAt: Long = 0L) {
+    private suspend fun scanBrowserUrl(pkg: String, start: BlockLatency.Start? = null) {
         if (lastForegroundPkg != pkg || !shouldScanPkg(pkg)) return
         // A cover is already up, so everything under it is unreachable and there is nothing
         // new to block.
@@ -2580,7 +2584,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                 showBlockScreen(
                     title = hit.title, message = hit.message, packageName = null,
                     counterKey = CoverGate.WEB_KEY, offenceKey = pkg, why = BlockWhy.ofWebHit(hit.site, hit.adult),
-                    startedAt = startedAt,
+                    start = start,
                 )
             } else lastCheckedUrl = null // left during the lookup — re-decide on the way back
         }
@@ -2636,7 +2640,7 @@ class BlockerAccessibilityService : AccessibilityService() {
     }
 
     /** Runs on a background dispatcher (the node-tree walk is heavy); only the block UI hops to main. */
-    private suspend fun scanWebContent(startedAt: Long = 0L) {
+    private suspend fun scanWebContent(start: BlockLatency.Start? = null) {
         // Scan browsers (word + adult + social-domain filtering) and, when the user has blocked
         // words with "every app" on, every other app too (user words only). The word appearing
         // anywhere — including one the user types into another app's own text field — trips the
@@ -2668,40 +2672,80 @@ class BlockerAccessibilityService : AccessibilityService() {
             withContext(Dispatchers.Main) {
                 if (lastForegroundPkg == pkg &&
                     rootInActiveWindow?.packageName?.toString() == pkg
-                ) handleAppBlock(pkg, startedAt)
+                ) handleAppBlock(pkg, start)
             }
             return
         }
         val isBrowser = pkg in browserPackages
-        val text = extractVisibleText(::isLauncherPkg)
-        if (DEBUG) Log.d(TAG, "scan[$pkg browser=$isBrowser]: ${text.length} chars: ${text.take(120)}")
-        if (text.isBlank()) return
-        // Same text as the last thing we blocked on — skip only while that block is still ON
-        // SCREEN. lastWebText is only ever set for text that HIT (a miss nulls it below), so
-        // without the second half this dedup outlives the cover: any path that takes the cover
-        // down early leaves the page reading as "already handled" and it is never covered again.
-        // That is what turned a one-frame flicker into a page sitting there unblocked, and it is
-        // the invisible half of the bug — the owner sees the flash, never the silence after it.
-        // The cost of dropping it is one bounded walk over a page already known to be blocked;
-        // showBlockScreen dedups the cover and CoverGate dedups the count.
-        if (text == lastWebText && overlay.isShowing) return
-        // The site the user is actually ON (browsers only) — keyword matching prefers it
-        // over the page text so a page merely mentioning a blocked word doesn't block. A
-        // non-browser has no address bar at all, which is Unreadable: exactly the null it used
-        // to pass, so its own words and the pack still match its text.
+        // ⚠️ **Computed once.** It was called here and again inside the filter call below,
+        // and each call walks every rule through StrictEdits.liveSiteWords for the same answer.
+        val social = autoSocialKeywords()
+        // After-update pause: the user's own words pause with everything else; only the adult
+        // layer (pack + adult sites) keeps matching. Hoisted beside `social` so both reads of
+        // the rules happen once, before either verdict is asked for.
+        val ownWords = if (updatePauseActive()) emptyList() else activeKeywords()
+        // The site the user is actually ON (browsers only) - keyword matching prefers it over
+        // the page text so a page merely mentioning a blocked word doesn't block. A non-browser
+        // has no address bar at all, which is Unreadable: exactly the null it used to pass, so
+        // its own words and the pack still match its text.
+        //
+        // ⚠️ **Read BEFORE the page text, and that order is the point.** For a site cover -
+        // most of what this app raises - the verdict comes from the host alone, and the
+        // 400-node text walk that used to run first was collected, matched and thrown away. On
+        // a start page it was worse: check() answers null on its own first line for a Blank
+        // address, after both walks had finished. Nothing is scanned more often than before;
+        // one of two scans is skipped when the other has already decided.
+        //
+        // Safe to move ahead of the lastWebText dedup below because that dedup is only
+        // reachable with a cover already on screen, and a cover on screen returns above unless
+        // it is a Shorts cover - which belongs to the YouTube app, where isBrowser is false and
+        // no address is read at all. So no browser pays an omnibox walk it did not pay before.
         val address = if (isBrowser) rememberedBrowserAddress(pkg) else BrowserAddress.Unreadable
-        // "Browser, but no address" is the shape this record exists to make visible — it is the
+        // "Browser, but no address" is the shape this record exists to make visible - it is the
         // whole difference between a Chrome that blocks a site and a Brave that says nothing.
         // Only the host is kept; see WatcherDiagnostics.
         WatcherDiagnostics.record(
             applicationContext, pkg, isBrowser, WatcherDiagnostics.hostOf(address.urlOrNull),
-            autoSocialKeywords(),
+            social,
         )
+        // The two URL layers, in the order check() runs them and with the same arguments, so
+        // the answer is identical to the one the full scan would have reached - it just costs
+        // no page read to get there. checkUrlAdult is called without learnedDomains because
+        // that is what check() does; the undebounced path passes them, and that difference is
+        // older than this change and is left alone rather than quietly widened here.
+        val host = address.urlOrNull?.lowercase()?.takeIf { it.isNotBlank() }
+        val urlHit = if (isBrowser && host != null) {
+            filter.checkUrl(host, ownWords, social)
+                ?: filter.checkUrlAdult(
+                    host, adultPackOn, SettingsStore.blockAdult(applicationContext),
+                )
+        } else {
+            null
+        }
 
-        // YouTube Shorts opened in a browser (youtube.com/shorts) — while Quick Block is active.
+        // The page walk, skipped entirely when the address has already answered.
+        val text = if (urlHit != null) "" else extractVisibleText(::isLauncherPkg)
+        if (DEBUG) Log.d(TAG, "scan[$pkg browser=$isBrowser]: ${text.length} chars")
+        if (urlHit == null) {
+            if (text.isBlank()) return
+            // Same text as the last thing we blocked on - skip only while that block is still
+            // ON SCREEN. lastWebText is only ever set for text that HIT (a miss nulls it
+            // below), so without the second half this dedup outlives the cover: any path that
+            // takes the cover down early leaves the page reading as "already handled" and it is
+            // never covered again. That is what turned a one-frame flicker into a page sitting
+            // there unblocked, and it is the invisible half of the bug - the owner sees the
+            // flash, never the silence after it. The cost of dropping it is one bounded walk
+            // over a page already known to be blocked; showBlockScreen dedups the cover and
+            // CoverGate dedups the count.
+            if (text == lastWebText && overlay.isShowing) return
+        }
+
+        // YouTube Shorts opened in a browser (youtube.com/shorts) - while Quick Block is active.
         // Same rule as the filter's, applied to the one address test that lives out here: an
-        // address answers for itself, an unreadable one falls back to the page (no bypass), and a
-        // start page answers nothing — a shorts link sitting in his history is not a page he is on.
+        // address answers for itself, an unreadable one falls back to the page (no bypass), and
+        // a start page answers nothing - a shorts link in his history is not a page he is on.
+        // ⚠️ Ahead of urlHit on purpose: a shorts URL that also matches a site rule must
+        // still be covered as Shorts, with its own title and its own counter key.
         val shortsText = when (address) {
             is BrowserAddress.At -> address.url
             BrowserAddress.Blank -> ""
@@ -2714,33 +2758,30 @@ class BlockerAccessibilityService : AccessibilityService() {
             withContext(Dispatchers.Main) {
                 if (lastForegroundPkg == pkg && stillOnScreen(pkg)) {
                     // Keyed as the page block it is, NOT with CoverGate.SHORTS_KEY. That key is
-                    // the YouTube-player scan's ownership marker: `shortsCovering` is derived from
-                    // it alone, so a browser cover wearing it was removed by scheduleShortsScan on
-                    // every content event ("a Shorts cover outside YouTube") and re-raised by the
-                    // next scan of the churning page — the flashing the owner reported, with the
-                    // page usable in between. As "web" it behaves like every other page block:
-                    // held while he is on the page, dismiss-suppressed after "Got it", counted in
-                    // Insights' Websites row. The log still says why=shorts.
+                    // the YouTube-player scan's ownership marker: shortsCovering is derived from
+                    // it alone, so a browser cover wearing it was removed by scheduleShortsScan
+                    // on every content event ("a Shorts cover outside YouTube") and re-raised by
+                    // the next scan of the churning page - the flashing the owner reported, with
+                    // the page usable in between. As "web" it behaves like every other page
+                    // block: held while he is on the page, dismiss-suppressed after "Got it",
+                    // counted in Insights' Websites row. The log still says why=shorts.
                     showBlockScreen(title = words.get(R.string.block_shorts_title),
                         message = words.get(R.string.block_shorts_message), packageName = null,
                         counterKey = CoverGate.WEB_KEY, offenceKey = pkg, why = BlockWhy.SHORTS)
-                } else lastWebText = null // left during the scan — don't cover what's there now
+                } else lastWebText = null // left during the scan - don't cover what's there now
             }
             return
         }
 
         // Browsers get the full filter (user words + adult word pack + blocked apps' domains +
-        // adult site list); user + social keywords match the omnibox URL when one was read
-        // (page text otherwise), while the adult layers always match the page text. Other
-        // apps match the user's own words + the adult word pack — the adult domains/keywords
-        // are URL/heuristic lists that don't make sense against arbitrary app UI text, but
-        // the pack is whole-word matched so it's safe everywhere.
-        // After-update pause: the user's own words pause with everything else; only the
-        // adult layer (pack + adult sites) keeps matching.
-        val ownWords = if (updatePauseActive()) emptyList() else activeKeywords()
-        val hit = if (isBrowser) {
+        // adult site list); user + social keywords match the omnibox URL when one was read (page
+        // text otherwise), while the adult layers always match the page text. Other apps match
+        // the user's own words + the adult word pack - the adult domains/keywords are
+        // URL/heuristic lists that don't make sense against arbitrary app UI text, but the pack
+        // is whole-word matched so it is safe everywhere.
+        val hit = urlHit ?: if (isBrowser) {
             filter.check(
-                text, address, ownWords, autoSocialKeywords(), adultPackOn,
+                text, address, ownWords, social, adultPackOn,
                 SettingsStore.blockAdult(applicationContext),
                 wideList = wideListOn(),
             )
@@ -2751,11 +2792,14 @@ class BlockerAccessibilityService : AccessibilityService() {
                 wideList = wideListOn(),
             )
         }
+
         if (hit == null) {
             lastWebText = null
             return
         }
-        lastWebText = text
+        // Only when a page was actually read: a URL-decided cover has no text to remember,
+        // and the empty placeholder would be a value the dedup above could match on.
+        lastWebText = if (urlHit == null) text else null
         if (DEBUG) Log.d(TAG, "BLOCK: ${hit.title} / ${hit.message}")
         // Cover the offending page with the block screen. The overlay/Activity must be shown on
         // the main thread. (No GLOBAL_ACTION_BACK *here* — at block time it races with the
@@ -2780,7 +2824,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                 showBlockScreen(
                     title = hit.title, message = hit.message, packageName = null,
                     counterKey = CoverGate.WEB_KEY, offenceKey = pkg, why = BlockWhy.ofWebHit(hit.site, hit.adult),
-                    startedAt = startedAt,
+                    start = start,
                 )
             } else lastWebText = null // left during the scan — don't cover what's there now
         }
@@ -3120,7 +3164,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         /** When the event that led here arrived, monotonically — 0 when this cover has no
          *  meaningful start to measure from (the re-check tick, the guard, a purchase sheet).
          *  See [BlockLatency]: the interval is recorded only when there is a real one. */
-        startedAt: Long = 0L,
+        start: BlockLatency.Start? = null,
     ) {
         // One cover = one recorded entry. The page/app behind a cover keeps emitting events
         // (feeds churn, activities transition), and each used to re-record an "attempt" and
@@ -3216,8 +3260,10 @@ class BlockerAccessibilityService : AccessibilityService() {
         // it took to happen, so when the owner said the blocking was too slow there was no
         // number on the phone that could agree with him. Recorded after the cover for the same
         // reason as the breadcrumb below, and only when there is a real start to measure from.
-        val took = if (startedAt > 0L) stopwatchNow() - startedAt else -1L
-        if (took >= 0L) BlockLatency.record(applicationContext, took)
+        val took = if (start != null && start.at > 0L) stopwatchNow() - start.at else -1L
+        if (took >= 0L && start != null) {
+            BlockLatency.record(applicationContext, took, start.path)
+        }
         // Diagnostic breadcrumb, recorded at the one place every cover passes through. Shape
         // only — which path raised it, whether our own UI was in front, whether the window on
         // screen actually matched what we were blocking. Never the app, word or page: see

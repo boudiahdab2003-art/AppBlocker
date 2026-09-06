@@ -1194,4 +1194,99 @@ class CodeShapeTest {
             "takeReading = false" in live,
         )
     }
+
+    // ---- invariant 58 ------------------------------------------------------------------------
+
+    /**
+     * The body of one function, comment lines removed.
+     *
+     * ⚠️ Two things learned the hard way. A shape check satisfied by a *commented-out* call has
+     * happened twice in this repo, so comments come out before anything is looked for. And the
+     * end of a function is its own four-space `}` — bounding on "the next `private fun`" swallows
+     * whatever sits between, which here is an enum and three more methods, and the count-based
+     * assertions below would then be counting somebody else's code.
+     */
+    private fun liveBody(path: String, after: String): String =
+        source(path).readText()
+            .substringAfter(after)
+            .substringBefore(Char(10) + "    }")
+            .lines().map { it.trim() }
+            .filterNot { it.startsWith("//") || it.startsWith("*") || it.startsWith("/*") }
+            .joinToString(" ")
+
+    /**
+     * **Only the debounced page scan may record a latency as SETTLED, and it must.**
+     *
+     * `BlockLatency` blends nothing now, and the whole value of that rests on one thing being true
+     * at four call sites: the two paths that decide in the event's own turn say INSTANT, and the
+     * one that deliberately waits 250-950ms before it starts work says SETTLED. Wrong in either
+     * direction and the histogram silently goes back to being a mixture — a settled cover filed as
+     * instant drags the verdict down with waiting time, an instant one filed as settled hides real
+     * slowness. Nothing throws, nothing looks wrong, and the number simply resumes meaning what it
+     * meant on 6 Sep 2026: it was read as blocking getting slower and reported to the owner as
+     * such, and it was path mix.
+     *
+     * `BlockLatency.Start` exists so a duration cannot be recorded without naming its path. This is
+     * the other half — that the names are the right way round.
+     */
+    @Test
+    fun `only the debounced scan records a settled latency`() {
+        val live = source("service/BlockerAccessibilityService.kt").readText()
+            .lines().map { it.trim() }
+            .filterNot { it.startsWith("//") || it.startsWith("*") || it.startsWith("/*") }
+        val settled = live.filter { "BlockLatency.Path.SETTLED" in it }
+        assertEquals(
+            "exactly one place may claim a settled latency, and it is the web-scan runnable: " +
+                settled,
+            1,
+            settled.size,
+        )
+        assertTrue(
+            "the settled start must be the one handed to scanWebContent, the only path that " +
+                "waits before it works: " + settled.first(),
+            "scanWebContent(" in settled.first(),
+        )
+        val instant = live.filter { "BlockLatency.Path.INSTANT" in it }
+        assertTrue(
+            "the app-block and address-bar paths must record as INSTANT: $instant",
+            instant.size >= 3 &&
+                instant.any { "handleAppBlock(" in it } &&
+                instant.any { "scanBrowserUrl(" in it },
+        )
+    }
+
+    /**
+     * **The page scan reads the address before it reads the page, and asks for the rules once.**
+     *
+     * For a site cover — most of what this app raises — the verdict comes from the host alone, and
+     * the 400-node text walk that used to run first was matched and thrown away; on a start page
+     * both walks finished before `check` returned null on its own first line. The order *is* the
+     * saving, so the order is what has to be held. `autoSocialKeywords()` rides in the same check
+     * because it was called twice in this one function, each call walking every rule for the same
+     * answer — the same shape, forty lines apart.
+     */
+    @Test
+    fun `the page scan reads the address before the page and the rules once`() {
+        val body = liveBody(
+            "service/BlockerAccessibilityService.kt",
+            "private suspend fun scanWebContent(",
+        )
+        val addressAt = body.indexOf("rememberedBrowserAddress(")
+        val textAt = body.indexOf("extractVisibleText(")
+        assertTrue("scanWebContent must still read an address", addressAt >= 0)
+        assertTrue("scanWebContent must still be able to read the page", textAt >= 0)
+        assertTrue(
+            "the address must be read first, or every site cover pays a page walk it discards",
+            addressAt < textAt,
+        )
+        assertTrue(
+            "the page walk must be conditional on the address not having answered already",
+            "urlHit != null" in body.substring(0, textAt),
+        )
+        assertEquals(
+            "autoSocialKeywords() must be read once per scan, not once per verdict",
+            1,
+            Regex("autoSocialKeywords\\(\\)").findAll(body).count(),
+        )
+    }
 }

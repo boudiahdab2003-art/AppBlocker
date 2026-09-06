@@ -205,17 +205,30 @@ object BugReportSender {
         // "82% of 140, 3 slow" — the share that landed under half a second, how many blocks that
         // is out of, and how many took over two seconds. The tail is the part worth reading: a
         // good percentage with a growing tail is exactly what "sometimes it's slow" looks like.
+        // ⚠️ **The headline blends three pipelines and is NOT a measure of speed on its own.** The
+        // page scan waits 250-950ms for the page to settle before it reads anything and the
+        // stopwatch starts at the event, so a settled cover can never reach the fastest two
+        // buckets — see BlockLatency.Path. The blend therefore moves with how the phone was used:
+        // more browsing, lower percentage, nothing changed. That is what 82% -> 77% was, and it was
+        // reported to the owner as blocking getting slower. The split in brackets is the part a
+        // verdict may be read from; the blend stays because it is what he actually waited for.
         field("blockSpeed") {
             val quick = BlockLatency.quickShare(ctx)
             if (quick == null) "none yet" else {
                 val counts = (0 until BlockLatency.SIZE).map { BlockLatency.get(ctx, it).total }
-                "$quick% of ${counts.sum()}, ${counts.last()} slow"
+                val split = BlockLatency.Path.values().mapNotNull { path ->
+                    val share = BlockLatency.quickShare(ctx, path) ?: return@mapNotNull null
+                    "${path.name.lowercase()} $share% of ${BlockLatency.measured(ctx, path)}"
+                }
+                "$quick% of ${counts.sum()}, ${counts.last()} slow" +
+                    if (split.isEmpty()) "" else " (${split.joinToString(", ")})"
             }
         }
-        // ⚠️ Today only. The lifetime figure above moves a point at a time once there are a
-        // hundred covers behind it, so a bad day reads as noise — 82% to 78% over 5-6 Sep 2026
-        // was about half the recent covers being slow, and nothing said so until it crossed a
-        // threshold. Read the pair: a today far under the lifetime is a slide in progress.
+        // ⚠️ Today only, and it carries the same mixture as the lifetime figure above — so a today
+        // under the lifetime is NOT by itself a slide. 12 quick of 18 against a lifetime 77% is
+        // one cover either way and sits well inside the noise; it was quoted as a slide anyway.
+        // What it is good for is the opposite reading: today far under the lifetime, on a day the
+        // instant split is also down, is worth looking at. Read all three or none.
         field("blockSpeedToday") {
             val quick = BlockLatency.quickShareToday(ctx)
             if (quick == null) "none yet" else {

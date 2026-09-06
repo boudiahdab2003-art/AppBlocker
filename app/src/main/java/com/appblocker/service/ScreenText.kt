@@ -367,15 +367,25 @@ private fun AccessibilityService.omniboxRead(pkg: String, settledOnly: Boolean):
                 else accept(node)?.let { return OmniboxRead(it, blankBar = false, startPage = false) }
             }
             if (id != null && isStartPageId(id)) startPageSeen = true
-            val editable = runCatching { node.isEditable }.getOrDefault(false)
-            if (editable) {
-                if (editableHost == null) {
+            // ⚠️ **Stop paying for tiers 3 and 4 the moment they cannot change the answer.**
+            // [looseAddress] discards both outright once a blank bar or a start page has been
+            // seen, and an editable host outranks every chrome label — so in either state the
+            // `isEditable` binder read and the text read below were collected and then thrown
+            // away, up to four hundred times per root. Same rule as [looseAddress], applied
+            // where the cost is instead of after it.
+            //
+            // ⚠️ **The walk itself must go on.** A tier-2 omnibox id still beats all of these,
+            // and it can appear at any depth — stopping the traversal here would turn a saving
+            // into an under-block, which is the direction this file may never fail in.
+            if (!blankBarSeen && !startPageSeen && editableHost == null) {
+                val editable = runCatching { node.isEditable }.getOrDefault(false)
+                if (editable) {
                     accept(node)?.takeIf { looksLikeHost(it) }?.let { editableHost = it }
+                } else if (!inside) {
+                    // Tier 4 candidate: a label in the browser's own chrome. Collected rather than
+                    // returned — soleHost decides, and it refuses when they disagree.
+                    accept(node)?.takeIf { looksLikeHost(it) }?.let { chromeLabels.add(it) }
                 }
-            } else if (editableHost == null && !inside) {
-                // Tier 4 candidate: a label in the browser's own chrome. Collected rather than
-                // returned — soleHost decides, and it refuses when they disagree.
-                accept(node)?.takeIf { looksLikeHost(it) }?.let { chromeLabels.add(it) }
             }
             for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it to inside) }
         }

@@ -1109,6 +1109,72 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     **The standing question: when a fix changes what one counter counts, what is it compared
     against — and does that still count the same thing?**
 
+58. **A latency that contains a deliberate wait is not a latency, and a percentage taken over
+    several pipelines is not a speed.** `BlockLatency`'s stopwatch starts at the accessibility
+    event and stops when the cover is up. The debounced page scan then does *nothing at all* for
+    250ms — up to ~950ms across a burst — so that the page has stopped changing before it is read.
+    That wait is inside every number that path records: **a settled cover cannot reach the fastest
+    two buckets however quick the code is**, and the fastest is unreachable by construction.
+
+    The arithmetic was already written down, in this object's own KDoc: *"the page scan's own
+    debounce caps at 700ms, so a block under a quarter of a second came from the undebounced
+    address-bar path."* The conclusion was never drawn. One blended percentage over three paths
+    does not measure how fast blocking is, it measures **which paths the owner happened to use** —
+    a day with more browsing lowers it with nothing in the app having changed. That is what the
+    82% → 77% "slide" was, and it was quoted to him as blocking getting slower.
+
+    ⚠️ **Invariant 50 examined this number a day earlier and deliberately kept the lifetime
+    verdict**, on reasoning that was sound for what it knew: a cumulative quality average should
+    not flip on a handful of covers. What it did not know was that the population was a mixture in
+    which one path can never score. **A judgement that is right about the statistic can still be
+    wrong about the population** — when a metric is defended, check what is actually inside it.
+
+    Now: `BlockLatency.Path` (INSTANT / SETTLED) with its own counters, the verdict taken from
+    INSTANT alone, the settled share reported beside it so the wait is named rather than hidden,
+    and `MIN_FOR_VERDICT` so a share over a handful of covers is reported and not judged — at
+    n=18 one cover is five and a half points, which is the entire difference that was quoted.
+    `BlockLatency.Start` pairs the instant with its path in one value **so a duration cannot be
+    recorded without saying which pipeline it came down**; a `path` argument with a default would
+    have been smaller, and would have been forgotten by the next caller with nothing failing.
+
+    **The shape to grep for: a threshold applied to a number whose population is not one thing.**
+
+59. **A section may not contradict the section printed directly above it.** A profile report
+    opened with `### What looks wrong here` and two ❌ lines, then said *"Nothing is wrong here"*
+    four lines below. Both halves were individually right — the crosses are `HealthFacts`, the
+    all-clear is `profileIsClean`, and they answer different questions — but the reader gets one
+    document, and that sentence was written when nothing could precede it. Profiles started
+    carrying health facts in v1.160; the prose did not move with them.
+
+    ⚠️ **The fix is scope, never a second verdict.** `profileIsClean` and `profileRowIsBad` are
+    the v1.155 one-rule extraction and stay untouched; "does this report carry any ❌" is asked by
+    calling `HealthFacts.problemLines`, which this file already calls in three places. **A fourth
+    call is not a fourth copy of the rule** — that distinction is the whole of invariants 54-55.
+
+    ⚠️ **The reason it shipped is a test gap, and the gap is the finding.**
+    `DeviceProfileReportTest`'s own `profile()` helper never passed `healthFacts`, so every test in
+    the class rendered an empty list and the contradiction was *structurally unreachable* from the
+    suite that owns this shape. **When a report shape gains a section, the tests that render that
+    shape have to be given one** — a helper's default is a decision about what can be tested.
+
+60. **A periodic job that did not run while nobody was using the phone has cost nothing.** The
+    scheduler verdict was `good = false` on any silence past `ProtectionPulse.SILENT_AFTER_MS`.
+    That reading is taken when the report is filed, which is when the owner opens the app —
+    normally straight out of Doze, which is exactly when a periodic job has not run. So the row was
+    red on essentially every report from his phone, and a fault that is always present is one the
+    reader learns to skip past. It is judged against real use now, exactly as `quietFact` already
+    judges silence: *quiet is only evidence when something was happening.*
+
+    ⚠️ **The window has to be the right one.** `Reading.usedMinutes` is measured over
+    `[lastEventAt, now]`, and on a report filed at app-open that spans seconds — reading it against
+    a scheduler silent for three quarters of an hour would pair two counters that count different
+    things (invariant 57) and turn a real fault permanently grey. Same reader
+    (`UsageTracker.totalMinutesInRange`), different range, its own field.
+
+    ⚠️ **Unknown use is not idle.** `totalMinutesInRange` answers 0 when it cannot read the stream
+    at all, so the permission is checked before the call and the fact renders as a plain `•` when
+    use cannot be measured — never ✅, and never dropped. Invariant 47 in a new place.
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused

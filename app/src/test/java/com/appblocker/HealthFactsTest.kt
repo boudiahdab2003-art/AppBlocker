@@ -1,5 +1,6 @@
 package com.appblocker
 
+import com.appblocker.data.BlockLatency
 import com.appblocker.data.BootAudit
 import com.appblocker.data.HealthFacts
 import com.appblocker.data.ProtectionPulse
@@ -113,7 +114,10 @@ class HealthFactsTest {
      */
     @Test
     fun `a scheduler quiet past the app's own silence threshold is a problem`() {
-        val r = healthy.copy(workerSilentMs = 51 * 60_000L)
+        val r = healthy.copy(
+            workerSilentMs = 51 * 60_000L,
+            usedSinceWorkerMin = HealthFacts.QUIET_WITH_USE_MIN,
+        )
         assertTrue(problems(r).any { "background scheduler" in it })
         assertEquals(
             false,
@@ -135,10 +139,55 @@ class HealthFactsTest {
      *  moves with it, which is the whole point of there being one of them. */
     @Test
     fun `the verdict turns exactly where the app says silence begins`() {
-        val justUnder = healthy.copy(workerSilentMs = ProtectionPulse.SILENT_AFTER_MS - 1)
-        val exactly = healthy.copy(workerSilentMs = ProtectionPulse.SILENT_AFTER_MS)
+        val used = HealthFacts.QUIET_WITH_USE_MIN
+        val justUnder = healthy.copy(
+            workerSilentMs = ProtectionPulse.SILENT_AFTER_MS - 1,
+            usedSinceWorkerMin = used,
+        )
+        val exactly = healthy.copy(
+            workerSilentMs = ProtectionPulse.SILENT_AFTER_MS,
+            usedSinceWorkerMin = used,
+        )
         assertEquals(true, HealthFacts.verdicts(justUnder).first { "scheduler" in it.title }.good)
         assertEquals(false, HealthFacts.verdicts(exactly).first { "scheduler" in it.title }.good)
+    }
+
+    /**
+     * ⚠️ **A scheduler held back while the phone slept has cost nothing, and must not read as a
+     * fault.**
+     *
+     * The reading is taken when the report is filed, which is when the app is opened — normally
+     * straight after the phone has been asleep, and Doze is precisely when a periodic job does not
+     * run. So this row was ❌ on essentially every report from the owner's phone, and a fault that
+     * is always there is one the reader stops seeing. Same rule the file already applies to
+     * silence: quiet is only evidence when something was happening.
+     */
+    @Test
+    fun `a scheduler quiet while the phone was idle is a reading, not a fault`() {
+        val r = healthy.copy(
+            workerSilentMs = 51 * 60_000L,
+            usedSinceWorkerMin = HealthFacts.QUIET_WITH_USE_MIN - 1,
+        )
+        assertTrue(problems(r).toString(), problems(r).isEmpty())
+        assertEquals(
+            null,
+            HealthFacts.verdicts(r).first { "background scheduler" in it.title }.good,
+        )
+    }
+
+    /**
+     * ⚠️ **Unknown use is not idle.** A phone without usage access (his second device reports
+     * exactly this) cannot tell the two apart. Answering "not a fault" there would be the
+     * null-means-no mistake; dropping the row would hide the scheduler from the phones least able
+     * to report anything else. It is reported and left unjudged.
+     */
+    @Test
+    fun `a scheduler quiet with use unknown is reported but not judged`() {
+        val r = healthy.copy(workerSilentMs = 51 * 60_000L, usedSinceWorkerMin = null)
+        assertTrue(problems(r).toString(), problems(r).isEmpty())
+        val fact = HealthFacts.verdicts(r).first { "background scheduler" in it.title }
+        assertEquals(null, fact.good)
+        assertTrue(fact.detail, "unknown" in fact.detail)
     }
 
     // --- did our own start-up run after the restart -------------------------------------------
@@ -472,13 +521,72 @@ class HealthFactsTest {
 
     // --- thresholds ---------------------------------------------------------------------------
 
+    /** Enough instant covers for the share to be allowed to mean something. */
+    private fun instant(share: Int) = healthy.copy(
+        instantSharePercent = share,
+        instantMeasured = BlockLatency.MIN_FOR_VERDICT,
+    )
+
     @Test
     fun `slow blocks are a finding and quick ones are not`() {
-        val slow = healthy.copy(quickSharePercent = HealthFacts.QUICK_SHARE_TARGET - 1)
-        val quick = healthy.copy(quickSharePercent = HealthFacts.QUICK_SHARE_TARGET)
+        val slow = instant(HealthFacts.QUICK_SHARE_TARGET - 1)
+        val quick = instant(HealthFacts.QUICK_SHARE_TARGET)
 
         assertTrue(problems(slow).any { it.contains("under half a second") })
         assertTrue(problems(quick).isEmpty())
+    }
+
+    /**
+     * ⚠️ **The blended figure may never be a fault on its own, and this is the whole of the fix.**
+     *
+     * `quickSharePercent` mixes three pipelines. The page scan waits 250-950ms for the page to
+     * settle before it does anything and the stopwatch starts at the event, so a settled cover
+     * cannot reach the fastest two buckets however quick the code is. The blend therefore falls
+     * when the owner browses more and rises when he opens blocked apps more, with nothing about
+     * blocking having changed — and it was that movement, not a regression, that was reported to
+     * him as blocking getting slower on 6 Sep 2026.
+     */
+    @Test
+    fun `the blended share is reported but is never on its own a fault`() {
+        val blended = healthy.copy(
+            quickSharePercent = HealthFacts.QUICK_SHARE_TARGET - 20,
+            instantSharePercent = null,
+            instantMeasured = 0,
+        )
+
+        assertTrue(
+            HealthFacts.verdicts(blended).any { it.title.contains("half a second") },
+        )
+        assertTrue(problems(blended).toString(), problems(blended).isEmpty())
+    }
+
+    /**
+     * ⚠️ **A percentage over a handful of covers is noise wearing a number's clothes.** At n=18
+     * the difference between 66% and 77% is one cover either way. Reported, not judged.
+     */
+    @Test
+    fun `too few instant covers to judge is reported but not a fault`() {
+        val young = healthy.copy(
+            instantSharePercent = 10,
+            instantMeasured = BlockLatency.MIN_FOR_VERDICT - 1,
+        )
+
+        assertTrue(problems(young).toString(), problems(young).isEmpty())
+        assertEquals(
+            null,
+            HealthFacts.verdicts(young).first { "half a second" in it.title }.good,
+        )
+    }
+
+    /** The wait is named rather than hidden inside the verdict. */
+    @Test
+    fun `the settled path is reported beside the verdict, not folded into it`() {
+        val r = instant(95).copy(settledSharePercent = 30, settledMeasured = 40)
+        val fact = HealthFacts.verdicts(r).first { "half a second" in it.title }
+
+        assertEquals(true, fact.good)
+        assertTrue(fact.detail, "30% of 40" in fact.detail)
+        assertTrue(fact.detail, "wait" in fact.detail)
     }
 
     @Test

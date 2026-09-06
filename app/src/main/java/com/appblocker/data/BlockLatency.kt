@@ -62,38 +62,104 @@ object BlockLatency {
         return EDGES.size
     }
 
+    /**
+     * Which pipeline raised the cover — and the reason this histogram cannot be read without it.
+     *
+     * ⚠️ **The two are not comparable, and the difference is deliberate waiting rather than
+     * speed.** [INSTANT] is decided in the same turn of the main thread as the event that caused
+     * it. [SETTLED] is the debounced page scan, which on purpose does nothing at all for 250ms —
+     * and up to ~950ms across a burst — so that the page has stopped changing before it is read.
+     * The stopwatch starts at the event, so that wait is *inside* every settled measurement:
+     * **a settled cover can never reach the fastest two buckets, however fast the code is.**
+     *
+     * That was already written down here — "the page scan's own debounce caps at 700ms, so a block
+     * under a quarter of a second came from the undebounced address-bar path" — and the conclusion
+     * was never drawn. One blended percentage over both paths does not measure speed, it measures
+     * **which paths the owner happened to use**: a day of more browsing lowers it with nothing in
+     * the code having changed, and that is exactly what was read as a slide on 6 Sep 2026 and
+     * reported to him as blocking getting slower. It was not.
+     *
+     * Splitting the counters is not a new instrument. It is this one saying which question it is
+     * answering, so that "is our code slow" can be asked of the only path that can answer it.
+     */
+    enum class Path {
+        /** App blocks and the address-bar scan: no debounce, decided in the event's own turn. */
+        INSTANT,
+
+        /** The debounced page scan: carries 250–950ms of deliberate settle inside its number. */
+        SETTLED,
+    }
+
+    /**
+     * When the event that led to a cover arrived, **and which pipeline carried it**.
+     *
+     * ⚠️ **One value rather than two parameters, so a duration cannot be recorded without naming
+     * its path.** A `path` argument defaulting to [Path.INSTANT] would have been smaller and would
+     * have been wrong in the way this codebase keeps being wrong: the next debounced caller
+     * forgets it, its settle time is filed as instant, and the metric quietly goes back to being
+     * a blend — with nothing failing. Here there is nothing to forget; `null` means "no meaningful
+     * start", which is the honest answer for the re-check tick, the guard and the blind fallback.
+     *
+     * @param at monotonic ([android.os.SystemClock.elapsedRealtime], invariant 9).
+     */
+    data class Start(val at: Long, val path: Path)
+
+    /**
+     * How many covers a path needs before its share is allowed to be a verdict.
+     *
+     * A percentage over a handful of covers is noise wearing a number's clothes: at n=18 the
+     * difference between 66% and 77% is one cover either way and sits well inside the interval.
+     * Below this the fact is still reported — he should see it — but it is not called a fault.
+     */
+    const val MIN_FOR_VERDICT = 20
+
     /** One bucket's today/total pair. */
     data class Count(val today: Int, val total: Int)
 
-    /** Records one cover, having taken [ms] to appear. Never throws: this runs on the way out of
-     *  raising a block, and an instrument must not be able to break what it measures. */
-    fun record(context: Context, ms: Long) {
+    /**
+     * Records one cover, having taken [ms] to appear by way of [path]. Never throws: this runs on
+     * the way out of raising a block, and an instrument must not be able to break what it measures.
+     *
+     * Writes the combined counters *and* the path's own. The combined pair is left exactly as it
+     * was so the lifetime history — every cover recorded since v1.140 — keeps its meaning and the
+     * report's `speedBuckets` still describes what the owner actually waited for. The per-path
+     * counters start empty and are the only ones a verdict may be taken from.
+     */
+    fun record(context: Context, ms: Long, path: Path) {
         runCatching {
             val bucket = bucketFor(ms)
             val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             val today = todayStamp()
-            val storedDay = prefs.getInt("day_$bucket", -1)
-            prefs.edit()
-                .putInt("total_$bucket", prefs.getInt("total_$bucket", 0) + 1)
-                .putInt(
-                    "today_$bucket",
-                    if (storedDay == today) prefs.getInt("today_$bucket", 0) + 1 else 1,
-                )
-                .putInt("day_$bucket", today)
-                .apply()
+            val edit = prefs.edit()
+            listOf("", "${path.name.lowercase()}_").forEach { scope ->
+                val storedDay = prefs.getInt("${scope}day_$bucket", -1)
+                edit.putInt("${scope}total_$bucket", prefs.getInt("${scope}total_$bucket", 0) + 1)
+                    .putInt(
+                        "${scope}today_$bucket",
+                        if (storedDay == today) prefs.getInt("${scope}today_$bucket", 0) + 1 else 1,
+                    )
+                    .putInt("${scope}day_$bucket", today)
+            }
+            edit.apply()
         }
     }
 
-    /** One bucket's counts. */
-    fun get(context: Context, bucket: Int): Count {
+    /** One bucket's counts, over every path — what the owner actually waited for. */
+    fun get(context: Context, bucket: Int): Count = get(context, bucket, scope = "")
+
+    /** One bucket's counts for a single [path]. */
+    fun get(context: Context, bucket: Int, path: Path): Count =
+        get(context, bucket, "${path.name.lowercase()}_")
+
+    private fun get(context: Context, bucket: Int, scope: String): Count {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val today =
-            if (prefs.getInt("day_$bucket", -1) == todayStamp()) {
-                prefs.getInt("today_$bucket", 0)
+            if (prefs.getInt("${scope}day_$bucket", -1) == todayStamp()) {
+                prefs.getInt("${scope}today_$bucket", 0)
             } else {
                 0
             }
-        return Count(today, prefs.getInt("total_$bucket", 0))
+        return Count(today, prefs.getInt("${scope}total_$bucket", 0))
     }
 
     /** Every bucket with its label, fastest first. */
@@ -122,11 +188,31 @@ object BlockLatency {
      */
     fun quickShareToday(context: Context): Int? = share { get(context, it).today }
 
-    private inline fun share(count: (Int) -> Int): Int? {
-        val counts = (0 until SIZE).map(count)
+    /** The share of one [path]'s covers that landed in under half a second, or null when it has
+     *  recorded none. This is the only share a verdict may be taken from — see [Path]. */
+    fun quickShare(context: Context, path: Path): Int? = share { get(context, it, path).total }
+
+    /** How many covers [path] has recorded, for [MIN_FOR_VERDICT]. */
+    fun measured(context: Context, path: Path): Int =
+        (0 until SIZE).sumOf { get(context, it, path).total }
+
+    private inline fun share(count: (Int) -> Int): Int? = sharePercent((0 until SIZE).map(count))
+
+    /**
+     * The arithmetic behind every percentage this object reports, pulled out so a JVM test can
+     * reach it — the storage around it cannot be.
+     *
+     * ⚠️ **Worth pinning because the derivation is where a wrong reading gets its authority.**
+     * "Quick" is the first two buckets, i.e. under half a second, and integer division rounds
+     * down. Over a small [counts] total that is a very coarse number: at eighteen covers one of
+     * them is five and a half points, which is how a difference well inside the noise came to be
+     * quoted as a slide. Callers that turn a share into a verdict must check the total too, and
+     * [MIN_FOR_VERDICT] is the line.
+     */
+    fun sharePercent(counts: List<Int>): Int? {
         val all = counts.sum()
         if (all == 0) return null
-        val quick = counts[0] + counts[1]
+        val quick = counts.take(2).sum()
         return quick * 100 / all
     }
 }
