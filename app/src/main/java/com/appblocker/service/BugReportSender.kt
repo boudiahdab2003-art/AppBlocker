@@ -711,24 +711,36 @@ object BugReportSender {
                 SettingsStore.setLastWeeklyReport(context, week)
                 return
             }
-            val watch = watchReading(context)
-            BugReportQueue.enqueue(
-                context,
-                BugReport.fromWeekly(
-                    appVersion = BuildConfig.VERSION_NAME,
-                    flavor = BuildConfig.FLAVOR,
-                    androidSdk = Build.VERSION.SDK_INT,
-                    device = describeDevice(),
-                    context = appContext(context, watch) + ruleCounts(context) + mapOf(
-                        "weekOf" to week,
-                        "weeksSkipped" to "${weeksBetween(last, week)}",
+            // ⚠️ **Guarded separately so the marker below cannot be skipped by a throw.** The
+            // comment on that line promises the week is marked "whether or not the enqueue took
+            // it", and it was true only for an enqueue that *returned false*. Everything in here
+            // touches something that can fail — `watchReading` walks the usage-event stream,
+            // `ruleCounts` reads Room, `healthLines` walks it again — and one throw left the
+            // marker unwritten, so `last != week` on the next launch and the whole expensive
+            // build ran again on **every app open for the rest of the week**, only to be refused
+            // by the queue's dedupe each time. That is the profile report's bug (invariant 61)
+            // with a throw in place of the dedupe.
+            runCatching {
+                val watch = watchReading(context)
+                BugReportQueue.enqueue(
+                    context,
+                    BugReport.fromWeekly(
+                        appVersion = BuildConfig.VERSION_NAME,
+                        flavor = BuildConfig.FLAVOR,
+                        androidSdk = Build.VERSION.SDK_INT,
+                        device = describeDevice(),
+                        context = appContext(context, watch) + ruleCounts(context) + mapOf(
+                            "weekOf" to week,
+                            "weeksSkipped" to "${weeksBetween(last, week)}",
+                        ),
+                        recentOutages = OutageLog.recent(context),
+                        healthFacts = healthLines(context, watch),
                     ),
-                    recentOutages = OutageLog.recent(context),
-                    healthFacts = healthLines(context, watch),
-                ),
-            )
-            // Written whether or not the enqueue took it. A queue that is full or capped must not
-            // make the app retry the same week on every single open for the rest of the week.
+                )
+            }.onFailure { Log.w(TAG, "weekly report not built", it) }
+            // Written whether or not the enqueue took it, and whether or not building it threw.
+            // A queue that is full or capped — or a reading that failed once — must not make the
+            // app retry the same week on every single open for the rest of the week.
             SettingsStore.setLastWeeklyReport(context, week)
         }
     }

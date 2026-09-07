@@ -767,6 +767,49 @@ class CodeShapeTest {
     }
 
     /**
+     * **One failing snapshot may not take the other three with it.**
+     *
+     * `refresh` wrote all four fallbacks inside a single `runCatching`, so a throw reading the
+     * first — a DAO query, a corrupt row, a disk error — silently skipped the rest and logged one
+     * line that did not say which. Those four snapshots are the only enforcement in the window
+     * between the watcher binding and Room's first emission, so three of them going stale because
+     * the first read failed is the bug this object exists to prevent, arriving by another door.
+     *
+     * `BugReportSender.appContext` had the identical shape and fixed it with a per-field `field()`
+     * helper, writing the lesson in a comment that was never grepped for. This is that grep, kept.
+     */
+    @Test
+    fun `each snapshot is refreshed under its own guard`() {
+        val text = source("data/Snapshots.kt").readText()
+        val live = text.lines().map { it.trim() }
+            .filterNot { it.startsWith("//") || it.startsWith("*") || it.startsWith("/*") }
+        val writes = live.count { Regex("SettingsStore\\.set\\w+Snapshot\\(").containsMatchIn(it) }
+        val guards = live.count { it.startsWith("step(") }
+        assertTrue("Snapshots writes no snapshot at all; this check proves nothing", writes > 0)
+        assertEquals(
+            "every snapshot write must sit in its own guarded step, or one failure silently " +
+                "leaves the others stale: $writes writes, $guards steps",
+            writes,
+            guards,
+        )
+        // ⚠️ This assertion started life as a regex for "the whole body in one runCatching" and
+        // fired on the CORRECT code: the one legitimate `runCatching` — around
+        // `BlockerDatabase.get` — sits right after `val app`, which is exactly what that pattern
+        // described. Counting is the honest version of the same question, and it caught its own
+        // author because it failed loudly rather than passing for the wrong reason.
+        val body = source("data/Snapshots.kt").readText()
+            .substringAfter("suspend fun refresh(")
+            .substringBefore(Char(10) + "    }")
+        assertEquals(
+            "refresh may hold exactly one runCatching — the database lookup. Any other means a " +
+                "snapshot write is guarded by something other than its own step(), which is how " +
+                "one failure came to take the other three with it.",
+            1,
+            Regex("runCatching").findAll(body).count(),
+        )
+    }
+
+    /**
      * **Every table a snapshot is derived from has to be a table the observer watches.**
      *
      * A fifth snapshot added without its table in `WATCHED` would be refreshed only while the

@@ -1240,6 +1240,37 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     implementation a few lines away in the same file. Derived from the guard's set now, with a
     `CodeShapeTest` that fails on a second list of package literals.
 
+65. **One guard per independent side effect.** `Snapshots.refresh` recomputes the four fallbacks
+    that are *the only enforcement* between the watcher binding and Room's first emission — and it
+    wrote all four inside a single `runCatching`. A throw reading the first (a DAO query, a corrupt
+    row, a disk error) silently skipped the other three and logged one line that did not say which.
+    Three snapshots going stale because the first read failed is the exact bug `Snapshots` was
+    built to end, arriving through a different door.
+
+    ⚠️ **The lesson was already written down, two files away, in the code that learned it.**
+    `BugReportSender.appContext`: *"Each field is read on its own. This used to be one runCatching
+    around the whole map, which meant ONE throw among ten calls produced an empty map with nothing
+    to say why — and that is exactly what happened."* Never grepped for. Eighth occurrence.
+
+    **Enumerated rather than fixed in one place**, per the method above: every `runCatching` in
+    `data/` and `service/` holding more than one independent commit. Three candidates, and the
+    other two are correct — `BootAudit.noteRun`'s three `.apply()` calls are mutually exclusive
+    arms of a `when` over an enum, and `BugReportQueue.migrate`'s two are one migration whose
+    partial completion is harmless and documented. **A second finding did come out of the sweep:**
+    `buildWeekly` promised in a comment that the week marker is written "whether or not the enqueue
+    took it", which was true for an enqueue returning false and false for a throw — so one failed
+    reading made the whole expensive weekly build run again on every app open for the rest of the
+    week, refused by the dedupe each time. Invariant 61 with a throw in place of the dedupe.
+
+    ⚠️ **And the check written for this one fired on the correct code.** Its first version matched
+    "the whole body wrapped in one `runCatching`" with a regex that also described the one
+    legitimate guard around `BlockerDatabase.get`. Counting guards against writes is the honest
+    version of the same question. It failed loudly rather than passing for the wrong reason, which
+    is the only reason it was caught — **fourth ornamental-or-wrong check this week**.
+
+    **The shape to grep for: a `runCatching` whose body contains two things that would still be
+    worth doing if the other one failed.**
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused
