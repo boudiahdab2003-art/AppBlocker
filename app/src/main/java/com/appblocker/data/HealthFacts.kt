@@ -64,6 +64,19 @@ object HealthFacts {
         val sinceAliveMs: Long,
         /** Foreground minutes since the last event — null when it cannot be told. */
         val usedMinutes: Int?,
+        /**
+         * Foreground minutes since the **background scheduler** last ran — null when it cannot be
+         * told (no usage access, or the scheduler has never been seen to run).
+         *
+         * ⚠️ **This is not [usedMinutes] and must not be replaced by it.** [usedMinutes] is
+         * measured over `[lastEventAt, now]`, which is a different window and usually a much
+         * shorter one — on a report filed the moment the app is opened it spans seconds. Reading
+         * it against a scheduler that has been silent for three quarters of an hour would pair two
+         * counters that count different things (invariant 57) and would answer "idle" for a phone
+         * that had been in use the whole time, turning a real fault permanently grey. Same reader
+         * (`UsageTracker.totalMinutesInRange`), different range.
+         */
+        val usedSinceWorkerMin: Int? = null,
         /** Millis this process has been alive. */
         val processAgeMs: Long,
         val updatePaused: Boolean,
@@ -107,10 +120,31 @@ object HealthFacts {
         val bootsMissed: Int = 0,
         /** Millis since the background scheduler last ran, or [ProtectionPulse.UNKNOWN]. */
         val workerSilentMs: Long,
-        /** Share of covers that appeared in under half a second, or null when none measured. */
+        /** Share of covers that appeared in under half a second, or null when none measured.
+         *  ⚠️ **Every path blended together — what the owner waited for, not a verdict.** See
+         *  [instantSharePercent]. */
         val quickSharePercent: Int?,
         val blocksMeasured: Int,
         val slowBlocks: Int,
+        /**
+         * The same share over [BlockLatency.Path.INSTANT] covers only — null until that path has
+         * recorded any.
+         *
+         * ⚠️ **The only share a speed verdict may be taken from.** [quickSharePercent] mixes the
+         * instant paths with the debounced page scan, which waits 250–950ms on purpose before it
+         * does anything, so a settled cover cannot reach the fastest two buckets however quick the
+         * code is. The blended figure therefore falls when the owner browses more and rises when
+         * he opens blocked apps more, with nothing in the app having changed — and that movement
+         * was read as blocking getting slower and reported to him as such on 6 Sep 2026.
+         */
+        val instantSharePercent: Int? = null,
+        /** How many [BlockLatency.Path.INSTANT] covers that share is over — a percentage taken
+         *  over a handful of them is noise, see [BlockLatency.MIN_FOR_VERDICT]. */
+        val instantMeasured: Int = 0,
+        /** The same share over [BlockLatency.Path.SETTLED] covers, reported beside the verdict so
+         *  the wait is visible rather than hidden inside it. Null until any are recorded. */
+        val settledSharePercent: Int? = null,
+        val settledMeasured: Int = 0,
         val deafSpells: Int,
         /** ⚠️ **How many of [deafSpells] happened TODAY.** The lifetime count alone kept a fault at
          *  the top of "what looks wrong" forever: one spell, from before v1.153 closed the cause,
@@ -286,22 +320,7 @@ object HealthFacts {
             )
         }
         outageFact(r)?.let { add(it) }
-        if (r.workerSilentMs > 0L) {
-            add(
-                Fact(
-                    "The background scheduler last ran ${agoText(r.workerSilentMs)}",
-                    "Every background check in this app is one of its jobs, so when it stops, the " +
-                        "checks that would notice a problem stop with it. It is meant to run every " +
-                        "quarter of an hour, and the app treats " +
-                        "${ProtectionPulse.SILENT_AFTER_MS / 60_000} minutes of quiet as it " +
-                        "having stopped.",
-                    // ⚠️ The app's OWN threshold, not a second opinion. This said an hour while
-                    // the alarm said twenty-five minutes, so a report could call the scheduler
-                    // healthy in exactly the state the app had already counted as a failure.
-                    good = r.workerSilentMs < ProtectionPulse.SILENT_AFTER_MS,
-                ),
-            )
-        }
+        schedulerFact(r)?.let { add(it) }
         speedFact(r)?.let { add(it) }
         silenceFacts(r).forEach { add(it) }
         queueFact(r)?.let { add(it) }
@@ -378,6 +397,63 @@ object HealthFacts {
         }
     }
 
+    /**
+     * The background scheduler, judged the way [quietFact] judges silence: **only against time the
+     * phone was actually being used.**
+     *
+     * The threshold itself is not in question and is not a second opinion — it is
+     * [ProtectionPulse.SILENT_AFTER_MS], the same constant the alarm acts on, and the prose is
+     * generated from it so the two cannot drift (that mismatch was the v1.160 fix). What was wrong
+     * is what the app *concluded* from it. The reading is taken when the report is filed, which is
+     * the moment the owner opens the app — usually straight after the phone has been asleep, and
+     * Doze is exactly when a periodic job does not run. So on his phone the row was red on
+     * essentially every report, and a fault that is always present is one the reader learns to
+     * skip past. That is invariant 50's standing question asked of a row nobody had asked it of.
+     *
+     * A scheduler that has not run while nobody was touching the phone has cost nothing: the
+     * checks it carries exist to notice that blocking stopped, and a phone in a pocket has nothing
+     * to block. Silence *through real use* is the case that costs protection, and that stays ❌.
+     *
+     * ⚠️ **Unknown use is not idle.** When [Reading.usedSinceWorkerMin] is null the app cannot
+     * tell the two apart (no usage access — his second device reports exactly this), and the fact
+     * must then be a plain reading rather than either verdict. Answering "not a fault" there would
+     * be the null-means-no mistake invariant 47 was written for; dropping the row entirely would
+     * hide the scheduler from the phones least able to report anything else.
+     */
+    private fun schedulerFact(r: Reading): Fact? {
+        if (r.workerSilentMs <= 0L) return null
+        val silent = r.workerSilentMs >= ProtectionPulse.SILENT_AFTER_MS
+        val threshold = ProtectionPulse.SILENT_AFTER_MS / 60_000
+        val what = "Every background check in this app is one of its jobs, so when it stops, the " +
+            "checks that would notice a problem stop with it. It is meant to run every quarter " +
+            "of an hour, and the app treats $threshold minutes of quiet as it having stopped."
+        val title = "The background scheduler last ran ${agoText(r.workerSilentMs)}"
+        if (!silent) return Fact(title, what, good = true)
+        val used = r.usedSinceWorkerMin
+        return when {
+            used == null -> Fact(
+                title,
+                "$what This phone cannot measure how much it was used in that time, so whether " +
+                    "anything was lost is unknown — it is reported rather than judged.",
+                good = null,
+            )
+            used >= QUIET_WITH_USE_MIN -> Fact(
+                "$title, through $used minutes of use",
+                "$what The phone was in use for $used of those minutes, so the checks that " +
+                    "notice a stoppage were not running at a time when a stoppage would have " +
+                    "cost you something.",
+                good = false,
+            )
+            else -> Fact(
+                title,
+                "$what Only $used minutes of the phone being used in that time, so the job was " +
+                    "most likely held back while the phone slept. A check that does not run " +
+                    "while nothing can be opened has cost nothing.",
+                good = null,
+            )
+        }
+    }
+
     private fun outageFact(r: Reading): Fact? {
         if (r.outageCount == 0 && r.foundDead == 0) return null
         // foundDead can move without a finished episode (and vice versa across an update), so both
@@ -432,14 +508,57 @@ object HealthFacts {
         )
     }
 
+    /**
+     * How fast blocking is — judged on the **instant** paths only, with the settled path reported
+     * beside it rather than folded into it.
+     *
+     * ⚠️ **The blended figure was never a measure of speed and must not be the verdict again.**
+     * Blocks arrive by three pipelines. An app block and an address-bar block are decided in the
+     * same turn of the main thread as the event that caused them. The page scan deliberately waits
+     * for the page to settle first — 250ms, and up to ~950ms across a burst — and the stopwatch
+     * starts at the event, so that wait is inside the number. A settled cover therefore cannot
+     * land in the fastest two buckets no matter how quick the code is
+     * ([BlockLatency.Path] carries the arithmetic). Blending them produces a percentage that
+     * tracks **how the owner used his phone**, and that is what slid from 82% to 77% while nothing
+     * about blocking changed. Invariant 50 examined this number and kept the lifetime verdict on
+     * sound reasoning, but it did not know the population was a mixture.
+     *
+     * ⚠️ **A share is not a verdict until there is enough of it.** Under
+     * [BlockLatency.MIN_FOR_VERDICT] covers the fact is still printed — the owner should see it —
+     * but `good` is null, because at n≈18 one cover moves the figure by five points.
+     */
     private fun speedFact(r: Reading): Fact? {
         val quick = r.quickSharePercent ?: return null
-        return Fact(
-            "$quick% of blocks appear in under half a second",
+        val settled = r.settledSharePercent?.let {
+            " Website blocks wait for the page to stop changing before they read it, so their " +
+                "own figure is kept apart: $it% of ${r.settledMeasured}, and most of that is the " +
+                "wait rather than the work."
+        } ?: ""
+        val enough = r.instantMeasured >= BlockLatency.MIN_FOR_VERDICT
+        val instant = r.instantSharePercent
+        val headline = if (instant != null) {
+            "$instant% of instant blocks appear in under half a second"
+        } else {
+            "$quick% of blocks appear in under half a second"
+        }
+        val counted = if (instant != null) {
+            "Measured over ${r.instantMeasured} covers that had nothing to wait for — an app " +
+                "opening, or an address read straight from the bar."
+        } else {
             "Measured over ${r.blocksMeasured} covers, ${r.slowBlocks} of which took more than " +
-                "two seconds. Half a second is roughly where a block stops feeling like an answer " +
-                "to what you did and starts feeling like something that happened later.",
-            good = quick >= QUICK_SHARE_TARGET,
+                "two seconds."
+        }
+        val young = if (instant != null && !enough) {
+            " Too few to call yet: under ${BlockLatency.MIN_FOR_VERDICT} covers one slow block " +
+                "moves this by several points, so it is reported rather than judged."
+        } else {
+            ""
+        }
+        return Fact(
+            headline,
+            "$counted Half a second is roughly where a block stops feeling like an answer to what " +
+                "you did and starts feeling like something that happened later.$settled$young",
+            good = if (instant == null || !enough) null else instant >= QUICK_SHARE_TARGET,
             group = Group.SPEED,
         )
     }

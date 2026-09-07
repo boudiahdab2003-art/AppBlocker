@@ -109,6 +109,18 @@ class WebContentFilter internal constructor(
          * invariant 17's bug, and the last one cost a whole report.
          */
         wideList: Boolean = false,
+        /**
+         * Hosts this phone established for itself — see [checkUrlAdult], which has always taken
+         * them.
+         *
+         * ⚠️ **Forwarded to the host branch only, never to the page-text fallback below.** The
+         * undebounced address check passed these and this one did not, so a host the phone had
+         * learned was blocked when the toolbar could be read and NOT blocked when it could not —
+         * an under-block in the one feature built to catch what the shipped lists miss. Matching
+         * them against page text instead would be the over-block this file has already been
+         * trimmed three times to remove: a page that merely mentions a site is not that site.
+         */
+        learnedDomains: Set<String> = emptySet(),
     ): Hit? {
         // **A blank address bar is a start page, and a start page is not a page.**
         //
@@ -145,7 +157,7 @@ class WebContentFilter internal constructor(
             // owner's browser start page. Same lesson as v1.105's "mentions us was never the
             // right signal", and the same one the word pack learnt from the other side when it
             // dropped "pornography"/"porno" for being what people *say about* porn.
-            checkUrlAdult(host, adultPack, blockAdult)?.let { return it }
+            checkUrlAdult(host, adultPack, blockAdult, learnedDomains)?.let { return it }
         } else {
             for (k in userKeywords) {
                 // Whole-word like the pack below: a bare keyword ("instagram") must not fire on
@@ -433,7 +445,51 @@ class WebContentFilter internal constructor(
          *  This cannot widen what matches: it restores the word boundary that was there when he
          *  typed it, and never removes one. Glued hostnames ("cuckoldplace.com") are untouched
          *  and still refuse, which is the guard that keeps "anal" out of "analytics.com". */
-        internal fun spacedUrl(url: String): String = url.replace('+', ' ').replace("%20", " ")
+        internal fun spacedUrl(url: String): String = percentDecoded(url.replace('+', ' '))
+
+        /**
+         * Percent-escapes turned back into the characters he typed.
+         *
+         * ⚠️ **Without this the address layer is blind to every non-Latin search.** A typed search
+         * reaches the address bar percent-encoded in UTF-8, so an Arabic term arrives as
+         * `%D8%B3%D9%83…` — bytes no pack word can match and that [normalizeArabic] cannot fold,
+         * because there are no Arabic characters left to fold. The owner is an Arabic speaker.
+         * [spacedUrl] already restored the spaces (`+`, `%20`) that multi-word entries need, but
+         * it only ever handled those two: every other escape passed through untouched, so the
+         * non-Latin half of the word pack could fire on the page-text walk alone — the slow path
+         * the address layer exists to beat, and the one that answers nothing when a page cannot
+         * be read at all.
+         *
+         * ⚠️ **`+` is replaced BEFORE decoding, and that order is load-bearing.** In a query
+         * string `+` means space while `%2B` means a literal plus; decoding first would turn an
+         * escaped plus into a space he never typed.
+         *
+         * Total by construction — it cannot throw on a malformed URL, which is the only way a
+         * matcher is allowed to fail here. A stray `%` or a truncated escape is left exactly as it
+         * stands, and bytes that are not valid UTF-8 become the replacement character, which
+         * matches no word. It widens nothing that the space restoration did not already: it puts
+         * back the letters he typed and adds no boundary that was not there.
+         */
+        internal fun percentDecoded(url: String): String {
+            if ('%' !in url) return url
+            val out = java.io.ByteArrayOutputStream(url.length)
+            var i = 0
+            while (i < url.length) {
+                val c = url[i]
+                if (c == '%' && i + 2 < url.length) {
+                    val hi = Character.digit(url[i + 1], 16)
+                    val lo = Character.digit(url[i + 2], 16)
+                    if (hi >= 0 && lo >= 0) {
+                        out.write((hi shl 4) or lo)
+                        i += 3
+                        continue
+                    }
+                }
+                out.write(c.toString().toByteArray(Charsets.UTF_8))
+                i++
+            }
+            return out.toString(Charsets.UTF_8.name())
+        }
 
         /** Whole-word substring search: a match only counts when it isn't glued to another
          *  letter/digit on either side (works for Latin and Arabic alike).

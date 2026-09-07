@@ -11,6 +11,7 @@ import com.appblocker.data.ProtectionPulse
 import com.appblocker.data.ServiceHealth
 import com.appblocker.data.SettingsStore
 import com.appblocker.data.SilenceLog
+import com.appblocker.ui.hasUsageAccess
 
 /**
  * Reads the phone once and hands [HealthFacts] the numbers it needs.
@@ -49,6 +50,9 @@ object HealthReader {
         }.getOrDefault(emptyList())
         val totals = runCatching { OutageLog.totals(ctx) }
             .getOrDefault(OutageLog.Totals(0, 0L, 0L))
+        // UNKNOWN (-1) means the scheduler has never been seen to run at all, which is not the
+        // same as "ran a long time ago" — pass it through rather than flattening to a duration.
+        val workerSilentMs = safe(ProtectionPulse.UNKNOWN) { ProtectionPulse.silentFor(ctx) }
         return HealthFacts.Reading(
             serviceEnabled = safe(false) { AccessibilityUtil.isEnabled(ctx) },
             serviceRunning = safe(false) { BlockerAccessibilityService.isConnected() },
@@ -73,12 +77,22 @@ object HealthReader {
             bindDeferrals = safe(0) { SettingsStore.bindDeferrals(ctx) },
             bootHeardMs = safe(BootAudit.NEVER) { BootAudit.lagMsForThisBoot(ctx) },
             bootsMissed = safe(0) { BootAudit.missedCount(ctx) },
-            // UNKNOWN (-1) means the scheduler has never been seen to run at all, which is not the
-            // same as "ran a long time ago" — pass it through rather than flattening to a duration.
-            workerSilentMs = safe(ProtectionPulse.UNKNOWN) { ProtectionPulse.silentFor(ctx) },
+            workerSilentMs = workerSilentMs,
+            usedSinceWorkerMin = usedSinceWorker(ctx, now, workerSilentMs),
             quickSharePercent = quick,
             blocksMeasured = buckets.sum(),
             slowBlocks = buckets.lastOrNull() ?: 0,
+            // The split the verdict is actually taken from — see HealthFacts.speedFact. Both are
+            // empty on a phone that has not blocked anything since the split shipped, which is
+            // why speedFact still prints the blended figure and simply declines to judge it.
+            instantSharePercent = runCatching {
+                BlockLatency.quickShare(ctx, BlockLatency.Path.INSTANT)
+            }.getOrNull(),
+            instantMeasured = safe(0) { BlockLatency.measured(ctx, BlockLatency.Path.INSTANT) },
+            settledSharePercent = runCatching {
+                BlockLatency.quickShare(ctx, BlockLatency.Path.SETTLED)
+            }.getOrNull(),
+            settledMeasured = safe(0) { BlockLatency.measured(ctx, BlockLatency.Path.SETTLED) },
             deafSpells = safe(0) { SilenceLog.get(ctx, SilenceLog.DEAF_DISMISSALS).total },
             deafSpellsToday = safe(0) { SilenceLog.get(ctx, SilenceLog.DEAF_DISMISSALS).today },
             lateSkips = safe(0) { SilenceLog.get(ctx, SilenceLog.LATE_DECLINES).total },
@@ -91,6 +105,29 @@ object HealthReader {
             lastSendResult = runCatching { BugReportQueue.lastResult(ctx) }.getOrNull(),
             sinceLastSendMs = since(now) { BugReportQueue.lastAttemptAt(ctx) },
         )
+    }
+
+    /**
+     * Foreground minutes since the background scheduler last ran, or null when that cannot be told.
+     *
+     * ⚠️ **Only computed once the scheduler is already past its own threshold.** Walking the
+     * usage-event stream is the most expensive thing a report does — see [read]'s `watch`
+     * parameter, which exists because doing it twice was a bug. A phone whose scheduler is running
+     * normally therefore pays nothing for this, and the walk happens only in the one state where
+     * the answer can change a verdict. Reports are filed when the app is opened, not on a timer,
+     * so this is not periodic work and the owner's "keep the battery as it is" holds.
+     *
+     * ⚠️ **Null means "cannot tell", never "none".** `UsageTracker.totalMinutesInRange` answers 0
+     * when it cannot read the stream at all, so the permission is checked here rather than left to
+     * be flattened downstream — the same guard, for the same reason, as `ProtectionWatchdog.read`.
+     * A zero returned from here is a real measurement of an idle phone.
+     */
+    private fun usedSinceWorker(ctx: Context, now: Long, workerSilentMs: Long): Int? {
+        if (workerSilentMs < ProtectionPulse.SILENT_AFTER_MS) return null
+        if (!safe(false) { hasUsageAccess(ctx) }) return null
+        return runCatching {
+            UsageTracker.totalMinutesInRange(ctx, now - workerSilentMs, now)
+        }.getOrNull()
     }
 
     private inline fun <T> safe(fallback: T, read: () -> T): T =

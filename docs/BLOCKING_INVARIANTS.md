@@ -1109,6 +1109,261 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     **The standing question: when a fix changes what one counter counts, what is it compared
     against — and does that still count the same thing?**
 
+58. **A latency that contains a deliberate wait is not a latency, and a percentage taken over
+    several pipelines is not a speed.** `BlockLatency`'s stopwatch starts at the accessibility
+    event and stops when the cover is up. The debounced page scan then does *nothing at all* for
+    250ms — up to ~950ms across a burst — so that the page has stopped changing before it is read.
+    That wait is inside every number that path records: **a settled cover cannot reach the fastest
+    two buckets however quick the code is**, and the fastest is unreachable by construction.
+
+    The arithmetic was already written down, in this object's own KDoc: *"the page scan's own
+    debounce caps at 700ms, so a block under a quarter of a second came from the undebounced
+    address-bar path."* The conclusion was never drawn. One blended percentage over three paths
+    does not measure how fast blocking is, it measures **which paths the owner happened to use** —
+    a day with more browsing lowers it with nothing in the app having changed. That is what the
+    82% → 77% "slide" was, and it was quoted to him as blocking getting slower.
+
+    ⚠️ **Invariant 50 examined this number a day earlier and deliberately kept the lifetime
+    verdict**, on reasoning that was sound for what it knew: a cumulative quality average should
+    not flip on a handful of covers. What it did not know was that the population was a mixture in
+    which one path can never score. **A judgement that is right about the statistic can still be
+    wrong about the population** — when a metric is defended, check what is actually inside it.
+
+    Now: `BlockLatency.Path` (INSTANT / SETTLED) with its own counters, the verdict taken from
+    INSTANT alone, the settled share reported beside it so the wait is named rather than hidden,
+    and `MIN_FOR_VERDICT` so a share over a handful of covers is reported and not judged — at
+    n=18 one cover is five and a half points, which is the entire difference that was quoted.
+    `BlockLatency.Start` pairs the instant with its path in one value **so a duration cannot be
+    recorded without saying which pipeline it came down**; a `path` argument with a default would
+    have been smaller, and would have been forgotten by the next caller with nothing failing.
+
+    **The shape to grep for: a threshold applied to a number whose population is not one thing.**
+
+59. **A section may not contradict the section printed directly above it.** A profile report
+    opened with `### What looks wrong here` and two ❌ lines, then said *"Nothing is wrong here"*
+    four lines below. Both halves were individually right — the crosses are `HealthFacts`, the
+    all-clear is `profileIsClean`, and they answer different questions — but the reader gets one
+    document, and that sentence was written when nothing could precede it. Profiles started
+    carrying health facts in v1.160; the prose did not move with them.
+
+    ⚠️ **The fix is scope, never a second verdict.** `profileIsClean` and `profileRowIsBad` are
+    the v1.155 one-rule extraction and stay untouched; "does this report carry any ❌" is asked by
+    calling `HealthFacts.problemLines`, which this file already calls in three places. **A fourth
+    call is not a fourth copy of the rule** — that distinction is the whole of invariants 54-55.
+
+    ⚠️ **The reason it shipped is a test gap, and the gap is the finding.**
+    `DeviceProfileReportTest`'s own `profile()` helper never passed `healthFacts`, so every test in
+    the class rendered an empty list and the contradiction was *structurally unreachable* from the
+    suite that owns this shape. **When a report shape gains a section, the tests that render that
+    shape have to be given one** — a helper's default is a decision about what can be tested.
+
+60. **A periodic job that did not run while nobody was using the phone has cost nothing.** The
+    scheduler verdict was `good = false` on any silence past `ProtectionPulse.SILENT_AFTER_MS`.
+    That reading is taken when the report is filed, which is when the owner opens the app —
+    normally straight out of Doze, which is exactly when a periodic job has not run. So the row was
+    red on essentially every report from his phone, and a fault that is always present is one the
+    reader learns to skip past. It is judged against real use now, exactly as `quietFact` already
+    judges silence: *quiet is only evidence when something was happening.*
+
+    ⚠️ **The window has to be the right one.** `Reading.usedMinutes` is measured over
+    `[lastEventAt, now]`, and on a report filed at app-open that spans seconds — reading it against
+    a scheduler silent for three quarters of an hour would pair two counters that count different
+    things (invariant 57) and turn a real fault permanently grey. Same reader
+    (`UsageTracker.totalMinutesInRange`), different range, its own field.
+
+    ⚠️ **Unknown use is not idle.** `totalMinutesInRange` answers 0 when it cannot read the stream
+    at all, so the permission is checked before the call and the fact renders as a plain `•` when
+    use cannot be measured — never ✅, and never dropped. Invariant 47 in a new place.
+
+61. **A dedupe that happens inside `enqueue` does not make *building* the report free.** The
+    profile report is filed from `MainActivity.onResume`, and four comments — three in
+    `reportDeviceProfile`, one at the call site — said the repeat cost "one lookup after the first
+    send" because the queue dedupes on the key. But `enqueue` can only refuse a report that
+    already exists, and constructing one evaluates `healthLines`, which calls `HealthReader.read`,
+    which takes its own `ProtectionWatchdog.read` when handed none — **the usage-event walk, the
+    most expensive read in the app, on every single app open since v1.148**, thrown away
+    immediately afterwards. Against a locked "keep the battery as it is".
+
+    ⚠️ **`watch = null` means "I have no reading", not "do not take one".** That is the whole
+    defect in one line, and the comment beside it asserted the second reading.
+
+    ⚠️ **And the shape check made it invisible.** `a profile report … takes no reading` pinned
+    `takeReading = false`, which stops *one* of the two walks. It verified the flag while the thing
+    it was named for happened by another route on the next line. **A check that names a property
+    and tests a proxy for it is worse than no check** — it is the reason nobody looked for six
+    days. It now asserts that `BugReportQueue.alreadyHave` is called *before* `fromProfile`.
+
+    **The standing question: for anything skipped by a dedupe, a cap or a throttle — what has
+    already been paid for by the time the skip happens?**
+
+62. **A round-trip fixture that leaves a field at its default cannot see that field.**
+    `anEpisodeSurvivesTheRoundTrip` compared the whole data class, which is the right shape, but
+    built its `Episode` with four of eleven fields defaulted — so `encode` could drop `detectedBy`,
+    `endedBy`, `usedDuringMin` or `fromBoot`, `decode` would restore the identical default, and the
+    test would pass. `usedDuringMin` is the field answering what a stoppage actually cost.
+
+    This is invariant-by-restatement: `ReportRoundTripTest` had exactly this hole, it was found on
+    31 Aug 2026 and fixed *there*, and the sibling serializer one file away was never looked at.
+    Both now assert reflectively that no field is left at a default before comparing.
+
+63. **A rule written for one constant set must be grepped for its siblings.** `decode` validates
+    `precededBy`, `detectedBy` and `endedBy` against three `ALL` sets in the same way — and only
+    `EndedBy.ALL` carried the ⚠️ comment and only `everyEndingIsDecodable` tested it. Adding a
+    constant and forgetting its set is not a compile error and not a crash.
+
+    ⚠️ **`Preceded` is the one that lies in the dangerous direction.** A missing `DetectedBy`
+    decodes to `UNKNOWN`, which admits it does not know; a missing `Preceded` decodes to
+    `NOTHING`, which *asserts nothing had just happened* — and `after=update` is the whole
+    evidence for the update hypothesis, the thing that showed installing v1.160 cost a 33-minute
+    stoppage. `BlockLog.Window.ALL` is the same shape, checked and left: a wrong value there
+    renders as `na` in a diagnostic line and decides nothing.
+
+    This is the doc's own opening diagnosis turned on itself for the sixth time — *"the rule had
+    been written down as a fact about one screen and never grepped for."*
+
+64. **Two lists that answer the same question are one list.** `KEYWORD_SCAN_EXCLUDED` names the
+    screens that must never be keyword-scanned, because Settings → Apps lists every app installed
+    and a blocked word that is also an app name would cover the screen the owner manages his phone
+    from. It held AOSP's two, `com.android.systemui` and `com.android.settings`. Twenty lines below
+    it in the same companion object, `GUARD_PACKAGES = GuardPackages.GUARD` already knew that
+    **Xiaomi routes app management through `com.miui.securitycenter`** — and said exactly that in
+    its own KDoc, because the uninstall guard had already been through this.
+
+    So on the owner's own phone, MIUI's app-management screen and all eight package installers were
+    keyword-scanned. Sharper during an armed danger hour: `danger_words.txt` is 353 deliberately
+    ordinary words matched against **every** app for an hour, and a list of every app on the phone
+    is the likeliest place for one of them to appear — the block screen landing on the screen he
+    would need to fix it.
+
+    ⚠️ **This is the doc's opening diagnosis, verbatim, for the seventh time**: *the rule had been
+    written down as a fact about one screen and never grepped for*, with the correct sibling
+    implementation a few lines away in the same file. Derived from the guard's set now, with a
+    `CodeShapeTest` that fails on a second list of package literals.
+
+65. **One guard per independent side effect.** `Snapshots.refresh` recomputes the four fallbacks
+    that are *the only enforcement* between the watcher binding and Room's first emission — and it
+    wrote all four inside a single `runCatching`. A throw reading the first (a DAO query, a corrupt
+    row, a disk error) silently skipped the other three and logged one line that did not say which.
+    Three snapshots going stale because the first read failed is the exact bug `Snapshots` was
+    built to end, arriving through a different door.
+
+    ⚠️ **The lesson was already written down, two files away, in the code that learned it.**
+    `BugReportSender.appContext`: *"Each field is read on its own. This used to be one runCatching
+    around the whole map, which meant ONE throw among ten calls produced an empty map with nothing
+    to say why — and that is exactly what happened."* Never grepped for. Eighth occurrence.
+
+    **Enumerated rather than fixed in one place**, per the method above: every `runCatching` in
+    `data/` and `service/` holding more than one independent commit. Three candidates, and the
+    other two are correct — `BootAudit.noteRun`'s three `.apply()` calls are mutually exclusive
+    arms of a `when` over an enum, and `BugReportQueue.migrate`'s two are one migration whose
+    partial completion is harmless and documented. **A second finding did come out of the sweep:**
+    `buildWeekly` promised in a comment that the week marker is written "whether or not the enqueue
+    took it", which was true for an enqueue returning false and false for a throw — so one failed
+    reading made the whole expensive weekly build run again on every app open for the rest of the
+    week, refused by the dedupe each time. Invariant 61 with a throw in place of the dedupe.
+
+    ⚠️ **And the check written for this one fired on the correct code.** Its first version matched
+    "the whole body wrapped in one `runCatching`" with a regex that also described the one
+    legitimate guard around `BlockerDatabase.get`. Counting guards against writes is the honest
+    version of the same question. It failed loudly rather than passing for the wrong reason, which
+    is the only reason it was caught — **fourth ornamental-or-wrong check this week**.
+
+    **The shape to grep for: a `runCatching` whose body contains two things that would still be
+    worth doing if the other one failed.**
+
+66. **A fast path may skip work; it may not also lower the standard of evidence.** The site fast
+    path added the same day (invariant 58's release) reads the address first and blocks from the
+    host alone, never touching the page — that is the saving. But `rememberedBrowserAddress`
+    answers from memory when the toolbar is hidden, and that memory is valid for `URL_MEMORY_MS`,
+    ten minutes. So the new order let a **recalled** address raise a cover **with no page text
+    beside it**, which the old order made unreachable by accident: a blank page returned before the
+    filter ever ran.
+
+    Two failed measurements at once — a toolbar that could not be read and a page that could not be
+    read — producing a positive verdict. Invariant 4 forbids exactly that, and the reorder walked
+    straight past it while the diff looked like a pure optimisation.
+
+    ⚠️ **Found by auditing my own change from the same day**, which is where this project's bugs
+    keep coming from: the reorder was reviewed for what it *removed* (a discarded page walk) and
+    not for what it *newly allowed*. `rememberedBrowserAddress` returns an `AddressRead` now, and
+    only `live = true` may answer alone; a recalled address still reaches the full `check` with the
+    page text beside it, exactly as before the fast path existed.
+
+    **The standing question for any fast path: what did the slow path require that this one does
+    not — and was that requirement load-bearing?**
+
+67. **The address layer was blind to every non-Latin search, and the matchers it rests on had no
+    tests.** A typed search reaches the address bar percent-encoded in UTF-8, so an Arabic term
+    arrives as `%D8%B3%D9%83…`. `spacedUrl` restored `+` and `%20` — the spaces multi-word entries
+    need — and handled nothing else, so every other escape passed through as raw bytes that no
+    pack word matches and that `normalizeArabic` cannot fold, because there are no Arabic
+    characters left in it to fold. **The owner is an Arabic speaker.**
+
+    The cost is not that such a search is unblocked — the page-text walk still catches it once the
+    results render — it is that the *address* layer, which exists to answer sooner and to answer at
+    all when a page cannot be read, could only ever answer for Latin text. `spacedUrl` decodes now,
+    with `+` replaced **before** decoding because `+` means space while `%2B` means a literal plus.
+    The decoder is total: a stray or truncated escape is left as it stands, invalid UTF-8 becomes
+    the replacement character, and it cannot throw on the blocking path.
+
+    ⚠️ **`spacedUrl`, `containsWord` and `normalizeArabic` had no direct tests anywhere** — only
+    incidental coverage through `check`. They are the lowest-level rules in the whole blocking
+    decision, and **`containsWord` is shared with the watcher's off-switch guard**, whose own KDoc
+    is the reason it is `internal` ("Files" must not fire inside "Profiles"). Two subsystems
+    resting on one untested primitive. Pinned now, including the case the loop could have got
+    wrong: a rejected glued match must not stop the search before a later clean one.
+
+    **The shape to grep for: a transformation applied to one alphabet's worth of input.**
+
+68. **A string the app reads back must not change with the phone's language.** `"%d".format(...)`
+    is Kotlin's shorthand for `String.format` and takes the **default locale** every time. The
+    weekly report's label is built that way — and it is not prose, it is the report's **dedupe
+    key**, its `weekOf` field, and the input to `weeksBetween`, which parses it back with
+    `toInt()`. Under a locale with Arabic-Indic digits it renders `٢٠٢٦-W٣٦`: the key changes shape
+    under the queue's feet, and the parse throws, so the skipped-weeks count silently reads 0.
+    **Proved, not assumed** — `LocaleSafetyTest` asserts the premise first, and `%d` really does
+    render `٢٠٢٦` under `ar-EG-u-nu-arab`.
+
+    Arabic shipped in v1.141 and the owner has never switched to it, so nothing in this app has
+    ever run under such a locale. The lesson was written down during that release — *`%d` rendering
+    ٠١٢٣* — as a fact about layout strings, and never grepped for. Ninth occurrence.
+
+    ⚠️ **The split that matters is what the string is FOR**, not where it lives. Every `%d` in
+    `ui/` — the clocks, the durations, the counter — is deliberately left on the default locale,
+    because a localised digit is the *correct* answer for something a person reads. `Locale.ROOT`
+    belongs only where the app reads it back.
+
+    ⚠️ **`PinStore.hash` uses the same `"%02x".format(byte)` and was deliberately NOT changed.** If
+    `%x` localised, the stored hash would depend on the phone's language and a language change
+    would lock the owner out of his own PIN — and "fixing" it afterwards would lock him out again,
+    because the stored value is already whatever it is. It does not localise: `java.util.Formatter`
+    applies localised digits to decimal conversions only. **That is now a test rather than a
+    memory of the JDK source**, pinning the property `PinStore` rests on without touching a stored
+    format. Reading a value out is the safe way to settle this; rewriting it is not.
+
+    **The shape to grep for: a machine-readable string built with a human-readable formatter.**
+
+69. **Two paths to the same verdict must be given the same evidence.** `checkUrlAdult` has always
+    taken `learnedDomains` — the hosts this phone established for itself, from two different
+    browsers — and the undebounced address check has always passed them. `check`, the full
+    debounced scan, **never had the parameter at all.** So a learned host was blocked while the
+    toolbar could be read and *not* blocked when it could not, which is precisely the case the
+    debounced scan exists to cover. An under-block, in the one feature built to catch what the
+    shipped lists miss.
+
+    ⚠️ **The boundary is the point of the fix, not an afterthought.** They are forwarded to the
+    **host branch only**. Learned hosts match as a plain substring, so running them over page text
+    would cover any page that merely names the site — the over-block this file has already been
+    trimmed three times to remove, and the reason the no-address fallback deliberately gets the
+    shipped domain list and not this one. Both halves are pinned: the two paths agree on an
+    address, and a page that only mentions a learned host is still not covered.
+
+    ⚠️ **This was seen and deferred twice in the same session** — recorded under invariant 65's
+    sweep as "older than this change and left alone rather than quietly widened". That was right
+    while it was a side effect of a different change and wrong once it was the subject: *do not
+    widen blocking in passing, but do not let "not now" become "not ever" either.* The deferral
+    only worked because it was written down.
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused
@@ -2081,6 +2336,45 @@ the thinness is the finding — this area has been swept out. The next hunt shou
 named candidate (*where else does a lookup have exactly one spelling?*) or the ~8,300 lines of
 reporting and recovery code written since 30 Aug, which no sweep has touched.
 
+### Swept (6 Sep 2026, evening) — the reporting layer's sentinels and serializers
+
+**The area:** the ~5,400 lines of `OutageLog` / `BootAudit` / `ProtectionPulse` / `BlockLatency` /
+`SilenceLog` / `HealthFacts` / `BugReport` / `BugReportQueue` / `HealthReader` / `BugReportSender`
+that the 5 Sep sweep named as never having been swept.
+
+**The primitive, not the feature.** The 5 Sep sweep asked where `null` means "no" instead of "don't
+know". This layer does not run on nulls, it runs on **sentinels** — `-1`, `NEVER` (-2), `MISSED`,
+`UNKNOWN`, `UNKNOWN_USE`. So: enumerate every sentinel constant, then every read of a value that
+can carry one, and ask whether each reader distinguishes the sentinel from a real number. Then the
+same question of every zero-on-failure reader (`UsageTracker.totalMinutesInRange` answers `0` when
+it cannot read the stream at all). Three findings — **invariants 61, 62, 63**.
+
+**Clean, and worth keeping as clean:**
+
+- **Every sentinel read in the protection path is guarded.** `ProtectionAlarmReceiver` excludes
+  `UNKNOWN` explicitly before comparing; `agoText`/`minutesText` answer "never"/"an unknown time"
+  for negatives; `BlockLog.render` prints `ms=?`; `HealthFacts` splits `>= 0` / `MISSED` / `NEVER`
+  into three branches; `OutageLog.Totals` sums `coerceAtLeast(0)` **and** carries a separate count
+  of how many were real, so "12 minutes lost" can never silently include unmeasured stoppages.
+- ⭐ **Every `totalMinutesInRange` caller in this layer checks `hasUsageAccess` first**, which is
+  what stops a phone without the permission recording an outage as costing zero minutes — the one
+  place where a zero would read as "harmless". (`AiCoach`'s "by this time yesterday" comparison
+  does not, and is left alone: a different feature, and a wrong comparison there is a worse
+  sentence, not weaker blocking.)
+- **`DayStamp`** — one `todayStamp()` for the whole app, `dayGap`/`stampDaysAgo` going through an
+  absolute ordinal so the year boundary cannot be subtracted across, and every "today" counter
+  reading the same function.
+- **The other three report shapes do not have invariant 59's contradiction.** `outageBody` opens
+  with a statement about the stoppage that agrees with the crosses above it; `weeklyBody` opens
+  with a heading; `faultBody` opens with the owner's own words. Only the profile asserted health.
+- **`BlockLog.Window.ALL`** has invariant 63's shape and was deliberately left: a value missing
+  from it renders as `na` in a diagnostic line and decides nothing.
+
+**Not fixed, recorded:** `WebContentFilter.check` calls `checkUrlAdult` **without**
+`learnedDomains` while the undebounced `scanBrowserUrl` passes them, so a host this phone learned
+for itself is caught by the fast path and not by the page scan. Older than this sweep, and widening
+blocking under cover of a different change is how a sweep produces a bug.
+
 ### Not yet swept
 
 - **Where else does a null answer mean "no" instead of "don't know"?** Four bugs now share this
@@ -2090,10 +2384,36 @@ reporting and recovery code written since 30 Aug, which no sweep has touched.
   invariant 20): it was written here as a prediction and arrived as a report before anybody swept
   it, which is the best argument this list has for being worked through rather than admired. The
   remaining ones have still never been enumerated.
-- **Where else does a lookup have exactly one spelling?** The 13 Aug report was a hardcoded
-  vendor string that silently meant "off". `SHORTS_ID_MARKERS` is the same shape and admits it
-  ("exact ids vary by YouTube version"); so are the launcher, IME and dialer detections, though
-  those fail *loudly* because the phone stops working. Nobody has enumerated the rest.
+- ~~**Where else does a lookup have exactly one spelling?**~~ **Partly swept, 6 Sep 2026 (late).**
+  Enumerated every hardcoded package/class/view-id literal in `service/` and `data/`. One finding
+  — `KEYWORD_SCAN_EXCLUDED` was AOSP's two while `GuardPackages.GUARD` in the same companion object
+  already knew Xiaomi's, invariant 64. **Checked and clean:** browser detection is *structural*
+  (`CATEGORY_BROWSABLE` and `CATEGORY_APP_BROWSER` intent queries, plus the default browser, with
+  `KNOWN_BROWSERS` only as a supplement), so an unknown browser is still found; `GuardPackages`
+  covers six OEM installers with the reasoning for each; the omnibox tiers are three deep by
+  design and tier 2 catches what tier 1's single `url_bar` spelling misses.
+  ⚠️ **`isTransientSurface` — examined 7 Sep 2026 and DELIBERATELY NOT CHANGED. Do not "fix" it.**
+  It is `pkg in TRANSIENT_SURFACES || pkg == imePackage()`, with no structural fallback, and the
+  set holds System UI, `android` and **three Samsung packages — nothing for Xiaomi, which is the
+  owner's phone.** That looks like an obvious gap and the obvious fixes are all wrong:
+
+  **Every one of its four call sites uses it to decide "do NOT adopt this package as the
+  foreground".** So the two errors are not symmetric. A wrong *yes* (a real destination judged a
+  panel) means the app is never adopted and therefore **never blocked** — a silent under-block,
+  the failure this whole document exists for. A wrong *no* (a real panel not recognised) costs a
+  phantom open against a daily limit and a cover torn down for a moment: annoying, **visible, and
+  reportable**. The short hardcoded list is conservative on purpose and the code says so.
+
+  A structural test — "no launcher entry means not a destination" — widens exactly the dangerous
+  side, and gating it on `blockReason(pkg) != null` does not rescue it: during the pre-Room window
+  that gate answers from a snapshot, and an unready answer would make an unknown package look
+  transient in the one window with the least protection. **The bug here is unconfirmed and its
+  cost is visible; the fix's cost would be invisible.** Trading a visible failure for an invisible
+  one is a bad trade however tidy the code looks afterwards.
+
+  **If it is ever picked up again it needs a device fact, not a guess:** *"with a blocked app
+  covered, swipe out MIUI's side panel / Game Turbo — does the cover come down?"* Take the package
+  from a report; never invent one.
 
 - ~~The rest of `BlockOverlay`.~~ **Swept in the eighteenth hunt** — all eleven readers traced, the
   set-before-`addView` window confirmed unreachable, one latent trap (`onClose`) recorded. See that
@@ -2102,12 +2422,46 @@ reporting and recovery code written since 30 Aug, which no sweep has touched.
   hunt** — `BugReportQueue`'s cap was found counting the wrong side of the queue; `CoachProfile`'s
   write-back-on-failed-read and the unordered sent-key trim were both judged and left, with the
   reasons recorded there. `MoodStore` and the advice ledger are clean. No longer a candidate.
-- **The new best candidate: state that escapes its composition.** The nineteenth hunt's first
-  finding was a lambda holding a `remember(key)` state that a resume had already replaced, and it
-  only enumerated the two sites in `ProfileScreen`. The general question — *which callbacks in this
-  app outlive the composition that built them, and what do they write?* — has not been asked of
-  `BlockEditorScreen`, `BlockingScreen`, `ScheduleEditorScreen` or the overlay screens, all of which
-  hand callbacks upwards to `AppRoot`.
+- ~~**The new best candidate: state that escapes its composition.**~~ **Asked, 7 Sep 2026, and it
+  came back CLEAN — record it as a gate rather than re-hunting it.** Enumerated every callback in
+  `ui/` that outlives its composition: the eleven `BackHandler` / `onDispose` / lifecycle-observer
+  sites. Every one either captures a `MutableState` (so the write lands on the state object, not on
+  a stale copy) or creates the object it later removes inside the same `DisposableEffect` body.
+  `JournalScreen`'s save-on-dispose already uses `rememberUpdatedState` for exactly this reason and
+  says so. The nineteenth hunt's shape did not recur.
+
+- ~~**An early return that skips the re-arm at the bottom of the same function.**~~ **Enumerated
+  7 Sep 2026 — CLEAN.** This is the v1.153 deaf-spell shape, fixed in `showBlockScreen` and never
+  swept for. Ten functions in the watcher both re-arm at their end and return early; all ten book
+  their return. The two in `onForegroundChanged` post `confirmForegroundRunnable`, which re-enters
+  `onForegroundChanged` and therefore reaches the three `schedule*Scan()` calls; the transient-
+  surface return is correct to arm nothing, because the app underneath never changed and its scans
+  were armed when it came to the front.
+
+- **Also clean, 7 Sep 2026:** `isLauncherPkg`'s negative cache only records a NO that was actually
+  established and clears every earlier guess on a fresh answer; `isRealBrowserPkg` re-reads only
+  from empty and says why. Both were swept before and have stayed correct.
+
+- ~~**The DNS filter.**~~ **Swept 7 Sep 2026 — CLEAN end to end. Keep it as a gate.** The subsystem
+  most able to make the phone unusable, and it holds up:
+  - `shouldShutBrowsers` is pure and its four refusals are all present and all tested — CANT_TELL
+    costs nothing, an unvalidated network (captive portal) is not judged, the reading must hold
+    still for `SETTLE_MS`, and `armed` means the filter has been *watched working* on this phone.
+  - `classify` never reads the switch, only *which resolver* — the distinction the whole design
+    turns on — and `isFamilyResolver` is a whole-name match, so a hostname that merely contains a
+    known one cannot pass. Both pinned.
+  - The off-since anchor is cleared whenever the filter is protecting **or** unreadable **or** the
+    network is unvalidated, so the settle time can only accumulate while it is genuinely off on a
+    working network. The `?:` fallback when the anchor cannot be read yields `offForMs = 0`, which
+    is the refusing direction.
+  - ⚠️ **The wall-clock fallback across a reboot was examined and is correct, not a bug.** A
+    `GuardedDeadline` older than one boot answers from the wall clock, so a stale anchor reads as
+    expired and the browsers shut without a fresh settle. That is the design: the filter really has
+    been off for longer than a minute, and post-boot the network is not yet validated anyway, which
+    clears the anchor before it can be used.
+  - Both backstops are actually wired — `refreshNetFilterIfStale` and `refreshCachedSettingsIfStale`
+    sit at the top of `blockReason`, the path every decision takes, not only on the recheck tick
+    (which does not run for an app with no rule, the exact case they exist for).
 - ~~The Insights-side of `UsageTracker`'s bucket queries.~~ **Not cosmetic — the owner hit it the
   same day it was written down here.** See the sweep-fourteen entry below: dismissing it as "off by
   part of a day at the edges" understated it, because for *today* the edge is the whole of

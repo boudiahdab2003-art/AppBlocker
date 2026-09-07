@@ -249,7 +249,19 @@ class OutageLogTest {
 
     // ---- the stored format -------------------------------------------------------------------
 
-    /** What is written must read back identically, or a report describes a different outage. */
+    /**
+     * What is written must read back identically, or a report describes a different outage.
+     *
+     * ⚠️ **Every field carries a non-default value, and the assertion above the round-trip is
+     * what keeps it that way.** This fixture used to set seven of eleven and leave `detectedBy`,
+     * `endedBy`, `usedDuringMin` and `fromBoot` at their defaults — so `encode` could have dropped
+     * any of those four, `decode` would have restored the identical default, and this test would
+     * have passed. It is the same hole `BugReportTest.every field a report carries survives the
+     * queue` was written to close in the sibling serializer on 31 Aug 2026; this one never got the
+     * same treatment. `usedDuringMin` is the field answering the owner's standing question about
+     * what a stoppage actually cost him, so losing it silently would make that question
+     * unanswerable with a green suite.
+     */
     @Test fun anEpisodeSurvivesTheRoundTrip() {
         val e = OutageLog.Episode(
             startedAt = now,
@@ -257,8 +269,34 @@ class OutageLogTest {
             detectedAfterMs = 3 * minute,
             aliveButDeaf = true,
             precededBy = OutageLog.Preceded.UPDATE,
-            rebooted = false,
+            rebooted = true,
             versionCode = 143L,
+            detectedBy = OutageLog.DetectedBy.PROBE,
+            endedBy = OutageLog.EndedBy.REBOUND,
+            usedDuringMin = 7,
+            fromBoot = true,
+        )
+        val defaults = OutageLog.Episode::class.java.declaredFields
+            .filterNot { it.isSynthetic || java.lang.reflect.Modifier.isStatic(it.modifiers) }
+            .filter { f ->
+                f.isAccessible = true
+                when (val v = f.get(e)) {
+                    null -> true
+                    is String -> v.isEmpty() || v == OutageLog.DetectedBy.UNKNOWN ||
+                        v == OutageLog.EndedBy.UNKNOWN || v == OutageLog.Preceded.NOTHING
+                    is Long -> v == 0L
+                    is Int -> v == 0 || v == OutageLog.UNKNOWN_USE
+                    is Boolean -> !v
+                    else -> false
+                }
+            }
+            .map { it.name }
+        assertEquals(
+            "$defaults is left at its default here, so the round-trip below says nothing about " +
+                "it — encode could drop it and decode would put the same default straight back. " +
+                "Give it a distinctive value; that is the whole job of this fixture.",
+            emptyList<String>(),
+            defaults,
         )
         assertEquals(e, OutageLog.decode(OutageLog.encode(e)))
     }
@@ -410,6 +448,17 @@ class OutageLogTest {
         )
 
     /**
+     * Every `String` constant declared on [holder], for the "is it in ALL" checks below.
+     *
+     * ⚠️ `ALL` is itself a field on the object, so it has to be excluded by type — a `Set` is not
+     * a `String` — or the check reads its own answer back and can never fail.
+     */
+    private fun declaredConstants(holder: Any): List<String> =
+        holder::class.java.declaredFields
+            .filter { it.type == String::class.java }
+            .mapNotNull { it.isAccessible = true; it.get(holder) as? String }
+
+    /**
      * **Every ending this app can record must decode back to itself.**
      *
      * `decode` maps any value not in `EndedBy.ALL` to `UNKNOWN`, which is right for a value some
@@ -420,9 +469,7 @@ class OutageLogTest {
      * The same trap as the sanitiser's allow-list, one layer down.
      */
     @Test fun everyEndingIsDecodable() {
-        val declared = OutageLog.EndedBy::class.java.declaredFields
-            .filter { it.type == String::class.java }
-            .mapNotNull { it.isAccessible = true; it.get(OutageLog.EndedBy) as? String }
+        val declared = declaredConstants(OutageLog.EndedBy)
         assertTrue("no EndedBy constants found; this check is reading nothing", declared.size >= 5)
         val missing = declared.filterNot { it in OutageLog.EndedBy.ALL }
         assertEquals(
@@ -430,6 +477,43 @@ class OutageLogTest {
                 "decodes as \"unknown\" and the ending is lost: $missing",
             emptyList<String>(),
             missing,
+        )
+    }
+
+    /**
+     * ⚠️ **The same rule, for the two sets that never got it — and one of them lies in the
+     * dangerous direction.**
+     *
+     * `everyEndingIsDecodable` above was written for `EndedBy` alone, and `decode` validates
+     * `Preceded` and `DetectedBy` in exactly the same way. That is this project's signature
+     * failure, written down in `docs/BLOCKING_INVARIANTS.md` since its first version: *the rule
+     * had been written down as a fact about one screen and never grepped for.* Only `EndedBy.ALL`
+     * even carries the warning comment.
+     *
+     * The severities differ and `Preceded` is the worse one. A missing `DetectedBy` decodes to
+     * `UNKNOWN`, which is honest — the row admits it does not know. A missing `Preceded` decodes
+     * to `NOTHING`, which **asserts that nothing had just happened**. `after=update` is the entire
+     * evidence for the update hypothesis, and it is what showed that installing v1.160 cost a
+     * 33-minute stoppage. A new constant left out of `ALL` would erase that quietly.
+     */
+    @Test fun everyCauseAndDetectorIsDecodable() {
+        val causes = declaredConstants(OutageLog.Preceded)
+        assertTrue("no Preceded constants found; this check is reading nothing", causes.size >= 3)
+        assertEquals(
+            "declared but not in Preceded.ALL — an episode preceded that way decodes as " +
+                "\"nothing\", which claims nothing had just happened rather than admitting it is " +
+                "not known: " + causes.filterNot { it in OutageLog.Preceded.ALL },
+            emptyList<String>(),
+            causes.filterNot { it in OutageLog.Preceded.ALL },
+        )
+
+        val detectors = declaredConstants(OutageLog.DetectedBy)
+        assertTrue("no DetectedBy constants found; reading nothing", detectors.size >= 4)
+        assertEquals(
+            "declared but not in DetectedBy.ALL, so the arm that found the stoppage is lost: " +
+                detectors.filterNot { it in OutageLog.DetectedBy.ALL },
+            emptyList<String>(),
+            detectors.filterNot { it in OutageLog.DetectedBy.ALL },
         )
     }
 

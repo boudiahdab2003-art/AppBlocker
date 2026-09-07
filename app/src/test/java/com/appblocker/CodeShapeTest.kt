@@ -767,6 +767,49 @@ class CodeShapeTest {
     }
 
     /**
+     * **One failing snapshot may not take the other three with it.**
+     *
+     * `refresh` wrote all four fallbacks inside a single `runCatching`, so a throw reading the
+     * first — a DAO query, a corrupt row, a disk error — silently skipped the rest and logged one
+     * line that did not say which. Those four snapshots are the only enforcement in the window
+     * between the watcher binding and Room's first emission, so three of them going stale because
+     * the first read failed is the bug this object exists to prevent, arriving by another door.
+     *
+     * `BugReportSender.appContext` had the identical shape and fixed it with a per-field `field()`
+     * helper, writing the lesson in a comment that was never grepped for. This is that grep, kept.
+     */
+    @Test
+    fun `each snapshot is refreshed under its own guard`() {
+        val text = source("data/Snapshots.kt").readText()
+        val live = text.lines().map { it.trim() }
+            .filterNot { it.startsWith("//") || it.startsWith("*") || it.startsWith("/*") }
+        val writes = live.count { Regex("SettingsStore\\.set\\w+Snapshot\\(").containsMatchIn(it) }
+        val guards = live.count { it.startsWith("step(") }
+        assertTrue("Snapshots writes no snapshot at all; this check proves nothing", writes > 0)
+        assertEquals(
+            "every snapshot write must sit in its own guarded step, or one failure silently " +
+                "leaves the others stale: $writes writes, $guards steps",
+            writes,
+            guards,
+        )
+        // ⚠️ This assertion started life as a regex for "the whole body in one runCatching" and
+        // fired on the CORRECT code: the one legitimate `runCatching` — around
+        // `BlockerDatabase.get` — sits right after `val app`, which is exactly what that pattern
+        // described. Counting is the honest version of the same question, and it caught its own
+        // author because it failed loudly rather than passing for the wrong reason.
+        val body = source("data/Snapshots.kt").readText()
+            .substringAfter("suspend fun refresh(")
+            .substringBefore(Char(10) + "    }")
+        assertEquals(
+            "refresh may hold exactly one runCatching — the database lookup. Any other means a " +
+                "snapshot write is guarded by something other than its own step(), which is how " +
+                "one failure came to take the other three with it.",
+            1,
+            Regex("runCatching").findAll(body).count(),
+        )
+    }
+
+    /**
      * **Every table a snapshot is derived from has to be a table the observer watches.**
      *
      * A fifth snapshot added without its table in `WATCHED` would be refreshed only while the
@@ -1170,13 +1213,19 @@ class CodeShapeTest {
      * `graceRecovers` and the outage totals were visible only alongside a stoppage. On 6 Sep 2026
      * the owner restarted his phone, it kept working, and nothing in any report could say so.
      *
-     * `takeReading = false` is the other half: the promise a profile does not pay for the usage
-     * walk. Both are checked, because dropping either turns this into the bug it replaced — one
-     * way the numbers vanish again, the other way every app open takes the most expensive read in
-     * the file.
+     * `takeReading = false` is the other half: it stops `appContext` taking a usage walk of its
+     * own. Both are checked, because dropping either turns this into the bug it replaced.
+     *
+     * ⚠️ **This check used to be named "and takes no reading", and that was not true.** It pinned
+     * the flag and the flag was never the whole cost: `healthLines(context, watch = null)` on the
+     * line below made `HealthReader.read` take its own `ProtectionWatchdog.read`, so every app
+     * resume since v1.148 walked the usage-event stream and then threw the report away at the
+     * queue's dedupe. **A check that verifies the flag while the thing it names happens by another
+     * route is worse than no check** — it is the reason nobody looked. The third assertion is the
+     * one that actually holds the promise: the key is asked for before the report is built.
      */
     @Test
-    fun `a profile report carries the standing questions and takes no reading`() {
+    fun `a profile report carries the standing questions and is skipped before it is built`() {
         val body = source("service/BugReportSender.kt").readText()
             .substringAfter("fun reportDeviceProfile(")
             .substringBefore(Char(10) + "    /**")
@@ -1189,9 +1238,220 @@ class CodeShapeTest {
             "appContext(" in live,
         )
         assertTrue(
-            "it must pass takeReading = false, or a profile filed on every app open takes the " +
-                "watchdog's usage walk with it.",
+            "it must pass takeReading = false, or appContext takes the watchdog's usage walk.",
             "takeReading = false" in live,
+        )
+        val asked = live.indexOf("BugReportQueue.alreadyHave(")
+        val built = live.indexOf("BugReport.fromProfile(")
+        assertTrue(
+            "reportDeviceProfile must ask BugReportQueue.alreadyHave before building anything. " +
+                "enqueue can only refuse a report that already exists, and building one takes " +
+                "the usage walk on every single app resume.",
+            asked >= 0,
+        )
+        assertTrue(
+            "the check must come BEFORE the report is constructed, or it saves nothing at all: " +
+                "alreadyHave at $asked, fromProfile at $built",
+            built < 0 || asked < built,
+        )
+    }
+
+    // ---- invariant 58 ------------------------------------------------------------------------
+
+    /**
+     * The body of one function, comment lines removed.
+     *
+     * ⚠️ Two things learned the hard way. A shape check satisfied by a *commented-out* call has
+     * happened twice in this repo, so comments come out before anything is looked for. And the
+     * end of a function is its own four-space `}` — bounding on "the next `private fun`" swallows
+     * whatever sits between, which here is an enum and three more methods, and the count-based
+     * assertions below would then be counting somebody else's code.
+     */
+    private fun liveBody(path: String, after: String): String =
+        source(path).readText()
+            .substringAfter(after)
+            .substringBefore(Char(10) + "    }")
+            .lines().map { it.trim() }
+            .filterNot { it.startsWith("//") || it.startsWith("*") || it.startsWith("/*") }
+            .joinToString(" ")
+
+    /**
+     * **Only the debounced page scan may record a latency as SETTLED, and it must.**
+     *
+     * `BlockLatency` blends nothing now, and the whole value of that rests on one thing being true
+     * at four call sites: the two paths that decide in the event's own turn say INSTANT, and the
+     * one that deliberately waits 250-950ms before it starts work says SETTLED. Wrong in either
+     * direction and the histogram silently goes back to being a mixture — a settled cover filed as
+     * instant drags the verdict down with waiting time, an instant one filed as settled hides real
+     * slowness. Nothing throws, nothing looks wrong, and the number simply resumes meaning what it
+     * meant on 6 Sep 2026: it was read as blocking getting slower and reported to the owner as
+     * such, and it was path mix.
+     *
+     * `BlockLatency.Start` exists so a duration cannot be recorded without naming its path. This is
+     * the other half — that the names are the right way round.
+     */
+    @Test
+    fun `only the debounced scan records a settled latency`() {
+        val live = source("service/BlockerAccessibilityService.kt").readText()
+            .lines().map { it.trim() }
+            .filterNot { it.startsWith("//") || it.startsWith("*") || it.startsWith("/*") }
+        val settled = live.filter { "BlockLatency.Path.SETTLED" in it }
+        assertEquals(
+            "exactly one place may claim a settled latency, and it is the web-scan runnable: " +
+                settled,
+            1,
+            settled.size,
+        )
+        assertTrue(
+            "the settled start must be the one handed to scanWebContent, the only path that " +
+                "waits before it works: " + settled.first(),
+            "scanWebContent(" in settled.first(),
+        )
+        val instant = live.filter { "BlockLatency.Path.INSTANT" in it }
+        assertTrue(
+            "the app-block and address-bar paths must record as INSTANT: $instant",
+            instant.size >= 3 &&
+                instant.any { "handleAppBlock(" in it } &&
+                instant.any { "scanBrowserUrl(" in it },
+        )
+    }
+
+    /**
+     * **Only an address read from the screen may block without reading the page.**
+     *
+     * The site fast path added on 6 Sep 2026 decides from the host alone and never reads the page,
+     * which is the whole saving. But `rememberedBrowserAddress` answers from memory when the
+     * toolbar is hidden, and that memory is good for `URL_MEMORY_MS` — ten minutes. Letting a
+     * recalled address decide *with no page text beside it* is judging from two failed
+     * measurements at once, and it could cover a page he had already moved to. The old order made
+     * that unreachable by accident, because a blank page returned before the filter ever ran.
+     *
+     * A recalled address still reaches the full `check` with the page text, exactly as before the
+     * fast path existed. It simply may not answer alone.
+     */
+    @Test
+    fun `only a live address decides a block without the page`() {
+        val body = liveBody(
+            "service/BlockerAccessibilityService.kt",
+            "private suspend fun scanWebContent(",
+        )
+        assertTrue(
+            "scanWebContent must still take a URL-only fast path, or the page walk it skips is back",
+            "val urlHit" in body,
+        )
+        val decl = body.substringAfter("val urlHit").substringBefore("}")
+        assertTrue(
+            "the URL-only verdict must be gated on the address having been read live — a " +
+                "remembered one may not decide without the page: $decl",
+            "read.live" in decl,
+        )
+    }
+
+    /**
+     * **The keyword scanner and the uninstall guard agree on what an app-management screen is.**
+     *
+     * `KEYWORD_SCAN_EXCLUDED` exists so a blocked word that is also an *app name* cannot cover the
+     * screen the owner manages his phone from — Settings → Apps lists every app installed. It was
+     * `setOf("com.android.systemui", "com.android.settings")`, AOSP's two, while
+     * `GuardPackages.GUARD` in the same companion object already knew that **Xiaomi routes app
+     * management through `com.miui.securitycenter`** and said so in its own KDoc. Two lists, one
+     * question, and the shorter one was the one on the hot path — so on the owner's own phone that
+     * screen and all eight package installers were keyword scanned.
+     *
+     * The danger zone makes it sharper: `danger_words.txt` is 353 deliberately ordinary words
+     * matched against every app for an hour, and a list of every app on the phone is the likeliest
+     * place for one of them to appear.
+     *
+     * ⚠️ **This is the shape `docs/BLOCKING_INVARIANTS.md` opens by naming** — a rule written down
+     * as a fact about one screen, with the correct sibling twenty lines away in the same file.
+     */
+    @Test
+    fun `the keyword scanner excludes every screen the guard calls app management`() {
+        val live = source("service/BlockerAccessibilityService.kt").readText()
+            .lines().map { it.trim() }
+            .filterNot { it.startsWith("//") || it.startsWith("*") || it.startsWith("/*") }
+        val decl = live.firstOrNull { it.startsWith("private val KEYWORD_SCAN_EXCLUDED") }
+        assertTrue("KEYWORD_SCAN_EXCLUDED must still exist", decl != null)
+        assertTrue(
+            "KEYWORD_SCAN_EXCLUDED must be derived from the guard's own set, not listed again — " +
+                "a second list of management screens is how the Xiaomi one got left out: $decl",
+            "GuardPackages.GUARD" in decl!! || "GUARD_PACKAGES" in decl,
+        )
+        assertFalse(
+            "it must not spell package names of its own beyond the system-UI one: $decl",
+            Regex("\"com\\.android\\.settings\"|\"com\\.miui\\.").containsMatchIn(decl),
+        )
+    }
+
+    /**
+     * **The profile dedupe key is spelled once.**
+     *
+     * `BugReportSender` asks the queue whether it already has this profile *before* building one,
+     * because building one takes the usage-stream walk on every app resume (invariant 61). That
+     * check is worth nothing if the key it asks about is not the key `enqueue` will compute, so
+     * `dedupeKey` calls `BugReport.profileKey` rather than spelling `"profile:…"` again.
+     *
+     * ⚠️ **A unit test cannot hold this.** Asserting `dedupeKey() == profileKey(...)` passes by
+     * construction while one calls the other — swapping `profileKey`'s format left that assertion
+     * green, which is how this check came to exist. The thing that can actually regress is the
+     * *shape*: someone restores the inline string, both spellings compile, and they drift apart in
+     * silence. Third ornamental check caught this week by putting the bug back.
+     */
+    @Test
+    fun `the profile dedupe key is not spelled twice`() {
+        val text = source("data/BugReport.kt").readText()
+        val live = text.lines().map { it.trim() }
+            .filterNot { it.startsWith("//") || it.startsWith("*") || it.startsWith("/*") }
+        val spellings = live.filter { "\"profile:" in it }
+        assertEquals(
+            "the \"profile:\" format may appear exactly once, inside profileKey — a second " +
+                "spelling is a rule with two copies, and the queue would go on refusing a report " +
+                "the caller thought it had already checked for: $spellings",
+            1,
+            spellings.size,
+        )
+        assertTrue(
+            "the one spelling must be profileKey's own body: " + spellings.first(),
+            "fun profileKey(" in spellings.first(),
+        )
+        assertTrue(
+            "dedupeKey must call profileKey rather than build the string itself",
+            live.any { "isProfile ->" in it && "profileKey(" in it },
+        )
+    }
+
+    /**
+     * **The page scan reads the address before it reads the page, and asks for the rules once.**
+     *
+     * For a site cover — most of what this app raises — the verdict comes from the host alone, and
+     * the 400-node text walk that used to run first was matched and thrown away; on a start page
+     * both walks finished before `check` returned null on its own first line. The order *is* the
+     * saving, so the order is what has to be held. `autoSocialKeywords()` rides in the same check
+     * because it was called twice in this one function, each call walking every rule for the same
+     * answer — the same shape, forty lines apart.
+     */
+    @Test
+    fun `the page scan reads the address before the page and the rules once`() {
+        val body = liveBody(
+            "service/BlockerAccessibilityService.kt",
+            "private suspend fun scanWebContent(",
+        )
+        val addressAt = body.indexOf("rememberedBrowserAddress(")
+        val textAt = body.indexOf("extractVisibleText(")
+        assertTrue("scanWebContent must still read an address", addressAt >= 0)
+        assertTrue("scanWebContent must still be able to read the page", textAt >= 0)
+        assertTrue(
+            "the address must be read first, or every site cover pays a page walk it discards",
+            addressAt < textAt,
+        )
+        assertTrue(
+            "the page walk must be conditional on the address not having answered already",
+            "urlHit != null" in body.substring(0, textAt),
+        )
+        assertEquals(
+            "autoSocialKeywords() must be read once per scan, not once per verdict",
+            1,
+            Regex("autoSocialKeywords\\(\\)").findAll(body).count(),
         )
     }
 }

@@ -1034,4 +1034,142 @@ class WebContentFilterTest {
         }
     }
 
+
+    // ---- the three shared matchers, which had no direct tests at all ------------------------
+
+    /**
+     * ⚠️ **A typed search reaches the address bar percent-encoded, and a non-Latin one stayed
+     * that way.** `spacedUrl` restored `+` and `%20` so multi-word entries could fire on the
+     * address, and handled nothing else — so an Arabic search arrived as raw `%D8%..` bytes that
+     * no pack word matches and `normalizeArabic` cannot fold, because no Arabic characters are
+     * left in it to fold. The owner is an Arabic speaker, and the address layer exists precisely
+     * to beat the page-text walk that would otherwise be the only thing left.
+     */
+    @Test
+    fun `a percent-encoded search is decoded before it is matched`() {
+        // Arabic for "cat" — an ordinary word, standing in for the shape of the encoding.
+        val arabic = "قطة"
+        val encoded = "example.com/search?q=%D9%82%D8%B7%D8%A9"
+        assertTrue(
+            "an encoded non-Latin term must survive spacedUrl as its own characters",
+            WebContentFilter.spacedUrl(encoded).contains(arabic),
+        )
+    }
+
+    /** `+` means space and `%2B` means a literal plus, so the order of the two steps matters. */
+    @Test
+    fun `an escaped plus does not become a space`() {
+        assertEquals("a b", WebContentFilter.spacedUrl("a+b"))
+        assertEquals("a b", WebContentFilter.spacedUrl("a%20b"))
+        assertEquals("c++", WebContentFilter.spacedUrl("c%2B%2B"))
+    }
+
+    /** A matcher on the blocking path may not throw, whatever a browser puts in the bar. */
+    @Test
+    fun `a malformed escape is left alone rather than throwing`() {
+        assertEquals("100% off", WebContentFilter.spacedUrl("100% off"))
+        assertEquals("ends with %", WebContentFilter.spacedUrl("ends with %"))
+        assertEquals("%zz", WebContentFilter.spacedUrl("%zz"))
+        assertEquals("%2", WebContentFilter.spacedUrl("%2"))
+    }
+
+    /**
+     * ⚠️ **`containsWord` is shared with the watcher's off-switch guard** — its KDoc says so:
+     * "Files" must not fire inside "Profiles". It is the lowest-level rule in the whole blocking
+     * decision and it had no test of its own.
+     */
+    @Test
+    fun `whole-word matching refuses a glued match on either side`() {
+        assertTrue(WebContentFilter.containsWord("the files app", "files"))
+        assertTrue(WebContentFilter.containsWord("files", "files"))
+        assertTrue(WebContentFilter.containsWord("open files.", "files"))
+        assertFalse("glued after", WebContentFilter.containsWord("profiles", "files"))
+        assertFalse("glued before", WebContentFilter.containsWord("filesystem", "files"))
+        assertFalse("empty never matches", WebContentFilter.containsWord("anything", ""))
+        // A later occurrence still counts when an earlier one was glued — the loop must not stop
+        // at the first hit it rejects.
+        assertTrue(WebContentFilter.containsWord("profiles and files", "files"))
+    }
+
+    /** The folding the pack is stored in: one written form has to catch its spelling variants. */
+    @Test
+    fun `arabic folding makes one stored spelling catch its variants`() {
+        val plain = WebContentFilter.normalizeArabic("احمد")
+        assertEquals(plain, WebContentFilter.normalizeArabic("أحمد"))
+        assertEquals(plain, WebContentFilter.normalizeArabic("إحمد"))
+        assertEquals(plain, WebContentFilter.normalizeArabic("آحمد"))
+        // Tatweel and diacritics are dropped rather than folded to something else.
+        assertEquals(plain, WebContentFilter.normalizeArabic("اـحمد"))
+        assertEquals(plain, WebContentFilter.normalizeArabic("اَحمد"))
+        // Latin text is untouched, or every English entry would fold too.
+        assertEquals("hello world", WebContentFilter.normalizeArabic("hello world"))
+    }
+
+    /**
+     * The two halves together: folding happens AFTER decoding, so a variant spelling typed into
+     * a search box still lands on the stored form. Neither step is any use without the other.
+     */
+    @Test
+    fun `a decoded arabic search folds to the stored spelling`() {
+        val stored = WebContentFilter.normalizeArabic("احمد")
+        val typed = WebContentFilter.normalizeArabic(
+            WebContentFilter.spacedUrl("example.com/?q=%D8%A3%D8%AD%D9%85%D8%AF"),
+        )
+        assertTrue("folded search must contain the stored form", typed.contains(stored))
+    }
+
+    // ---- learned domains: the two paths have to agree, and only about the ADDRESS -----------
+
+    /**
+     * ⚠️ **A host this phone learned for itself was blocked by one path and not the other.**
+     *
+     * `checkUrlAdult` has always taken `learnedDomains` and the undebounced address check has
+     * always passed them; `check` — the full scan — never had the parameter at all. So a learned
+     * host was blocked while the toolbar could be read and NOT blocked when it could not, which is
+     * exactly the case the debounced scan exists to cover. An under-block in the one feature built
+     * to catch what the shipped lists miss.
+     */
+    @Test
+    fun `a learned host is blocked by the full scan as well as the fast path`() {
+        val f = filter()
+        val learned = setOf("learned-example.com")
+        val url = "learned-example.com/page"
+
+        val fast = f.checkUrlAdult(url, adultPack = true, blockAdult = true, learnedDomains = learned)
+        val full = f.check(
+            text = "some ordinary page text",
+            address = BrowserAddress.At(url),
+            userKeywords = emptyList(),
+            siteKeywords = emptyList(),
+            adultPack = true,
+            blockAdult = true,
+            learnedDomains = learned,
+        )
+        assertNotNull("the fast path must still block a learned host", fast)
+        assertNotNull("and so must the full scan, or a hidden toolbar is the way out", full)
+        assertEquals(fast?.title, full?.title)
+    }
+
+    /**
+     * ⚠️ **And it must stay an ADDRESS rule.** Learned hosts are matched as a plain substring,
+     * so running them over page text would cover any page that merely mentions the site — the
+     * over-block this file has been trimmed three times to remove, and the reason the no-address
+     * fallback below the host branch deliberately does not get them.
+     */
+    @Test
+    fun `a learned host does not fire on a page that merely mentions it`() {
+        val f = filter()
+        assertNull(
+            "a page naming the site, with no address readable, must not be covered",
+            f.check(
+                text = "an article about learned-example.com and why to avoid it",
+                address = BrowserAddress.Unreadable,
+                userKeywords = emptyList(),
+                siteKeywords = emptyList(),
+                adultPack = true,
+                blockAdult = true,
+                learnedDomains = setOf("learned-example.com"),
+            ),
+        )
+    }
 }

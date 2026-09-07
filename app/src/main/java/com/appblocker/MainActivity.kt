@@ -103,9 +103,12 @@ class MainActivity : ComponentActivity() {
         // What this phone says about the guesses the app makes about it — sent once per phone per
         // build, and sent **even when every answer is the one we hoped for**. A phone we got wrong
         // does not crash; it quietly stops protecting, so a healthy report is the only signal
-        // there is. The queue dedupes on the report's own key, so calling this every resume costs
-        // one lookup after the first send. Before the flush, or the first profile would sit in the
-        // queue until the next launch.
+        // there is. Calling this every resume costs one prefs lookup after the first send —
+        // ⚠️ which became true only when the key started being checked BEFORE the report is
+        // built. This sentence was written as a fact about the queue's dedupe, and dedupe happens
+        // inside `enqueue`, by which point the report and its usage-stream walk have already been
+        // paid for. Before the flush, or the first profile would sit in the queue until the next
+        // launch.
         BugReportSender.reportDeviceProfile(applicationContext)
         // The one report filed when nothing is wrong. Rides here rather than on a schedule for
         // the reason spelled out in reportWeekly: every background job in this app runs on the

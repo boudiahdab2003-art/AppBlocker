@@ -819,13 +819,33 @@ class DeviceProfileReportTest {
         "browsersClaimUnproven" to "com.sec.android.app.sbrowser",
     )
 
-    private fun profile(context: Map<String, String>) = BugReport.fromProfile(
+    /**
+     * ⚠️ **[healthFacts] defaults to empty, and that default is what let a defect ship.**
+     *
+     * Every test in this class used to call this helper without facts, so `whatLooksWrong()`
+     * rendered nothing and the class could not see what a profile actually looks like once v1.160
+     * started carrying the blocker's own readings on this shape. A real report then opened with
+     * two ❌ lines and said "Nothing is wrong here" four lines later. The parameter is here so the
+     * contradiction is reachable from a test at all — see
+     * `a profile that carries a bad reading does not also claim nothing is wrong`.
+     */
+    private fun profile(
+        context: Map<String, String>,
+        healthFacts: List<String> = emptyList(),
+    ) = BugReport.fromProfile(
         appVersion = "1.136",
         flavor = "github",
         androidSdk = 35,
         device = "samsung SM-S911B",
         context = context,
+        healthFacts = healthFacts,
     )
+
+    /** A rendered ❌ line, in the shape [HealthFacts.render] emits and [BugReport] filters on. */
+    private fun badFact(title: String) = "❌ **$title** — because the phone said so."
+
+    /** The same, healthy — it must never be mistaken for a problem. */
+    private fun goodFact(title: String) = "✅ **$title** — all fine."
 
     // --- the point of the whole thing ---
 
@@ -838,6 +858,69 @@ class DeviceProfileReportTest {
         // It must read as evidence rather than as an error, or it gets closed unread.
         assertTrue(r.body().contains("healthy phone reporting in"))
         assertTrue(r.body().contains("samsung SM-S911B"))
+    }
+
+    /**
+     * The key a caller can ask for in advance is the key the queue will use.
+     *
+     * ⚠️ **This assertion cannot fail on its own and is not the guard** — `dedupeKey` calls
+     * `profileKey`, so changing one changes both and they agree by construction. That is the
+     * point: it documents the relationship, and `CodeShapeTest.the profile dedupe key is not
+     * spelled twice` is what stops someone restoring the inline string and letting the two drift.
+     * Proving it: swapping `profileKey`'s format left this green, which is how it was found.
+     */
+    @Test
+    fun `the key a profile can be looked up by is the key it dedupes on`() {
+        val r = profile(clean)
+
+        assertEquals(
+            r.dedupeKey(),
+            BugReport.profileKey("samsung SM-S911B", "1.136"),
+        )
+    }
+
+    /**
+     * ⚠️ **The report may not contradict itself between two adjacent sections.**
+     *
+     * A real profile from his phone opened with `❌ The background scheduler last ran 44 min ago`
+     * and `❌ 77% of blocks appear in under half a second`, and then said "Nothing is wrong here"
+     * four lines below. Both halves were individually right — the crosses are health facts, the
+     * all-clear was about the app's guesses about the handset — but a reader gets one document.
+     *
+     * The fix is scope, not a second verdict, so this asserts the sentence still exists and that
+     * it no longer claims more than it can see.
+     */
+    @Test
+    fun `a profile that carries a bad reading does not also claim nothing is wrong`() {
+        val r = profile(clean, listOf(badFact("The background scheduler last ran 44 min ago")))
+
+        // The device verdict is unchanged: every guess about this handset really is right.
+        assertTrue(r.title().contains("profile OK"))
+        assertTrue(r.body().contains("healthy phone reporting in"))
+        // But the flat claim is gone, and the body says which half it is speaking for.
+        assertFalse(
+            "the all-clear must not be unqualified while a ❌ reading is printed above it",
+            r.body().contains("Nothing is wrong here"),
+        )
+        assertTrue(r.body().contains("Nothing the app assumed about this phone is wrong"))
+        assertTrue(r.body().contains("table below"))
+    }
+
+    /**
+     * The other half, and the reason the clause is conditional: on a phone with nothing wrong the
+     * report must not start apologising for readings it does not have. A caveat printed
+     * unconditionally is the v1.155 defect (all three fixes printed on every healthy phone) with
+     * the words changed.
+     */
+    @Test
+    fun `a profile whose readings are all healthy keeps its plain all-clear`() {
+        val r = profile(clean, listOf(goodFact("The blocker is running")))
+
+        assertTrue(r.body().contains("Nothing the app assumed about this phone is wrong"))
+        assertFalse(
+            "there is no bad reading, so there is nothing to point up at",
+            r.body().contains("table below"),
+        )
     }
 
     @Test

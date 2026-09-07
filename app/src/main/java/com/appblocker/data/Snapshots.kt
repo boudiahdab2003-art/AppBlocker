@@ -80,17 +80,37 @@ internal object Snapshots {
      *
      * Never throws: it runs on a background scope where an escape would be silent, and a failure
      * here must not be able to take the database's own invalidation machinery down with it.
+     *
+     * ⚠️ **One guard per snapshot, and that is the whole point of [step].** This used to be a
+     * single `runCatching` around all four, so a throw reading the *first* — a DAO query, a
+     * corrupt row, a disk error — silently skipped the other three, and the log line said
+     * "snapshot refresh failed" without saying which. These four are the only enforcement in the
+     * window between the watcher binding and Room's first emission, so three of them going stale
+     * because the first read failed is the exact failure this object was built to end, arriving by
+     * a different door.
+     *
+     * `BugReportSender.appContext` already learned this and says so in its own comment: *"Each
+     * field is read on its own. This used to be one runCatching around the whole map, which meant
+     * ONE throw among ten calls produced an empty map with nothing to say why — and that is
+     * exactly what happened."* Same shape, two files apart, and it was never grepped for.
      */
     suspend fun refresh(context: Context) {
         val app = context.applicationContext
-        runCatching {
-            val db = BlockerDatabase.get(app)
+        // Outside the per-step guards on purpose: with no database there is nothing to refresh,
+        // and four identical failures would say less than one.
+        val db = runCatching { BlockerDatabase.get(app) }.getOrNull() ?: run {
+            Log.w(TAG, "snapshot refresh skipped: no database")
+            return
+        }
 
+        step("blocked apps") {
             val blocked = RuleSnapshot.encode(db.appRuleDao().getAll().first())
             if (blocked != SettingsStore.blockedSnapshot(app)) {
                 SettingsStore.setBlockedSnapshot(app, blocked)
             }
+        }
 
+        step("strict session") {
             val focus = db.focusDao().get().first()
             val strict = StrictSnapshot.Session(
                 realtimeStart = focus?.realtimeStartMillis ?: 0L,
@@ -102,17 +122,27 @@ internal object Snapshots {
             if (strict != SettingsStore.strictSnapshot(app)) {
                 SettingsStore.setStrictSnapshot(app, strict)
             }
+        }
 
+        step("keywords") {
             val words = db.blockedKeywordDao().getAll().first().map { it.keyword }.toSet()
             if (words != SettingsStore.keywordSnapshot(app)) {
                 SettingsStore.setKeywordSnapshot(app, words)
             }
+        }
 
+        step("schedules") {
             val schedules = db.scheduleDao().getAll().first()
             if (schedules != SettingsStore.scheduleSnapshot(app)) {
                 SettingsStore.setScheduleSnapshot(app, schedules)
             }
-        }.onFailure { Log.w(TAG, "snapshot refresh failed", it) }
+        }
+    }
+
+    /** One snapshot's refresh, isolated so a failure cannot take the others with it — and named,
+     *  so the log says which one. Modelled on `BugReportSender.appContext`'s `field`. */
+    private inline fun step(what: String, write: () -> Unit) {
+        runCatching(write).onFailure { Log.w(TAG, "snapshot refresh failed: $what", it) }
     }
 
     private const val TAG = "Snapshots"

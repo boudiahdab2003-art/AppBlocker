@@ -205,17 +205,30 @@ object BugReportSender {
         // "82% of 140, 3 slow" — the share that landed under half a second, how many blocks that
         // is out of, and how many took over two seconds. The tail is the part worth reading: a
         // good percentage with a growing tail is exactly what "sometimes it's slow" looks like.
+        // ⚠️ **The headline blends three pipelines and is NOT a measure of speed on its own.** The
+        // page scan waits 250-950ms for the page to settle before it reads anything and the
+        // stopwatch starts at the event, so a settled cover can never reach the fastest two
+        // buckets — see BlockLatency.Path. The blend therefore moves with how the phone was used:
+        // more browsing, lower percentage, nothing changed. That is what 82% -> 77% was, and it was
+        // reported to the owner as blocking getting slower. The split in brackets is the part a
+        // verdict may be read from; the blend stays because it is what he actually waited for.
         field("blockSpeed") {
             val quick = BlockLatency.quickShare(ctx)
             if (quick == null) "none yet" else {
                 val counts = (0 until BlockLatency.SIZE).map { BlockLatency.get(ctx, it).total }
-                "$quick% of ${counts.sum()}, ${counts.last()} slow"
+                val split = BlockLatency.Path.values().mapNotNull { path ->
+                    val share = BlockLatency.quickShare(ctx, path) ?: return@mapNotNull null
+                    "${path.name.lowercase()} $share% of ${BlockLatency.measured(ctx, path)}"
+                }
+                "$quick% of ${counts.sum()}, ${counts.last()} slow" +
+                    if (split.isEmpty()) "" else " (${split.joinToString(", ")})"
             }
         }
-        // ⚠️ Today only. The lifetime figure above moves a point at a time once there are a
-        // hundred covers behind it, so a bad day reads as noise — 82% to 78% over 5-6 Sep 2026
-        // was about half the recent covers being slow, and nothing said so until it crossed a
-        // threshold. Read the pair: a today far under the lifetime is a slide in progress.
+        // ⚠️ Today only, and it carries the same mixture as the lifetime figure above — so a today
+        // under the lifetime is NOT by itself a slide. 12 quick of 18 against a lifetime 77% is
+        // one cover either way and sits well inside the noise; it was quoted as a slide anyway.
+        // What it is good for is the opposite reading: today far under the lifetime, on a day the
+        // instant split is also down, is worth looking at. Read all three or none.
         field("blockSpeedToday") {
             val quick = BlockLatency.quickShareToday(ctx)
             if (quick == null) "none yet" else {
@@ -496,10 +509,26 @@ object BugReportSender {
      */
     fun reportDeviceProfile(context: Context) {
         if (!enabled()) return
-        // No watchdog reading here on purpose: a profile is about what this phone IS, not how
-        // blocking is doing, and it is filed from `onResume` on every launch. Taking the usage
-        // walk for a report that would not print it would be paying the most expensive read in
-        // the file for nothing.
+        // ⚠️ **Asked BEFORE the report is built, and that is the whole point of this line.**
+        //
+        // This runs on every `onResume`. The queue dedupes on the key, and both this function and
+        // MainActivity said that made the repeat cost "one lookup after the first send" — but
+        // `enqueue` can only refuse a report that already exists, and building one evaluates
+        // `healthLines`, which takes `ProtectionWatchdog.read`, which walks the usage-event
+        // stream. So every single app open since v1.148 (when the profile started carrying health
+        // facts) paid the most expensive read in the app and then threw the result away, against
+        // an explicit "keep the battery as it is". `takeReading = false` below was saving one walk
+        // while the line under it took another.
+        //
+        // The key needs only the two cheap facts, and comes from `BugReport.profileKey` so it
+        // cannot drift from the answer `enqueue` would give.
+        if (BugReportQueue.alreadyHave(
+                context,
+                BugReport.profileKey(describeDevice(), BuildConfig.VERSION_NAME),
+            )
+        ) {
+            return
+        }
         runCatching {
             BugReportQueue.enqueue(
                 context,
@@ -513,12 +542,15 @@ object BugReportSender {
                     // phone whose counters say whether the last fix worked. Without this they only
                     // appeared alongside a stoppage, so a week with no stoppages reported nothing
                     // about the instruments built to explain the stoppages.
-                    // `takeReading = false` keeps the promise above: no usage walk for a profile.
+                    // `takeReading = false` stops THIS half taking a walk of its own.
                     context = DeviceProfile.reportContext(context) +
                         appContext(context, takeReading = false),
-                    // No watchdog reading is taken for a profile, so this passes none — the
-                    // health facts still gather cheaply from prefs, and they include the delivery
-                    // verdicts, which is the whole reason a profile is worth reading right now.
+                    // ⚠️ **This half DOES take one**, because `HealthReader.read` takes its own
+                    // reading when it is handed none — `watch = null` means "I have no reading",
+                    // not "do not take one". Three comments here used to claim the opposite. It is
+                    // paid once per phone per build now rather than on every resume, which is what
+                    // makes it worth paying: the facts include the quiet reading and the delivery
+                    // verdicts, and a profile is the only report a healthy phone ever files.
                     healthFacts = healthLines(context, watch = null),
                 ),
             )
@@ -679,24 +711,36 @@ object BugReportSender {
                 SettingsStore.setLastWeeklyReport(context, week)
                 return
             }
-            val watch = watchReading(context)
-            BugReportQueue.enqueue(
-                context,
-                BugReport.fromWeekly(
-                    appVersion = BuildConfig.VERSION_NAME,
-                    flavor = BuildConfig.FLAVOR,
-                    androidSdk = Build.VERSION.SDK_INT,
-                    device = describeDevice(),
-                    context = appContext(context, watch) + ruleCounts(context) + mapOf(
-                        "weekOf" to week,
-                        "weeksSkipped" to "${weeksBetween(last, week)}",
+            // ⚠️ **Guarded separately so the marker below cannot be skipped by a throw.** The
+            // comment on that line promises the week is marked "whether or not the enqueue took
+            // it", and it was true only for an enqueue that *returned false*. Everything in here
+            // touches something that can fail — `watchReading` walks the usage-event stream,
+            // `ruleCounts` reads Room, `healthLines` walks it again — and one throw left the
+            // marker unwritten, so `last != week` on the next launch and the whole expensive
+            // build ran again on **every app open for the rest of the week**, only to be refused
+            // by the queue's dedupe each time. That is the profile report's bug (invariant 61)
+            // with a throw in place of the dedupe.
+            runCatching {
+                val watch = watchReading(context)
+                BugReportQueue.enqueue(
+                    context,
+                    BugReport.fromWeekly(
+                        appVersion = BuildConfig.VERSION_NAME,
+                        flavor = BuildConfig.FLAVOR,
+                        androidSdk = Build.VERSION.SDK_INT,
+                        device = describeDevice(),
+                        context = appContext(context, watch) + ruleCounts(context) + mapOf(
+                            "weekOf" to week,
+                            "weeksSkipped" to "${weeksBetween(last, week)}",
+                        ),
+                        recentOutages = OutageLog.recent(context),
+                        healthFacts = healthLines(context, watch),
                     ),
-                    recentOutages = OutageLog.recent(context),
-                    healthFacts = healthLines(context, watch),
-                ),
-            )
-            // Written whether or not the enqueue took it. A queue that is full or capped must not
-            // make the app retry the same week on every single open for the rest of the week.
+                )
+            }.onFailure { Log.w(TAG, "weekly report not built", it) }
+            // Written whether or not the enqueue took it, and whether or not building it threw.
+            // A queue that is full or capped — or a reading that failed once — must not make the
+            // app retry the same week on every single open for the rest of the week.
             SettingsStore.setLastWeeklyReport(context, week)
         }
     }
@@ -745,8 +789,26 @@ object BugReportSender {
         c.minimalDaysInFirstWeek = 4
         val week = c.get(java.util.Calendar.WEEK_OF_YEAR)
         val year = c.get(java.util.Calendar.YEAR)
-        return "%d-W%02d".format(year, week)
+        return weekLabel(year, week)
     }
+
+    /**
+     * The week's name, in ASCII digits whatever language the phone is in.
+     *
+     * ⚠️ **`"%d".format(...)` uses the DEFAULT locale**, and a locale with Arabic-Indic digits
+     * renders `2026-W36` as `٢٠٢٦-W٣٦`. This string is not for reading: it is the weekly report's
+     * **dedupe key**, the `weekOf` field in the report, and the input to [weeksBetween], which
+     * parses it back with `toInt()` — and `toInt()` on Arabic-Indic digits throws, so the skipped
+     * count would silently read 0 while the key changed under the app's own feet. Arabic shipped
+     * in v1.141 and the owner has never switched to it; this would have been waiting for the day
+     * he did, or for a phone whose system language already uses those digits.
+     *
+     * The lesson was written down during that release — `%d` rendering ٠١٢٣ — and never grepped
+     * for. `Locale.ROOT` is the whole fix; the user-facing clocks in `ui/` are deliberately left
+     * on the default, because there a localised digit is the correct answer.
+     */
+    internal fun weekLabel(year: Int, week: Int): String =
+        String.format(java.util.Locale.ROOT, "%d-W%02d", year, week)
 
     /** How many whole weeks were skipped between two labels; 0 when they are consecutive or the
      *  labels cannot be compared (a year boundary counts as consecutive rather than guessing). */

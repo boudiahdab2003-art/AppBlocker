@@ -56,4 +56,53 @@ class BlockLatencyTest {
         assertEquals(listOf(0, 1, 2, 3, 4), reached)
         assertTrue(BlockLatency.LABELS.all { it.isNotBlank() })
     }
+
+    // --- the percentage, which is where a wrong reading gets its authority --------------------
+
+    @Test
+    fun `quick is the first two buckets and nothing measured is null`() {
+        assertEquals(null, BlockLatency.sharePercent(listOf(0, 0, 0, 0, 0)))
+        assertEquals(100, BlockLatency.sharePercent(listOf(1, 1, 0, 0, 0)))
+        assertEquals(0, BlockLatency.sharePercent(listOf(0, 0, 1, 1, 1)))
+        // His own lifetime figure: 62/27/14/11/1 reads 77%, which is where this started.
+        assertEquals(77, BlockLatency.sharePercent(listOf(62, 27, 14, 11, 1)))
+    }
+
+    /**
+     * ⚠️ **The reason [BlockLatency.MIN_FOR_VERDICT] exists, stated as arithmetic.**
+     *
+     * Over eighteen covers one block is worth five and a half points. 12 quick of 18 reads 66%
+     * against a lifetime 77%, and that gap — a single cover either way — was quoted to the owner
+     * as blocking having got slower. A share this coarse is a reading, not a verdict.
+     */
+    @Test
+    fun `a share over a handful of covers moves several points per block`() {
+        assertEquals(66, BlockLatency.sharePercent(listOf(7, 5, 3, 3, 0)))
+        assertEquals(72, BlockLatency.sharePercent(listOf(8, 5, 3, 2, 0)))
+        assertTrue(
+            "one cover must move a small sample by several points, or the guard is unnecessary",
+            BlockLatency.sharePercent(listOf(8, 5, 3, 2, 0))!! -
+                BlockLatency.sharePercent(listOf(7, 5, 3, 3, 0))!! >= 5,
+        )
+        assertTrue(BlockLatency.MIN_FOR_VERDICT > 18)
+    }
+
+    /**
+     * ⚠️ **The two paths are not comparable, and this is the arithmetic that says so.**
+     *
+     * The debounced page scan does nothing for 250ms before it starts work, and up to ~950ms
+     * across a burst, while the stopwatch runs from the event that armed it. So a settled cover
+     * cannot land in bucket 0 at all and reaches bucket 1 only if it settles instantly. Blending
+     * it with the instant paths produces a percentage that tracks which paths were used rather
+     * than how fast anything was.
+     */
+    @Test
+    fun `a settled cover cannot reach the fastest bucket however fast the work is`() {
+        // Zero work, but the debounce has already run: the floor is its own delay.
+        assertEquals(1, BlockLatency.bucketFor(250L))
+        assertTrue(BlockLatency.bucketFor(250L) > 0)
+        // The realistic settle across a burst is past half a second before work begins.
+        assertTrue(BlockLatency.bucketFor(700L) >= 2)
+        assertTrue(BlockLatency.bucketFor(949L) >= 2)
+    }
 }

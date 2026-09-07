@@ -109,7 +109,7 @@ data class BugReport(
     fun dedupeKey(): String = when {
         // One profile per phone per build. Not per launch: the point is one report per *thing we
         // might have got wrong*, and that only changes when the phone or our guesses do.
-        isProfile -> "profile:$device|$appVersion"
+        isProfile -> profileKey(device, appVersion)
         // One per episode, keyed on when it started. Deliberately NOT collapsed the way faults
         // are: two outages are two outages even when they look identical, and the rate is the
         // measurement being taken. The start stamp is what makes them distinguishable at all.
@@ -436,10 +436,25 @@ data class BugReport(
      */
     private fun profileBody(): String = buildString {
         if (profileIsClean) {
-            appendLine("Nothing is wrong here. This is a **healthy phone reporting in** — it is")
-            appendLine("worth an issue because it is evidence: a brand nobody owns, confirming")
-            appendLine("that what the app assumed about it is actually true. Close it once")
-            appendLine("`docs/DEVICE_MATRIX.md` has the row.")
+            // ⚠️ **This sentence answers [profileIsClean]'s question, not the report's.** It read
+            // "Nothing is wrong here", which was true while nothing could precede it — profiles
+            // carried no health facts until v1.160. [body] now prepends [whatLooksWrong] to every
+            // shape, so an unqualified all-clear sat two lines under a list of crosses. The scope
+            // is the fix: [profileIsClean] and [profileRowIsBad] are correct and are untouched,
+            // and "does this report have any ❌" is asked by calling the one
+            // [HealthFacts.problemLines] this file already uses in three places — a fourth call,
+            // not a fourth copy of the rule.
+            appendLine("**Nothing the app assumed about this phone is wrong.** This is a")
+            appendLine("**healthy phone reporting in** — it is worth an issue because it is")
+            appendLine("evidence: a brand nobody owns, confirming that what the app assumed about")
+            appendLine("it is actually true. Close it once `docs/DEVICE_MATRIX.md` has the row.")
+            if (HealthFacts.problemLines(healthFacts).isNotEmpty()) {
+                appendLine()
+                appendLine("That verdict covers the **table below** and nothing else. The readings")
+                appendLine("above are the blocker's own numbers and some of them are not healthy;")
+                appendLine("both are true at once. A right guess about the handset does not make")
+                appendLine("the phone well.")
+            }
         } else {
             appendLine("**A guess about this phone is wrong, and blocking is weaker here because")
             appendLine("of it.** Nothing crashed and the owner of this phone cannot see it — that")
@@ -962,6 +977,17 @@ data class BugReport(
             recentOutages = recentOutages,
             healthFacts = healthFacts,
         )
+
+        /**
+         * The key a profile for this phone and build **will** have, without building one.
+         *
+         * ⚠️ **[dedupeKey] calls this rather than spelling the format again**, so a caller that
+         * asks the queue in advance — see `BugReportQueue.alreadyHave` — cannot drift from the
+         * answer the queue will actually give. It exists because a profile is filed on every app
+         * resume and is expensive to construct: its health facts take the usage-stream walk, and
+         * `enqueue` can only refuse something that has already been built.
+         */
+        fun profileKey(device: String, appVersion: String): String = "profile:$device|$appVersion"
 
         /**
          * A report about the phone itself, sent **whether or not anything is wrong**.
