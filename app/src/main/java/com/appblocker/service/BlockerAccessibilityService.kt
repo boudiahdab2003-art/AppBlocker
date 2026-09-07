@@ -2727,9 +2727,9 @@ class BlockerAccessibilityService : AccessibilityService() {
         )
         // The two URL layers, in the order check() runs them and with the same arguments, so
         // the answer is identical to the one the full scan would have reached - it just costs
-        // no page read to get there. checkUrlAdult is called without learnedDomains because
-        // that is what check() does; the undebounced path passes them, and that difference is
-        // older than this change and is left alone rather than quietly widened here.
+        // no page read to get there. `learnedDomains` is passed here and to `check` below, the
+        // same way the undebounced address check has always passed them: a host this phone
+        // established for itself is evidence from two browsers, not a guess.
         // ⚠️ **Only a LIVE address may decide without the page.** A remembered one exists for a
         // hidden toolbar and can be up to URL_MEMORY_MS old, and this path deliberately does not
         // read the page at all — so taking it would judge from two failed measurements at once and
@@ -2741,6 +2741,7 @@ class BlockerAccessibilityService : AccessibilityService() {
             filter.checkUrl(host, ownWords, social)
                 ?: filter.checkUrlAdult(
                     host, adultPackOn, SettingsStore.blockAdult(applicationContext),
+                    learnedDomains,
                 )
         } else {
             null
@@ -2807,6 +2808,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                 text, address, ownWords, social, adultPackOn,
                 SettingsStore.blockAdult(applicationContext),
                 wideList = wideListOn(),
+                learnedDomains = learnedDomains,
             )
         } else {
             filter.check(

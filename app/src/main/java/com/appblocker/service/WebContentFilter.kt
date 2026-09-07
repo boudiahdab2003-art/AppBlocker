@@ -109,6 +109,18 @@ class WebContentFilter internal constructor(
          * invariant 17's bug, and the last one cost a whole report.
          */
         wideList: Boolean = false,
+        /**
+         * Hosts this phone established for itself — see [checkUrlAdult], which has always taken
+         * them.
+         *
+         * ⚠️ **Forwarded to the host branch only, never to the page-text fallback below.** The
+         * undebounced address check passed these and this one did not, so a host the phone had
+         * learned was blocked when the toolbar could be read and NOT blocked when it could not —
+         * an under-block in the one feature built to catch what the shipped lists miss. Matching
+         * them against page text instead would be the over-block this file has already been
+         * trimmed three times to remove: a page that merely mentions a site is not that site.
+         */
+        learnedDomains: Set<String> = emptySet(),
     ): Hit? {
         // **A blank address bar is a start page, and a start page is not a page.**
         //
@@ -145,7 +157,7 @@ class WebContentFilter internal constructor(
             // owner's browser start page. Same lesson as v1.105's "mentions us was never the
             // right signal", and the same one the word pack learnt from the other side when it
             // dropped "pornography"/"porno" for being what people *say about* porn.
-            checkUrlAdult(host, adultPack, blockAdult)?.let { return it }
+            checkUrlAdult(host, adultPack, blockAdult, learnedDomains)?.let { return it }
         } else {
             for (k in userKeywords) {
                 // Whole-word like the pack below: a bare keyword ("instagram") must not fire on

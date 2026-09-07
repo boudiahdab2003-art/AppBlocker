@@ -1343,6 +1343,27 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
 
     **The shape to grep for: a machine-readable string built with a human-readable formatter.**
 
+69. **Two paths to the same verdict must be given the same evidence.** `checkUrlAdult` has always
+    taken `learnedDomains` — the hosts this phone established for itself, from two different
+    browsers — and the undebounced address check has always passed them. `check`, the full
+    debounced scan, **never had the parameter at all.** So a learned host was blocked while the
+    toolbar could be read and *not* blocked when it could not, which is precisely the case the
+    debounced scan exists to cover. An under-block, in the one feature built to catch what the
+    shipped lists miss.
+
+    ⚠️ **The boundary is the point of the fix, not an afterthought.** They are forwarded to the
+    **host branch only**. Learned hosts match as a plain substring, so running them over page text
+    would cover any page that merely names the site — the over-block this file has already been
+    trimmed three times to remove, and the reason the no-address fallback deliberately gets the
+    shipped domain list and not this one. Both halves are pinned: the two paths agree on an
+    address, and a page that only mentions a learned host is still not covered.
+
+    ⚠️ **This was seen and deferred twice in the same session** — recorded under invariant 65's
+    sweep as "older than this change and left alone rather than quietly widened". That was right
+    while it was a side effect of a different change and wrong once it was the subject: *do not
+    widen blocking in passing, but do not let "not now" become "not ever" either.* The deferral
+    only worked because it was written down.
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused

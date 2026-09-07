@@ -1117,4 +1117,59 @@ class WebContentFilterTest {
         )
         assertTrue("folded search must contain the stored form", typed.contains(stored))
     }
+
+    // ---- learned domains: the two paths have to agree, and only about the ADDRESS -----------
+
+    /**
+     * ⚠️ **A host this phone learned for itself was blocked by one path and not the other.**
+     *
+     * `checkUrlAdult` has always taken `learnedDomains` and the undebounced address check has
+     * always passed them; `check` — the full scan — never had the parameter at all. So a learned
+     * host was blocked while the toolbar could be read and NOT blocked when it could not, which is
+     * exactly the case the debounced scan exists to cover. An under-block in the one feature built
+     * to catch what the shipped lists miss.
+     */
+    @Test
+    fun `a learned host is blocked by the full scan as well as the fast path`() {
+        val f = filter()
+        val learned = setOf("learned-example.com")
+        val url = "learned-example.com/page"
+
+        val fast = f.checkUrlAdult(url, adultPack = true, blockAdult = true, learnedDomains = learned)
+        val full = f.check(
+            text = "some ordinary page text",
+            address = BrowserAddress.At(url),
+            userKeywords = emptyList(),
+            siteKeywords = emptyList(),
+            adultPack = true,
+            blockAdult = true,
+            learnedDomains = learned,
+        )
+        assertNotNull("the fast path must still block a learned host", fast)
+        assertNotNull("and so must the full scan, or a hidden toolbar is the way out", full)
+        assertEquals(fast?.title, full?.title)
+    }
+
+    /**
+     * ⚠️ **And it must stay an ADDRESS rule.** Learned hosts are matched as a plain substring,
+     * so running them over page text would cover any page that merely mentions the site — the
+     * over-block this file has been trimmed three times to remove, and the reason the no-address
+     * fallback below the host branch deliberately does not get them.
+     */
+    @Test
+    fun `a learned host does not fire on a page that merely mentions it`() {
+        val f = filter()
+        assertNull(
+            "a page naming the site, with no address readable, must not be covered",
+            f.check(
+                text = "an article about learned-example.com and why to avoid it",
+                address = BrowserAddress.Unreadable,
+                userKeywords = emptyList(),
+                siteKeywords = emptyList(),
+                adultPack = true,
+                blockAdult = true,
+                learnedDomains = setOf("learned-example.com"),
+            ),
+        )
+    }
 }
