@@ -2284,12 +2284,25 @@ blocking under cover of a different change is how a sweep produces a bug.
   hunt** — `BugReportQueue`'s cap was found counting the wrong side of the queue; `CoachProfile`'s
   write-back-on-failed-read and the unordered sent-key trim were both judged and left, with the
   reasons recorded there. `MoodStore` and the advice ledger are clean. No longer a candidate.
-- **The new best candidate: state that escapes its composition.** The nineteenth hunt's first
-  finding was a lambda holding a `remember(key)` state that a resume had already replaced, and it
-  only enumerated the two sites in `ProfileScreen`. The general question — *which callbacks in this
-  app outlive the composition that built them, and what do they write?* — has not been asked of
-  `BlockEditorScreen`, `BlockingScreen`, `ScheduleEditorScreen` or the overlay screens, all of which
-  hand callbacks upwards to `AppRoot`.
+- ~~**The new best candidate: state that escapes its composition.**~~ **Asked, 7 Sep 2026, and it
+  came back CLEAN — record it as a gate rather than re-hunting it.** Enumerated every callback in
+  `ui/` that outlives its composition: the eleven `BackHandler` / `onDispose` / lifecycle-observer
+  sites. Every one either captures a `MutableState` (so the write lands on the state object, not on
+  a stale copy) or creates the object it later removes inside the same `DisposableEffect` body.
+  `JournalScreen`'s save-on-dispose already uses `rememberUpdatedState` for exactly this reason and
+  says so. The nineteenth hunt's shape did not recur.
+
+- ~~**An early return that skips the re-arm at the bottom of the same function.**~~ **Enumerated
+  7 Sep 2026 — CLEAN.** This is the v1.153 deaf-spell shape, fixed in `showBlockScreen` and never
+  swept for. Ten functions in the watcher both re-arm at their end and return early; all ten book
+  their return. The two in `onForegroundChanged` post `confirmForegroundRunnable`, which re-enters
+  `onForegroundChanged` and therefore reaches the three `schedule*Scan()` calls; the transient-
+  surface return is correct to arm nothing, because the app underneath never changed and its scans
+  were armed when it came to the front.
+
+- **Also clean, 7 Sep 2026:** `isLauncherPkg`'s negative cache only records a NO that was actually
+  established and clears every earlier guess on a fresh answer; `isRealBrowserPkg` re-reads only
+  from empty and says why. Both were swept before and have stayed correct.
 - ~~The Insights-side of `UsageTracker`'s bucket queries.~~ **Not cosmetic — the owner hit it the
   same day it was written down here.** See the sweep-fourteen entry below: dismissing it as "off by
   part of a day at the edges" understated it, because for *today* the edge is the whole of
