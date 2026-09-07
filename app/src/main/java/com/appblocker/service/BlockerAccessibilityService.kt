@@ -2599,7 +2599,22 @@ class BlockerAccessibilityService : AccessibilityService() {
      * only ever consulted in the one case it is for — the toolbar is not on screen and there is
      * nothing to read.
      */
-    private fun rememberedBrowserAddress(pkg: String): BrowserAddress {
+    /**
+     * An address plus whether it was read from the screen just now or recalled from memory.
+     *
+     * ⚠️ **Not interchangeable for a verdict taken without the page.** A live read is a positive
+     * measurement of where he is; a remembered one is a fallback for a hidden toolbar and can be
+     * up to [URL_MEMORY_MS] old. Judging on a remembered address while the page text is *also*
+     * unreadable decides from two failed measurements at once — see the use in [scanWebContent].
+     *
+     * [live] answers "did this come off the screen just now", so it only carries meaning beside a
+     * [BrowserAddress.At]. The [BrowserAddress.Unreadable] cases are marked `true` because there
+     * is no remembered value behind them either, and nothing reads the flag there: an unreadable
+     * address has no host to decide from in the first place.
+     */
+    private data class AddressRead(val address: BrowserAddress, val live: Boolean)
+
+    private fun rememberedBrowserAddress(pkg: String): AddressRead {
         val read = extractBrowserAddress(pkg)
         val now = stopwatchNow()
         if (read is BrowserAddress.At) {
@@ -2610,7 +2625,7 @@ class BlockerAccessibilityService : AccessibilityService() {
             // "can't filter" — see SettingsStore.readableBrowsers. Cheap: a set lookup unless
             // it is the first time.
             SettingsStore.addReadableBrowser(applicationContext, pkg)
-            return read
+            return AddressRead(read, live = true)
         }
         // **An empty address bar is an answer, and the memory must give way to it.** Invariant 4
         // cuts both ways: a *hidden* toolbar is a failed measurement, so answering from memory is
@@ -2621,14 +2636,15 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (read is BrowserAddress.Blank) {
             forgetBrowserUrl()
             SettingsStore.addReadableBrowser(applicationContext, pkg)
-            return read
+            return AddressRead(read, live = true)
         }
-        if (rememberedUrlPkg != pkg) return BrowserAddress.Unreadable
+        if (rememberedUrlPkg != pkg) return AddressRead(BrowserAddress.Unreadable, live = true)
         if (now - rememberedUrlAt > URL_MEMORY_MS) {
             rememberedUrl = null
-            return BrowserAddress.Unreadable
+            return AddressRead(BrowserAddress.Unreadable, live = true)
         }
-        return rememberedUrl?.let { BrowserAddress.At(it) } ?: BrowserAddress.Unreadable
+        return rememberedUrl?.let { AddressRead(BrowserAddress.At(it), live = false) }
+            ?: AddressRead(BrowserAddress.Unreadable, live = true)
     }
 
     /** Forgets the remembered address. Called on every foreground change: a different app is a
@@ -2700,7 +2716,8 @@ class BlockerAccessibilityService : AccessibilityService() {
         // reachable with a cover already on screen, and a cover on screen returns above unless
         // it is a Shorts cover - which belongs to the YouTube app, where isBrowser is false and
         // no address is read at all. So no browser pays an omnibox walk it did not pay before.
-        val address = if (isBrowser) rememberedBrowserAddress(pkg) else BrowserAddress.Unreadable
+        val read = if (isBrowser) rememberedBrowserAddress(pkg) else AddressRead(BrowserAddress.Unreadable, live = true)
+        val address = read.address
         // "Browser, but no address" is the shape this record exists to make visible - it is the
         // whole difference between a Chrome that blocks a site and a Brave that says nothing.
         // Only the host is kept; see WatcherDiagnostics.
@@ -2713,8 +2730,14 @@ class BlockerAccessibilityService : AccessibilityService() {
         // no page read to get there. checkUrlAdult is called without learnedDomains because
         // that is what check() does; the undebounced path passes them, and that difference is
         // older than this change and is left alone rather than quietly widened here.
+        // ⚠️ **Only a LIVE address may decide without the page.** A remembered one exists for a
+        // hidden toolbar and can be up to URL_MEMORY_MS old, and this path deliberately does not
+        // read the page at all — so taking it would judge from two failed measurements at once and
+        // could cover a page he had already moved to. A recalled address still reaches the full
+        // `check` below with the page text beside it, exactly as it did before this fast path
+        // existed; it just does not get to answer alone.
         val host = address.urlOrNull?.lowercase()?.takeIf { it.isNotBlank() }
-        val urlHit = if (isBrowser && host != null) {
+        val urlHit = if (isBrowser && read.live && host != null) {
             filter.checkUrl(host, ownWords, social)
                 ?: filter.checkUrlAdult(
                     host, adultPackOn, SettingsStore.blockAdult(applicationContext),

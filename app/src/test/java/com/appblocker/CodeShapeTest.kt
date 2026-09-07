@@ -1317,6 +1317,37 @@ class CodeShapeTest {
     }
 
     /**
+     * **Only an address read from the screen may block without reading the page.**
+     *
+     * The site fast path added on 6 Sep 2026 decides from the host alone and never reads the page,
+     * which is the whole saving. But `rememberedBrowserAddress` answers from memory when the
+     * toolbar is hidden, and that memory is good for `URL_MEMORY_MS` — ten minutes. Letting a
+     * recalled address decide *with no page text beside it* is judging from two failed
+     * measurements at once, and it could cover a page he had already moved to. The old order made
+     * that unreachable by accident, because a blank page returned before the filter ever ran.
+     *
+     * A recalled address still reaches the full `check` with the page text, exactly as before the
+     * fast path existed. It simply may not answer alone.
+     */
+    @Test
+    fun `only a live address decides a block without the page`() {
+        val body = liveBody(
+            "service/BlockerAccessibilityService.kt",
+            "private suspend fun scanWebContent(",
+        )
+        assertTrue(
+            "scanWebContent must still take a URL-only fast path, or the page walk it skips is back",
+            "val urlHit" in body,
+        )
+        val decl = body.substringAfter("val urlHit").substringBefore("}")
+        assertTrue(
+            "the URL-only verdict must be gated on the address having been read live — a " +
+                "remembered one may not decide without the page: $decl",
+            "read.live" in decl,
+        )
+    }
+
+    /**
      * **The keyword scanner and the uninstall guard agree on what an app-management screen is.**
      *
      * `KEYWORD_SCAN_EXCLUDED` exists so a blocked word that is also an *app name* cannot cover the

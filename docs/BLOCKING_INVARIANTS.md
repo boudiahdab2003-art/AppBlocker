@@ -1271,6 +1271,27 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     **The shape to grep for: a `runCatching` whose body contains two things that would still be
     worth doing if the other one failed.**
 
+66. **A fast path may skip work; it may not also lower the standard of evidence.** The site fast
+    path added the same day (invariant 58's release) reads the address first and blocks from the
+    host alone, never touching the page — that is the saving. But `rememberedBrowserAddress`
+    answers from memory when the toolbar is hidden, and that memory is valid for `URL_MEMORY_MS`,
+    ten minutes. So the new order let a **recalled** address raise a cover **with no page text
+    beside it**, which the old order made unreachable by accident: a blank page returned before the
+    filter ever ran.
+
+    Two failed measurements at once — a toolbar that could not be read and a page that could not be
+    read — producing a positive verdict. Invariant 4 forbids exactly that, and the reorder walked
+    straight past it while the diff looked like a pure optimisation.
+
+    ⚠️ **Found by auditing my own change from the same day**, which is where this project's bugs
+    keep coming from: the reorder was reviewed for what it *removed* (a discarded page walk) and
+    not for what it *newly allowed*. `rememberedBrowserAddress` returns an `AddressRead` now, and
+    only `live = true` may answer alone; a recalled address still reaches the full `check` with the
+    page text beside it, exactly as before the fast path existed.
+
+    **The standing question for any fast path: what did the slow path require that this one does
+    not — and was that requirement load-bearing?**
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused
@@ -2299,14 +2320,28 @@ blocking under cover of a different change is how a sweep produces a bug.
   `KNOWN_BROWSERS` only as a supplement), so an unknown browser is still found; `GuardPackages`
   covers six OEM installers with the reasoning for each; the omnibox tiers are three deep by
   design and tier 2 catches what tier 1's single `url_bar` spelling misses.
-  ⚠️ **Still open, and it needs a device fact rather than a guess:** `isTransientSurface` is
-  `pkg in TRANSIENT_SURFACES || pkg == imePackage()` and **has no structural fallback at all**.
-  The set holds System UI, `android`, and **three Samsung packages — and nothing for Xiaomi, which
-  is the owner's phone.** The documented cost of a miss is real: an overlay panel drawn over a
-  blocked app reads as *leaving* it, which books a phantom open against that app's daily limit and
-  cancels the mid-use re-check. Do not guess MIUI package names — a wrong entry makes a cover
-  linger. **Ask him first:** *"with a blocked app covered, swipe out MIUI's side panel / Game
-  Turbo — does the cover come down?"* If it does, get the package from a report before adding it.
+  ⚠️ **`isTransientSurface` — examined 7 Sep 2026 and DELIBERATELY NOT CHANGED. Do not "fix" it.**
+  It is `pkg in TRANSIENT_SURFACES || pkg == imePackage()`, with no structural fallback, and the
+  set holds System UI, `android` and **three Samsung packages — nothing for Xiaomi, which is the
+  owner's phone.** That looks like an obvious gap and the obvious fixes are all wrong:
+
+  **Every one of its four call sites uses it to decide "do NOT adopt this package as the
+  foreground".** So the two errors are not symmetric. A wrong *yes* (a real destination judged a
+  panel) means the app is never adopted and therefore **never blocked** — a silent under-block,
+  the failure this whole document exists for. A wrong *no* (a real panel not recognised) costs a
+  phantom open against a daily limit and a cover torn down for a moment: annoying, **visible, and
+  reportable**. The short hardcoded list is conservative on purpose and the code says so.
+
+  A structural test — "no launcher entry means not a destination" — widens exactly the dangerous
+  side, and gating it on `blockReason(pkg) != null` does not rescue it: during the pre-Room window
+  that gate answers from a snapshot, and an unready answer would make an unknown package look
+  transient in the one window with the least protection. **The bug here is unconfirmed and its
+  cost is visible; the fix's cost would be invisible.** Trading a visible failure for an invisible
+  one is a bad trade however tidy the code looks afterwards.
+
+  **If it is ever picked up again it needs a device fact, not a guess:** *"with a blocked app
+  covered, swipe out MIUI's side panel / Game Turbo — does the cover come down?"* Take the package
+  from a report; never invent one.
 
 - ~~The rest of `BlockOverlay`.~~ **Swept in the eighteenth hunt** — all eleven readers traced, the
   set-before-`addView` window confirmed unreachable, one latent trap (`onClose`) recorded. See that
