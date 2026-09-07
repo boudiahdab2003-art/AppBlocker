@@ -1315,6 +1315,34 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
 
     **The shape to grep for: a transformation applied to one alphabet's worth of input.**
 
+68. **A string the app reads back must not change with the phone's language.** `"%d".format(...)`
+    is Kotlin's shorthand for `String.format` and takes the **default locale** every time. The
+    weekly report's label is built that way — and it is not prose, it is the report's **dedupe
+    key**, its `weekOf` field, and the input to `weeksBetween`, which parses it back with
+    `toInt()`. Under a locale with Arabic-Indic digits it renders `٢٠٢٦-W٣٦`: the key changes shape
+    under the queue's feet, and the parse throws, so the skipped-weeks count silently reads 0.
+    **Proved, not assumed** — `LocaleSafetyTest` asserts the premise first, and `%d` really does
+    render `٢٠٢٦` under `ar-EG-u-nu-arab`.
+
+    Arabic shipped in v1.141 and the owner has never switched to it, so nothing in this app has
+    ever run under such a locale. The lesson was written down during that release — *`%d` rendering
+    ٠١٢٣* — as a fact about layout strings, and never grepped for. Ninth occurrence.
+
+    ⚠️ **The split that matters is what the string is FOR**, not where it lives. Every `%d` in
+    `ui/` — the clocks, the durations, the counter — is deliberately left on the default locale,
+    because a localised digit is the *correct* answer for something a person reads. `Locale.ROOT`
+    belongs only where the app reads it back.
+
+    ⚠️ **`PinStore.hash` uses the same `"%02x".format(byte)` and was deliberately NOT changed.** If
+    `%x` localised, the stored hash would depend on the phone's language and a language change
+    would lock the owner out of his own PIN — and "fixing" it afterwards would lock him out again,
+    because the stored value is already whatever it is. It does not localise: `java.util.Formatter`
+    applies localised digits to decimal conversions only. **That is now a test rather than a
+    memory of the JDK source**, pinning the property `PinStore` rests on without touching a stored
+    format. Reading a value out is the safe way to settle this; rewriting it is not.
+
+    **The shape to grep for: a machine-readable string built with a human-readable formatter.**
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused

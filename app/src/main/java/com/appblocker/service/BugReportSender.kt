@@ -789,8 +789,26 @@ object BugReportSender {
         c.minimalDaysInFirstWeek = 4
         val week = c.get(java.util.Calendar.WEEK_OF_YEAR)
         val year = c.get(java.util.Calendar.YEAR)
-        return "%d-W%02d".format(year, week)
+        return weekLabel(year, week)
     }
+
+    /**
+     * The week's name, in ASCII digits whatever language the phone is in.
+     *
+     * ⚠️ **`"%d".format(...)` uses the DEFAULT locale**, and a locale with Arabic-Indic digits
+     * renders `2026-W36` as `٢٠٢٦-W٣٦`. This string is not for reading: it is the weekly report's
+     * **dedupe key**, the `weekOf` field in the report, and the input to [weeksBetween], which
+     * parses it back with `toInt()` — and `toInt()` on Arabic-Indic digits throws, so the skipped
+     * count would silently read 0 while the key changed under the app's own feet. Arabic shipped
+     * in v1.141 and the owner has never switched to it; this would have been waiting for the day
+     * he did, or for a phone whose system language already uses those digits.
+     *
+     * The lesson was written down during that release — `%d` rendering ٠١٢٣ — and never grepped
+     * for. `Locale.ROOT` is the whole fix; the user-facing clocks in `ui/` are deliberately left
+     * on the default, because there a localised digit is the correct answer.
+     */
+    internal fun weekLabel(year: Int, week: Int): String =
+        String.format(java.util.Locale.ROOT, "%d-W%02d", year, week)
 
     /** How many whole weeks were skipped between two labels; 0 when they are consecutive or the
      *  labels cannot be compared (a year boundary counts as consecutive rather than guessing). */
