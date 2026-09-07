@@ -2441,6 +2441,27 @@ blocking under cover of a different change is how a sweep produces a bug.
 - **Also clean, 7 Sep 2026:** `isLauncherPkg`'s negative cache only records a NO that was actually
   established and clears every earlier guess on a fresh answer; `isRealBrowserPkg` re-reads only
   from empty and says why. Both were swept before and have stayed correct.
+
+- ~~**The DNS filter.**~~ **Swept 7 Sep 2026 — CLEAN end to end. Keep it as a gate.** The subsystem
+  most able to make the phone unusable, and it holds up:
+  - `shouldShutBrowsers` is pure and its four refusals are all present and all tested — CANT_TELL
+    costs nothing, an unvalidated network (captive portal) is not judged, the reading must hold
+    still for `SETTLE_MS`, and `armed` means the filter has been *watched working* on this phone.
+  - `classify` never reads the switch, only *which resolver* — the distinction the whole design
+    turns on — and `isFamilyResolver` is a whole-name match, so a hostname that merely contains a
+    known one cannot pass. Both pinned.
+  - The off-since anchor is cleared whenever the filter is protecting **or** unreadable **or** the
+    network is unvalidated, so the settle time can only accumulate while it is genuinely off on a
+    working network. The `?:` fallback when the anchor cannot be read yields `offForMs = 0`, which
+    is the refusing direction.
+  - ⚠️ **The wall-clock fallback across a reboot was examined and is correct, not a bug.** A
+    `GuardedDeadline` older than one boot answers from the wall clock, so a stale anchor reads as
+    expired and the browsers shut without a fresh settle. That is the design: the filter really has
+    been off for longer than a minute, and post-boot the network is not yet validated anyway, which
+    clears the anchor before it can be used.
+  - Both backstops are actually wired — `refreshNetFilterIfStale` and `refreshCachedSettingsIfStale`
+    sit at the top of `blockReason`, the path every decision takes, not only on the recheck tick
+    (which does not run for an app with no rule, the exact case they exist for).
 - ~~The Insights-side of `UsageTracker`'s bucket queries.~~ **Not cosmetic — the owner hit it the
   same day it was written down here.** See the sweep-fourteen entry below: dismissing it as "off by
   part of a day at the edges" understated it, because for *today* the edge is the whole of
