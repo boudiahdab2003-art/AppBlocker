@@ -1292,6 +1292,29 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     **The standing question for any fast path: what did the slow path require that this one does
     not — and was that requirement load-bearing?**
 
+67. **The address layer was blind to every non-Latin search, and the matchers it rests on had no
+    tests.** A typed search reaches the address bar percent-encoded in UTF-8, so an Arabic term
+    arrives as `%D8%B3%D9%83…`. `spacedUrl` restored `+` and `%20` — the spaces multi-word entries
+    need — and handled nothing else, so every other escape passed through as raw bytes that no
+    pack word matches and that `normalizeArabic` cannot fold, because there are no Arabic
+    characters left in it to fold. **The owner is an Arabic speaker.**
+
+    The cost is not that such a search is unblocked — the page-text walk still catches it once the
+    results render — it is that the *address* layer, which exists to answer sooner and to answer at
+    all when a page cannot be read, could only ever answer for Latin text. `spacedUrl` decodes now,
+    with `+` replaced **before** decoding because `+` means space while `%2B` means a literal plus.
+    The decoder is total: a stray or truncated escape is left as it stands, invalid UTF-8 becomes
+    the replacement character, and it cannot throw on the blocking path.
+
+    ⚠️ **`spacedUrl`, `containsWord` and `normalizeArabic` had no direct tests anywhere** — only
+    incidental coverage through `check`. They are the lowest-level rules in the whole blocking
+    decision, and **`containsWord` is shared with the watcher's off-switch guard**, whose own KDoc
+    is the reason it is `internal` ("Files" must not fire inside "Profiles"). Two subsystems
+    resting on one untested primitive. Pinned now, including the case the loop could have got
+    wrong: a rejected glued match must not stop the search before a later clean one.
+
+    **The shape to grep for: a transformation applied to one alphabet's worth of input.**
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused

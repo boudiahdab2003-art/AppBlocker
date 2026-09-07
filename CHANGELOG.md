@@ -4,7 +4,7 @@ All notable changes to AppBlocker, newest first. Versions map to `versionName` i
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
 ## v1.161
-- The speed figure was counting the app's own deliberate wait, website blocks stop reading a page they throw away, the report stops contradicting itself, and every app open stops paying for a report it was about to discard.
+- The speed figure was counting the app's own deliberate wait, website blocks stop reading a page they throw away, the address bar can finally read an Arabic search, the report stops contradicting itself, and every app open stops paying for a report it was about to discard.
 
 ## v1.160
 - A second pair of eyes that costs nothing when your phone is fine, and eight fixes to what the app was telling us.
