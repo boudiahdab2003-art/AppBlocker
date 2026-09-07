@@ -4,6 +4,9 @@ All notable changes to AppBlocker, newest first. Versions map to `versionName` i
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
 ## v1.161
+- Blocking was never getting slower - I was timing my own waiting. The speed figure counted the app's own deliberate pause before reading a page, so it measured how you used your phone rather than how fast blocking is. Split in two and honest now. Website blocks stop reading a page they throw away; the address bar can finally read an Arabic search; a site your phone learned to block is now blocked on both routes. Plus eight bugs found by hunting rather than by you hitting them - including a report your phone was building and discarding on every single app open.
+
+## v1.161
 - The speed figure was counting the app's own deliberate wait, website blocks stop reading a page they throw away, the address bar can finally read an Arabic search, a site your phone learned is now blocked on both routes, the report stops contradicting itself, and every app open stops paying for a report it was about to discard.
 
 ## v1.160
