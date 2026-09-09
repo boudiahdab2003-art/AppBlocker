@@ -1,5 +1,6 @@
 package com.appblocker
 
+import com.appblocker.data.BlockLatency
 import com.appblocker.data.BugReport
 import com.appblocker.data.DeviceProfile
 import org.junit.Assert.assertEquals
@@ -157,6 +158,34 @@ class BugReportTest {
     fun `allowed values are truncated, so nothing long slips through a permitted key`() {
         val sanitized = BugReport.sanitizeContext(mapOf("layout" to secret.repeat(20)))
         assertTrue((sanitized["layout"]?.length ?: 0) <= 24)
+    }
+
+    @Test
+    fun `the block-speed split survives the cap, however many paths there are`() {
+        // v1.161's whole point was splitting this number by pipeline, and the 24-character cap
+        // amputated the split mid-word on every report that carried one: `1 slow (inst`. Built
+        // here from the enum rather than typed out, so adding a third path fails this test instead
+        // of quietly shipping another half-value.
+        val split = BlockLatency.Path.values().joinToString(", ") { "${it.name.lowercase()} 100% of 9999" }
+        val value = "100% of 9999, 99 slow ($split)"
+        assertEquals(value, BugReport.sanitizeContext(mapOf("blockSpeed" to value))["blockSpeed"])
+    }
+
+    @Test
+    fun `the longer ruler widens no key that was not already allowed`() {
+        // MEASURED_CONTEXT_KEYS raises a cap; it must never be a second way into the payload.
+        assertEquals(
+            emptySet<String>(),
+            BugReport.MEASURED_CONTEXT_KEYS - BugReport.ALLOWED_CONTEXT_KEYS,
+        )
+        // And it stays the exception: every other allowed key is still measured with the short one.
+        val long = "x".repeat(200)
+        val stillShort = (BugReport.ALLOWED_CONTEXT_KEYS - BugReport.MEASURED_CONTEXT_KEYS)
+            .associateWith { long }
+        assertEquals(
+            emptyList<String>(),
+            BugReport.sanitizeContext(stillShort).filterValues { it.length > 24 }.keys.toList(),
+        )
     }
 
     @Test
@@ -848,6 +877,27 @@ class DeviceProfileReportTest {
     private fun goodFact(title: String) = "✅ **$title** — all fine."
 
     // --- the point of the whole thing ---
+
+    @Test
+    fun `a profile title cannot say OK over a red cross`() {
+        // Report #114, 8 Sep 2026: titled "profile OK" with "The watcher was re-checked and still
+        // missing" as the first line of its own body. In an issue list that row is a green tick,
+        // so the one report carrying a finding is the one nobody opens. "profile OK" answers a
+        // question about this phone's SETUP and stays true here — it just may not be the whole
+        // title while the health checks have something to say.
+        val r = profile(clean, listOf(goodFact("The blocker is running"), badFact("The watcher went missing")))
+
+        assertTrue(r.title(), r.title().contains("The watcher went missing"))
+        // And the setup verdict is still in there: this widens the title, it does not replace it.
+        assertTrue(r.title(), r.title().contains("profile OK"))
+    }
+
+    @Test
+    fun `a profile title stays short when there is nothing to add`() {
+        val r = profile(clean, listOf(goodFact("The blocker is running")))
+
+        assertTrue(r.title(), r.title().endsWith("profile OK"))
+    }
 
     @Test
     fun `a phone where every guess was right still files a report`() {

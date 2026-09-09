@@ -154,13 +154,22 @@ data class BugReport(
         // The verdict goes in the title because most profiles are healthy and the issue list has
         // to make the one that isn't findable without opening twenty that are.
         isProfile -> "[$appVersion] $device — " +
-            if (profileIsClean) "profile OK" else "PROFILE: something is wrong here"
+            // ⚠️ **"profile OK" is about this phone's SETUP, and it used to be the whole
+            // title while the report's own first section led with a red cross about blocking.**
+            // Report #114 was titled `profile OK` above "The watcher was re-checked and still
+            // missing" — in a list of twenty issues that row is a green tick and never gets
+            // opened. The weekly title and the typed-note title had both carried the worst finding
+            // since they were written; this shape was the one that did not.
+            when {
+                !profileIsClean -> "PROFILE: something is wrong here"
+                else -> worstProblem()?.let { "profile OK, but $it" } ?: "profile OK"
+            }
         // The length and the blame go in the title on purpose: the whole point of these reports is
         // the pattern across them, and a list where every row reads "outage" would have to be
         // opened issue by issue to see the very thing being measured.
         // Says the answer in the list, so a healthy week never needs opening.
         isWeekly -> "[$appVersion] Week of ${context["weekOf"] ?: "?"} — " +
-            (weeklyVerdict() ?: "all healthy")
+            (worstProblem() ?: "all healthy")
         isOutage -> "[$appVersion] STOPPED for ${context["outageMin"] ?: "?"} min" +
             " — after ${context["outagePreceded"] ?: "?"}" +
             if (context["outageDeaf"] == "true") ", still running" else ", process died"
@@ -190,8 +199,7 @@ data class BugReport(
             else -> null
         }
         // The worst finding, with its markdown and marker stripped — a title is plain text.
-        val worst = HealthFacts.problemLines(healthFacts).firstOrNull()
-            ?.substringAfter("**")?.substringBefore("**")?.trim()
+        val worst = worstProblem()
         return when {
             chip != null && worst != null -> "$chip — $worst"
             chip != null -> "Sent from the phone — $chip"
@@ -235,7 +243,16 @@ data class BugReport(
      * the phone and read weeks later, and re-running today's thresholds over an old week would
      * quietly rewrite history.
      */
-    private fun weeklyVerdict(): String? = HealthFacts.problemLines(healthFacts)
+    /**
+     * The worst thing the phone's own health checks found, as plain text for a title.
+     *
+     * **One extraction, because there were three.** The weekly verdict, the typed-note title and
+     * (now) the profile title all answer "what is the single worst thing on this report", and the
+     * markdown-stripping was written out separately each time. Three copies of one rule is the
+     * shape that has cost this project more findings than any other — and here the third copy
+     * was the one that did not exist, which is how a `profile OK` title came to sit above a cross.
+     */
+    private fun worstProblem(): String? = HealthFacts.problemLines(healthFacts)
         .firstOrNull()?.substringAfter("**")?.substringBefore("**")?.trim()
 
     /**
@@ -911,6 +928,29 @@ data class BugReport(
         private const val MAX_PROFILE_VALUE = 240
 
         /**
+         * The ruler for a value that is **composed** rather than counted.
+         *
+         * `blockSpeed` was a count until v1.161 gave it the bracketed per-path split the release
+         * was built around - and the 24-character cap cut that split off mid-word (`1 slow (inst`)
+         * on every report carrying one, so the half of the number a verdict may actually be read
+         * from never left the phone. The cap was not wrong; the premise written above it was, from
+         * the moment a key on that list stopped being a setting or a count.
+         *
+         * The longer ruler is safe **for these keys specifically**, by the same argument as the
+         * profile set and for the same reason: every character is either a digit this app measured
+         * or an enum name it declares itself ([com.appblocker.data.BlockLatency.Path]). No keyword,
+         * host, app name or screen text can reach one, so a value here cannot be long *because of
+         * something the owner did*, which is the property the 24-character cap stands in for.
+         */
+        private const val MAX_MEASURED_VALUE = 120
+
+        /**
+         * The keys measured with [MAX_MEASURED_VALUE]. Every entry must also be on
+         * [ALLOWED_CONTEXT_KEYS] - this set widens a ruler, it never admits a key.
+         */
+        val MEASURED_CONTEXT_KEYS = setOf("blockSpeed")
+
+        /**
          * Drops every key not on [ALLOWED_CONTEXT_KEYS] or [PROFILE_CONTEXT_KEYS] and truncates
          * what remains. The one function standing between "a helpful diagnostic" and "an
          * accidental leak".
@@ -918,7 +958,11 @@ data class BugReport(
         fun sanitizeContext(raw: Map<String, String>): Map<String, String> = raw
             .filterKeys { it in ALLOWED_CONTEXT_KEYS || it in PROFILE_CONTEXT_KEYS }
             .mapValues { (k, v) ->
-                val cap = if (k in PROFILE_CONTEXT_KEYS) MAX_PROFILE_VALUE else MAX_CONTEXT_VALUE
+                val cap = when {
+                    k in PROFILE_CONTEXT_KEYS -> MAX_PROFILE_VALUE
+                    k in MEASURED_CONTEXT_KEYS -> MAX_MEASURED_VALUE
+                    else -> MAX_CONTEXT_VALUE
+                }
                 v.replace('\n', ' ').trim().take(cap)
             }
 
