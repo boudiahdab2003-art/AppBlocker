@@ -911,6 +911,29 @@ data class BugReport(
         private const val MAX_PROFILE_VALUE = 240
 
         /**
+         * The ruler for a value that is **composed** rather than counted.
+         *
+         * `blockSpeed` was a count until v1.161 gave it the bracketed per-path split the release
+         * was built around - and the 24-character cap cut that split off mid-word (`1 slow (inst`)
+         * on every report carrying one, so the half of the number a verdict may actually be read
+         * from never left the phone. The cap was not wrong; the premise written above it was, from
+         * the moment a key on that list stopped being a setting or a count.
+         *
+         * The longer ruler is safe **for these keys specifically**, by the same argument as the
+         * profile set and for the same reason: every character is either a digit this app measured
+         * or an enum name it declares itself ([com.appblocker.data.BlockLatency.Path]). No keyword,
+         * host, app name or screen text can reach one, so a value here cannot be long *because of
+         * something the owner did*, which is the property the 24-character cap stands in for.
+         */
+        private const val MAX_MEASURED_VALUE = 120
+
+        /**
+         * The keys measured with [MAX_MEASURED_VALUE]. Every entry must also be on
+         * [ALLOWED_CONTEXT_KEYS] - this set widens a ruler, it never admits a key.
+         */
+        val MEASURED_CONTEXT_KEYS = setOf("blockSpeed")
+
+        /**
          * Drops every key not on [ALLOWED_CONTEXT_KEYS] or [PROFILE_CONTEXT_KEYS] and truncates
          * what remains. The one function standing between "a helpful diagnostic" and "an
          * accidental leak".
@@ -918,7 +941,11 @@ data class BugReport(
         fun sanitizeContext(raw: Map<String, String>): Map<String, String> = raw
             .filterKeys { it in ALLOWED_CONTEXT_KEYS || it in PROFILE_CONTEXT_KEYS }
             .mapValues { (k, v) ->
-                val cap = if (k in PROFILE_CONTEXT_KEYS) MAX_PROFILE_VALUE else MAX_CONTEXT_VALUE
+                val cap = when {
+                    k in PROFILE_CONTEXT_KEYS -> MAX_PROFILE_VALUE
+                    k in MEASURED_CONTEXT_KEYS -> MAX_MEASURED_VALUE
+                    else -> MAX_CONTEXT_VALUE
+                }
                 v.replace('\n', ' ').trim().take(cap)
             }
 
