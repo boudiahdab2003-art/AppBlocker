@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.162
+- The speed number the last release was about was being cut in half before it left your phone, and a report titled 'profile OK' was leading with a red cross inside. Plus nine more words in the built-in adult list.
+
 ## v1.161
 - Blocking was never getting slower - I was timing my own waiting. The speed figure counted the app's own deliberate pause before reading a page, so it measured how you used your phone rather than how fast blocking is. Split in two and honest now. Website blocks stop reading a page they throw away; the address bar can finally read an Arabic search; a site your phone learned to block is now blocked on both routes. Plus eight bugs found by hunting rather than by you hitting them - including a report your phone was building and discarding on every single app open.
 
