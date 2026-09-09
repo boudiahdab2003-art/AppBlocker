@@ -879,6 +879,27 @@ class DeviceProfileReportTest {
     // --- the point of the whole thing ---
 
     @Test
+    fun `a profile title cannot say OK over a red cross`() {
+        // Report #114, 8 Sep 2026: titled "profile OK" with "The watcher was re-checked and still
+        // missing" as the first line of its own body. In an issue list that row is a green tick,
+        // so the one report carrying a finding is the one nobody opens. "profile OK" answers a
+        // question about this phone's SETUP and stays true here — it just may not be the whole
+        // title while the health checks have something to say.
+        val r = profile(clean, listOf(goodFact("The blocker is running"), badFact("The watcher went missing")))
+
+        assertTrue(r.title(), r.title().contains("The watcher went missing"))
+        // And the setup verdict is still in there: this widens the title, it does not replace it.
+        assertTrue(r.title(), r.title().contains("profile OK"))
+    }
+
+    @Test
+    fun `a profile title stays short when there is nothing to add`() {
+        val r = profile(clean, listOf(goodFact("The blocker is running")))
+
+        assertTrue(r.title(), r.title().endsWith("profile OK"))
+    }
+
+    @Test
     fun `a phone where every guess was right still files a report`() {
         val r = profile(clean)
 

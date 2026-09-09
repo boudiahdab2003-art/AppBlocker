@@ -154,13 +154,22 @@ data class BugReport(
         // The verdict goes in the title because most profiles are healthy and the issue list has
         // to make the one that isn't findable without opening twenty that are.
         isProfile -> "[$appVersion] $device — " +
-            if (profileIsClean) "profile OK" else "PROFILE: something is wrong here"
+            // ⚠️ **"profile OK" is about this phone's SETUP, and it used to be the whole
+            // title while the report's own first section led with a red cross about blocking.**
+            // Report #114 was titled `profile OK` above "The watcher was re-checked and still
+            // missing" — in a list of twenty issues that row is a green tick and never gets
+            // opened. The weekly title and the typed-note title had both carried the worst finding
+            // since they were written; this shape was the one that did not.
+            when {
+                !profileIsClean -> "PROFILE: something is wrong here"
+                else -> worstProblem()?.let { "profile OK, but $it" } ?: "profile OK"
+            }
         // The length and the blame go in the title on purpose: the whole point of these reports is
         // the pattern across them, and a list where every row reads "outage" would have to be
         // opened issue by issue to see the very thing being measured.
         // Says the answer in the list, so a healthy week never needs opening.
         isWeekly -> "[$appVersion] Week of ${context["weekOf"] ?: "?"} — " +
-            (weeklyVerdict() ?: "all healthy")
+            (worstProblem() ?: "all healthy")
         isOutage -> "[$appVersion] STOPPED for ${context["outageMin"] ?: "?"} min" +
             " — after ${context["outagePreceded"] ?: "?"}" +
             if (context["outageDeaf"] == "true") ", still running" else ", process died"
@@ -190,8 +199,7 @@ data class BugReport(
             else -> null
         }
         // The worst finding, with its markdown and marker stripped — a title is plain text.
-        val worst = HealthFacts.problemLines(healthFacts).firstOrNull()
-            ?.substringAfter("**")?.substringBefore("**")?.trim()
+        val worst = worstProblem()
         return when {
             chip != null && worst != null -> "$chip — $worst"
             chip != null -> "Sent from the phone — $chip"
@@ -235,7 +243,16 @@ data class BugReport(
      * the phone and read weeks later, and re-running today's thresholds over an old week would
      * quietly rewrite history.
      */
-    private fun weeklyVerdict(): String? = HealthFacts.problemLines(healthFacts)
+    /**
+     * The worst thing the phone's own health checks found, as plain text for a title.
+     *
+     * **One extraction, because there were three.** The weekly verdict, the typed-note title and
+     * (now) the profile title all answer "what is the single worst thing on this report", and the
+     * markdown-stripping was written out separately each time. Three copies of one rule is the
+     * shape that has cost this project more findings than any other — and here the third copy
+     * was the one that did not exist, which is how a `profile OK` title came to sit above a cross.
+     */
+    private fun worstProblem(): String? = HealthFacts.problemLines(healthFacts)
         .firstOrNull()?.substringAfter("**")?.substringBefore("**")?.trim()
 
     /**
