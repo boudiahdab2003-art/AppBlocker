@@ -9,9 +9,6 @@ All notable changes to AppBlocker, newest first. Versions map to `versionName` i
 ## v1.161
 - Blocking was never getting slower - I was timing my own waiting. The speed figure counted the app's own deliberate pause before reading a page, so it measured how you used your phone rather than how fast blocking is. Split in two and honest now. Website blocks stop reading a page they throw away; the address bar can finally read an Arabic search; a site your phone learned to block is now blocked on both routes. Plus eight bugs found by hunting rather than by you hitting them - including a report your phone was building and discarding on every single app open.
 
-## v1.161
-- The speed figure was counting the app's own deliberate wait, website blocks stop reading a page they throw away, the address bar can finally read an Arabic search, a site your phone learned is now blocked on both routes, the report stops contradicting itself, and every app open stops paying for a report it was about to discard.
-
 ## v1.160
 - A second pair of eyes that costs nothing when your phone is fine, and eight fixes to what the app was telling us.
 
@@ -59,9 +56,6 @@ All notable changes to AppBlocker, newest first. Versions map to `versionName` i
 
 ## v1.145
 - The Short that followed you home, a lot less talking, and a blocker that checks on itself instead of only waiting
-
-## v1.145
-- The blocked Short no longer follows you: "Got it" now closes the reel and confirms it closed before leaving YouTube, instead of pressing Home - which was itself the signal that handed the Short to a floating window. Plus a one-tap route to YouTube's picture-in-picture permission, the only complete fix. Much less text on the way to the accessibility switch (the repair screen had ~200 words above its own fix button; everything now folds behind its heading). And the blocker asks whether it can still see the screen rather than only waiting to be told: "switched on but not working" is caught in about 15 minutes instead of two hours, with a second alarm watching whether the background scheduler is running at all.
 
 ## v1.144
 - Five ways blocking could stop on its own: the pause that came back after Reactivate, schedules not firing on an app already open after a restart or space switch, the mid-use check dying on one error, plus two blind spots that were corrupting the outage log itself
