@@ -359,21 +359,25 @@ class CodeShapeTest {
      */
     @Test
     fun `an outage episode is opened and closed under a lock`() {
-        val text = source("data/OutageLog.kt").readText()
-        for (name in listOf("begin", "end")) {
-            val start = text.indexOf("    fun $name(")
-            assertTrue("OutageLog no longer has a $name( to check", start >= 0)
-            val tail = text.substring(start)
-            val body = tail.substringBefore(System.lineSeparator() + "    fun ", tail)
-            val guard = Regex("""synchronized\s*\(""").containsMatchIn(body) ||
-                Regex("""lock\.with""").containsMatchIn(body)
-            assertTrue(
-                "OutageLog.$name touches KEY_OPEN_STARTED without holding a lock. It is a " +
-                    "check-then-act, and seven separate callers reach it, so two can open or " +
-                    "close the same episode at once — which duplicates the line in his log AND " +
-                    "double-counts outageCount and outageTotalMin.",
-                guard,
-            )
+        // SwitchOffLog is the same check-then-act on its own open key, reached from the same
+        // checkAndNotify by the same seven callers (invariant 70), so it answers to the same rule.
+        for (file in listOf("OutageLog", "SwitchOffLog")) {
+            val text = source("data/$file.kt").readText()
+            for (name in listOf("begin", "end")) {
+                val start = text.indexOf("    fun $name(")
+                assertTrue("$file no longer has a $name( to check", start >= 0)
+                val tail = text.substring(start)
+                val body = tail.substringBefore(System.lineSeparator() + "    fun ", tail)
+                val guard = Regex("""synchronized\s*\(""").containsMatchIn(body) ||
+                    Regex("""lock\.with""").containsMatchIn(body)
+                assertTrue(
+                    "$file.$name touches KEY_OPEN_STARTED without holding a lock. It is a " +
+                        "check-then-act, and seven separate callers reach it, so two can open or " +
+                        "close the same episode at once — which duplicates the line in his log AND " +
+                        "double-counts the totals.",
+                    guard,
+                )
+            }
         }
     }
     // ---- invariant 38 ------------------------------------------------------------------------

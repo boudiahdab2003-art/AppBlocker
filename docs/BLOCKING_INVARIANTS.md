@@ -1364,6 +1364,48 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     widen blocking in passing, but do not let "not now" become "not ever" either.* The deferral
     only worked because it was written down.
 
+70. **A state read as a choice still has to be timed.** `checkAndNotify` answered OFF with a
+    notification and nothing else, on the reasoning that a switch the user turned off is the user's
+    business. That holds for exactly the cases where the user turned it off. On 10 Sep 2026 (report
+    #118) the switch was found OFF after fourteen hours with no sign of the watcher and six restarts
+    in a day — and the stoppage history, the one record built to find the cause of his outages, had
+    not a line of it. If the phone is what turns it off, that was the largest gap of the week, and
+    it was invisible because it had been filed as a decision before anyone asked who made it.
+
+    `SwitchOffLog` now times every observed OFF period, **apart from `OutageLog`**: those totals
+    judge the app's self-repair, and averaging a switch into them would make both meaningless. The
+    lines are merged into one time-ordered list (`StoppageHistory`) because the question the list
+    answers is about time. `onDestroy` records what was in front at the unbind — Settings with the
+    screen on, a dark screen, another app — which is the only moment that is knowable, and
+    `how=not-running` is the case that started this: no unbind belongs to the period, so it went off
+    while nothing was running. A restart mid-period is a floor from the boot, not an unknown: a
+    watcher that had come back in between would have closed the period itself. `begin`/`end` hold
+    the same lock as the outage log, and `CodeShapeTest`'s invariant-37 check covers both files.
+
+    ⚠️ **It sees only what a check sees.** A period opens when something runs the watchdog while
+    the switch reads OFF, so the few-second repair toggle usually leaves no line — correctly.
+
+    Same family as invariants 26 and 31 (instrument the interval, not the crossing), one step
+    earlier: before an interval can be measured it has to stop being classified as not-a-fault.
+    **The shape to grep for: a branch that answers a state with a notification or a log line and
+    no record of when the state began.**
+
+71. **A counter has to be re-judged when the fault it counted gains a remedy.** `deafSpells` counts
+    declines past the short grace — the blocked app still in front after "Got it". It was red
+    because the watcher used to stop watching after one. v1.153 made every decline book its own
+    return (`bookGraceRecheck`), and the re-check re-covers apps (`handleAppBlock`) and pages
+    (`scheduleWebScan`) alike, so the event still happens and the failure it stood for does not.
+    Invariant 50 then narrowed the verdict to *today's* count — which kept the row red on every day
+    the ordinary event happened. Report #122 led with it, above the stoppage it was filed about.
+
+    It is `good = null` now and says what happens: how often the app stayed up, and how often the
+    return had to put the cover back (`graceRecovers`, today and total). The diagnostics row says
+    the same thing in the same words.
+
+    Invariant 50 asked "can this warning ever clear?" This is the prior question: **does the thing
+    it counts still mean what it meant when it was made red?** A remedy that works leaves the
+    counter climbing; only the verdict should change.
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused

@@ -448,6 +448,11 @@ object OutageLog {
         runCatching { prefs(context).edit().putLong(KEY_LAST_UPDATE_AT, now).apply() }
     }
 
+    /** When a version change was last noticed (0 = never). [SwitchOffLog] blames with the same
+     *  stamp, so the two logs can never disagree about whether an update came first. */
+    internal fun lastUpdateAt(context: Context): Long =
+        runCatching { prefs(context).getLong(KEY_LAST_UPDATE_AT, 0L) }.getOrDefault(0L)
+
     /**
      * Blocking has just been found down. Opens an episode if one isn't already open.
      *
@@ -605,14 +610,17 @@ object OutageLog {
     fun isOpen(context: Context): Boolean =
         runCatching { prefs(context).contains(KEY_OPEN_STARTED) }.getOrDefault(false)
 
-    /** Every finished episode, newest first, as report-ready lines. */
-    fun recent(context: Context): List<String> = runCatching {
+    /** Every finished episode, newest first — decoded, so [StoppageHistory] can order them by time
+     *  alongside the switched-off periods. */
+    internal fun recentEpisodes(context: Context): List<Episode> = runCatching {
         prefs(context).getString(KEY_EPISODES, "").orEmpty()
             .split(';').filter { it.isNotBlank() }
             .mapNotNull { decode(it) }
             .reversed()
-            .map { it.render() }
     }.getOrDefault(emptyList())
+
+    /** Every finished episode, newest first, as report-ready lines. */
+    fun recent(context: Context): List<String> = recentEpisodes(context).map { it.render() }
 
     /** The most recent finished episode, or null before there has been one. */
     fun last(context: Context): Episode? = runCatching {

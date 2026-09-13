@@ -7,6 +7,7 @@ import com.appblocker.data.BootAudit
 import com.appblocker.data.OutageLog
 import com.appblocker.data.ServiceHealth
 import com.appblocker.data.SettingsStore
+import com.appblocker.data.SwitchOffLog
 import com.appblocker.ui.hasUsageAccess
 
 /**
@@ -153,7 +154,23 @@ object ProtectionWatchdog {
         // outage was then never counted, and the one eventually closed carried a duration spanning
         // hours that were not an outage at all. An instrument that keeps measuring after the thing
         // it measures has stopped is worse than one that stops.
+        val outageWasOpen = OutageLog.isOpen(context)
         if (state != ProtectionState.STALLED) endOpenOutage(context, state, calledBy)
+        // ⚠️ **OFF used to be read as a choice and timed by nothing.** On 10 Sep 2026 the switch
+        // was found OFF after fourteen hours with no sign of the watcher, and not a line of it
+        // reached the stoppage history — so if the phone is what switches it off, the largest gap
+        // of the week was invisible. Timed now, apart from the outages. When this same check has
+        // just closed an outage, the period may not start before now: those minutes are counted.
+        if (state == ProtectionState.OFF) {
+            SwitchOffLog.begin(
+                context,
+                lastSeenAt = maxOf(ServiceHealth.lastAliveAt(context), ServiceHealth.lastEventAt(context)),
+                unbind = ServiceHealth.lastUnbind(context),
+                notBefore = if (outageWasOpen) System.currentTimeMillis() else 0L,
+            )
+        } else {
+            endSwitchOff(context, calledBy)
+        }
         when (state) {
             ProtectionState.OK -> {
                 SettingsStore.clearProtectionOffSince(context)
@@ -222,6 +239,8 @@ object ProtectionWatchdog {
      */
     fun noteWatcherAlive(context: Context, calledBy: String) = guarded(context, "watcherAlive") {
         endOpenOutage(context, ProtectionState.OK, calledBy)
+        // A bound watcher is proof the switch is ON, so a switched-off period ends here too.
+        endSwitchOff(context, calledBy)
     }
 
     /**
@@ -274,5 +293,24 @@ object ProtectionWatchdog {
             }
             BugReportSender.reportOutage(context, it, outageEndedBy(state))
         }
+    }
+
+    /**
+     * Closes a switched-off period, if one is open. Its cost is asked for here, at the close, with
+     * the same guard as the outage's: without usage access the answer is unknown, never zero.
+     */
+    private fun endSwitchOff(context: Context, calledBy: String) {
+        SwitchOffLog.end(
+            context,
+            endedBy = calledBy,
+            usedMinutes = { from, to ->
+                if (hasUsageAccess(context)) {
+                    runCatching { UsageTracker.totalMinutesInRange(context, from, to) }
+                        .getOrDefault(OutageLog.UNKNOWN_USE)
+                } else {
+                    OutageLog.UNKNOWN_USE
+                }
+            },
+        )
     }
 }

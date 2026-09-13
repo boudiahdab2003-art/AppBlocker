@@ -23,6 +23,9 @@ object ServiceHealth {
     private const val KEY_PROBE_FAILS = "health_probe_fail_streak"
     private const val KEY_UNBOUND_AT = "health_last_unbound_at"
     private const val KEY_UNBINDS = "health_unbind_count"
+    private const val KEY_UNBOUND_SETTINGS = "health_unbound_settings_in_front"
+    private const val KEY_UNBOUND_SCREEN = "health_unbound_screen_on"
+    private const val KEY_UNBOUND_GUARD = "health_unbound_guard_armed"
     private const val KEY_INTERRUPTS = "health_interrupt_count"
     private const val KEY_LAST_ERROR_AT = "health_last_error_at"
     private const val KEY_LAST_ERROR = "health_last_error"
@@ -304,17 +307,45 @@ object ServiceHealth {
      *
      * Roughly as sharp a discriminator as `OutageLog.aliveButDeaf`, for one line at the one place
      * that already knew. `onDestroy` used to set `connected = false` and record nothing.
+     *
+     * **And what was in front when it happened** — the only moment anyone can know. When the switch
+     * is later found OFF, [SwitchOffLog] reads these to say whether it went off with Settings open
+     * (a hand at the toggle), with the screen dark, or somewhere else. Written in the same edit as
+     * the stamp, so the three facts can never describe a different unbind from the time beside them.
+     * Nullable ones are written as absent, which reads back as "not recorded" rather than "no".
      */
-    fun recordUnbind(context: Context, now: Long = System.currentTimeMillis()) {
+    fun recordUnbind(
+        context: Context,
+        now: Long = System.currentTimeMillis(),
+        settingsInFront: Boolean? = null,
+        screenOn: Boolean? = null,
+        guardArmed: Boolean? = null,
+    ) {
         val p = prefs(context)
         p.edit()
             .putLong(KEY_UNBOUND_AT, now)
             .putInt(KEY_UNBINDS, p.getInt(KEY_UNBINDS, 0) + 1)
+            .putString(KEY_UNBOUND_SETTINGS, settingsInFront?.toString())
+            .putString(KEY_UNBOUND_SCREEN, screenOn?.toString())
+            .putString(KEY_UNBOUND_GUARD, guardArmed?.toString())
             .apply()
     }
 
     /** When the binding was last taken down in an orderly way (0 = never since install). */
     fun lastUnboundAt(context: Context): Long = prefs(context).getLong(KEY_UNBOUND_AT, 0L)
+
+    /** The last orderly unbind with what was in front at the time, or null when there never was one. */
+    fun lastUnbind(context: Context): SwitchOffLog.Unbind? {
+        val p = prefs(context)
+        val at = p.getLong(KEY_UNBOUND_AT, 0L)
+        if (at <= 0L) return null
+        return SwitchOffLog.Unbind(
+            at = at,
+            settingsInFront = p.getString(KEY_UNBOUND_SETTINGS, null)?.toBooleanStrictOrNull(),
+            screenOn = p.getString(KEY_UNBOUND_SCREEN, null)?.toBooleanStrictOrNull(),
+            guardArmed = p.getString(KEY_UNBOUND_GUARD, null)?.toBooleanStrictOrNull(),
+        )
+    }
 
     fun unbindCount(context: Context): Int = prefs(context).getInt(KEY_UNBINDS, 0)
 
