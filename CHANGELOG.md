@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.163
+- When the accessibility switch itself is off, the app now times it and notes what was on screen when it went off, so a report can tell whether it was switched off by hand or by the phone. And the red cross saying the blocker went quiet after Got it is gone - it described a bug that v1.153 already fixed.
+
 ## v1.162
 - The speed number the last release was about was being cut in half before it left your phone, and a report titled 'profile OK' was leading with a red cross inside. Plus nine more words in the built-in adult list.
 
