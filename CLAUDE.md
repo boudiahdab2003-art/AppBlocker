@@ -75,6 +75,12 @@ different causes, different fixes. `outagePreceded` tests the standing hypothesi
 own frequent self-updates are what kill it. ⚠️ **The cause is not known yet, and Second Space is
 NOT it** — he ruled that out on 28 Aug 2026 (invariant 31). Don't repeat the old explanation to him.
 
+From v1.163 the stoppage list also carries **`SWITCHED-OFF` lines** (`data/SwitchOffLog.kt`,
+invariant 70): the switch itself read OFF, which the app used to file as his choice and time not
+at all. They are never in the outage totals. Read `how=` first — `settings-open` looks like his
+hand; `screen-off`, `elsewhere` and `not-running` (off across a restart) are not the toggle — and
+`guard=true` means the accessibility page was being bounced at the time.
+
 **Then send him to Profile ▸ "What the blocker sees"** (`ui/DiagnosticsScreen.kt`). It is the first
 tool for any "it blocked X" / "it didn't block Y" report: it names this phone's brand, the uninstall
 screen, whether the keep-alive deep link resolves, which apps count as browsers, and — separately —

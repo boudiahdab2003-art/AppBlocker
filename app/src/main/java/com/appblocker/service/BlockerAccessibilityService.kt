@@ -3585,7 +3585,17 @@ class BlockerAccessibilityService : AccessibilityService() {
         // force-stop never gets here, and neither does a killed process. See recordUnbind: a
         // stamp at the start of an outage means something ended the binding, and no stamp means
         // the process vanished without being told anything.
-        runCatching { ServiceHealth.recordUnbind(applicationContext) }
+        // What was in front is recorded with it, because this is the only moment it is knowable:
+        // when the switch is later found OFF, it is the difference between Settings being open
+        // (a hand at the toggle) and the screen being dark. See SwitchOffLog.How.
+        runCatching {
+            ServiceHealth.recordUnbind(
+                applicationContext,
+                settingsInFront = lastForegroundPkg?.let { it in GUARD_PACKAGES } ?: false,
+                screenOn = interactive(),
+                guardArmed = OffSwitchGuard.armed(applicationContext),
+            )
+        }
         handler.removeCallbacks(heartbeatRunnable)
         handler.removeCallbacks(webScanRunnable)
         handler.removeCallbacks(shortsScanRunnable)

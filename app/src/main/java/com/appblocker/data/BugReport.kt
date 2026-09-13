@@ -380,6 +380,19 @@ data class BugReport(
         appendLine("this report's own heading: build 150 is version 1.149. They are not the same")
         appendLine("number, and reading them as the same names the wrong release.")
         appendLine()
+        // Explained only where one appears, so the section does not grow a paragraph about a thing
+        // most reports never contain.
+        if (recentOutages.any { "SWITCHED-OFF" in it }) {
+            appendLine("`SWITCHED-OFF` lines are a different failure: the accessibility switch itself")
+            appendLine("read OFF, rather than ON with nothing running. They are not in any outage total.")
+            appendLine("`how=` is the clue to who did it: **settings-open** means Settings was in front")
+            appendLine("when the watcher was unbound (looks like a hand), **screen-off** and **elsewhere**")
+            appendLine("mean it was not the toggle, and **not-running** means it went off while the")
+            appendLine("blocker was not running — a restart that came back with it off. `guard=true`")
+            appendLine("means the off-switch guard was up, so the accessibility page was being bounced.")
+            appendLine("`off=` runs from the last sign of life until something saw the switch back on.")
+            appendLine()
+        }
         appendLine("```")
         recentOutages.forEach { appendLine(it) }
         appendLine("```")

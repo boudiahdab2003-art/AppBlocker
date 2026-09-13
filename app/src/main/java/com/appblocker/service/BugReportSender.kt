@@ -27,6 +27,7 @@ import com.appblocker.data.QuickSession
 import com.appblocker.data.SettingsStore
 import com.appblocker.data.ProtectionPulse
 import com.appblocker.data.SilenceLog
+import com.appblocker.data.StoppageHistory
 import com.appblocker.ui.hasUsageAccess
 import com.appblocker.ui.isIgnoringBattery
 import kotlinx.coroutines.CoroutineScope
@@ -483,7 +484,7 @@ object BugReportSender {
                     device = describeDevice(),
                     context = appContext(context, watch),
                     recentBlocks = BlockLog.recent(context),
-                    recentOutages = OutageLog.recent(context),
+                    recentOutages = StoppageHistory.lines(context),
                     healthFacts = healthLines(context, watch),
                 ),
             )
@@ -599,7 +600,7 @@ object BugReportSender {
                         "outageCount" to "${OutageLog.totals(context).count}",
                     ),
                     recentBlocks = BlockLog.recent(context),
-                    recentOutages = OutageLog.recent(context),
+                    recentOutages = StoppageHistory.lines(context),
                     healthFacts = healthLines(context, watch),
                 ),
             )
@@ -673,7 +674,7 @@ object BugReportSender {
                         kind?.let { put("reportKind", it) }
                     },
                     recentBlocks = BlockLog.recent(context),
-                    recentOutages = OutageLog.recent(context),
+                    recentOutages = StoppageHistory.lines(context),
                     healthFacts = healthLines(context, watch),
                 ),
             )
@@ -733,7 +734,7 @@ object BugReportSender {
                             "weekOf" to week,
                             "weeksSkipped" to "${weeksBetween(last, week)}",
                         ),
-                        recentOutages = OutageLog.recent(context),
+                        recentOutages = StoppageHistory.lines(context),
                         healthFacts = healthLines(context, watch),
                     ),
                 )

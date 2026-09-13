@@ -4,6 +4,7 @@ import com.appblocker.data.BlockLatency
 import com.appblocker.data.BootAudit
 import com.appblocker.data.HealthFacts
 import com.appblocker.data.ProtectionPulse
+import com.appblocker.data.SwitchOffLog
 import com.appblocker.service.STALE_AFTER_MS
 import com.appblocker.service.STALE_MIN_USED_MINUTES
 import org.junit.Assert.assertEquals
@@ -253,19 +254,82 @@ class HealthFactsTest {
     fun `a deaf spell that has not happened again is history, not a fault`() {
         val r = healthy.copy(deafSpells = 1, deafSpellsToday = 0)
         assertTrue(problems(r).toString(), problems(r).isEmpty())
-        val fact = HealthFacts.verdicts(r).first { "went quiet after a block" in it.title }
+        val fact = HealthFacts.verdicts(r).first { "stayed on screen after" in it.title }
         assertEquals(null, fact.good)
         assertTrue(fact.detail, "None today" in fact.detail)
     }
 
-    /** And one that happened today still is, because that is the state worth acting on. */
+    /**
+     * **And one that happened today is not a fault either** (invariant 71). Report #122 led with
+     * "went quiet after a block was dismissed: 2 today" — red, above the stoppage it was filed
+     * about. The event is counted at the decline, and since v1.153 every decline books a return
+     * that re-covers apps and pages alike; `graceRecovers` moved that same day. The failure the
+     * red cross stood for is closed, so the row says what happens now instead.
+     */
     @Test
-    fun `a deaf spell today is still a fault`() {
-        val r = healthy.copy(deafSpells = 4, deafSpellsToday = 2)
-        assertTrue(problems(r).any { "went quiet after a block" in it })
-        val fact = HealthFacts.verdicts(r).first { "went quiet after a block" in it.title }
-        assertEquals(false, fact.good)
+    fun `a slow exit today is still not a fault, because the blocker looks again`() {
+        val r = healthy.copy(
+            deafSpells = 3, deafSpellsToday = 2, graceRecovers = 1, graceRecoversToday = 1,
+        )
+        assertTrue(problems(r).toString(), problems(r).isEmpty())
+        val fact = HealthFacts.verdicts(r).first { "stayed on screen after" in it.title }
+        assertEquals(null, fact.good)
         assertTrue(fact.detail, "2 today" in fact.detail)
+        assertTrue(fact.detail, "put the block back 1 time(s) today, 1 in total" in fact.detail)
+        assertFalse(fact.detail, "stopped watching" in fact.detail)
+    }
+
+    // --- the switch itself found OFF ----------------------------------------------------------
+
+    @Test
+    fun `a phone whose switch was never found off says nothing about it`() {
+        assertTrue(HealthFacts.verdicts(healthy).none { "switch was found OFF" in it.title })
+    }
+
+    /**
+     * Report #118: the switch read OFF after fourteen hours with no sign of the watcher, and the
+     * report had nothing to say about how long or how. A measurement, never an alarm — the alarm
+     * for a switch that is off right now is the running fact's, and it already fires.
+     */
+    @Test
+    fun `a switch found off is a measurement that names its cost and its clue`() {
+        val r = healthy.copy(
+            switchOffCount = 2, switchOffTotalMs = 50_880_000L, switchOffLongestMs = 50_400_000L,
+            switchOffUsedMin = 0, switchOffUsedCount = 2,
+            switchOffLastHow = SwitchOffLog.How.NOT_RUNNING,
+        )
+        val fact = HealthFacts.verdicts(r).first { "switch was found OFF" in it.title }
+        assertEquals(null, fact.good)
+        assertTrue(problems(r).toString(), problems(r).isEmpty())
+        assertTrue(fact.detail, "None of it was while you were using the phone" in fact.detail)
+        assertTrue(fact.detail, "while the blocker was not running" in fact.detail)
+    }
+
+    @Test
+    fun `switched off with Settings open reads as by hand, and a dark screen does not`() {
+        val base = healthy.copy(
+            switchOffCount = 1, switchOffTotalMs = 600_000L, switchOffLongestMs = 600_000L,
+        )
+        val hand = HealthFacts.verdicts(base.copy(switchOffLastHow = SwitchOffLog.How.SETTINGS_OPEN))
+            .first { "switch was found OFF" in it.title }.detail
+        assertTrue(hand, "by hand" in hand)
+        assertFalse(hand, "not done by hand" in hand)
+        val dark = HealthFacts.verdicts(base.copy(switchOffLastHow = SwitchOffLog.How.SCREEN_OFF))
+            .first { "switch was found OFF" in it.title }.detail
+        assertTrue(dark, "not done by hand" in dark)
+    }
+
+    @Test
+    fun `an armed guard is named only when it was up`() {
+        val base = healthy.copy(
+            switchOffCount = 1, switchOffTotalMs = 600_000L, switchOffLongestMs = 600_000L,
+            switchOffLastHow = SwitchOffLog.How.ELSEWHERE,
+        )
+        fun detail(guard: Boolean?) = HealthFacts.verdicts(base.copy(switchOffLastGuard = guard))
+            .first { "switch was found OFF" in it.title }.detail
+        assertTrue("guard was up" in detail(true))
+        assertFalse("guard was up" in detail(false))
+        assertFalse("guard was up" in detail(null))
     }
 
     // --- the cost of a stoppage, as opposed to its length -------------------------------------
@@ -719,7 +783,13 @@ class HealthFactsTest {
         // called only with `BugReportSender.post`'s return value. **Never a response body** — a
         // failure body can echo what was submitted. If that ever stops being true, this exception
         // must go, not the test.
-        val allowedText = setOf("lastSendResult")
+        //
+        // `switchOffLastHow` is the second, for two reasons that each hold alone. It can only be one
+        // of `SwitchOffLog.How`'s five literals: `shape` and `decode` map anything else to UNKNOWN
+        // before it is stored or read. And `switchOffFact` never renders it — it only picks which
+        // of our own sentences to print, with an empty string for anything it does not recognise.
+        // If either stops being true, this exception must go, not the test.
+        val allowedText = setOf("lastSendResult", "switchOffLastHow")
         val text = HealthFacts.Reading::class.java.declaredFields
             .filterNot { it.isSynthetic || java.lang.reflect.Modifier.isStatic(it.modifiers) }
             .filterNot { it.type in allowed || it.name in allowedText }

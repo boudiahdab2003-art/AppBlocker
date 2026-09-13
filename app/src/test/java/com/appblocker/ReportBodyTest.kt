@@ -171,6 +171,29 @@ class ReportBodyTest {
         assertTrue(outage.body().contains("at=Sun 21:40"))
     }
 
+    /** A switched-off period rides in the same list, explained where one appears and nowhere else. */
+    @Test
+    fun `a switched-off line is explained only when one is in the history`() {
+        fun outage(lines: List<String>) = BugReport.fromOutage(
+            appVersion = "1.163", flavor = "github", androidSdk = 36, device = "d",
+            context = mapOf("outageAt" to "1756000000", "outageMin" to "97"),
+            recentBlocks = emptyList(),
+            recentOutages = lines,
+        ).body()
+
+        val with = outage(
+            listOf(
+                "at=Thu 18:04  down=97min  deaf=false",
+                "at=Wed 23:39  SWITCHED-OFF  off=848min+fromBoot  how=not-running  guard=?",
+            ),
+        )
+        assertTrue(with.contains("They are not in any outage total"))
+        assertTrue(with.contains("at=Wed 23:39  SWITCHED-OFF"))
+
+        val without = outage(listOf("at=Thu 18:04  down=97min  deaf=false"))
+        assertFalse(without.contains("They are not in any outage total"))
+    }
+
     // --- privacy still holds after everything added -------------------------------------------
 
     /**

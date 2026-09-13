@@ -404,15 +404,16 @@ private fun readSnapshot(context: Context): Snapshot {
     val silence = buildList {
         add(
             Fact(
-                "Times it went quiet after \"Got it\": ${deaf.today} today, ${deaf.total} in total",
+                "Times the blocked app stayed on screen after \"Got it\": ${deaf.today} today, " +
+                    "${deaf.total} in total",
                 if (deaf.total == 0) {
-                    "None. After a block was dismissed, it has always started watching again " +
-                        "as soon as you moved somewhere new."
+                    "None. Every time a block was dismissed, the app it covered left the screen " +
+                        "straight away."
                 } else {
-                    "Each one is a spell where a block screen was dismissed and the blocker " +
-                        "stayed quiet while you were still in that app. Some of that is normal " +
-                        "while your phone is going Home. If this number keeps climbing, tell " +
-                        "me — that is the shape of a block that should have come and didn't."
+                    "Each one is a block you dismissed while the phone was slow to go Home, so " +
+                        "the app stayed in front for a few seconds. The blocker looks again the " +
+                        "moment that wait ends — the row below counts the times it had to put " +
+                        "the block back."
                 },
                 good = if (deaf.total == 0) true else null,
             ),

@@ -110,6 +110,16 @@ object HealthFacts {
         val outageUsedMin: Int = 0,
         val outageUsedCount: Int = 0,
         val outageLongestMs: Long,
+        /** Periods the accessibility switch itself read OFF — see [SwitchOffLog]. Apart from the
+         *  outage figures on purpose: those judge the app's self-repair, these a switch. */
+        val switchOffCount: Int = 0,
+        val switchOffTotalMs: Long = 0L,
+        val switchOffLongestMs: Long = 0L,
+        val switchOffUsedMin: Int = 0,
+        val switchOffUsedCount: Int = 0,
+        /** [SwitchOffLog.Episode.how] and the guard reading of the most recent period. */
+        val switchOffLastHow: String? = null,
+        val switchOffLastGuard: Boolean? = null,
         val probeFailStreak: Int,
         val bindDeferrals: Int,
         /** ⚠️ **How long after the last restart the app's own start-up ran**, or
@@ -151,6 +161,9 @@ object HealthFacts {
          *  and the row could never clear again however long it went without recurring. A warning
          *  that outlives what caused it is the shape this whole week has been about. */
         val deafSpellsToday: Int = 0,
+        /** Covers the booked re-check put back after one of [deafSpells] — [SilenceLog.GRACE_RECOVERS]. */
+        val graceRecovers: Int = 0,
+        val graceRecoversToday: Int = 0,
         val lateSkips: Int,
         val unreadyDecisions: Int,
         /** The half of [unreadyDecisions] that had no snapshot to answer from. Defaults to 0 so a
@@ -320,6 +333,7 @@ object HealthFacts {
             )
         }
         outageFact(r)?.let { add(it) }
+        switchOffFact(r)?.let { add(it) }
         schedulerFact(r)?.let { add(it) }
         speedFact(r)?.let { add(it) }
         silenceFacts(r).forEach { add(it) }
@@ -509,6 +523,51 @@ object HealthFacts {
     }
 
     /**
+     * The periods the switch itself read OFF, and the one clue to who switched it.
+     *
+     * A measurement, never a verdict: `runningFact` already raises the alarm while the switch is
+     * off, and a count that climbs is how anyone finds out whether it is him or the phone.
+     */
+    private fun switchOffFact(r: Reading): Fact? {
+        if (r.switchOffCount <= 0) return null
+        val head = "Off for ${minutesText(r.switchOffTotalMs)} in total; the longest was " +
+            "${minutesText(r.switchOffLongestMs)}. Each is counted from the blocker's last sign " +
+            "of life until something saw the switch back on, so treat it as a maximum. These are " +
+            "not in the stoppage figures: the switch itself was off, rather than on with nothing " +
+            "running behind it."
+        val cost = when {
+            r.switchOffUsedCount <= 0 ->
+                " How much of it was while you were using the phone was not measured."
+            r.switchOffUsedMin <= 0 -> " None of it was while you were using the phone."
+            else -> " ${r.switchOffUsedMin} minute(s) of it were while you were using the phone."
+        }
+        val last = when (r.switchOffLastHow) {
+            SwitchOffLog.How.SETTINGS_OPEN ->
+                " The last time, Settings was open when it went off, so it looks like it was " +
+                    "switched off by hand."
+            SwitchOffLog.How.SCREEN_OFF ->
+                " The last time, the screen was off when it went off, so it was not done by hand."
+            SwitchOffLog.How.ELSEWHERE ->
+                " The last time, another app was in front when it went off, not Settings."
+            SwitchOffLog.How.NOT_RUNNING ->
+                " The last time, it went off while the blocker was not running (for example " +
+                    "across a restart), so nothing saw what did it."
+            else -> ""
+        }
+        val guard = if (r.switchOffLastGuard == true) {
+            " The off-switch guard was up at that moment, so it was not switched off from " +
+                "AppBlocker's accessibility page."
+        } else {
+            ""
+        }
+        return Fact(
+            "The accessibility switch was found OFF ${r.switchOffCount} time(s)",
+            head + cost + last + guard,
+            good = null,
+        )
+    }
+
+    /**
      * How fast blocking is — judged on the **instant** paths only, with the settled path reported
      * beside it rather than folded into it.
      *
@@ -570,21 +629,29 @@ object HealthFacts {
      */
     private fun silenceFacts(r: Reading): List<Fact> = buildList {
         if (r.deafSpells > 0) {
+            // No number of seconds: how long the grace lasts is CoverGate's alone to say, and a
+            // second copy here would drift from it silently (CodeShapeTest).
+            val today = if (r.deafSpellsToday > 0) " ${r.deafSpellsToday} today." else " None today."
+            val returns = if (r.graceRecovers > 0) {
+                " It had to put the block back ${r.graceRecoversToday} time(s) today, " +
+                    "${r.graceRecovers} in total; every other time there was nothing left to " +
+                    "cover when it looked."
+            } else {
+                " It has not yet found anything still open to cover when it looked."
+            }
             add(
                 Fact(
-                    "Times it went quiet after a block was dismissed: ${r.deafSpells}",
-                    if (r.deafSpellsToday > 0) {
-                        "Each is a spell where a cover was dismissed and the blocker then stopped " +
-                            "watching instead of looking again. ${r.deafSpellsToday} today."
-                    } else {
-                        "Each is a spell where a cover was dismissed and the blocker then stopped " +
-                            "watching instead of looking again. None today — v1.153 made a " +
-                            "declined cover book its own return, and this is the count from " +
-                            "before that."
-                    },
-                    // Only today's is a fault. The lifetime count is history, and history that
-                    // can never clear teaches the reader to skip the section it leads.
-                    good = if (r.deafSpellsToday > 0) false else null,
+                    "Times the blocked app stayed on screen after \"Got it\": ${r.deafSpells}",
+                    "Each one is a block you dismissed while the phone was slow to go Home, so " +
+                        "the app stayed in front for a few seconds. The blocker " +
+                        "looks again the moment that wait ends, so this counts how often it " +
+                        "happened, not a block that failed.$today$returns",
+                    // ⚠️ **Never a fault now, today's or otherwise (invariant 71).** It was red
+                    // because the watcher used to stop watching after one of these. v1.153 booked
+                    // a return for every decline, and the re-check covers apps and pages alike, so
+                    // the event still happens and the failure it stood for does not. Report #122
+                    // led with it, above the stoppage it was filed about.
+                    good = null,
                     group = Group.SILENCE,
                 ),
             )
