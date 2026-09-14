@@ -381,6 +381,13 @@ object BugReportSender {
                 "${it.attempts}/${it.helped}/${it.noRebind}/${it.notLaunched}"
             }
         }
+        // Whether Notification access is granted. With it, Android restarted a force-stopped
+        // AppBlocker within a second on the emulator; without it nothing of ours runs after a force
+        // stop until he opens the app (invariant 76). Our own boolean.
+        field("notifAccess") {
+            androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(ctx)
+                .contains(ctx.packageName).toString()
+        }
         // onInterrupt, which used to be an empty body. Not a failure by itself; a number that
         // moves either side of an outage is the first description anyone has of what precedes one.
         field("interrupts") { ServiceHealth.interruptCount(ctx).toString() }

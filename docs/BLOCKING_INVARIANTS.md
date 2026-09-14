@@ -1459,6 +1459,38 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     **The shape to grep for: an ending or a success counter that cannot tell "it recovered" from "we
     did something, and then it recovered".**
 
+75. **A stretch of use ends when use does, not when its app remembers to pause.** The usage walk
+    opened a stretch on a resume, closed it on a pause, and counted anything still open to the end of
+    the window. So one missing pause — an activity destroyed without one, a phone that went dark or
+    shut down — was hours of "use" on a long window. That walk is what the stoppage log calls an
+    outage's cost (report #127's `used=323` over 373 minutes could not be cross-checked), what the
+    stalled detector waits for, and what screen time and daily limits add up.
+
+    `UsageTracker.StretchWalker` now also closes a stretch on `ACTIVITY_STOPPED` for that app, and
+    every open stretch on `SCREEN_NON_INTERACTIVE`, `KEYGUARD_SHOWN` or `DEVICE_SHUTDOWN`. A pause
+    arriving afterwards adds nothing, and the app in front at the moment of reading still counts to
+    the end. Tested on synthetic event runs (`UsageWalkTest`), including an ordinary run that must
+    count exactly as before; `CodeShapeTest` keeps `walkForeground` on the one walker.
+
+    **The shape to grep for: an interval opened by one event and closed only by its partner, with
+    "still open" counted as running.**
+
+76. **The part of the app Android restarts by itself must repair the parts it does not.** With
+    Notification access granted, Android restarted a force-stopped AppBlocker one second later
+    (`Start proc … for service {…NotificationCountListener}`, API 35 emulator, 14 Sep 2026); with the
+    access off, nothing ran for as long as anyone waited. A force stop is the owner's 11–13 Sep
+    shape — the switch OFF and two days of silence — because it also cancels every alarm and job.
+    But the listener's only health check lived in `onNotificationPosted`, and nothing re-armed the
+    scheduler, so the restart Android offered was spent counting notifications.
+
+    `onListenerConnected` now re-arms `ProtectionScheduler.ensureScheduled` and posts its own check
+    past `SERVICE_BIND_GRACE_MS`, on the process's own clock rather than a throttled job. Reports
+    carry `notifAccess`, and a health fact names the access when it is off. ⚠️ Measured on stock
+    Android only — whether HyperOS rebinds a force-stopped app's listener the same way is unproven.
+
+    **The shape to grep for: a component the system keeps alive whose callbacks only do their own
+    small job.**
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused

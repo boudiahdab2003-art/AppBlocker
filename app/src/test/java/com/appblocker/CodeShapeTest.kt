@@ -1007,6 +1007,49 @@ class CodeShapeTest {
         assertEquals("SelfRestore.maybeReopen is called from more than the stalled branch", 1, calls)
     }
 
+    // ---- invariants 75 and 76 ----------------------------------------------------------------
+
+    /**
+     * **Invariant 75: the usage walk has one set of rules, and they end a stretch when use ends.**
+     * `walkForeground` must feed `StretchWalker` rather than keep its own resumed-to-paused map — the
+     * inline map is exactly the version that counted an app whose pause never arrived as in use until
+     * the window closed. The walk was once three drifting copies; this keeps it one.
+     */
+    @Test
+    fun `the usage walk uses the one tested set of stretch rules`() {
+        val text = code(source("service/UsageTracker.kt").readText())
+        val walk = text.substringAfter("private fun walkForeground(", "").substringBefore("\n    }")
+        assertTrue("walkForeground is gone; this check is reading nothing", walk.isNotEmpty())
+        assertTrue(
+            "walkForeground must feed StretchWalker, the tested rules for when a stretch of use ends " +
+                "(invariant 75); an inline resumed/paused map counts a missing pause as hours of use",
+            "StretchWalker(" in walk && "fgStart" !in walk,
+        )
+    }
+
+    /**
+     * **Invariant 76: when Android reconnects the notification listener, AppBlocker repairs itself
+     * without waiting for a notification.** With Notification access granted, Android restarted a
+     * force-stopped AppBlocker within a second (API 35 emulator, 14 Sep 2026) — but the force stop had
+     * also cancelled every alarm and job, and the only health check lived in onNotificationPosted.
+     */
+    @Test
+    fun `a reconnected notification listener re-arms the scheduler and checks blocking`() {
+        val text = code(source("service/NotificationCountListener.kt").readText())
+        val connect = text.substringAfter("override fun onListenerConnected()", "").substringBefore("override fun ")
+        assertTrue("onListenerConnected is gone; this check is reading nothing", connect.isNotEmpty())
+        assertTrue(
+            "onListenerConnected must re-arm the scheduler — a force stop cancelled every alarm and job",
+            "ProtectionScheduler.ensureScheduled(" in connect,
+        )
+        assertTrue(
+            "onListenerConnected must schedule its own health check rather than wait for a notification",
+            "postDelayed(connectCheck" in connect,
+        )
+        val check = text.substringAfter("private val connectCheck", "").substringBefore("\n    }")
+        assertTrue("the connect check must run the watchdog", "ProtectionWatchdog.checkAndNotify(" in check)
+    }
+
     /**
      * **A share of a total may not be written separately from the total.**
      *

@@ -783,6 +783,9 @@ data class BugReport(
             // "3/2/1/0" — AppBlocker reopening itself: attempts, then the ones after which Android
             // bound the watcher again, opened with no rebind, or were never let open. Our integers.
             "selfRestore",
+            // true/false — Notification access, the path Android restarts AppBlocker by after a
+            // force stop (invariant 76).
+            "notifAccess",
             // How many times Android called onInterrupt on the watcher. Our own integer.
             "interrupts",
             // Foreground minutes since the watcher last saw anything, or `?` when usage access

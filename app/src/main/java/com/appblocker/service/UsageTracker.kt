@@ -215,7 +215,64 @@ object UsageTracker {
     }
 
     /** One app's stretch in the foreground. */
-    private class Session(val pkg: String, val from: Long, val to: Long)
+    internal class Session(val pkg: String, val from: Long, val to: Long)
+
+    /**
+     * **The walk's rules, apart from Android so a test can reach them.**
+     *
+     * A stretch opens when an app resumes and closes when it pauses. Until 14 Sep 2026 that was the
+     * whole rule — so an app whose pause never arrived stayed "in use" until the end of the window,
+     * and on a six-hour window one missed pause was six hours of use. This is the figure the
+     * stoppage log calls an outage's cost, the stalled detector waits for, and the screen-time
+     * headline and daily limits add up (invariant 75).
+     *
+     * So a stretch also closes when use demonstrably ended:
+     * - `ACTIVITY_STOPPED` for that app — a stop with no pause before it;
+     * - the screen going dark, the keyguard coming up, or the phone shutting down — for every open
+     *   app at once, because nobody uses a phone through any of those.
+     *
+     * A pause arriving after one of those finds nothing open and adds nothing. A stretch still open
+     * when the window closes counts to the end: that is the app in front right now.
+     */
+    internal class StretchWalker(
+        private val start: Long,
+        private val fgEvent: Int,
+        private val bgEvent: Int,
+    ) {
+        private val open = HashMap<String, Long>()
+        private val out = ArrayList<Session>()
+
+        /** True once any event at all was read — "nothing readable" is not "not used". */
+        var sawAnyEvent = false
+            private set
+
+        fun onEvent(type: Int, pkg: String, at: Long) {
+            sawAnyEvent = true
+            when (type) {
+                fgEvent -> open[pkg] = at
+                bgEvent, UsageEvents.Event.ACTIVITY_STOPPED ->
+                    open.remove(pkg)?.let { openedAt -> close(pkg, openedAt, at) }
+                UsageEvents.Event.SCREEN_NON_INTERACTIVE,
+                UsageEvents.Event.KEYGUARD_SHOWN,
+                UsageEvents.Event.DEVICE_SHUTDOWN -> {
+                    open.forEach { (p, openedAt) -> close(p, openedAt, at) }
+                    open.clear()
+                }
+            }
+        }
+
+        private fun close(pkg: String, openedAt: Long, at: Long) {
+            val from = max(openedAt, start)
+            out.add(Session(pkg, from, max(from, at)))
+        }
+
+        /** Every stretch, with those still open counted up to [end]. */
+        fun finish(end: Long): List<Session> {
+            open.forEach { (p, openedAt) -> close(p, openedAt, end) }
+            open.clear()
+            return out
+        }
+    }
 
     /** What one walk of the event stream found. [sawAnyEvent] separates "the phone wasn't used"
      *  from "we couldn't read anything", which are opposite facts that both yield no sessions. */
@@ -297,24 +354,13 @@ object UsageTracker {
         val bgEvent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
             UsageEvents.Event.ACTIVITY_PAUSED
         else @Suppress("DEPRECATION") UsageEvents.Event.MOVE_TO_BACKGROUND
-        val fgStart = HashMap<String, Long>()
-        val out = ArrayList<Session>()
-        var sawAnyEvent = false
+        // The rules for when a stretch opens and closes live in StretchWalker, where a test can
+        // reach them — including the ones this loop used to lack (invariant 75).
+        val walker = StretchWalker(start, fgEvent, bgEvent)
         val events = usm.queryEvents(start, end)
         val e = UsageEvents.Event()
-        while (events.getNextEvent(e)) {
-            sawAnyEvent = true
-            when (e.eventType) {
-                fgEvent -> fgStart[e.packageName] = e.timeStamp
-                bgEvent -> {
-                    val s = fgStart.remove(e.packageName) ?: continue
-                    out.add(Session(e.packageName, max(s, start), e.timeStamp))
-                }
-            }
-        }
-        // Still in the foreground when the window closed: count up to the end, not to nothing.
-        for ((pkg, s) in fgStart) out.add(Session(pkg, max(s, start), end))
-        return Walk(out, sawAnyEvent)
+        while (events.getNextEvent(e)) walker.onEvent(e.eventType, e.packageName, e.timeStamp)
+        return Walk(walker.finish(end), walker.sawAnyEvent)
     }
 
     /**

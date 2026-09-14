@@ -127,6 +127,9 @@ object HealthFacts {
         val restoreNoRebind: Int = 0,
         val restoreNotLaunched: Int = 0,
         val restoreFutileStreak: Int = 0,
+        /** Notification access — the path Android restarts AppBlocker by after a force stop
+         *  (invariant 76). Null when it could not be read. */
+        val notifAccess: Boolean? = null,
         val probeFailStreak: Int,
         val bindDeferrals: Int,
         /** ⚠️ **How long after the last restart the app's own start-up ran**, or
@@ -342,6 +345,7 @@ object HealthFacts {
         outageFact(r)?.let { add(it) }
         switchOffFact(r)?.let { add(it) }
         selfRestoreFact(r)?.let { add(it) }
+        notificationAccessFact(r)?.let { add(it) }
         schedulerFact(r)?.let { add(it) }
         speedFact(r)?.let { add(it) }
         silenceFacts(r).forEach { add(it) }
@@ -612,6 +616,23 @@ object HealthFacts {
             good = null,
         )
     }
+
+    /**
+     * Notification access, named only when it is off. A choice, not a fault — but the one that
+     * decides whether anything can start AppBlocker again after the phone shuts it down.
+     */
+    private fun notificationAccessFact(r: Reading): Fact? =
+        if (r.notifAccess != false) {
+            null
+        } else {
+            Fact(
+                "Notification access is off",
+                "Besides counting notifications, it is what lets Android start AppBlocker again " +
+                    "after the phone has shut it down. On a test phone AppBlocker came back within a " +
+                    "second with it on, and not at all with it off.",
+                good = null,
+            )
+        }
 
     /**
      * How fast blocking is — judged on the **instant** paths only, with the settled path reported

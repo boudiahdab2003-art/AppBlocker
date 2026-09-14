@@ -90,6 +90,10 @@ object HealthReader {
             restoreNoRebind = restore.noRebind,
             restoreNotLaunched = restore.notLaunched,
             restoreFutileStreak = restore.futileStreak,
+            notifAccess = runCatching {
+                androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(ctx)
+                    .contains(ctx.packageName)
+            }.getOrNull(),
             probeFailStreak = safe(0) { ServiceHealth.probeFailStreak(ctx) },
             bindDeferrals = safe(0) { SettingsStore.bindDeferrals(ctx) },
             bootHeardMs = safe(BootAudit.NEVER) { BootAudit.lagMsForThisBoot(ctx) },

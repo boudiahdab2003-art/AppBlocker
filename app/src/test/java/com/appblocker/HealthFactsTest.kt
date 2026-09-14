@@ -375,6 +375,15 @@ class HealthFactsTest {
         assertTrue(detail, "stopped reopening itself for a day" in detail)
     }
 
+    /** Invariant 76: named when off, silent when on or unreadable, and never a fault. */
+    @Test
+    fun `notification access that is off is named, and on or unknown says nothing`() {
+        assertTrue(HealthFacts.verdicts(healthy.copy(notifAccess = false)).any { it.title == "Notification access is off" })
+        assertTrue(HealthFacts.verdicts(healthy.copy(notifAccess = true)).none { "Notification access" in it.title })
+        assertTrue(HealthFacts.verdicts(healthy).none { "Notification access" in it.title })
+        assertTrue(problems(healthy.copy(notifAccess = false)).isEmpty())
+    }
+
     @Test
     fun `an armed guard is named only when it was up`() {
         val base = healthy.copy(
