@@ -1,6 +1,7 @@
 package com.appblocker
 
 import com.appblocker.data.OutageLog
+import com.appblocker.data.ProcessExits
 import com.appblocker.data.SwitchOffLog
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -159,6 +160,8 @@ class SwitchOffLogTest {
         usedDuringMin = 4,
         versionCode = 163L,
         endedBy = OutageLog.EndedBy.REBOUND,
+        killedBy = "user-requested:force-stop@perceptible",
+        spanMs = 2937 * minute,
     )
 
     @Test fun `a period survives being stored and read back`() {
@@ -182,5 +185,25 @@ class SwitchOffLogTest {
         assertTrue(line, "backBy=rebound" in line)
         assertFalse(line, "down=" in line)
         assertTrue("guard=?" in full.copy(guardArmed = null).render())
+    }
+
+    /** Rows written by v1.163 have eleven fields. They are on his phone and must still read. */
+    @Test fun `a period stored by the build before this one still decodes, as unasked`() {
+        val e = SwitchOffLog.decode("$now|60000|60000|not-running|?|nothing|false|true|772|164|rebound")
+        assertEquals(772, e?.usedDuringMin)
+        assertEquals(ProcessExits.UNREAD, e?.killedBy)
+        assertEquals(-1L, e?.spanMs)
+    }
+
+    /**
+     * **Invariant 73, from his own report.** `off=890min+fromBoot  used=772min` — the length from a
+     * restart, the use from two days before it. The window the use was counted over is printed.
+     */
+    @Test fun `a length from a restart is printed beside the span its use was counted over`() {
+        val line = full.render()
+        assertTrue(line, "used=4min  usedWindow=2937min" in line)
+        assertTrue(line, "killedBy=user-requested:force-stop@perceptible" in line)
+        val measured = full.copy(fromBoot = false, rebooted = false).render()
+        assertFalse(measured, "usedWindow=" in measured)
     }
 }

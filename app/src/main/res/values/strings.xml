@@ -438,6 +438,11 @@ Never sent: your blocked words, the sites you visit, which apps you block, or an
     <string name="notif_stalled_subtitle">Nothing is being blocked</string>
     <string name="notif_stalled_action">Fix it</string>
 
+    <!-- AppBlocker reopening itself when blocking stopped while the phone was in use (SelfRestore). -->
+    <string name="restore_banner">Turning blocking back on…</string>
+    <string name="restore_working">AppBlocker is turning blocking back on…</string>
+    <string name="restore_done">Blocking is back</string>
+
     <string name="notif_paused_title">Blocking is paused after the update</string>
     <string name="notif_paused_collapsed">Tap to turn it back on</string>
     <string name="notif_paused_headline">BLOCKING IS OFF</string>

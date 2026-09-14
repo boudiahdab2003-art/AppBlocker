@@ -194,6 +194,31 @@ class ReportBodyTest {
         assertFalse(without.contains("They are not in any outage total"))
     }
 
+    /** Android's record of a death is explained where one appears (invariant 72); the two new
+     *  stoppage fields are explained on every report that has stoppage lines. */
+    @Test
+    fun `an exit line is explained only when one is in the history`() {
+        fun outage(lines: List<String>) = BugReport.fromOutage(
+            appVersion = "1.164", flavor = "github", androidSdk = 36, device = "d",
+            context = mapOf("outageAt" to "1756000000", "outageMin" to "373"),
+            recentBlocks = emptyList(),
+            recentOutages = lines,
+        ).body()
+
+        val with = outage(
+            listOf(
+                "at=Mon 10:45  EXITED  reason=low-memory  sub=?  was=perceptible  note=-",
+                "at=Mon 10:45  down=373min  used=323min  deaf=false  killedBy=low-memory@perceptible",
+            ),
+        )
+        assertTrue(with.contains("Android's own record of why"))
+        val without = outage(listOf("at=Mon 10:45  down=373min  used=323min  deaf=false"))
+        assertFalse(without.contains("Android's own record of why"))
+        assertTrue(without.contains("`killedBy=`"))
+        assertTrue(without.contains("`usedWindow=`"))
+        assertTrue(without.contains("**rebound-after-open**"))
+    }
+
     // --- privacy still holds after everything added -------------------------------------------
 
     /**

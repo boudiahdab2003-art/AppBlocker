@@ -376,6 +376,18 @@ data class BugReport(
         appendLine("nothing happened to check. Read them as upper bounds and do not average the")
         appendLine("two kinds together.")
         appendLine()
+        appendLine("**rebound-after-open** is timed by the watcher too, but it came within seconds")
+        appendLine("of AppBlocker's own screen being opened — by him, or by the app reopening itself —")
+        appendLine("so it is NOT Android recovering alone. Never count it with **rebound**.")
+        appendLine()
+        appendLine("`killedBy=` is Android's own record of what closed the process, taken when the")
+        appendLine("stoppage was noticed: the first death after the blocker's last sign of life.")
+        appendLine("`none` means Android recorded no death (the deaf kind), `?` that it could not be")
+        appendLine("asked, and `+earlier?` that its list was already full, so an earlier death may")
+        appendLine("be missing. ⚠️ `used=` is counted from the last sign of life to the end. Where a")
+        appendLine("line carries `usedWindow=`, the length beside it covers less than that (a")
+        appendLine("restart came in between), so `used=` is NOT a share of `down=` or `off=`.")
+        appendLine()
         appendLine("⚠️ `build=` is the build NUMBER, and it is one ahead of the 1.x version in")
         appendLine("this report's own heading: build 150 is version 1.149. They are not the same")
         appendLine("number, and reading them as the same names the wrong release.")
@@ -391,6 +403,18 @@ data class BugReport(
             appendLine("blocker was not running — a restart that came back with it off. `guard=true`")
             appendLine("means the off-switch guard was up, so the accessibility page was being bounced.")
             appendLine("`off=` runs from the last sign of life until something saw the switch back on.")
+            appendLine()
+        }
+        if (recentOutages.any { "  EXITED  " in it }) {
+            appendLine("`EXITED` lines are not stoppages: they are **Android's own record of why")
+            appendLine("AppBlocker's process ended**, read when this report was written. `reason=` is")
+            appendLine("Android's category — **low-memory**, **freezer**, **user-requested** (Force stop,")
+            appendLine("or a swipe from Recents), **other** (usually a manufacturer's own kill),")
+            appendLine("**package-updated** (our own install). `sub=` is its detail. `was=` is how")
+            appendLine("important Android thought the process was: **perceptible** or better means it")
+            appendLine("died while still the blocker; **cached** or **empty** means it had already")
+            appendLine("stopped being one and was only reclaimed. `note=` is the phone's own wording,")
+            appendLine("with app names removed.")
             appendLine()
         }
         appendLine("```")
@@ -756,6 +780,9 @@ data class BugReport(
             // counted either way, so read it as "how often did it demonstrably work".
             "revivesHelped",
             "reboundWake",
+            // "3/2/1/0" — AppBlocker reopening itself: attempts, then the ones after which Android
+            // bound the watcher again, opened with no rebind, or were never let open. Our integers.
+            "selfRestore",
             // How many times Android called onInterrupt on the watcher. Our own integer.
             "interrupts",
             // Foreground minutes since the watcher last saw anything, or `?` when usage access

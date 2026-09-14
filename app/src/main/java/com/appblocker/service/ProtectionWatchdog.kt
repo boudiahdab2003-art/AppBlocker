@@ -5,6 +5,9 @@ import android.os.Process
 import android.os.SystemClock
 import com.appblocker.data.BootAudit
 import com.appblocker.data.OutageLog
+import com.appblocker.data.OwnUi
+import com.appblocker.data.ProcessExits
+import com.appblocker.data.SelfRestoreLog
 import com.appblocker.data.ServiceHealth
 import com.appblocker.data.SettingsStore
 import com.appblocker.data.SwitchOffLog
@@ -167,6 +170,7 @@ object ProtectionWatchdog {
                 lastSeenAt = maxOf(ServiceHealth.lastAliveAt(context), ServiceHealth.lastEventAt(context)),
                 unbind = ServiceHealth.lastUnbind(context),
                 notBefore = if (outageWasOpen) System.currentTimeMillis() else 0L,
+                killedBy = { whoClosedIt(context) },
             )
         } else {
             endSwitchOff(context, calledBy)
@@ -198,6 +202,7 @@ object ProtectionWatchdog {
                         context,
                         ServiceHealth.lastEventAt(context),
                         detectedBy = reading.arm ?: OutageLog.DetectedBy.UNBOUND,
+                        killedBy = { whoClosedIt(context) },
                     )
                 }
                 ProtectionNotifier.notifyStalled(context, force)
@@ -206,6 +211,16 @@ object ProtectionWatchdog {
                 // he has to happen to look at. Re-armed on every check that still sees STALLED,
                 // and cancelled by endOpenOutage on any exit from it.
                 ProtectionScheduler.scheduleStalledRepeat(context)
+                // ⭐ **And do not wait for him.** On 14 Sep 2026 he saw this alert at about 11:02 and
+                // blocking stayed down until he opened the app at 16:58, when it came back within a
+                // second. He chose that the app open itself instead (invariant 74). It declines almost
+                // always — not unbound, phone not in use, tried recently, or given up after tries
+                // that did not help — and every attempt it does make is judged.
+                SelfRestore.maybeReopen(
+                    context,
+                    arm = reading.arm ?: OutageLog.DetectedBy.UNBOUND,
+                    calledBy = calledBy,
+                )
             }
             // Off after an update, pending reactivation. Worth an alert precisely because it is
             // self-inflicted and easy to forget: the app was doing nothing at all, and saying it
@@ -238,10 +253,42 @@ object ProtectionWatchdog {
      * [endOpenOutage]'s other work is cancelling things that were never scheduled.
      */
     fun noteWatcherAlive(context: Context, calledBy: String) = guarded(context, "watcherAlive") {
-        endOpenOutage(context, ProtectionState.OK, calledBy)
+        val ending = if (calledBy == OutageLog.EndedBy.REBOUND) reboundEnding(context) else calledBy
+        endOpenOutage(context, ProtectionState.OK, ending)
         // A bound watcher is proof the switch is ON, so a switched-off period ends here too.
-        endSwitchOff(context, calledBy)
+        endSwitchOff(context, ending)
     }
+
+    /**
+     * How long after AppBlocker's own screen came to the front a rebind still counts as following
+     * it. On 14 Sep 2026 the gap was about a second.
+     */
+    private const val OPEN_ATTRIBUTION_MS = 15_000L
+
+    /**
+     * ⚠️ **A rebind seconds after our own screen came up is not Android recovering alone.**
+     *
+     * On 14 Sep 2026 a six-hour stoppage ended the second he opened AppBlocker and was filed as
+     * `rebound` — the ending this log reads as "blocking came back with nobody doing anything" — and
+     * `reboundWake` would have scored it `cold`, Android acting on its own. Both halves are always
+     * evaluated: the claim settles a pending self-reopen even when his own open already answers
+     * (invariant 74).
+     */
+    private fun reboundEnding(context: Context): String {
+        val reopened = SelfRestoreLog.claimRebind(context)
+        val opened = OwnUi.openedWithin(SystemClock.elapsedRealtime(), OPEN_ATTRIBUTION_MS)
+        return if (reopened || opened) OutageLog.EndedBy.AFTER_OPEN else OutageLog.EndedBy.REBOUND
+    }
+
+    /**
+     * Android's own record of the first death since the watcher's last sign of life — read when an
+     * episode opens, before its short list of records can rotate it out. See [ProcessExits].
+     */
+    private fun whoClosedIt(context: Context): String = ProcessExits.killedBy(
+        ProcessExits.read(context),
+        lastSignOfLife = maxOf(ServiceHealth.lastAliveAt(context), ServiceHealth.lastEventAt(context)),
+        now = System.currentTimeMillis(),
+    )
 
     /**
      * Closes an open outage episode and takes the stalled alert down with it. Called on **every**

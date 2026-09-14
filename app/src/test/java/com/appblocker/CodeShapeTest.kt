@@ -903,6 +903,110 @@ class CodeShapeTest {
         )
     }
 
+    // ---- invariants 72 and 74 ----------------------------------------------------------------
+
+    /** The source without comment lines — a shape check a comment can satisfy is decoration. */
+    private fun code(text: String): String = text.lines()
+        .filterNot { line ->
+            val t = line.trim()
+            t.startsWith("//") || t.startsWith("*") || t.startsWith("/**")
+        }
+        .joinToString("\n")
+
+    /** The argument text of every call to [call] (which ends in `(`), nested parentheses respected. */
+    private fun callArgs(text: String, call: String): List<String> {
+        val out = mutableListOf<String>()
+        var from = 0
+        while (true) {
+            val at = text.indexOf(call, from)
+            if (at < 0) break
+            var depth = 1
+            var i = at + call.length
+            while (i < text.length && depth > 0) {
+                when (text[i]) {
+                    '(' -> depth++
+                    ')' -> depth--
+                }
+                i++
+            }
+            out += text.substring(at + call.length, maxOf(at + call.length, i - 1))
+            from = i
+        }
+        return out
+    }
+
+    /**
+     * **Invariant 72: every stoppage that opens asks Android who closed the process — as it opens.**
+     *
+     * 48 stoppages and 60 deaths went by with no line able to say what killed the watcher, while
+     * Android had recorded it every time. It is asked at the opening because the record rotates: a
+     * call that leaves `killedBy` to its default files `?` for ever, and nothing would look broken.
+     */
+    @Test
+    fun `every stoppage that opens records who closed the process`() {
+        val text = code(source("service/ProtectionWatchdog.kt").readText())
+        for (call in listOf("OutageLog.begin(", "SwitchOffLog.begin(")) {
+            val calls = callArgs(text, call)
+            assertTrue("$call is no longer made by the watchdog; this check is reading nothing", calls.isNotEmpty())
+            calls.forEach { args ->
+                assertTrue(
+                    "$call$args) does not pass killedBy, so every such stoppage would record '?' " +
+                        "for who closed the process — see invariant 72.",
+                    Regex("""killedBy\s*=""").containsMatchIn(args),
+                )
+            }
+        }
+        assertTrue(
+            "the watchdog no longer reads Android's exit record, so killedBy can only ever be '?'",
+            "ProcessExits.read(" in text && "ProcessExits.killedBy(" in text,
+        )
+    }
+
+    /**
+     * **Invariant 74: a rebind that followed AppBlocker's own screen is not filed as Android
+     * recovering alone.** On 14 Sep 2026 a six-hour stoppage ended the second he opened the app and
+     * was filed `rebound`. Both witnesses — the self-reopen's claim and the owner's own open — must
+     * be asked, and both screens must leave the stamp the second one reads.
+     */
+    @Test
+    fun `a rebind that followed our own screen is not filed as unassisted`() {
+        val text = code(source("service/ProtectionWatchdog.kt").readText())
+        val alive = text.substringAfter("fun noteWatcherAlive(", "").substringBefore("\n    }")
+        assertTrue("noteWatcherAlive is gone; this check is reading nothing", alive.isNotEmpty())
+        assertTrue("noteWatcherAlive must pass a rebind through reboundEnding", "reboundEnding(" in alive)
+        val ending = text.substringAfter("private fun reboundEnding(", "").substringBefore("\n    }")
+        assertTrue(
+            "reboundEnding must ask both witnesses and be able to answer AFTER_OPEN",
+            "SelfRestoreLog.claimRebind(" in ending && "OwnUi.openedWithin(" in ending &&
+                "EndedBy.AFTER_OPEN" in ending,
+        )
+        for (file in listOf("MainActivity.kt", "ui/RestoreActivity.kt")) {
+            val resume = code(source(file).readText())
+                .substringAfter("override fun onResume()", "").substringBefore("override fun ")
+            assertTrue(
+                "$file no longer stamps OwnUi.resumedAtRt in onResume, so a rebind it caused " +
+                    "reads as Android recovering on its own",
+                "OwnUi.resumedAtRt" in resume,
+            )
+        }
+    }
+
+    /** **And the reopen is asked for from the stalled branch, and only there** — anywhere else it
+     *  could open a screen over a phone whose blocking is fine. */
+    @Test
+    fun `the app reopens itself only from the stalled branch`() {
+        val text = code(source("service/ProtectionWatchdog.kt").readText())
+        val stalled = text.substringAfter("ProtectionState.STALLED -> {", "")
+            .substringBefore("ProtectionState.PAUSED ->")
+        assertTrue("the STALLED branch is gone; this check is reading nothing", stalled.isNotEmpty())
+        assertTrue(
+            "the stalled branch no longer asks SelfRestore to reopen the app",
+            "SelfRestore.maybeReopen(" in stalled,
+        )
+        val calls = sourceTree().sumOf { f -> code(f.readText()).split("SelfRestore.maybeReopen(").size - 1 }
+        assertEquals("SelfRestore.maybeReopen is called from more than the stalled branch", 1, calls)
+    }
+
     /**
      * **A share of a total may not be written separately from the total.**
      *

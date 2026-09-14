@@ -51,6 +51,7 @@ object SwitchOffLog {
     private const val KEY_OPEN_PRECEDED = "open_preceded_by"
     private const val KEY_OPEN_BOOT = "open_boot_count"
     private const val KEY_OPEN_VERSION = "open_version"
+    private const val KEY_OPEN_KILLED_BY = "open_killed_by"
 
     private const val KEY_TOTAL_COUNT = "total_count"
     private const val KEY_TOTAL_MS = "total_ms"
@@ -117,6 +118,12 @@ object SwitchOffLog {
         val versionCode: Long,
         /** Which check saw the switch back on — one of [OutageLog.EndedBy]. */
         val endedBy: String,
+        /** What Android says closed the process — [ProcessExits.killedBy], taken when the period
+         *  opened. For `how=not-running` it is the only witness there is. */
+        val killedBy: String = ProcessExits.UNREAD,
+        /** Wall-clock span from [startedAt] to the close — the window [usedDuringMin] is counted
+         *  over — or -1 when it was not recorded. See [render]. */
+        val spanMs: Long = -1L,
     ) {
         /**
          * A report-ready line that can never pass for an outage: it names itself, and it says
@@ -128,16 +135,15 @@ object SwitchOffLog {
             val detect = if (detectedAfterMs < 0) "?" else "${detectedAfterMs / 60_000}"
             val used = if (usedDuringMin < 0) "?" else "$usedDuringMin"
             val guard = guardArmed?.toString() ?: "?"
-            return "at=${startedLabel()}  SWITCHED-OFF  off=$span  used=${used}min  " +
-                "noticedAfter=${detect}min  how=$how  guard=$guard  after=$precededBy  " +
-                "rebooted=$rebooted  build=$versionCode  backBy=$endedBy"
+            // ⚠️ On 13 Sep 2026 this line read `off=890min+fromBoot  used=772min`: the length ran from
+            // a restart early that morning and the use from the last sign of life two days before,
+            // and side by side the second read as a share of the first (invariant 73).
+            val window = if (fromBoot && spanMs >= 0L) "  usedWindow=${spanMs / 60_000}min" else ""
+            return "at=${StoppageHistory.label(startedAt)}  SWITCHED-OFF  off=$span  " +
+                "used=${used}min$window  noticedAfter=${detect}min  how=$how  " +
+                "killedBy=$killedBy  guard=$guard  after=$precededBy  rebooted=$rebooted  " +
+                "build=$versionCode  backBy=$endedBy"
         }
-
-        private fun startedLabel(): String =
-            if (startedAt <= 0L) "?" else runCatching {
-                java.text.SimpleDateFormat("EEE HH:mm", java.util.Locale.US)
-                    .format(java.util.Date(startedAt))
-            }.getOrDefault("?")
     }
 
     /**
@@ -189,6 +195,8 @@ object SwitchOffLog {
         versionCode: Long,
         endedBy: String,
         usedDuringMin: Int = OutageLog.UNKNOWN_USE,
+        killedBy: String = ProcessExits.UNREAD,
+        spanMs: Long = -1L,
     ): Episode {
         val rebooted = bootAtOpen != bootNow
         val duration = if (rebooted) nowRt.coerceAtLeast(0L) else (nowRt - startedRt).coerceAtLeast(0L)
@@ -207,6 +215,8 @@ object SwitchOffLog {
             usedDuringMin = usedDuringMin.coerceAtLeast(OutageLog.UNKNOWN_USE),
             versionCode = versionCode,
             endedBy = if (endedBy in OutageLog.EndedBy.ALL) endedBy else OutageLog.EndedBy.UNKNOWN,
+            killedBy = ProcessExits.safeToken(killedBy),
+            spanMs = spanMs,
         )
     }
 
@@ -226,6 +236,8 @@ object SwitchOffLog {
         unbind: Unbind?,
         notBefore: Long = 0L,
         now: Long = System.currentTimeMillis(),
+        /** Who closed the process — see [OutageLog.begin]'s parameter of the same name. */
+        killedBy: () -> String = { ProcessExits.UNREAD },
     ) {
         runCatching {
             // Invariant 37: the same check-then-act as OutageLog.begin, reached by the same seven
@@ -252,6 +264,10 @@ object SwitchOffLog {
                     )
                     .putInt(KEY_OPEN_BOOT, DeviceBoot.count(context))
                     .putLong(KEY_OPEN_VERSION, AppVersion.code(context))
+                    .putString(
+                        KEY_OPEN_KILLED_BY,
+                        ProcessExits.safeToken(runCatching(killedBy).getOrNull()),
+                    )
                     .apply()
             }
         }
@@ -290,6 +306,8 @@ object SwitchOffLog {
                 endedBy = endedBy,
                 usedDuringMin = runCatching { usedMinutes(startedAt, now) }
                     .getOrDefault(OutageLog.UNKNOWN_USE),
+                killedBy = p.getString(KEY_OPEN_KILLED_BY, null) ?: ProcessExits.UNREAD,
+                spanMs = if (startedAt > 0L) (now - startedAt).coerceAtLeast(0L) else -1L,
             )
             val existing = p.getString(KEY_EPISODES, "").orEmpty()
                 .split(';').filter { it.isNotBlank() }
@@ -316,6 +334,7 @@ object SwitchOffLog {
                 .remove(KEY_OPEN_PRECEDED)
                 .remove(KEY_OPEN_BOOT)
                 .remove(KEY_OPEN_VERSION)
+                .remove(KEY_OPEN_KILLED_BY)
                 .apply()
             episode
         }
@@ -360,11 +379,13 @@ object SwitchOffLog {
     internal fun encode(e: Episode): String = listOf(
         e.startedAt, e.durationMs, e.detectedAfterMs, e.how, e.guardArmed?.toString() ?: "?",
         e.precededBy, e.rebooted, e.fromBoot, e.usedDuringMin, e.versionCode, e.endedBy,
+        e.killedBy, e.spanMs,
     ).joinToString("|")
 
     internal fun decode(raw: String): Episode? {
         val p = raw.split('|')
-        if (p.size != 11) return null
+        // Eleven fields until 14 Sep 2026 and thirteen since; the older rows are already on his phone.
+        if (p.size != 11 && p.size != 13) return null
         return Episode(
             startedAt = p[0].toLongOrNull() ?: return null,
             durationMs = p[1].toLongOrNull() ?: return null,
@@ -377,6 +398,8 @@ object SwitchOffLog {
             usedDuringMin = p[8].toIntOrNull() ?: OutageLog.UNKNOWN_USE,
             versionCode = p[9].toLongOrNull() ?: -1L,
             endedBy = p[10].takeIf { it in OutageLog.EndedBy.ALL } ?: OutageLog.EndedBy.UNKNOWN,
+            killedBy = ProcessExits.safeToken(p.getOrNull(11)),
+            spanMs = p.getOrNull(12)?.toLongOrNull() ?: -1L,
         )
     }
 }

@@ -1,6 +1,7 @@
 package com.appblocker
 
 import com.appblocker.data.OutageLog
+import com.appblocker.data.ProcessExits
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -275,6 +276,8 @@ class OutageLogTest {
             endedBy = OutageLog.EndedBy.REBOUND,
             usedDuringMin = 7,
             fromBoot = true,
+            killedBy = "other:kill-background@perceptible",
+            spanMs = 95 * minute,
         )
         val defaults = OutageLog.Episode::class.java.declaredFields
             .filterNot { it.isSynthetic || java.lang.reflect.Modifier.isStatic(it.modifiers) }
@@ -282,9 +285,12 @@ class OutageLogTest {
                 f.isAccessible = true
                 when (val v = f.get(e)) {
                     null -> true
+                    // Every sentinel a field can default to. `?` and -1 were invisible here until
+                    // 14 Sep 2026, so a new field left at either would have read as set.
                     is String -> v.isEmpty() || v == OutageLog.DetectedBy.UNKNOWN ||
-                        v == OutageLog.EndedBy.UNKNOWN || v == OutageLog.Preceded.NOTHING
-                    is Long -> v == 0L
+                        v == OutageLog.EndedBy.UNKNOWN || v == OutageLog.Preceded.NOTHING ||
+                        v == ProcessExits.UNREAD
+                    is Long -> v == 0L || v == -1L
                     is Int -> v == 0 || v == OutageLog.UNKNOWN_USE
                     is Boolean -> !v
                     else -> false
@@ -542,9 +548,9 @@ class OutageLogTest {
      * exists to be free of it — the same mistake as before, with a new name.
      */
     @Test
-    fun `self-timed endings are exactly the two the watcher records itself`() {
+    fun `self-timed endings are exactly the ones the watcher records itself`() {
         assertEquals(
-            setOf(OutageLog.EndedBy.REBOUND, OutageLog.EndedBy.HEARTBEAT),
+            setOf(OutageLog.EndedBy.REBOUND, OutageLog.EndedBy.HEARTBEAT, OutageLog.EndedBy.AFTER_OPEN),
             OutageLog.EndedBy.SELF_TIMED,
         )
         // And every one of them has to be a real, decodable ending, not a string nothing produces.
@@ -637,5 +643,66 @@ class OutageLogTest {
         )
         assertTrue(e.render(), "fromBoot" in e.render())
         assertEquals(true, OutageLog.decode(OutageLog.encode(e))?.fromBoot)
+    }
+
+    // ---- who closed it, and the window use is counted over (invariants 72 and 73) -------------
+
+    /** Rows written before 14 Sep 2026 have eleven fields, and say "never asked" rather than a guess. */
+    @Test
+    fun `an episode stored before who-closed-it existed still decodes, as unasked`() {
+        val e = OutageLog.decode("$now|60000|60000|false|nothing|false|163|unbound|rebound|0|false")
+        assertEquals(60_000L, e?.durationMs)
+        assertEquals(ProcessExits.UNREAD, e?.killedBy)
+        assertEquals(-1L, e?.spanMs)
+    }
+
+    /** A value read back from disk that is not a token is not trusted into a report line. */
+    @Test
+    fun `a stored killer that is not a token decodes as unasked`() {
+        val e = OutageLog.decode("$now|60000|60000|false|nothing|false|163|unbound|rebound|0|false|Bad Token|60000")
+        assertEquals(ProcessExits.UNREAD, e?.killedBy)
+        assertEquals(60_000L, e?.spanMs)
+    }
+
+    @Test
+    fun `the line names what closed the process`() {
+        val line = OutageLog.Episode(
+            now, 14 * minute, 3 * minute, false, OutageLog.Preceded.NOTHING, false, 164L,
+            killedBy = "low-memory@perceptible", spanMs = 14 * minute,
+        ).render()
+        assertTrue(line, "killedBy=low-memory@perceptible" in line)
+        assertFalse("a length over the whole span needs no second window: $line", "usedWindow=" in line)
+    }
+
+    /**
+     * **Invariant 73.** On 13 Sep 2026 a line read `off=890min+fromBoot  used=772min` — the length
+     * from a restart, the use from two days earlier — and the second read as a share of the first.
+     * Wherever the length covers less than the use window, the window is printed.
+     */
+    @Test
+    fun `use counted over a longer span than the length says which span`() {
+        val clamped = OutageLog.Episode(
+            now, 20 * minute, 3 * minute, false, OutageLog.Preceded.BOOT, false, 164L,
+            usedDuringMin = 12, fromBoot = true, spanMs = 180 * minute,
+        ).render()
+        assertTrue(clamped, "used=12min  usedWindow=180min" in clamped)
+        val rebooted = OutageLog.Episode(
+            now, -1L, 3 * minute, false, OutageLog.Preceded.NOTHING, true, 164L,
+            usedDuringMin = 12, spanMs = 180 * minute,
+        ).render()
+        assertTrue(rebooted, "usedWindow=180min" in rebooted)
+    }
+
+    /** Invariant 74: timed by the watcher, stored and printed — but never the same word as `rebound`. */
+    @Test
+    fun `a rebind that followed our own screen survives storage under its own name`() {
+        assertTrue(OutageLog.EndedBy.AFTER_OPEN in OutageLog.EndedBy.ALL)
+        assertFalse(OutageLog.EndedBy.AFTER_OPEN == OutageLog.EndedBy.REBOUND)
+        val e = OutageLog.Episode(
+            now, minute, minute, false, OutageLog.Preceded.NOTHING, false, 164L,
+            endedBy = OutageLog.EndedBy.AFTER_OPEN,
+        )
+        assertEquals(OutageLog.EndedBy.AFTER_OPEN, OutageLog.decode(OutageLog.encode(e))?.endedBy)
+        assertTrue(e.render(), "backBy=rebound-after-open" in e.render())
     }
 }

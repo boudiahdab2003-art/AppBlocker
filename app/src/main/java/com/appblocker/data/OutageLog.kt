@@ -66,6 +66,7 @@ object OutageLog {
     private const val KEY_OPEN_BOOT = "open_boot_count"
     private const val KEY_OPEN_VERSION = "open_version"
     private const val KEY_OPEN_DETECTED_BY = "open_detected_by"
+    private const val KEY_OPEN_KILLED_BY = "open_killed_by"
 
     /** When a version change was last noticed, stamped by [UpdatePause.checkVersionChange]. */
     private const val KEY_LAST_UPDATE_AT = "last_update_at"
@@ -189,6 +190,18 @@ object OutageLog {
          */
         const val HEARTBEAT = "heard-again"
 
+        /**
+         * **Android bound the watcher again within seconds of AppBlocker's own screen coming to the
+         * front** — the owner opening the app, or the app reopening itself ([SelfRestoreLog]).
+         *
+         * Timed by the watcher like [REBOUND], so its length is a measurement — but it is NOT Android
+         * recovering alone, and filing it as [REBOUND] answers the recovery question wrongly in the
+         * case that matters most. On 14 Sep 2026 a six-hour stoppage ended the second he opened the
+         * app and was recorded as `rebound`; `reboundWake` would have called it Android acting on
+         * its own (invariant 74).
+         */
+        const val AFTER_OPEN = "rebound-after-open"
+
         /** An episode recorded before this field existed. Never guessed at. */
         const val UNKNOWN = "unknown"
 
@@ -198,7 +211,7 @@ object OutageLog {
          * episode that silently forgets how it ended, which is the one thing this object exists
          * to record. `everyEndingIsDecodable` fails the build on the omission.
          */
-        val ALL = setOf(BACKGROUND, APP_OPENED, BOOT, GLANCED, REBOUND, HEARTBEAT, UNKNOWN)
+        val ALL = setOf(BACKGROUND, APP_OPENED, BOOT, GLANCED, REBOUND, HEARTBEAT, AFTER_OPEN, UNKNOWN)
 
         /**
          * ⚠️ **The endings whose `durationMs` is a measurement rather than a ceiling.**
@@ -210,9 +223,10 @@ object OutageLog {
          * number nobody could act on.
          *
          * A new ending belongs here only if the thing recording it *is* the thing that knows the
-         * fault is over (invariant 44). If it had to go and check, it does not.
+         * fault is over (invariant 44). If it had to go and check, it does not. [AFTER_OPEN] is the
+         * watcher's own clock as well — what it is not is Android recovering unassisted.
          */
-        val SELF_TIMED = setOf(REBOUND, HEARTBEAT)
+        val SELF_TIMED = setOf(REBOUND, HEARTBEAT, AFTER_OPEN)
     }
 
     object DetectedBy {
@@ -271,6 +285,19 @@ object OutageLog {
          *  See [startAnchor]: without it, time the phone spent switched off was reported as time
          *  the owner was unprotected. */
         val fromBoot: Boolean = false,
+        /**
+         * ⭐ **What closed the process, in Android's own words** — [ProcessExits.killedBy], taken when
+         * the episode opened: `low-memory@perceptible`, `none` for a watcher that stayed alive, `?`
+         * when Android could not be asked. Until 14 Sep 2026 no line could say who killed it.
+         */
+        val killedBy: String = ProcessExits.UNREAD,
+        /**
+         * Wall-clock span from [startedAt] to the close — the window [usedDuringMin] is counted
+         * over — or -1 when it was not recorded. Printed only where [durationMs] covers less than
+         * that window, so `used=` is never read as a share of a `down=` measured over something
+         * else (invariant 73).
+         */
+        val spanMs: Long = -1L,
     ) {
         /**
          * A report-ready line. No content, by construction — every field here is a number.
@@ -291,18 +318,20 @@ object OutageLog {
             // `fromBoot` marks a length that is a floor rather than a measurement, so the two can
             // never be read as the same number — the rule `backBy` already follows for endings.
             val span = if (fromBoot) "${mins}min+fromBoot" else "${mins}min"
-            return "at=${startedLabel()}  down=$span  used=${used}min  " +
-                "noticedAfter=${detect}min  deaf=$aliveButDeaf  after=$precededBy  " +
-                "rebooted=$rebooted  build=$versionCode  by=$detectedBy  backBy=$endedBy"
+            // ⚠️ `used=` runs from the last sign of life to the close. Where `down=` covers less than
+            // that — a restart before or during the episode — the span is printed beside it, so the
+            // minutes are never read as a share of a length measured over something else
+            // (invariant 73).
+            val window = if ((fromBoot || rebooted) && spanMs >= 0L) {
+                "  usedWindow=${spanMs / 60_000}min"
+            } else {
+                ""
+            }
+            return "at=${StoppageHistory.label(startedAt)}  down=$span  used=${used}min$window  " +
+                "noticedAfter=${detect}min  deaf=$aliveButDeaf  killedBy=$killedBy  " +
+                "after=$precededBy  rebooted=$rebooted  build=$versionCode  by=$detectedBy  " +
+                "backBy=$endedBy"
         }
-
-        /** `Sun 21:40`, or `?` when the stamp was never recorded. Never a date-with-year: the day
-         *  of the week and the hour are the pattern, and the rest is noise in a fixed-width line. */
-        private fun startedLabel(): String =
-            if (startedAt <= 0L) "?" else runCatching {
-                java.text.SimpleDateFormat("EEE HH:mm", java.util.Locale.US)
-                    .format(java.util.Date(startedAt))
-            }.getOrDefault("?")
     }
 
     /**
@@ -334,6 +363,8 @@ object OutageLog {
          *  caller took the reading where both ends were known, and this must not second-guess it. */
         usedDuringMin: Int = UNKNOWN_USE,
         fromBoot: Boolean = false,
+        killedBy: String = ProcessExits.UNREAD,
+        spanMs: Long = -1L,
     ): Episode {
         val rebooted = bootAtOpen != bootNow
         // A reboot resets the monotonic clock, so the difference across one is not a duration.
@@ -355,6 +386,8 @@ object OutageLog {
             endedBy = if (endedBy in EndedBy.ALL) endedBy else EndedBy.UNKNOWN,
             usedDuringMin = usedDuringMin,
             fromBoot = fromBoot,
+            killedBy = ProcessExits.safeToken(killedBy),
+            spanMs = spanMs,
         )
     }
 
@@ -466,6 +499,12 @@ object OutageLog {
         lastEventAt: Long,
         now: Long = System.currentTimeMillis(),
         detectedBy: String = DetectedBy.UNKNOWN,
+        /**
+         * Who closed the process, from Android's own record — see [ProcessExits.killedBy]. A
+         * function, evaluated only when an episode actually opens: it is a binder call, and this is
+         * reached by every check that finds blocking stalled.
+         */
+        killedBy: () -> String = { ProcessExits.UNREAD },
     ) {
         runCatching {
             // Invariant 37. Read-then-write on KEY_OPEN_STARTED, reached by seven separate
@@ -502,6 +541,13 @@ object OutageLog {
                     .putString(
                         KEY_OPEN_DETECTED_BY,
                         if (detectedBy in DetectedBy.ALL) detectedBy else DetectedBy.UNKNOWN,
+                    )
+                    // Asked NOW rather than at the close: every process a worker starts during a
+                    // long stoppage dies too, and Android's short list of records can rotate the
+                    // first death out before blocking comes back (invariant 72).
+                    .putString(
+                        KEY_OPEN_KILLED_BY,
+                        ProcessExits.safeToken(runCatching(killedBy).getOrNull()),
                     )
                     .apply()
             }
@@ -550,6 +596,8 @@ object OutageLog {
                 versionCode = p.getLong(KEY_OPEN_VERSION, -1L),
                 detectedBy = p.getString(KEY_OPEN_DETECTED_BY, DetectedBy.UNKNOWN) ?: DetectedBy.UNKNOWN,
                 endedBy = endedBy,
+                killedBy = ProcessExits.safeToken(p.getString(KEY_OPEN_KILLED_BY, null)),
+                spanMs = if (startedAt > 0L) (now - startedAt).coerceAtLeast(0L) else -1L,
                 // Asked once, here, where both ends of the window are known. Read at report time
                 // instead it would span the wrong range entirely — the 5 Sep six-hour episode
                 // reported `usedMinutes 0` measured over the ONE minute since the phone woke up,
@@ -601,6 +649,7 @@ object OutageLog {
                 .remove(KEY_OPEN_BOOT)
                 .remove(KEY_OPEN_VERSION)
                 .remove(KEY_OPEN_DETECTED_BY)
+                .remove(KEY_OPEN_KILLED_BY)
                 .apply()
             episode
         }
@@ -677,7 +726,7 @@ object OutageLog {
     internal fun encode(e: Episode): String = listOf(
         e.startedAt, e.durationMs, e.detectedAfterMs, e.aliveButDeaf,
         e.precededBy, e.rebooted, e.versionCode, e.detectedBy, e.endedBy, e.usedDuringMin,
-        e.fromBoot,
+        e.fromBoot, e.killedBy, e.spanMs,
     ).joinToString("|")
 
     /**
@@ -691,7 +740,7 @@ object OutageLog {
      */
     internal fun decode(raw: String): Episode? {
         val p = raw.split('|')
-        if (p.size !in 7..11) return null
+        if (p.size !in 7..13) return null
         return Episode(
             startedAt = p[0].toLongOrNull() ?: return null,
             durationMs = p[1].toLongOrNull() ?: return null,
@@ -709,6 +758,9 @@ object OutageLog {
             // Absent on every episode stored before this shipped, and false is the right default:
             // those were measured the old way and inventing a caveat for them would be a guess.
             fromBoot = p.getOrNull(10)?.toBoolean() ?: false,
+            // Absent before 14 Sep 2026. Those were never asked, and `?` says exactly that.
+            killedBy = ProcessExits.safeToken(p.getOrNull(11)),
+            spanMs = p.getOrNull(12)?.toLongOrNull() ?: -1L,
         )
     }
 }

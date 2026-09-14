@@ -190,6 +190,17 @@
             </intent-filter>
         </activity-alias>
 
+        <!-- AppBlocker reopening itself for a few seconds when the watcher is found unbound while
+             the phone is in use (SelfRestore). Its own task, never in Recents, closes itself. -->
+        <activity
+            android:name=".ui.RestoreActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <!-- The full-screen "Blocked" page. -->
         <activity
             android:name=".ui.BlockScreenActivity"

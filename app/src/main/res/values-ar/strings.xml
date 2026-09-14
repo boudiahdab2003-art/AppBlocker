@@ -495,6 +495,11 @@
     <string name="notif_stalled_subtitle">لا شيء يُحظر الآن</string>
     <string name="notif_stalled_action">أصلحه</string>
 
+    <!-- إعادة فتح AppBlocker لنفسه عندما يتوقّف الحظر أثناء استخدام الهاتف (SelfRestore). -->
+    <string name="restore_banner">جارٍ إعادة تشغيل الحظر…</string>
+    <string name="restore_working">AppBlocker يعيد تشغيل الحظر…</string>
+    <string name="restore_done">عاد الحظر للعمل</string>
+
     <string name="notif_paused_title">الحظر متوقّف مؤقتًا بعد التحديث</string>
     <string name="notif_paused_collapsed">اضغط لإعادة تشغيله</string>
     <string name="notif_paused_headline">الحظر متوقّف</string>

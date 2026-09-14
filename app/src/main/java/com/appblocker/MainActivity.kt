@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -100,6 +101,9 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         OwnUi.visible = true
+        // A rebind in the next few seconds followed our own screen, not Android alone — see
+        // ProtectionWatchdog.reboundEnding. On 14 Sep 2026 a six-hour stoppage ended this way.
+        OwnUi.resumedAtRt = SystemClock.elapsedRealtime()
         // What this phone says about the guesses the app makes about it — sent once per phone per
         // build, and sent **even when every answer is the one we hoped for**. A phone we got wrong
         // does not crash; it quietly stops protecting, so a healthy report is the only signal

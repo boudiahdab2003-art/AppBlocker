@@ -1,6 +1,7 @@
 package com.appblocker
 
 import com.appblocker.data.OutageLog
+import com.appblocker.data.ProcessExits
 import com.appblocker.data.StoppageHistory
 import com.appblocker.data.SwitchOffLog
 import org.junit.Assert.assertEquals
@@ -66,5 +67,29 @@ class StoppageHistoryTest {
         )
         assertEquals(StoppageHistory.MAX_LINES, lines.size)
         assertEquals(25, lines.count { "SWITCHED-OFF" in it })
+    }
+
+    /**
+     * Android's own record of a death rides in the same time order (invariant 72) — the death just
+     * after a stoppage's last sign of life is the one thing its line cannot say — and it never
+     * pushes a stoppage out of the capped list.
+     */
+    @Test fun `a death sits in time order beside the stoppage it began, outside the cap`() {
+        val death = ProcessExits.Exit(now - 20 * minute + 5_000L, "low-memory", null, 230, null)
+        val lines = StoppageHistory.merge(
+            outages = listOf(outage(now - 20 * minute), outage(now - 90 * minute)),
+            switchOffs = emptyList(),
+            exits = listOf(death),
+        )
+        assertEquals(3, lines.size)
+        assertTrue(lines[0], "EXITED" in lines[0])
+        assertFalse(lines[1], "EXITED" in lines[1])
+        val full = StoppageHistory.merge(
+            outages = List(StoppageHistory.MAX_LINES) { outage(now - it * minute) },
+            switchOffs = emptyList(),
+            exits = listOf(death),
+        )
+        assertEquals(StoppageHistory.MAX_LINES, full.count { "EXITED" !in it })
+        assertEquals(1, full.count { "EXITED" in it })
     }
 }

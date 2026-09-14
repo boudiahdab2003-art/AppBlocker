@@ -319,6 +319,62 @@ class HealthFactsTest {
         assertTrue(dark, "not done by hand" in dark)
     }
 
+    /**
+     * **Invariant 73, as he would have read it.** "Off for 14 h 50 min … treat it as a maximum … 772
+     * minute(s) of it were while you were using the phone": a length that ran from a restart (a
+     * minimum) and use counted from two days earlier, joined by "of it".
+     */
+    @Test
+    fun `switch-off use is never called a share of a length measured over something else`() {
+        val r = healthy.copy(
+            switchOffCount = 1, switchOffTotalMs = 890 * 60_000L, switchOffLongestMs = 890 * 60_000L,
+            switchOffUsedMin = 772, switchOffUsedCount = 1,
+            switchOffLastHow = SwitchOffLog.How.NOT_RUNNING,
+        )
+        val detail = HealthFacts.verdicts(r).first { "switch was found OFF" in it.title }.detail
+        assertFalse(detail, "of it were while" in detail)
+        assertFalse(detail, "so treat it as a maximum" in detail)
+        assertTrue(detail, "772 minute(s) of phone use happened between the blocker's last sign of life" in detail)
+        assertTrue(detail, "a minimum" in detail)
+    }
+
+    @Test
+    fun `stoppage use is counted over its own window, not as a share of the length`() {
+        val r = healthy.copy(
+            outageCount = 48, foundDead = 60, outageTotalMs = 2585 * 60_000L,
+            outageLongestMs = 373 * 60_000L, outageUsedMin = 334, outageUsedCount = 13,
+        )
+        val detail = HealthFacts.verdicts(r).first { it.title.startsWith("Blocking has stopped") }.detail
+        assertFalse(detail, "Of that, 334" in detail)
+        assertTrue(detail, "334 minute(s) of real use fell inside those stoppages" in detail)
+    }
+
+    // --- AppBlocker reopening itself (invariant 74) ---------------------------------------------
+
+    @Test
+    fun `a phone that never reopened itself says nothing about it`() {
+        assertTrue(HealthFacts.verdicts(healthy).none { "reopened itself" in it.title })
+    }
+
+    @Test
+    fun `reopening itself is a measurement that says whether it helped`() {
+        val r = healthy.copy(restoreAttempts = 4, restoreHelped = 1, restoreNoRebind = 2, restoreNotLaunched = 1)
+        val fact = HealthFacts.verdicts(r).first { "reopened itself 4 time(s)" in it.title }
+        assertEquals(null, fact.good)
+        assertTrue(problems(r).toString(), problems(r).isEmpty())
+        assertTrue(fact.detail, "within seconds 1 time(s)" in fact.detail)
+        assertTrue(fact.detail, "2 time(s) it opened and blocking did not come back" in fact.detail)
+        assertTrue(fact.detail, "1 time(s) the phone did not let it open" in fact.detail)
+        assertFalse(fact.detail, "stopped reopening itself" in fact.detail)
+    }
+
+    @Test
+    fun `tries that did not help say it has stopped trying`() {
+        val r = healthy.copy(restoreAttempts = 3, restoreNoRebind = 3, restoreFutileStreak = 3)
+        val detail = HealthFacts.verdicts(r).first { "reopened itself" in it.title }.detail
+        assertTrue(detail, "stopped reopening itself for a day" in detail)
+    }
+
     @Test
     fun `an armed guard is named only when it was up`() {
         val base = healthy.copy(
@@ -374,7 +430,7 @@ class HealthFactsTest {
             outageUsedMin = 12, outageUsedCount = 4,
         )
         val detail = HealthFacts.verdicts(r).first { "Blocking has stopped" in it.title }.detail
-        assertTrue(detail, "12 minute(s) were while you were actually using" in detail)
+        assertTrue(detail, "12 minute(s) of real use fell inside those stoppages" in detail)
         assertTrue(detail, "cost you something" in detail)
     }
 

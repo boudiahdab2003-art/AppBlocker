@@ -27,6 +27,7 @@ import com.appblocker.data.QuickSession
 import com.appblocker.data.SettingsStore
 import com.appblocker.data.ProtectionPulse
 import com.appblocker.data.SilenceLog
+import com.appblocker.data.SelfRestoreLog
 import com.appblocker.data.StoppageHistory
 import com.appblocker.ui.hasUsageAccess
 import com.appblocker.ui.isIgnoringBattery
@@ -371,6 +372,14 @@ object BugReportSender {
         // Counted only on a rebind that ended a real stoppage.
         field("reboundWake") {
             "${ServiceHealth.reboundWarmCount(ctx)}/${ServiceHealth.reboundColdCount(ctx)}"
+        }
+        // attempts/helped/noRebind/notLaunched — AppBlocker reopening itself when the watcher was
+        // found unbound during use (invariant 74). A repair that reports only that it ran is
+        // `revives` again; the second number is the one that says whether it works.
+        field("selfRestore") {
+            SelfRestoreLog.counts(ctx).let {
+                "${it.attempts}/${it.helped}/${it.noRebind}/${it.notLaunched}"
+            }
         }
         // onInterrupt, which used to be an empty body. Not a failure by itself; a number that
         // moves either side of an outage is the first description anyone has of what precedes one.

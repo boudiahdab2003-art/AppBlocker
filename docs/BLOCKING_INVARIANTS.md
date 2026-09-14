@@ -1406,6 +1406,59 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     it counts still mean what it meant when it was made red?** A remedy that works leaves the
     counter climbing; only the verdict should change.
 
+72. **Ask the platform before theorising about it.** By 14 Sep 2026 the stoppage history held 48
+    stoppages and 60 deaths, and not one line could say what killed the watcher: `deaf=false` says
+    the process died and `after=` what happened just before. Every theory — our own updates, a
+    battery manager, a cleaner — was argued from those two fields, while Android had written the
+    answer down for every death since API 30 (`ApplicationExitInfo`: reason, subreason, importance
+    at death, a description), readable by the app itself with no permission. Nothing ever asked.
+    Report #127 made it urgent: across Friday to Sunday nothing of ours ran for about two days, the
+    switch ended OFF, and the owner had done none of the things that do that.
+
+    `ProcessExits` reads it. `killedBy=` on every stoppage line is **the first death after the last
+    sign of life**, and reports list the phone's own records as `EXITED` lines in the same time
+    order. ⚠️ **Read when the episode OPENS**: Android keeps about sixteen records and every
+    worker- or alarm-started process that dies during a long outage adds one, so the death that
+    began it can rotate out before the close — a list that is full inside the window says
+    `+earlier?`. ⚠️ The subreason exists only in `toString()`. ⚠️ The description can name another
+    app, so every dotted name that is not the platform's is replaced. `CodeShapeTest` fails if a
+    `begin` call stops passing `killedBy`.
+
+    **The shape to grep for: an investigation reasoning about a cause the platform already records.**
+
+73. **Two figures side by side must be measured over the same window, or say they are not.** Report
+    #123 carried `off=890min+fromBoot  used=772min`, and its fact said "Off for 14 h 50 min … treat
+    it as a maximum … 772 minute(s) of it were while you were using the phone". The length ran from
+    a restart early on Sunday and was a *minimum*; the use ran from Friday 16:58, the last sign of
+    life, about 49 hours. "Of it" made the second a share of the first, and it was very nearly
+    quoted to the owner as 772 of 890 minutes. The outage fact's "Of that" had the same flaw for any
+    episode clamped to a boot or broken by one.
+
+    Lines carry `usedWindow=` wherever the length covers less than the use window, and both facts
+    name the window the use was counted over instead of calling it a share. Same family as invariant
+    46 (two quantities under one sentence) and 57 (two counters over different ranges).
+
+    **The shape to grep for: "of it" or "of that" joining two figures computed by different calls.**
+
+74. **A repair with no verdict is decoration — and so is an ending that cannot tell who helped.** On
+    14 Sep 2026 the watcher's process died at 10:45, the stalled alert went up at about 11:02 and
+    was seen, and blocking stayed down until the owner opened the app at 16:58, when it came back
+    within a second; a worker-started process twenty minutes earlier had not brought it back.
+    (Proved, not assumed: `buildWeekly` files on the first resume of an ISO week, and #128 was built
+    at 16:58 with the process 0 s old and the watcher unbound.) He chose that the app reopen itself.
+
+    `SelfRestore` does, only for UNBOUND on a lit and unlocked phone, at most every ten minutes, with
+    a visible overlay banner first — the background-launch exemption for "display over other apps"
+    counts only while one of the app's overlay windows is showing. `SelfRestoreLog` judges every
+    attempt: HELPED only when Android rebinds within 20 s, NO_REBIND or NOT_LAUNCHED otherwise, and
+    three futile in a row stop it for a day. The same day also exposed the log: that rebind was
+    filed `rebound`, the ending read as "Android recovered alone", and `reboundWake` would have
+    scored it `cold`. A rebind within 15 s of our own screen resuming is `rebound-after-open` now —
+    timed, but never unassisted. `CodeShapeTest` pins both witnesses and both screens' stamps.
+
+    **The shape to grep for: an ending or a success counter that cannot tell "it recovered" from "we
+    did something, and then it recovered".**
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused

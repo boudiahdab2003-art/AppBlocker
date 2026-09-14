@@ -120,6 +120,13 @@ object HealthFacts {
         /** [SwitchOffLog.Episode.how] and the guard reading of the most recent period. */
         val switchOffLastHow: String? = null,
         val switchOffLastGuard: Boolean? = null,
+        /** AppBlocker reopening itself when the watcher was found unbound during use — see
+         *  [SelfRestoreLog]. Attempts, and what they came to. */
+        val restoreAttempts: Int = 0,
+        val restoreHelped: Int = 0,
+        val restoreNoRebind: Int = 0,
+        val restoreNotLaunched: Int = 0,
+        val restoreFutileStreak: Int = 0,
         val probeFailStreak: Int,
         val bindDeferrals: Int,
         /** ⚠️ **How long after the last restart the app's own start-up ran**, or
@@ -334,6 +341,7 @@ object HealthFacts {
         }
         outageFact(r)?.let { add(it) }
         switchOffFact(r)?.let { add(it) }
+        selfRestoreFact(r)?.let { add(it) }
         schedulerFact(r)?.let { add(it) }
         speedFact(r)?.let { add(it) }
         silenceFacts(r).forEach { add(it) }
@@ -495,10 +503,14 @@ object HealthFacts {
                             "${r.outageUsedCount} measured so far were on a phone that was not " +
                             "being touched, and a blocker that is off while the phone is idle " +
                             "costs you nothing — there is nothing to block."
+                    // ⚠️ Not "of that": use is counted from the blocker's last sign of life until it
+                    // came back, and across a restart the length above is shorter than that span —
+                    // so the minutes are not a share of it (invariant 73).
                     else ->
-                        " Of that, ${r.outageUsedMin} minute(s) were while you were actually " +
-                            "using the phone, across ${r.outageUsedCount} measured stoppages. " +
-                            "That is the part that cost you something."
+                        " ${r.outageUsedMin} minute(s) of real use fell inside those stoppages, " +
+                            "counted from the blocker's last sign of life until blocking came " +
+                            "back, across ${r.outageUsedCount} measured stoppages. That is the " +
+                            "part that cost you something."
                 }
                 val timing = when {
                     r.outageTimedCount >= r.outageCount -> ""
@@ -530,16 +542,22 @@ object HealthFacts {
      */
     private fun switchOffFact(r: Reading): Fact? {
         if (r.switchOffCount <= 0) return null
+        // ⚠️ Two windows, named apart (invariant 73). On 13 Sep 2026 this said "Off for 14 h 50 min …
+        // treat it as a maximum … 772 minute(s) of it were while you were using the phone": the
+        // length ran from a restart and was a MINIMUM, the use ran from the last sign of life two
+        // days earlier, and "of it" made the second look like a share of the first.
         val head = "Off for ${minutesText(r.switchOffTotalMs)} in total; the longest was " +
-            "${minutesText(r.switchOffLongestMs)}. Each is counted from the blocker's last sign " +
-            "of life until something saw the switch back on, so treat it as a maximum. These are " +
-            "not in the stoppage figures: the switch itself was off, rather than on with nothing " +
-            "running behind it."
+            "${minutesText(r.switchOffLongestMs)}. Each runs from the blocker's last sign of life " +
+            "until something saw the switch back on — except when the phone restarted in between, " +
+            "where it can only run from the restart and is a minimum. These are not in the " +
+            "stoppage figures: the switch itself was off, rather than on with nothing running " +
+            "behind it."
         val cost = when {
             r.switchOffUsedCount <= 0 ->
                 " How much of it was while you were using the phone was not measured."
             r.switchOffUsedMin <= 0 -> " None of it was while you were using the phone."
-            else -> " ${r.switchOffUsedMin} minute(s) of it were while you were using the phone."
+            else -> " ${r.switchOffUsedMin} minute(s) of phone use happened between the " +
+                "blocker's last sign of life and the switch being seen back on."
         }
         val last = when (r.switchOffLastHow) {
             SwitchOffLog.How.SETTINGS_OPEN ->
@@ -563,6 +581,34 @@ object HealthFacts {
         return Fact(
             "The accessibility switch was found OFF ${r.switchOffCount} time(s)",
             head + cost + last + guard,
+            good = null,
+        )
+    }
+
+    /**
+     * AppBlocker reopening itself — a measurement, never a verdict, and the one that says whether
+     * the repair repairs anything (invariant 74). See [SelfRestoreLog].
+     */
+    private fun selfRestoreFact(r: Reading): Fact? {
+        if (r.restoreAttempts <= 0) return null
+        val detail = buildString {
+            append("When blocking stops while you are using the phone, AppBlocker opens itself for ")
+            append("a moment, because opening it brought blocking back when nothing else did. ")
+            append("Blocking came back within seconds ${r.restoreHelped} time(s).")
+            if (r.restoreNoRebind > 0) {
+                append(" ${r.restoreNoRebind} time(s) it opened and blocking did not come back.")
+            }
+            if (r.restoreNotLaunched > 0) {
+                append(" ${r.restoreNotLaunched} time(s) the phone did not let it open.")
+            }
+            if (r.restoreFutileStreak >= SelfRestoreLog.MAX_FUTILE_STREAK) {
+                append(" The last ${r.restoreFutileStreak} tries did not help, so it has stopped ")
+                append("reopening itself for a day and leaves it to the alert.")
+            }
+        }
+        return Fact(
+            "AppBlocker reopened itself ${r.restoreAttempts} time(s) to bring blocking back",
+            detail,
             good = null,
         )
     }
