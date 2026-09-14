@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.164
+- When blocking stops while you are using your phone, AppBlocker now opens itself for a few seconds to bring it back - and it checks whether that actually worked, stopping by itself if it does not help. Every stoppage in a report now says what shut the app down, in the words Android itself uses. And the weekend report that put two numbers side by side from different stretches of time now says which stretch each one covers.
+
 ## v1.163
 - When the accessibility switch itself is off, the app now times it and notes what was on screen when it went off, so a report can tell whether it was switched off by hand or by the phone. And the red cross saying the blocker went quiet after Got it is gone - it described a bug that v1.153 already fixed.
 
