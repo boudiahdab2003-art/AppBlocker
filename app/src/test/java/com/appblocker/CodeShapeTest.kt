@@ -1141,6 +1141,39 @@ class CodeShapeTest {
     }
 
     /**
+     * **Invariant 77: the boot receiver asks whether this is a boot before stamping one.**
+     *
+     * Since Android 15 a force-stopped app is sent `BOOT_COMPLETED` when it next starts, with no
+     * restart at all — 0.2 s after `am force-stop` on the Android 16 emulator. Stamped as a boot, the
+     * "how long after the restart" figure was written hours into one (`bootHeard 58531s`, under a
+     * ✅), and the check that followed was filed as the boot's. The question must come before the
+     * stamp it decides, the stamp must depend on it, and so must what the check is filed as. The
+     * rule itself — can't tell is a boot, a late start after a force stop is not — is
+     * `BootAuditTest`'s.
+     */
+    @Test
+    fun `the boot receiver asks whether this is a boot before stamping one`() {
+        val body = code(source("service/BootReceiver.kt").readText()).substringAfter("override fun onReceive", "")
+        assertTrue("onReceive is gone; this check is reading nothing", body.isNotEmpty())
+        val ask = body.indexOf("BootAudit.isBoot(")
+        val stamp = body.indexOf("BootAudit.heard(")
+        assertTrue("BootReceiver no longer asks whether this BOOT_COMPLETED is a boot", ask >= 0)
+        assertTrue("BootReceiver never stamps a boot", stamp >= 0)
+        assertTrue("the question must be asked before the stamp it decides", ask < stamp)
+        val stampLine = body.lines().first { "BootAudit.heard(" in it }
+        assertTrue("the stamp does not depend on the answer: $stampLine", "(boot)" in stampLine)
+        val filing = body.substringAfter("val calledBy =", "").substringBefore("ProtectionWatchdog.checkAndNotify(")
+        assertTrue(
+            "a check after a force stop is filed as the boot's: $filing",
+            "!boot" in filing && "EndedBy.BACKGROUND" in filing && "EndedBy.BOOT" in filing,
+        )
+        assertTrue(
+            "the check does not use the filing decided above",
+            callArgs(body, "ProtectionWatchdog.checkAndNotify(").any { "calledBy = calledBy" in it },
+        )
+    }
+
+    /**
      * **One reader of "did the last send succeed".**
      *
      * There were two, forty lines apart, and only one was right: `queueFact` treated any recorded

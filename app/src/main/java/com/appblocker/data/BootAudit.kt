@@ -1,7 +1,12 @@
 package com.appblocker.data
 
+import android.app.ActivityManager
+import android.app.ApplicationStartInfo
 import android.content.Context
+import android.os.Build
+import android.os.Process
 import android.os.SystemClock
+import kotlin.math.abs
 
 /**
  * **Did our own start-up run after the phone restarted, and how long after?**
@@ -115,6 +120,87 @@ object BootAudit {
                 .putLong(KEY_HEARD_RT, SystemClock.elapsedRealtime().coerceAtLeast(1L))
                 .apply()
         }
+    }
+
+    /** A start record this close to our own process's start is that start. */
+    private const val START_MATCH_MS = 5_000L
+
+    /** Reaches past the warm starts recorded since, back to this process's own cold start. */
+    private const val MAX_STARTS = 16
+
+    /**
+     * How far into a boot a start after a force stop still counts as the boot's own start-up.
+     *
+     * If Android binds our notification listener as the phone comes up, that bind is itself what
+     * takes a force-stopped app out of the stopped state — the boot heard through another door.
+     * Generous on purpose: too tight turns a slow phone's boot into a missed one, while too loose
+     * only lets a start minutes into a boot stamp a lag of minutes.
+     */
+    private const val BOOT_WINDOW_MS = 10 * 60_000L
+
+    /**
+     * ⚠️ **Whether the `BOOT_COMPLETED` being handled is the phone's boot** (invariant 77).
+     *
+     * Since Android 15 a force-stopped app is sent `BOOT_COMPLETED` when it next starts, with no
+     * restart at all: on the Android 16 emulator on 15 Sep 2026 it arrived 0.2 s after a force stop,
+     * at exactly the cold starts Android marked `wasForceStopped`. [heard] believed every one, so
+     * "how long after the restart did our start-up run" could be written hours into a boot — the
+     * likeliest source of the owner's `bootHeard 58531s`, printed under a ✅ that a long wait is
+     * normal.
+     */
+    fun isBoot(context: Context): Boolean =
+        isBoot(startedAfterForceStop(context), SystemClock.elapsedRealtime())
+
+    /**
+     * The pure rule behind [isBoot]. A start Android did not mark force-stopped is the boot, however
+     * late — a file-based-encryption phone hands the broadcast out at the first unlock — and so is
+     * "can't tell", which is what every earlier version assumed. A start after a force stop is the
+     * boot only inside [BOOT_WINDOW_MS]; later than that the phone had been up a while, and it is
+     * the app coming back.
+     */
+    internal fun isBoot(forceStopped: Boolean?, uptimeMs: Long): Boolean =
+        forceStopped != true || uptimeMs < BOOT_WINDOW_MS
+
+    /**
+     * Whether this process started while the app was force-stopped, from Android's own start
+     * record — which exists exactly where the behaviour does (API 35+). Null when it cannot be told:
+     * an older phone, or no record matching this process.
+     */
+    private fun startedAfterForceStop(context: Context): Boolean? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) return null
+        return runCatching {
+            val am = context.getSystemService(ActivityManager::class.java) ?: return null
+            val starts = am.getHistoricalProcessStartReasons(MAX_STARTS)
+                .filter {
+                    it.processName == context.packageName &&
+                        it.startType == ApplicationStartInfo.START_TYPE_COLD
+                }
+                .mapNotNull { start ->
+                    val launchNs = start.startupTimestamps[ApplicationStartInfo.START_TIMESTAMP_LAUNCH]
+                        ?: return@mapNotNull null
+                    ColdStart(launchRtMs = launchNs / 1_000_000L, forceStopped = start.wasForceStopped())
+                }
+            startedAfterForceStop(starts, Process.getStartElapsedRealtime())
+        }.getOrNull()
+    }
+
+    /** One cold start of this app's process, as Android recorded it. */
+    internal data class ColdStart(val launchRtMs: Long, val forceStopped: Boolean)
+
+    /**
+     * The pure half of reading the start record: the answer carried by the record that IS this
+     * process's start, or null.
+     *
+     * Matched by time rather than pid — a cold start for a bound service is recorded with pid 0 —
+     * and only within [START_MATCH_MS], because the records outlive a reboot: the newest one can
+     * belong to the process that died before the restart being asked about.
+     */
+    internal fun startedAfterForceStop(starts: List<ColdStart>?, processStartRt: Long): Boolean? {
+        if (starts == null || processStartRt <= 0L) return null
+        return starts
+            .filter { abs(it.launchRtMs - processStartRt) <= START_MATCH_MS }
+            .minByOrNull { abs(it.launchRtMs - processStartRt) }
+            ?.forceStopped
     }
 
     /** How long after this boot our start-up ran, or [MISSED] / [NEVER]. */

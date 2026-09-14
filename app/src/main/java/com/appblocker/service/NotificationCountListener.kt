@@ -19,8 +19,13 @@ import com.appblocker.data.OutageLog
  * API 35 emulator, it restarted AppBlocker's process one second after a force stop, where without
  * the access nothing of ours ran at all. A force stop is the shape of the owner's gap of 11–13 Sep:
  * the switch ended up OFF and nothing ran for two days, because a force stop also cancels every alarm
- * and job — and the only health check here waited for a notification to arrive. So a reconnect
- * re-arms the scheduler and looks at blocking itself.
+ * and job. So a reconnect re-arms the scheduler and looks at blocking itself.
+ *
+ * ⚠️ Corrected 15 Sep: after a FORCE STOP, Android 15+ also sends `BootReceiver` a `BOOT_COMPLETED`
+ * on that first start (invariant 77), and that already re-armed and checked — on the Android 16
+ * emulator the switch-off was noticed 1 s after the force stop, long before this check was due.
+ * What only this covers is a restart that carries no such broadcast, a kill or a crash: there it
+ * was this check that found the watcher unbound and reopened the app.
  */
 class NotificationCountListener : NotificationListenerService() {
 

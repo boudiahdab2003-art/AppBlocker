@@ -1488,8 +1488,34 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     carry `notifAccess`, and a health fact names the access when it is off. ⚠️ Measured on stock
     Android only — whether HyperOS rebinds a force-stopped app's listener the same way is unproven.
 
+    ⚠️ **Corrected 15 Sep, on the Android 16 emulator.** After a force stop, the first start also
+    delivers `BOOT_COMPLETED` on Android 15+ (invariant 77), and `BootReceiver` already re-armed and
+    checked on it: the switch-off was noticed 1 s after `am force-stop`, well before this check was
+    due. So "the restart was spent counting notifications" was true of the listener, not of the app.
+    What only the connect check covers is a restart that carries no broadcast — a kill or a crash.
+    After a crash left the watcher unbound, it found the stall 25 s after the listener came back and
+    the app reopened itself (`BAL_ALLOW_NON_APP_VISIBLE_WINDOW`).
+
     **The shape to grep for: a component the system keeps alive whose callbacks only do their own
     small job.**
+
+77. **A `BOOT_COMPLETED` is not always a boot.** Since Android 15 a force-stopped app is sent
+    `BOOT_COMPLETED` when it next starts, with no restart at all. On the Android 16 emulator it
+    arrived 0.2 s after `am force-stop`, at exactly the three cold starts `dumpsys activity
+    start-info` marked `wasForceStopped=true`, and at none of the starts marked false.
+    `BootReceiver` stamped every one as the boot, so `bootHeard` — how long after the restart our
+    start-up ran — could be written hours into a boot. That is the likeliest source of report
+    `bootHeard 58531s`, printed under a ✅ saying a long wait is normal. And the check it ran was
+    filed `backBy=boot`.
+
+    `BootAudit.isBoot` now asks Android's own start record for this process (API 35+, matched by time
+    within 5 s, because the records outlive a reboot and a service's cold start carries pid 0). A
+    start after a force stop more than ten minutes into a boot is not stamped, and its check is filed
+    as a background one. Inside those ten minutes it is still the boot, since a listener bound as the
+    phone comes up would take the app out of the stopped state. "Can't tell" still reads as a boot,
+    as before. A stamp already written wrongly stays until the phone next restarts.
+
+    **The shape to grep for: a system broadcast trusted to mean the one thing its name says.**
 
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37

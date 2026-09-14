@@ -94,4 +94,77 @@ class BootAuditTest {
     fun `an unreadable boot counter does not invent a missed boot`() {
         assertEquals(5_000L, BootAudit.lagFor(storedBoot = -1, storedRt = 5_000L, nowBoot = -1))
     }
+
+    // --- a BOOT_COMPLETED that is not a boot (invariant 77) -----------------------------------
+
+    /**
+     * ⚠️ **Since Android 15 a force-stopped app is sent `BOOT_COMPLETED` when it next starts, with no
+     * restart at all.** On the Android 16 emulator on 15 Sep 2026 it arrived 0.2 s after a force
+     * stop, at exactly the cold starts `dumpsys activity start-info` marked `wasForceStopped=true`.
+     * The figures below are that run's, in milliseconds of elapsed realtime.
+     */
+    @Test
+    fun `a start Android marked force-stopped says so`() {
+        val starts = listOf(BootAudit.ColdStart(launchRtMs = 957_138L, forceStopped = true))
+        assertEquals(true, BootAudit.startedAfterForceStop(starts, processStartRt = 957_190L))
+    }
+
+    @Test
+    fun `an ordinary cold start says it was not force-stopped`() {
+        val starts = listOf(BootAudit.ColdStart(launchRtMs = 583_706L, forceStopped = false))
+        assertEquals(false, BootAudit.startedAfterForceStop(starts, processStartRt = 583_760L))
+    }
+
+    /** The records outlive a reboot, so the newest can be the process that died before it. */
+    @Test
+    fun `a record from before the restart does not speak for this process`() {
+        val starts = listOf(BootAudit.ColdStart(launchRtMs = 957_138L, forceStopped = true))
+        assertEquals(null, BootAudit.startedAfterForceStop(starts, processStartRt = 31_000L))
+    }
+
+    @Test
+    fun `the record nearest this process start decides`() {
+        val starts = listOf(
+            BootAudit.ColdStart(launchRtMs = 410_501L, forceStopped = true),
+            BootAudit.ColdStart(launchRtMs = 413_900L, forceStopped = false),
+        )
+        assertEquals(false, BootAudit.startedAfterForceStop(starts, processStartRt = 413_950L))
+    }
+
+    @Test
+    fun `nothing to read is cannot tell, never a guess`() {
+        assertEquals(null, BootAudit.startedAfterForceStop(null, processStartRt = 957_190L))
+        assertEquals(null, BootAudit.startedAfterForceStop(emptyList(), processStartRt = 957_190L))
+        assertEquals(
+            null,
+            BootAudit.startedAfterForceStop(
+                listOf(BootAudit.ColdStart(launchRtMs = 1_000L, forceStopped = true)),
+                processStartRt = 0L,
+            ),
+        )
+    }
+
+    @Test
+    fun `a start after a force stop long into a boot is not the boot`() {
+        // The emulator's: sixteen minutes up. And the owner's report: 58531 s.
+        assertEquals(false, BootAudit.isBoot(forceStopped = true, uptimeMs = 957_190L))
+        assertEquals(false, BootAudit.isBoot(forceStopped = true, uptimeMs = 58_531_000L))
+    }
+
+    @Test
+    fun `a start Android did not mark is the boot however late, and so is cannot tell`() {
+        // The file-based-encryption phone: heard at the first unlock, hours in. Still the boot.
+        assertEquals(true, BootAudit.isBoot(forceStopped = false, uptimeMs = 6 * 3_600_000L))
+        assertEquals(true, BootAudit.isBoot(forceStopped = null, uptimeMs = 6 * 3_600_000L))
+    }
+
+    /**
+     * If Android binds the listener as the phone comes up, that bind is what takes a force-stopped
+     * app out of the stopped state — the boot heard through another door. Calling it missed would
+     * put a red line on a phone that did start the blocker.
+     */
+    @Test
+    fun `a start after a force stop as the phone comes up is the boot`() {
+        assertEquals(true, BootAudit.isBoot(forceStopped = true, uptimeMs = 40_000L))
+    }
 }
