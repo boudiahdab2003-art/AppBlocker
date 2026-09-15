@@ -1385,6 +1385,14 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     ⚠️ **It sees only what a check sees.** A period opens when something runs the watchdog while
     the switch reads OFF, so the few-second repair toggle usually leaves no line — correctly.
 
+    ⚠️ **15 Sep 2026: the unbind turned "don't know what was in front" into "not Settings".** The
+    watcher passed `settingsInFront = lastForegroundPkg?.let { … } ?: false`, and that cache is empty
+    after the screen goes off and after a bind whose first look found only the launcher. So a switch
+    that went off in that state, with the screen on, filed `how=elsewhere` — which this file reads as
+    "not the toggle" — about a moment nobody saw. It is null now, which `classify` already reads as
+    `unknown`. `CodeShapeTest` fails the build on a default in that argument, and `SwitchOffLogTest`
+    pins "screen on, front app unknown" as unknown.
+
     Same family as invariants 26 and 31 (instrument the interval, not the crossing), one step
     earlier: before an interval can be measured it has to stop being classified as not-a-fault.
     **The shape to grep for: a branch that answers a state with a notification or a log line and
@@ -1471,6 +1479,22 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     arriving afterwards adds nothing, and the app in front at the moment of reading still counts to
     the end. Tested on synthetic event runs (`UsageWalkTest`), including an ordinary run that must
     count exactly as before; `CodeShapeTest` keeps `walkForeground` on the one walker.
+
+    ⚠️ **Corrected 15 Sep, before it shipped: "for that app" was a bug.** Android writes a screen's
+    stop AFTER the next screen's resume — pause, resume, stop — so matched by package, every move
+    between two screens of one app ended the new screen's stretch within a second. Recorded on the
+    API 35 emulator: 23 seconds in Settings (home, Display, back, App info twice) counted as 8. The
+    second App info was a second copy of the same `SpaActivity`, whose first copy stopped while it
+    was in front, so "is it the same screen class?" alone would still have been wrong. A stop now
+    ends a stretch only when it comes from the screen that opened it and that screen never paused; a
+    stop that follows its own pause changes nothing. `walkForeground` passes each event's
+    `className` for this, and `CodeShapeTest` fails the build if it stops. The recorded run is a test
+    in `UsageWalkTest`, beside one case per rule. None of the earlier tests could name a screen,
+    which is why all of them passed.
+
+    Known and not fixed: a stretch already open when the window starts is still missed until that
+    app resumes again (`totalMinutesInRange` says so in its KDoc). It undercounts, so a stoppage that
+    began while he was in one app, and that he stayed in, reads low on `used=`.
 
     **The shape to grep for: an interval opened by one event and closed only by its partner, with
     "still open" counted as running.**
@@ -2527,6 +2551,54 @@ it cannot read the stream at all). Three findings — **invariants 61, 62, 63**.
 `learnedDomains` while the undebounced `scanBrowserUrl` passes them, so a host this phone learned
 for itself is caught by the fast path and not by the page scan. Older than this sweep, and widening
 blocking under cover of a different change is how a sweep produces a bug.
+
+### Swept (15 Sep 2026) — the recovery and reporting code shipped since the last hunt
+
+**The area:** every line of app code changed between v1.161 (the last hunt) and the unpublished
+v1.165 — `SwitchOffLog`, `ProcessExits`, `SelfRestore` / `SelfRestoreLog` / `RestoreActivity`,
+`OwnUi`, `StoppageHistory`, the `OutageLog` and `ProtectionWatchdog` changes, `BootAudit.isBoot` and
+`BootReceiver`, `NotificationCountListener.onListenerConnected`, the usage walk (`StretchWalker`), and
+the `HealthFacts` / `HealthReader` / `BugReportSender` additions. About 1,900 lines, read as diffs,
+plus one usage-event stream recorded on the API 35 emulator.
+
+**Two findings:**
+
+- ⭐ **Invariant 75, before it shipped: a stop was matched to the app, not to the screen.** Every
+  move inside an app ended the new screen's stretch, and a recorded Settings run counted 8 of 23
+  seconds. The walk feeds the stall detector, `used=`, screen time and daily limits.
+- **Invariant 70: an unknown front app at an unbind was recorded as "not Settings"**, so a
+  switched-off period could read `how=elsewhere` about a moment nobody saw.
+
+**Clean, and worth keeping as clean:**
+
+- `RestoreActivity` runs in its own task (`taskAffinity=""`, `excludeFromRecents`, `noHistory`), so
+  closing it returns to the app that was in front, never to AppBlocker's home screen.
+- `SelfRestoreLog` settles an attempt exactly once, under its lock. A rebind later than 20 s is not
+  credited, and a reboot lifts the day-long give-up because its clock is monotonic and cannot be
+  compared across a boot (invariant 9).
+- `ProcessExits.killedBy` is taken when an episode opens, picks the first death after the last sign
+  of life, and says `+earlier?` when Android's list was already full.
+- `StoppageHistory` keeps `EXITED` lines out of the 30-line cap, and `recordReboundWake` fires only
+  for a plain `rebound`, never for `rebound-after-open`.
+- `SwitchOffLog`: the start estimate never falls before an outage the same check just closed, a
+  restart makes the length a floor rather than an unknown, and the 11- and 13-field rows already on
+  his phone both decode.
+- `BootAudit.isBoot` matches Android's start record by time within 5 s, and "can't tell" still reads
+  as a boot.
+
+**Not fixed, recorded:**
+
+- A stretch already open when a usage window starts is missed until its app resumes again
+  (`totalMinutesInRange` says so). So `used=` reads low for a stoppage that began while he was in one
+  app and stayed in it, and the `STALE` detector waits longer in that case. Changing it would move
+  `used=` again straight after v1.165 moves it once; it wants its own release and its own recorded
+  stream.
+- `BootAudit.heard` overwrites a stamp already written for the same boot. A force stop in the first
+  ten minutes of uptime still counts as the boot (invariant 77), so it can replace a 40-second
+  `bootHeard` with a later one. Rare, and it only ever makes the number larger.
+
+**Yield: 2 from about 1,900 lines**, one of them in code a day old. Both in instruments, neither in
+enforcement.
 
 ### Not yet swept
 

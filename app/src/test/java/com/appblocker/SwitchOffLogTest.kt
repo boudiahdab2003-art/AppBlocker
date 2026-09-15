@@ -68,6 +68,17 @@ class SwitchOffLogTest {
         )
     }
 
+    /**
+     * The screen was on, but the watcher did not know what was in front — its cache is emptied when
+     * the screen goes off. That is not "some other app" either: `elsewhere` reads as "not the toggle".
+     */
+    @Test fun `an unbind with the screen on but no known front app is unknown, not elsewhere`() {
+        assertEquals(
+            SwitchOffLog.How.UNKNOWN,
+            SwitchOffLog.classify(now - 2 * minute, unbind(now - minute, settings = null, screen = true)),
+        )
+    }
+
     /** A stamp written by a build that did not record what was in front is not evidence of "no". */
     @Test fun `an unbind that recorded nothing about the screen is unknown, not guessed`() {
         assertEquals(

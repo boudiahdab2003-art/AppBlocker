@@ -227,9 +227,15 @@ object UsageTracker {
      * headline and daily limits add up (invariant 75).
      *
      * So a stretch also closes when use demonstrably ended:
-     * - `ACTIVITY_STOPPED` for that app — a stop with no pause before it;
+     * - `ACTIVITY_STOPPED` from the screen that opened the stretch, when that screen never paused;
      * - the screen going dark, the keyguard coming up, or the phone shutting down — for every open
      *   app at once, because nobody uses a phone through any of those.
+     *
+     * ⚠️ **A stop belongs to a SCREEN, not to an app.** Android writes a screen's stop after the next
+     * screen's resume — pause, resume, stop — so the first version of this rule, which matched a stop
+     * to its package, ended the new screen's stretch within a second of every move inside an app.
+     * Recorded on the API 35 emulator on 15 Sep 2026: 23 seconds in Settings counted as 8. A stop
+     * that follows its own pause is the tail of a stretch already closed, and changes nothing.
      *
      * A pause arriving after one of those finds nothing open and adds nothing. A stretch still open
      * when the window closes counts to the end: that is the app in front right now.
@@ -239,27 +245,56 @@ object UsageTracker {
         private val fgEvent: Int,
         private val bgEvent: Int,
     ) {
-        private val open = HashMap<String, Long>()
+        /** An app's open stretch: when it opened, and which of the app's screens opened it. */
+        private class Open(val at: Long, val screen: String?)
+
+        private val open = HashMap<String, Open>()
+
+        /** Screens that have paused and not stopped yet, counted per app and screen. Their stops are
+         *  still to come, and when one arrives it is not the end of anything. */
+        private val awaitingStop = HashMap<String, Int>()
+
         private val out = ArrayList<Session>()
 
         /** True once any event at all was read — "nothing readable" is not "not used". */
         var sawAnyEvent = false
             private set
 
-        fun onEvent(type: Int, pkg: String, at: Long) {
+        /** @param screen the activity class the event is about; null for a device-wide event. */
+        fun onEvent(type: Int, pkg: String, screen: String?, at: Long) {
             sawAnyEvent = true
             when (type) {
-                fgEvent -> open[pkg] = at
-                bgEvent, UsageEvents.Event.ACTIVITY_STOPPED ->
-                    open.remove(pkg)?.let { openedAt -> close(pkg, openedAt, at) }
+                fgEvent -> open[pkg] = Open(at, screen)
+                bgEvent -> {
+                    val key = screenKey(pkg, screen)
+                    awaitingStop[key] = (awaitingStop[key] ?: 0) + 1
+                    open.remove(pkg)?.let { close(pkg, it.at, at) }
+                }
+                UsageEvents.Event.ACTIVITY_STOPPED -> stopped(pkg, screen, at)
                 UsageEvents.Event.SCREEN_NON_INTERACTIVE,
                 UsageEvents.Event.KEYGUARD_SHOWN,
                 UsageEvents.Event.DEVICE_SHUTDOWN -> {
-                    open.forEach { (p, openedAt) -> close(p, openedAt, at) }
+                    open.forEach { (p, o) -> close(p, o.at, at) }
                     open.clear()
                 }
             }
         }
+
+        /** A stop ends the open stretch only when its own screen opened it and never paused. */
+        private fun stopped(pkg: String, screen: String?, at: Long) {
+            val key = screenKey(pkg, screen)
+            val waiting = awaitingStop[key] ?: 0
+            if (waiting > 0) {
+                if (waiting == 1) awaitingStop.remove(key) else awaitingStop[key] = waiting - 1
+                return
+            }
+            val o = open[pkg] ?: return
+            if (o.screen != screen) return
+            open.remove(pkg)
+            close(pkg, o.at, at)
+        }
+
+        private fun screenKey(pkg: String, screen: String?) = "$pkg/${screen.orEmpty()}"
 
         private fun close(pkg: String, openedAt: Long, at: Long) {
             val from = max(openedAt, start)
@@ -268,7 +303,7 @@ object UsageTracker {
 
         /** Every stretch, with those still open counted up to [end]. */
         fun finish(end: Long): List<Session> {
-            open.forEach { (p, openedAt) -> close(p, openedAt, end) }
+            open.forEach { (p, o) -> close(p, o.at, end) }
             open.clear()
             return out
         }
@@ -359,7 +394,9 @@ object UsageTracker {
         val walker = StretchWalker(start, fgEvent, bgEvent)
         val events = usm.queryEvents(start, end)
         val e = UsageEvents.Event()
-        while (events.getNextEvent(e)) walker.onEvent(e.eventType, e.packageName, e.timeStamp)
+        // Each event carries its screen: a stop is matched to the screen that paused, never to
+        // whichever of the app's screens happens to be open (invariant 75).
+        while (events.getNextEvent(e)) walker.onEvent(e.eventType, e.packageName, e.className, e.timeStamp)
         return Walk(walker.finish(end), walker.sawAnyEvent)
     }
 

@@ -3591,7 +3591,11 @@ class BlockerAccessibilityService : AccessibilityService() {
         runCatching {
             ServiceHealth.recordUnbind(
                 applicationContext,
-                settingsInFront = lastForegroundPkg?.let { it in GUARD_PACKAGES } ?: false,
+                // Null when the watcher did not know what was in front: its cache is emptied when
+                // the screen goes off, and a bind can find only the launcher. Unknown is not
+                // "another app" — SwitchOffLog reads null as unknown, where a default of false
+                // wrote "Settings was not in front" about a moment nobody saw.
+                settingsInFront = lastForegroundPkg?.let { it in GUARD_PACKAGES },
                 screenOn = interactive(),
                 guardArmed = OffSwitchGuard.armed(applicationContext),
             )

@@ -1007,6 +1007,32 @@ class CodeShapeTest {
         assertEquals("SelfRestore.maybeReopen is called from more than the stalled branch", 1, calls)
     }
 
+    // ---- invariant 70 ------------------------------------------------------------------------
+
+    /**
+     * **Invariant 70: an unbind never records an unknown front app as a known one.** `how=` is the one
+     * clue that can tell "he switched it off" from "the phone did", and the watcher wrote a front app it
+     * did not know — its cache is emptied when the screen goes off, and a bind can find only the
+     * launcher — as "Settings was not in front", so a report could say another app was in front about a
+     * moment nobody saw. `SwitchOffLog.classify` already reads null as unknown; this keeps the watcher
+     * handing it null (15 Sep 2026).
+     */
+    @Test
+    fun `an unbind never records an unknown front app as a known one`() {
+        val text = code(source("service/BlockerAccessibilityService.kt").readText())
+        val calls = callArgs(text, "ServiceHealth.recordUnbind(")
+        assertTrue("the watcher no longer records its unbind; this check is reading nothing", calls.isNotEmpty())
+        calls.forEach { args ->
+            val front = args.lines().firstOrNull { "settingsInFront" in it }.orEmpty()
+            assertTrue("recordUnbind no longer passes settingsInFront; this check is reading nothing", front.isNotEmpty())
+            assertTrue(
+                "recordUnbind must read the front app null-safely and leave an unknown one null ($front): " +
+                    "SwitchOffLog reads null as unknown, and a default turns it into 'another app was in front'",
+                "?." in front && "?:" !in front,
+            )
+        }
+    }
+
     // ---- invariants 75 and 76 ----------------------------------------------------------------
 
     /**
@@ -1024,6 +1050,16 @@ class CodeShapeTest {
             "walkForeground must feed StretchWalker, the tested rules for when a stretch of use ends " +
                 "(invariant 75); an inline resumed/paused map counts a missing pause as hours of use",
             "StretchWalker(" in walk && "fgStart" !in walk,
+        )
+        // A stop is matched to the screen that paused (15 Sep 2026). The walker's own tests pass the
+        // screen explicitly, so only this can see the walk stop handing it over — and without it
+        // every stop ends whatever stretch its app has open.
+        assertTrue(
+            "walkForeground must hand StretchWalker each event's screen (e.className): Android writes a " +
+                "screen's stop after the next screen's resume, so a stop not matched to its own screen " +
+                "ends the stretch of the screen now in front (invariant 75)",
+            Regex("""walker\.onEvent\(\s*e\.eventType\s*,\s*e\.packageName\s*,\s*e\.className\s*,\s*e\.timeStamp\s*\)""")
+                .containsMatchIn(walk),
         )
     }
 
