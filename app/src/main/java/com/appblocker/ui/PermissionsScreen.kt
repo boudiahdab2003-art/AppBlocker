@@ -218,7 +218,7 @@ private fun PermCard(p: Perm, onRequestDisclosure: (() -> Unit) -> Unit) {
                         Icon(Icons.Filled.Check, null, tint = Color.White, modifier = Modifier.size(15.dp))
                     }
                     Spacer(Modifier.width(6.dp))
-                    Text("On", style = MaterialTheme.typography.labelLarge,
+                    Text(stringResource(R.string.perm_on), style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                 } } else if (!p.essential) {
                 Text(stringResource(R.string.profile_optional),

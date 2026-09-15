@@ -113,6 +113,10 @@
     <string name="common_delete">Delete</string>
     <string name="common_done">Done</string>
     <string name="common_open">Open</string>
+    <string name="tab_blocking">Blocking</string>
+    <string name="tab_strict">Strict</string>
+    <string name="tab_insights">Insights</string>
+    <string name="tab_profile">Profile</string>
     <string name="day_today">Today</string>
     <string name="day_yesterday">Yesterday</string>
 
@@ -358,6 +362,16 @@ Never sent: your blocked words, the sites you visit, which apps you block, or an
     <string name="onboarding_headline_accessibility">Blocking needs one switch</string>
     <string name="onboarding_headline_overlay">Let the block screen show</string>
     <string name="onboarding_stuck_title">Not switched on yet</string>
+    <string name="onboarding_recommended_title">Recommended</string>
+    <string name="onboarding_recommended_body">Optional, but they make blocking more reliable. You can skip these.</string>
+    <string name="onboarding_start_blocking">Start blocking</string>
+    <string name="onboarding_done_title_ready">You\'re all set</string>
+    <string name="onboarding_done_title_not_on">Blocking is not on yet</string>
+    <string name="onboarding_done_body_ready">AppBlocker can now block reliably. Start adding apps to block.</string>
+    <plurals name="onboarding_done_body_skipped">
+        <item quantity="one">You skipped %1$s of the %2$s switches AppBlocker needs, so nothing will be blocked yet. You can finish any time — tap “Finish setup” on the home screen, and it will show you the pictures again.</item>
+        <item quantity="other">You skipped %1$s of the %2$s switches AppBlocker needs, so nothing will be blocked yet. You can finish any time — tap “Finish setup” on the home screen, and it will show you the pictures again.</item>
+    </plurals>
 
     <string name="perm_accessibility_label">Accessibility (the blocker)</string>
     <string name="perm_accessibility_desc">This is the one switch that makes blocking work. In your phone\'s Settings it is called “Accessibility”.</string>
@@ -374,6 +388,8 @@ Never sent: your blocked words, the sites you visit, which apps you block, or an
     <string name="perm_deviceadmin_label">Prevent uninstall (Device admin)</string>
     <string name="perm_deviceadmin_desc">Stops AppBlocker being uninstalled until you turn this off — extra friction against bypassing your blocks.</string>
     <string name="perm_grant">Grant</string>
+    <string name="perm_granted">Granted</string>
+    <string name="perm_on">On</string>
 
     <string name="gate_uninstall_title">Allow uninstalling</string>
     <string name="gate_uninstall_blurb">This is the switch that actually refuses an uninstall. Type the paragraph below — you can\'t paste it — before the clock runs out.</string>

@@ -53,6 +53,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -322,7 +323,11 @@ private fun NameStep(onNext: () -> Unit) {
  *  before the permission chores. Pure showcase — nothing to grant here. */
 @Composable
 private fun CoachStep(onNext: () -> Unit) {
-    StepScaffold(footer = { GradientButton(text = "Continue", onClick = onNext) }) {
+    StepScaffold(
+        footer = {
+            GradientButton(text = stringResource(R.string.onboarding_continue), onClick = onNext)
+        },
+    ) {
         Spacer(Modifier.height(8.dp))
         StepIcon(Icons.Filled.AutoAwesome)
         Spacer(Modifier.height(24.dp))
@@ -620,7 +625,7 @@ private fun RecommendedStep(
         StepIcon(Icons.Filled.BatteryChargingFull)
         Spacer(Modifier.height(24.dp))
         Text(
-            "Recommended",
+            stringResource(R.string.onboarding_recommended_title),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
@@ -628,7 +633,7 @@ private fun RecommendedStep(
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            "Optional, but they make blocking more reliable. You can skip these.",
+            stringResource(R.string.onboarding_recommended_body),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -672,7 +677,7 @@ private fun RecommendedRow(p: Perm, onRequestDisclosure: (() -> Unit) -> Unit) {
                     Icon(Icons.Filled.Check, null, tint = Color.White, modifier = Modifier.size(15.dp))
                 }
                 Spacer(Modifier.width(6.dp))
-                Text("On", style = MaterialTheme.typography.labelLarge,
+                Text(stringResource(R.string.perm_on), style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             }
         } else {
@@ -680,7 +685,9 @@ private fun RecommendedRow(p: Perm, onRequestDisclosure: (() -> Unit) -> Unit) {
             // usage/battery today, so it cannot currently reach accessibility — but it was the
             // one call site that bypassed the disclosure by construction, and "currently" is not
             // a property anybody checks when adding a permission to the list.
-            TextButton(onClick = gatedFix(p, onRequestDisclosure)) { Text("Grant") }
+            TextButton(onClick = gatedFix(p, onRequestDisclosure)) {
+                Text(stringResource(R.string.perm_grant))
+            }
         }
     }
 }
@@ -688,7 +695,11 @@ private fun RecommendedRow(p: Perm, onRequestDisclosure: (() -> Unit) -> Unit) {
 @Composable
 private fun DoneStep(grantedEssentials: Int, totalEssentials: Int, onFinish: () -> Unit) {
     val allEssential = grantedEssentials == totalEssentials
-    StepScaffold(footer = { GradientButton(text = "Start blocking", onClick = onFinish) }) {
+    StepScaffold(
+        footer = {
+            GradientButton(text = stringResource(R.string.onboarding_start_blocking), onClick = onFinish)
+        },
+    ) {
         Spacer(Modifier.height(24.dp))
         StepIcon(Icons.Filled.Shield, granted = allEssential)
         Spacer(Modifier.height(28.dp))
@@ -697,7 +708,10 @@ private fun DoneStep(grantedEssentials: Int, totalEssentials: Int, onFinish: () 
         // someone skipped the switch, the last thing they see has to say so in words they cannot
         // misread, because everything after this screen quietly does nothing.
         Text(
-            if (allEssential) "You're all set" else "Blocking is not on yet",
+            stringResource(
+                if (allEssential) R.string.onboarding_done_title_ready
+                else R.string.onboarding_done_title_not_on,
+            ),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = if (allEssential) MaterialTheme.colorScheme.onSurface
@@ -707,12 +721,13 @@ private fun DoneStep(grantedEssentials: Int, totalEssentials: Int, onFinish: () 
         Spacer(Modifier.height(12.dp))
         Text(
             if (allEssential) {
-                "AppBlocker can now block reliably. Start adding apps to block."
+                stringResource(R.string.onboarding_done_body_ready)
             } else {
-                "You skipped ${totalEssentials - grantedEssentials} of the $totalEssentials " +
-                    "switches AppBlocker needs, so nothing will be blocked yet. You can finish " +
-                    "any time — tap “Finish setup” on the home screen, and it will show you the " +
-                    "pictures again."
+                val skipped = totalEssentials - grantedEssentials
+                pluralStringResource(
+                    R.plurals.onboarding_done_body_skipped, skipped,
+                    skipped.toString(), totalEssentials.toString(),
+                )
             },
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -737,7 +752,7 @@ private fun StatusChip(granted: Boolean, requiredLabel: String) {
             Icon(Icons.Filled.Check, null, tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(6.dp))
-            Text("Granted", style = MaterialTheme.typography.labelLarge,
+            Text(stringResource(R.string.perm_granted), style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
         } else {
             Text(requiredLabel, style = MaterialTheme.typography.labelLarge,

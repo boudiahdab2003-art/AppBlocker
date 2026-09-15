@@ -54,13 +54,14 @@ import com.appblocker.ui.theme.appBackground
 import androidx.compose.ui.res.stringResource
 import com.appblocker.R
 
-private data class Tab(val label: String, val icon: ImageVector)
+/** [labelRes] is a string resource: the tab labels are on every screen, in the app's language. */
+private data class Tab(val labelRes: Int, val icon: ImageVector)
 
 private val TABS = listOf(
-    Tab("Blocking", Icons.Filled.Shield),
-    Tab("Strict", Icons.Filled.Lock),
-    Tab("Insights", Icons.Filled.BarChart),
-    Tab("Profile", Icons.Filled.Person),
+    Tab(R.string.tab_blocking, Icons.Filled.Shield),
+    Tab(R.string.tab_strict, Icons.Filled.Lock),
+    Tab(R.string.tab_insights, Icons.Filled.BarChart),
+    Tab(R.string.tab_profile, Icons.Filled.Person),
 )
 
 /** Editor sub-screens shown full-screen over the current tab. */
@@ -405,13 +406,14 @@ private fun MainScaffold(
         bottomBar = {
             NavigationBar(containerColor = Color.Transparent) {
                 TABS.forEachIndexed { i, t ->
+                    val label = stringResource(t.labelRes)
                     NavigationBarItem(
                         selected = tab == i,
                         onClick = { onTab(i) },
-                        icon = { Icon(t.icon, contentDescription = t.label) },
+                        icon = { Icon(t.icon, contentDescription = label) },
                         label = {
                             Text(
-                                t.label,
+                                label,
                                 style = MaterialTheme.typography.labelMedium,
                                 maxLines = 1,
                                 softWrap = false,

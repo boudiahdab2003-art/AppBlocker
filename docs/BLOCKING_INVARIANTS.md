@@ -2754,14 +2754,18 @@ enforcement.
   set `quick_block_paused` with AppBlocker still the top resumed activity, and the card went on saying
   Stop and Active. Those reads now also follow `settingsTick`, and `CodeShapeTest` fails the build on a
   `LaunchedEffect(perms)` there that re-reads a setting without it. The rest of this item still stands:
-- The rest of the UI's live state. Sweep thirteen took the `remember`-blocks pass and found the
-  one that mattered (`KeywordsScreen`'s phase), but only audited the blocks that gate a
-  *protection*. `BlockEditorScreen` and `BlockingScreen` cache a dozen settings each and were read
-  quickly rather than reasoned through; both refresh on `LaunchedEffect(perms)`, which is a
-  resume-tick in disguise, so they looked sound.
-- Every `remember` that survives backgrounding. Finding 3 turned on recomposition *stopping* while
-  the app is in the background, which makes a `LaunchedEffect` ticker an unreliable cleaner. Any
-  other place that leans on a ticker to correct stale state has the same hole.
+- ~~The rest of the UI's live state.~~ **Swept 15 Sep 2026 — clean.** Every `SettingsStore` read in
+  `ui/` was set against every writer outside `ui/`. The only outside writers that can move a setting
+  while a screen is showing are the Quick Settings tile (`quick_block_paused`, which the Blocking tab
+  now follows) and the watcher (danger zone, learned sites, readable browsers), whose values appear
+  only on `DiagnosticsScreen` — a one-read-per-open snapshot with a refresh button, deliberately, as
+  its own comment says. The one notification action opens an activity and writes nothing.
+  `BlockEditorScreen` stages its settings on purpose, and nothing outside the UI writes them.
+- ~~Every `remember` that survives backgrounding.~~ **Swept 15 Sep 2026 — clean.** The one
+  `remember` of phone state outside a resume key is Profile's device-admin badge, which a
+  `LaunchedEffect(resumeTick)` re-reads. `NetworkFilterScreen` recomputes its DNS state on every
+  recomposition on purpose, and its off-request phase is computed from the clock rather than left to
+  the ticker, so a ticker that stopped in the background cannot leave a lapsed request looking open.
 
 ### Swallowed errors now leave the device (v1.103)
 

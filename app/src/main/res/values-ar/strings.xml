@@ -136,6 +136,10 @@
     <string name="common_delete">حذف</string>
     <string name="common_done">تم</string>
     <string name="common_open">فتح</string>
+    <string name="tab_blocking">الحظر</string>
+    <string name="tab_strict">صارم</string>
+    <string name="tab_insights">الإحصاءات</string>
+    <string name="tab_profile">الملف الشخصي</string>
     <string name="day_today">اليوم</string>
     <string name="day_yesterday">أمس</string>
 
@@ -415,6 +419,20 @@
     <string name="onboarding_headline_accessibility">الحظر يحتاج مفتاحًا واحدًا</string>
     <string name="onboarding_headline_overlay">دع شاشة الحظر تظهر</string>
     <string name="onboarding_stuck_title">لم يُشغَّل بعد</string>
+    <string name="onboarding_recommended_title">مُوصى بها</string>
+    <string name="onboarding_recommended_body">اختيارية، لكنها تجعل الحظر أكثر ثباتًا. يمكنك تخطّيها.</string>
+    <string name="onboarding_start_blocking">ابدأ الحظر</string>
+    <string name="onboarding_done_title_ready">كل شيء جاهز</string>
+    <string name="onboarding_done_title_not_on">الحظر لم يعمل بعد</string>
+    <string name="onboarding_done_body_ready">يستطيع AppBlocker الآن أن يحظر بثبات. ابدأ بإضافة التطبيقات التي تريد حظرها.</string>
+    <plurals name="onboarding_done_body_skipped">
+        <item quantity="zero">تخطّيتَ %1$s مفتاح يحتاجها AppBlocker، لذلك لن يُحظر شيء بعد. يمكنك الإكمال في أي وقت — اضغط «أكمِل الإعداد» في الشاشة الرئيسية، وستُعرض عليك الصور مرة أخرى.</item>
+        <item quantity="one">تخطّيتَ مفتاحًا واحدًا يحتاجه AppBlocker، لذلك لن يُحظر شيء بعد. يمكنك الإكمال في أي وقت — اضغط «أكمِل الإعداد» في الشاشة الرئيسية، وستُعرض عليك الصور مرة أخرى.</item>
+        <item quantity="two">تخطّيتَ مفتاحين يحتاجهما AppBlocker، لذلك لن يُحظر شيء بعد. يمكنك الإكمال في أي وقت — اضغط «أكمِل الإعداد» في الشاشة الرئيسية، وستُعرض عليك الصور مرة أخرى.</item>
+        <item quantity="few">تخطّيتَ %1$s مفاتيح يحتاجها AppBlocker، لذلك لن يُحظر شيء بعد. يمكنك الإكمال في أي وقت — اضغط «أكمِل الإعداد» في الشاشة الرئيسية، وستُعرض عليك الصور مرة أخرى.</item>
+        <item quantity="many">تخطّيتَ %1$s مفتاحًا يحتاجها AppBlocker، لذلك لن يُحظر شيء بعد. يمكنك الإكمال في أي وقت — اضغط «أكمِل الإعداد» في الشاشة الرئيسية، وستُعرض عليك الصور مرة أخرى.</item>
+        <item quantity="other">تخطّيتَ %1$s مفتاح يحتاجها AppBlocker، لذلك لن يُحظر شيء بعد. يمكنك الإكمال في أي وقت — اضغط «أكمِل الإعداد» في الشاشة الرئيسية، وستُعرض عليك الصور مرة أخرى.</item>
+    </plurals>
 
     <string name="perm_accessibility_label">إمكانية الوصول (الحاظر)</string>
     <string name="perm_accessibility_desc">هذا هو المفتاح الوحيد الذي يجعل الحظر يعمل. في إعدادات هاتفك يُسمّى «إمكانية الوصول».</string>
@@ -431,6 +449,8 @@
     <string name="perm_deviceadmin_label">منع إلغاء التثبيت (مسؤول الجهاز)</string>
     <string name="perm_deviceadmin_desc">يمنع إلغاء تثبيت AppBlocker حتى توقف هذا — عائق إضافي أمام الالتفاف على قوائم حظرك.</string>
     <string name="perm_grant">امنح</string>
+    <string name="perm_granted">مُفعَّل</string>
+    <string name="perm_on">مُفعَّل</string>
 
     <string name="gate_uninstall_title">السماح بإلغاء التثبيت</string>
     <string name="gate_uninstall_blurb">هذا هو المفتاح الذي يرفض إلغاء التثبيت فعلًا. اكتب الفقرة أدناه — لا يمكنك لصقها — قبل أن ينفد الوقت.</string>

@@ -1,0 +1,262 @@
+# English still typed into translated screens — read by TranslatedScreensTest.
+# One "File.kt|text" per line. This list may only SHRINK: a literal not listed here fails the build,
+# and so does a line here whose literal is gone. To fix one, move the text to values/strings.xml with
+# its Arabic in values-ar/strings.xml, then delete its line below.
+AccountScreen.kt|Add your name and the app will greet you by it
+AccountScreen.kt|This is how you'll be greeted
+AppRoot.kt|Version ${release.version} is ready.
+BlockEditorScreen.kt|Add
+BlockEditorScreen.kt|Allowlist
+BlockEditorScreen.kt|BETA
+BlockEditorScreen.kt|Blocklist
+BlockEditorScreen.kt|Change blocking mode
+BlockEditorScreen.kt|Close
+BlockEditorScreen.kt|Select apps you want to allow. All others will be blocked.
+BlockEditorScreen.kt|Select apps, sites or words you want to block.
+BlockEditorScreen.kt|🔒 Strict Mode — you can add blocks, but not remove them.
+BlockEditorScreen.kt|🔒 Strict Mode — you can remove allowed apps, but not add them.
+BlockScreenActivity.kt|MINUTES RECLAIMED TODAY
+BlockThemePickerScreen.kt|Alignment
+BlockThemePickerScreen.kt|Block screen
+BlockThemePickerScreen.kt|Blocked
+BlockThemePickerScreen.kt|Centred
+BlockThemePickerScreen.kt|Colour
+BlockThemePickerScreen.kt|Default
+BlockThemePickerScreen.kt|Default keeps each layout's own alignment.
+BlockThemePickerScreen.kt|Instagram is blocked
+BlockThemePickerScreen.kt|Larger
+BlockThemePickerScreen.kt|Layout
+BlockThemePickerScreen.kt|Left
+BlockThemePickerScreen.kt|Move down
+BlockThemePickerScreen.kt|Move up
+BlockThemePickerScreen.kt|Pick a starting point, choose a colour, then show, hide and reorder the
+BlockThemePickerScreen.kt|Pieces
+BlockThemePickerScreen.kt|Reset the pieces to this layout's own arrangement
+BlockThemePickerScreen.kt|Side
+BlockThemePickerScreen.kt|Size
+BlockThemePickerScreen.kt|Smaller
+BlockThemePickerScreen.kt|The next block screen you see will use it.
+BlockThemePickerScreen.kt|You have power over your mind — not outside events.
+BlockThemePickerScreen.kt|pieces. The preview is the real block screen, not a picture of one.
+BlockThemePickerScreen.kt|— Marcus Aurelius
+BlockThemePickerScreen.kt|🔒 Strict Mode is on — the block screen is locked until it ends.
+BlockedWordRow.kt|${covering.appLabel} is blocked, so its website is too
+BlockedWordRow.kt|Remove
+BlockedWordRow.kt|The website stays blocked. You've blocked $appLabel, and blocking an app
+BlockedWordRow.kt|What you lose: the word stops being blocked inside other apps, so a chat or
+BlockedWordRow.kt|You can add it back any time, Strict Mode or not.
+BlockedWordRow.kt|an article that only mentions it won't be covered any more. And in your
+BlockedWordRow.kt|blocks its website too — that's why Strict Mode can let this one go.
+BlockedWordRow.kt|browser the site gets covered without locking the browser for half an
+BlockedWordRow.kt|hour afterwards.
+BlockingSchedules.kt|${s.packages.size} app${if (s.packages.size == 1)
+BlockingSchedules.kt|Any Wi-Fi
+BlockingSchedules.kt|Cancel
+BlockingSchedules.kt|Delete
+BlockingSchedules.kt|Delete this schedule?
+BlockingSchedules.kt|Wi-Fi: ${s.wifiSsid}
+BlockingSchedules.kt|Within ${s.radiusMeters} m
+BlockingSchedules.kt|“${schedule.name}” — ${scheduleSummary(schedule)}. This can't be undone.
+BlockingScreen.kt|Stop
+BlockingScreen.kt|Time
+CleanCounterScreen.kt|EEEE, d MMMM yyyy 'at' h:mm a
+CleanCounterScreen.kt|UTC
+CoachChatScreen.kt|Brain: $it
+CoachChatScreen.kt|Last problem: ${error.name.lowercase().replace('_', ' ')}
+CoachChatScreen.kt|The conversation is deleted from this device. Your goals and what
+CoachChatScreen.kt|your coach knows about you are kept.
+CoachChatViewModel.kt|$hello I'm your coach — I can see your screen time and what's set up in the
+CoachChatViewModel.kt|Couldn't reach the coach's server. It may be down or just slow —
+CoachChatViewModel.kt|Give me my weekly report
+CoachChatViewModel.kt|Hi ${DisplayName.first(stored)}!
+CoachChatViewModel.kt|Hi!
+CoachChatViewModel.kt|How am I doing today?
+CoachChatViewModel.kt|Set a goal for this week with a plan
+CoachChatViewModel.kt|Something went wrong that I haven't seen before. Please send a report —
+CoachChatViewModel.kt|The coach answered in a form the app couldn't read. Try asking again;
+CoachChatViewModel.kt|The coach has used up today's free allowance from Google. It comes back
+CoachChatViewModel.kt|The coach isn't set up in this build — there's no key for it to use.
+CoachChatViewModel.kt|The server turned us away. That's a key or password problem on my side,
+CoachChatViewModel.kt|Try again once you're back on Wi-Fi or data.
+CoachChatViewModel.kt|Your phone isn't online right now — the coach needs a connection.
+CoachChatViewModel.kt|app. Ask me anything, or let's set a goal together. The more we talk, the
+CoachChatViewModel.kt|better I get to know you.
+CoachChatViewModel.kt|if it keeps happening, send a report.
+CoachChatViewModel.kt|it'll carry the details.
+CoachChatViewModel.kt|not yours — send a report and I'll fix it.
+CoachChatViewModel.kt|tomorrow — everything else in the app is unaffected.
+CoachChatViewModel.kt|try again in a minute.
+FrictionGate.kt|$wordsDone / ${TypedChallenge.WORDS} words
+FrictionGate.kt|Clock stopped
+FrictionGate.kt|How this works
+FrictionGate.kt|Pasting is off — this one has to be typed.
+FrictionGate.kt|That's more than the paragraph — delete the extra words.
+FrictionGate.kt|Time ran out — attempt ${attempt + 1}
+FrictionGate.kt|Typed ✓ — the clock has stopped.
+FrictionGate.kt|Word ${progress.correct + 1} doesn't match — fix it to carry on.
+GoalsCard.kt|${gp.usedToday} of ${g.target} unlocks today
+GoalsCard.kt|\"${goal.label()}\" and its history will be removed.
+HomeBanners.kt|AppBlocker
+IconPickerScreen.kt|App icon
+IconPickerScreen.kt|Icon changed — your home screen may take a moment to refresh
+IconPickerScreen.kt|Pick the icon AppBlocker wears on your home screen. The block screen
+IconPickerScreen.kt|matches your choice.
+InsightsCards.kt|$pct % of awake time
+InsightsCards.kt|${InsightsViewModel.fmt(state.hourly[peakIdx])} of screen time
+InsightsCards.kt|${detail.attemptsToday}× today · ${detail.attemptsTotal}× total
+InsightsCards.kt|${if (up)
+InsightsCards.kt|Games
+InsightsCards.kt|Grant access
+InsightsCards.kt|Heavy
+InsightsCards.kt|Insights needs Usage Access to show your screen time and most-used apps.
+InsightsCards.kt|Light
+InsightsCards.kt|Moderate
+InsightsCards.kt|Opened while blocked
+InsightsCards.kt|Opens today
+InsightsCards.kt|Productive
+InsightsCards.kt|Screen time today
+InsightsCards.kt|Social
+InsightsCards.kt|Turn on Usage Access
+InsightsCards.kt|Very heavy
+InsightsCards.kt|Video
+InsightsCards.kt|Weekday average
+InsightsCards.kt|Weekend average
+InsightsCards.kt|You use your phone more on weekdays.
+InsightsCards.kt|You use your phone more on weekends.
+InsightsCards.kt|Your use is fairly even across the week.
+InsightsChart.kt|AM
+InsightsChart.kt|Day
+InsightsChart.kt|EEE
+InsightsChart.kt|EEEEE
+InsightsChart.kt|MMM d
+InsightsChart.kt|PM
+InsightsChart.kt|Today
+InsightsChart.kt|Trend
+InsightsChart.kt|Week
+InsightsScreen.kt|${state.attemptsTodayTotal}× today
+InsightsScreen.kt|${state.totalOpens} app opens today · tap an app for details
+InsightsScreen.kt|· ${state.attemptsAllTotal}× all time
+InsightsViewModel.kt|${a.today}× today · ${a.total}× total
+InsightsViewModel.kt|1 open
+InsightsViewModel.kt|Websites
+JournalScreen.kt|EEEE, d MMMM
+JournalScreen.kt|EEEE, d MMMM yyyy
+KeywordsScreen.kt|Add
+Permissions.kt|Lets AppBlocker resist being uninstalled until you turn this off.
+PinScreen.kt|4–8 digits. You'll need this to change your blocks.
+PinScreen.kt|PIN
+ProfileScreen.kt|AppBlocker
+ProfileScreen.kt|Cancel
+ProfileScreen.kt|Unknown
+QuickBlockCard.kt|${p.first} min work · ${p.second} min break
+QuickBlockCard.kt|× ${p.third} rounds
+ScheduleEditorScreen.kt|A daily limit is measured from Android's usage statistics, which AppBlocker
+ScheduleEditorScreen.kt|Apps
+ScheduleEditorScreen.kt|Blocking runs in the background, so foreground-only location isn't enough.
+ScheduleEditorScreen.kt|Captured: %.4f, %.4f
+ScheduleEditorScreen.kt|Decrease $name
+ScheduleEditorScreen.kt|End
+ScheduleEditorScreen.kt|For a whole day, use 00:00 to 23:59.
+ScheduleEditorScreen.kt|Increase $name
+ScheduleEditorScreen.kt|Launch count
+ScheduleEditorScreen.kt|Launch limit
+ScheduleEditorScreen.kt|Location block
+ScheduleEditorScreen.kt|Location schedule
+ScheduleEditorScreen.kt|OK
+ScheduleEditorScreen.kt|Radius
+ScheduleEditorScreen.kt|Save
+ScheduleEditorScreen.kt|Saved places
+ScheduleEditorScreen.kt|Start and end are the same, so this would never run.
+ScheduleEditorScreen.kt|Strict Mode is running. A schedule can be switched on while
+ScheduleEditorScreen.kt|Tap to open settings, then choose Location → “Allow all the time” (and Precise).
+ScheduleEditorScreen.kt|Time block
+ScheduleEditorScreen.kt|Time schedule
+ScheduleEditorScreen.kt|Usage limit
+ScheduleEditorScreen.kt|Wi-Fi block
+ScheduleEditorScreen.kt|Wi-Fi schedule
+ScheduleEditorScreen.kt|can't read yet. Until you allow it, every app looks like zero minutes and this
+ScheduleEditorScreen.kt|it is, but not off.
+ScheduleEditorScreen.kt|schedule can never block. Tap to open settings, then switch AppBlocker on.
+StrictModeScreen.kt|$apps app${if (apps == 1)
+StrictModeScreen.kt|$keywords word${if (keywords == 1)
+StrictModeScreen.kt|$schedules schedule${if (schedules == 1)
+StrictModeScreen.kt|${endsAt(minutes)}.\n\nYou can't stop early. You'll be able to add
+StrictModeScreen.kt|EEE, MMM d 'at' h:mm a
+StrictModeScreen.kt|Locks
+StrictModeScreen.kt|Your blocks will be locked for ${humanDuration(minutes)} — until
+StrictModeScreen.kt|Your blocks will stay locked until ${endsAt(pendingMinutes, deadline)}.
+StrictModeScreen.kt|\n\nYou can't undo this or cut it short.
+StrictModeScreen.kt|adult filter
+StrictModeScreen.kt|more time while it runs, but never cut it short.
+TemplateCard.kt|Active
+TemplateCard.kt|Choose apps for ${t.title}
+TemplateCard.kt|It will also turn on:
+TemplateCard.kt|This will block
+TemplateEditorScreen.kt|Apps
+TemplateEditorScreen.kt|Apps you install later are blocked automatically.
+TemplateEditorScreen.kt|Blocks browsers we can't filter (e.g. Brave).
+TemplateEditorScreen.kt|Blocks the Google Play purchase prompt in games and apps.
+TemplateEditorScreen.kt|Choose what this template blocks. Nothing changes until you tap Save.
+TemplateEditorScreen.kt|Customise “${template.title}”
+TemplateEditorScreen.kt|Detects and blocks adult sites in your browsers.
+TemplateEditorScreen.kt|EXTRA OPTIONS
+TemplateEditorScreen.kt|Save
+TemplateEditorScreen.kt|Saved “${template.title}”
+TemplateEditorScreen.kt|Search apps
+TemplateEditorScreen.kt|🔒 Strict Mode — you can add, but not remove.
+Templates.kt|Adult content filter on
+Templates.kt|Auto-block newly installed apps
+Templates.kt|Block adult sites
+Templates.kt|Block fun, keep tools
+Templates.kt|Block in-app purchases
+Templates.kt|Block the social feeds
+Templates.kt|Block unsupported browsers
+Templates.kt|Candy Crush
+Templates.kt|Clash of Clans
+Templates.kt|Deep Focus
+Templates.kt|Deep work needs a quiet phone.
+Templates.kt|Every day, all day
+Templates.kt|Everything fun, paused until you're done.
+Templates.kt|Facebook
+Templates.kt|Gaming Break
+Templates.kt|Instagram
+Templates.kt|Minecraft
+Templates.kt|Netflix
+Templates.kt|One less thing to fight on your own.
+Templates.kt|Reddit
+Templates.kt|Roblox
+Templates.kt|Sleep Well
+Templates.kt|Snapchat
+Templates.kt|Social + video, gone
+Templates.kt|Social Detox
+Templates.kt|Stay Clean
+Templates.kt|Step away from games
+Templates.kt|Step away now, come back sharper.
+Templates.kt|Study Mode
+Templates.kt|The feed will still be there later.
+Templates.kt|TikTok
+Templates.kt|Wind down, no scrolling
+Templates.kt|YouTube
+Templates.kt|Your best mornings start the night before.
+TimeFormat.kt|$h hr $m min
+TimeFormat.kt|%dd %dh
+TimeFormat.kt|AM
+TimeFormat.kt|Every day
+TimeFormat.kt|Fr
+TimeFormat.kt|Mo
+TimeFormat.kt|Mon–Fri
+TimeFormat.kt|No days
+TimeFormat.kt|PM
+TimeFormat.kt|Sa
+TimeFormat.kt|Su
+TimeFormat.kt|Th
+TimeFormat.kt|Tu
+TimeFormat.kt|We
+UpdateViewModel.kt|Allow AppBlocker to install apps, then come back here.
+UpdateViewModel.kt|Allow \"install unknown apps\" for AppBlocker in Settings first.
+UpdateViewModel.kt|Couldn't reach the update server.
+UpdateViewModel.kt|Download failed — try again.
+WheelPicker.kt|Choose a duration.
+WheelPicker.kt|Ends ${endsAtText(minutes, baseMillis)}.
+WheelPicker.kt|M/d, h:mm a
+WheelPicker.kt|Save
