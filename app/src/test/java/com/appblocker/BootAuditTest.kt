@@ -95,6 +95,61 @@ class BootAuditTest {
         assertEquals(5_000L, BootAudit.lagFor(storedBoot = -1, storedRt = 5_000L, nowBoot = -1))
     }
 
+    // --- the first stamp of a boot stands (invariant 77, 15 Sep 2026) ---------------------------
+
+    /**
+     * A comeback after a force stop inside the ten minutes `isBoot` still calls the boot delivers a
+     * second `BOOT_COMPLETED` in the same boot. Stamping it would replace the boot's real lag with a
+     * later one: 40 seconds becoming five minutes.
+     */
+    @Test
+    fun `a stamp already written in this boot stands`() {
+        assertEquals(
+            true,
+            BootAudit.keepsEarlierStamp(storedBoot = 61, storedRt = 40_000L, nowBoot = 61, nowRt = 300_000L),
+        )
+    }
+
+    /**
+     * The last boot's stamp at 40 s, and this boot five minutes up. ⚠️ Now has to be LATER than the
+     * stored time, or "a stored time no later than now" rejects the stamp on its own and the boot
+     * comparison this test is named for decides nothing — which is how its first version stayed green
+     * with that comparison broken (15 Sep 2026).
+     */
+    @Test
+    fun `a stamp from an earlier boot is replaced`() {
+        assertEquals(
+            false,
+            BootAudit.keepsEarlierStamp(storedBoot = 60, storedRt = 40_000L, nowBoot = 61, nowRt = 300_000L),
+        )
+    }
+
+    @Test
+    fun `no stamp yet is always written`() {
+        assertEquals(
+            false,
+            BootAudit.keepsEarlierStamp(storedBoot = -2, storedRt = 0L, nowBoot = 61, nowRt = 35_000L),
+        )
+    }
+
+    /** -1 on both sides compares equal for ever: keeping would freeze one stamp over every boot after. */
+    @Test
+    fun `an unreadable boot counter never keeps a stamp`() {
+        assertEquals(
+            false,
+            BootAudit.keepsEarlierStamp(storedBoot = -1, storedRt = 40_000L, nowBoot = -1, nowRt = 300_000L),
+        )
+    }
+
+    /** A stored time later than now is a restart the counter did not see. */
+    @Test
+    fun `a stamp from later than now is a restart the counter missed`() {
+        assertEquals(
+            false,
+            BootAudit.keepsEarlierStamp(storedBoot = 61, storedRt = 900_000L, nowBoot = 61, nowRt = 35_000L),
+        )
+    }
+
     // --- a BOOT_COMPLETED that is not a boot (invariant 77) -----------------------------------
 
     /**

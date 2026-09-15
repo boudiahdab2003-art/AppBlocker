@@ -29,6 +29,19 @@ object UsageTracker {
     private const val USED_TODAY_TTL_MS = 15_000L
     private const val CACHE_PREFS = "usage_stats_cache"
 
+    /**
+     * **How far before a window the usage walk starts reading.**
+     *
+     * An app already in front when a window opens was resumed before it, so a walk that reads from
+     * the window's start never sees that resume and counts the app for nothing until it is left and
+     * opened again: the app he was in when a stoppage began, a film still playing at midnight. Every
+     * unlock resumes whatever is in front, so this only has to reach back past one unbroken stretch of
+     * use, and two hours covers a film. The cost is two more hours of events per walk, a few hundred
+     * on a busy phone, and every stretch read from before a window is clipped to its start
+     * (invariant 75).
+     */
+    private const val LEAD_IN_MS = 2 * 3_600_000L
+
     /** A package's foreground time today, in minutes. */
     data class AppUsage(val packageName: String, val minutes: Int)
 
@@ -239,6 +252,11 @@ object UsageTracker {
      *
      * A pause arriving after one of those finds nothing open and adds nothing. A stretch still open
      * when the window closes counts to the end: that is the app in front right now.
+     *
+     * Events from before [start] are expected: [walkForeground] reads [LEAD_IN_MS] of them, because
+     * they are how the app already in front when the window opened is found. A stretch is clipped to
+     * [start], and one that ended before it adds nothing, not even an empty stretch at the window's
+     * edge, which anything looking for the gaps between uses would read as a use.
      */
     internal class StretchWalker(
         private val start: Long,
@@ -298,7 +316,9 @@ object UsageTracker {
 
         private fun close(pkg: String, openedAt: Long, at: Long) {
             val from = max(openedAt, start)
-            out.add(Session(pkg, from, max(from, at)))
+            // Nothing of it inside the window: it ended before the window began, or it has no length.
+            if (at <= from) return
+            out.add(Session(pkg, from, at))
         }
 
         /** Every stretch, with those still open counted up to [end]. */
@@ -392,7 +412,9 @@ object UsageTracker {
         // The rules for when a stretch opens and closes live in StretchWalker, where a test can
         // reach them — including the ones this loop used to lack (invariant 75).
         val walker = StretchWalker(start, fgEvent, bgEvent)
-        val events = usm.queryEvents(start, end)
+        // ⚠️ From before the window: the app already in front when it opens was resumed earlier, and
+        // without that resume it counts nothing until it is left (LEAD_IN_MS, invariant 75).
+        val events = usm.queryEvents(start - LEAD_IN_MS, end)
         val e = UsageEvents.Event()
         // Each event carries its screen: a stop is matched to the screen that paused, never to
         // whichever of the app's screens happens to be open (invariant 75).
@@ -490,9 +512,10 @@ object UsageTracker {
 
     /** Total foreground minutes across exactly [start]..[end], reconstructed from events —
      *  the bucket-based queries can't trim a partial day, which is what the coach's
-     *  "by this same time yesterday" comparison needs. Sessions already in progress at
-     *  [start] are missed (their resume event is outside the range), same as the other
-     *  event walks; events older than a few days may be gone — callers treat 0 as unknown. */
+     *  "by this same time yesterday" comparison needs. A session already in progress at
+     *  [start] is found by reading [LEAD_IN_MS] earlier and counted from [start]; one that had
+     *  already run longer than that is still missed, and events older than a few days may be
+     *  gone, so this can read low. */
     fun totalMinutesInRange(context: Context, start: Long, end: Long): Int {
         val walk = walkForeground(context, start, end) ?: return 0
         // Merged, like every other total here. Unmerged it double-counted overlapping apps, which

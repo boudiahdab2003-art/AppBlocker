@@ -1143,6 +1143,56 @@ class CodeShapeTest {
         )
     }
 
+    // ---- invariants 75 and 77, 15 Sep 2026 (later) ------------------------------------------
+
+    /**
+     * **Invariant 75: the usage walk reads from before its window.** An app already in front when a
+     * window opens was resumed before it. Read from the window's start, that app counted nothing until
+     * it was left and opened again: the app he was in when a stoppage began, a film still playing at
+     * midnight. The walker's tests feed events from before the window by hand, so only this can see
+     * the query stop reaching back, or the lead-in shrink to nothing.
+     */
+    @Test
+    fun `the usage walk reads from before its window`() {
+        val text = code(source("service/UsageTracker.kt").readText())
+        val walk = text.substringAfter("private fun walkForeground(", "").substringBefore("\n    }")
+        assertTrue("walkForeground is gone; this check is reading nothing", walk.isNotEmpty())
+        assertTrue(
+            "walkForeground must read from before its window, usm.queryEvents(start - LEAD_IN_MS, end), " +
+                "or the app already in front when the window opens counts nothing (invariant 75)",
+            Regex("""queryEvents\(\s*start\s*-\s*LEAD_IN_MS\s*,\s*end\s*\)""").containsMatchIn(walk),
+        )
+        val hours = Regex("""const val LEAD_IN_MS\s*=\s*(\d+)\s*\*\s*3_600_000L""")
+            .find(text)?.groupValues?.get(1)?.toIntOrNull()
+        assertTrue(
+            "LEAD_IN_MS must be written as whole hours and be at least one: a stretch of use that began " +
+                "longer ago than the lead-in is missed at the window's start (found: $hours)",
+            hours != null && hours >= 1,
+        )
+    }
+
+    /**
+     * **Invariant 77: the first stamp of a boot stands.** A comeback after a force stop inside
+     * `isBoot`'s ten minutes delivers a second `BOOT_COMPLETED` in the same boot, and `heard` used to
+     * overwrite the boot's real lag with the later one. The rule is `BootAuditTest`'s; this keeps
+     * `heard` asking it, and obeying the answer, before it writes.
+     */
+    @Test
+    fun `the boot stamp asks whether an earlier one stands before writing`() {
+        val text = code(source("data/BootAudit.kt").readText())
+        val heard = text.substringAfter("fun heard(context: Context)", "").substringBefore("\n    }")
+        assertTrue("BootAudit.heard is gone; this check is reading nothing", heard.isNotEmpty())
+        val ask = heard.indexOf("keepsEarlierStamp(")
+        val write = heard.indexOf(".putLong(KEY_HEARD_RT")
+        assertTrue("heard no longer asks keepsEarlierStamp before stamping", ask >= 0)
+        assertTrue("heard no longer writes the stamp; this check is reading nothing", write >= 0)
+        assertTrue("heard must ask whether an earlier stamp stands before it writes", ask < write)
+        assertTrue(
+            "heard asks keepsEarlierStamp but does not return on its answer before writing",
+            Regex("""if\s*\(\s*keep\s*\)\s*return@runCatching""").containsMatchIn(heard.substring(ask, write)),
+        )
+    }
+
     // ---- invariant 48 ------------------------------------------------------------------------
 
     /**

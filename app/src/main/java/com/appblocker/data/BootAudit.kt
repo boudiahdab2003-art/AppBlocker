@@ -115,12 +115,36 @@ object BootAudit {
      */
     fun heard(context: Context) {
         runCatching {
-            prefs(context).edit()
-                .putInt(KEY_HEARD_BOOT, DeviceBoot.count(context))
-                .putLong(KEY_HEARD_RT, SystemClock.elapsedRealtime().coerceAtLeast(1L))
+            val p = prefs(context)
+            val boot = DeviceBoot.count(context)
+            val nowRt = SystemClock.elapsedRealtime()
+            // The boot's own start-up is the FIRST time this runs in a boot. A later BOOT_COMPLETED in
+            // the same boot is a comeback after a force stop that still fell inside isBoot's window,
+            // and stamping it would replace the boot's real lag with a later one.
+            val keep = keepsEarlierStamp(
+                storedBoot = p.getInt(KEY_HEARD_BOOT, -2),
+                storedRt = p.getLong(KEY_HEARD_RT, 0L),
+                nowBoot = boot,
+                nowRt = nowRt,
+            )
+            if (keep) return@runCatching
+            p.edit()
+                .putInt(KEY_HEARD_BOOT, boot)
+                .putLong(KEY_HEARD_RT, nowRt.coerceAtLeast(1L))
                 .apply()
         }
     }
+
+    /**
+     * Whether a stamp already written stands. Pure, for the reason [lagFor] is.
+     *
+     * Only a stamp from this same boot does: a readable boot count on both sides, the two equal, and
+     * a stored time no later than now. An unreadable counter is -1 on both sides and would compare
+     * equal for ever, so it never keeps (every boot then stamps, as it always did); and a stored time
+     * later than now means a restart the counter did not see.
+     */
+    internal fun keepsEarlierStamp(storedBoot: Int, storedRt: Long, nowBoot: Int, nowRt: Long): Boolean =
+        storedRt > 0L && storedBoot >= 0 && storedBoot == nowBoot && storedRt <= nowRt
 
     /** A start record this close to our own process's start is that start. */
     private const val START_MATCH_MS = 5_000L

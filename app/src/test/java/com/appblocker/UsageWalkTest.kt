@@ -48,6 +48,55 @@ class UsageWalkTest {
     private fun minutes(sessions: List<UsageTracker.Session>, pkg: String? = null): Long =
         sessions.filter { pkg == null || it.pkg == pkg }.sumOf { it.to - it.from } / minute
 
+    private fun seconds(sessions: List<UsageTracker.Session>, pkg: String): Long =
+        sessions.filter { it.pkg == pkg }.sumOf { it.to - it.from } / second
+
+    // ---- the recorded run -----------------------------------------------------------------------
+
+    private val settings = "com.android.settings"
+    private val launcher = "com.google.android.apps.nexuslauncher"
+    private val home = "com.android.settings.homepage.SettingsHomepageActivity"
+    private val display = "com.android.settings.Settings\$DisplaySettingsActivity"
+    private val trampoline = "com.android.settings.applications.InstalledAppDetailsTop"
+    private val spa = "com.android.settings.spa.SpaActivity"
+    private val nexus = "com.google.android.apps.nexuslauncher.NexusLauncherActivity"
+
+    private fun at(sec: Long, type: Int, pkg: String, screen: String) = Ev(type, pkg, sec * second, screen)
+
+    /**
+     * **Recorded, not invented.** Settings on the API 35 emulator, 15 Sep 2026, copied from `dumpsys
+     * usagestats` in the order Android wrote it (seconds from the first event): the home screen, the
+     * Display screen, back, then App info twice. App info passes through a trampoline screen, and the
+     * second App info is a second copy of the same `SpaActivity` — whose first copy stops while the
+     * second is in front. Settings was in front for 23 seconds.
+     */
+    private val recordedSettingsRun = listOf(
+        at(0, paused, launcher, nexus),
+        at(0, resumed, settings, home),
+        at(2, stopped, launcher, nexus),
+        at(6, paused, settings, home),
+        at(6, resumed, settings, display),
+        at(6, stopped, settings, home),
+        at(10, paused, settings, display),
+        at(10, resumed, settings, home),
+        at(10, stopped, settings, display),
+        at(14, paused, settings, home),
+        at(14, resumed, settings, trampoline),
+        at(15, paused, settings, trampoline),
+        at(15, resumed, settings, spa),
+        at(15, stopped, settings, trampoline),
+        at(15, stopped, settings, home),
+        at(19, paused, settings, spa),
+        at(19, resumed, settings, trampoline),
+        at(19, paused, settings, trampoline),
+        at(19, resumed, settings, spa),
+        at(20, stopped, settings, trampoline),
+        at(20, stopped, settings, spa),
+        at(23, paused, settings, spa),
+        at(23, resumed, launcher, nexus),
+        at(24, stopped, settings, spa),
+    )
+
     // ---- use ends when use ends -------------------------------------------------------------------
 
     /** The case this exists for: without the closer this reads 360 minutes. */
@@ -134,51 +183,42 @@ class UsageWalkTest {
         assertEquals(10L, minutes(s))
     }
 
-    /**
-     * **Recorded, not invented.** Settings on the API 35 emulator, 15 Sep 2026, copied from `dumpsys
-     * usagestats` in the order Android wrote it (seconds from the first event): the home screen, the
-     * Display screen, back, then App info twice. App info passes through a trampoline screen, and the
-     * second App info is a second copy of the same `SpaActivity` — whose first copy stops while the
-     * second is in front. Settings was in front for 23 seconds; the walker that matched stops to the
-     * app counted 8.
-     */
+    /** The recorded run; the walker that matched stops to the app counted 8 of these 23 seconds. */
     @Test fun `a real run through Settings counts every second it was in front`() {
-        val settings = "com.android.settings"
-        val launcher = "com.google.android.apps.nexuslauncher"
-        val home = "com.android.settings.homepage.SettingsHomepageActivity"
-        val display = "com.android.settings.Settings\$DisplaySettingsActivity"
-        val trampoline = "com.android.settings.applications.InstalledAppDetailsTop"
-        val spa = "com.android.settings.spa.SpaActivity"
-        val nexus = "com.google.android.apps.nexuslauncher.NexusLauncherActivity"
-        fun at(sec: Long, type: Int, pkg: String, screen: String) = Ev(type, pkg, sec * second, screen)
-        val recorded = listOf(
-            at(0, paused, launcher, nexus),
-            at(0, resumed, settings, home),
-            at(2, stopped, launcher, nexus),
-            at(6, paused, settings, home),
-            at(6, resumed, settings, display),
-            at(6, stopped, settings, home),
-            at(10, paused, settings, display),
-            at(10, resumed, settings, home),
-            at(10, stopped, settings, display),
-            at(14, paused, settings, home),
-            at(14, resumed, settings, trampoline),
-            at(15, paused, settings, trampoline),
-            at(15, resumed, settings, spa),
-            at(15, stopped, settings, trampoline),
-            at(15, stopped, settings, home),
-            at(19, paused, settings, spa),
-            at(19, resumed, settings, trampoline),
-            at(19, paused, settings, trampoline),
-            at(19, resumed, settings, spa),
-            at(20, stopped, settings, trampoline),
-            at(20, stopped, settings, spa),
-            at(23, paused, settings, spa),
-            at(23, resumed, launcher, nexus),
-            at(24, stopped, settings, spa),
-        )
-        val s = walkMs(0L, 30 * second, recorded)
-        assertEquals(23L, s.filter { it.pkg == settings }.sumOf { it.to - it.from } / second)
+        assertEquals(23L, seconds(walkMs(0L, 30 * second, recordedSettingsRun), settings))
+    }
+
+    // ---- reading from before the window (15 Sep 2026) -----------------------------------------------
+
+    /** The app already in front when the window opened, found by the resume read before it. */
+    @Test fun `an app already in front when the window opens counts from its start`() {
+        assertEquals(60L, minutes(walk(0, 60, ev(resumed, "video", -30))))
+    }
+
+    /**
+     * A stretch that ended before the window was read only to find the one still open at its start,
+     * and adds nothing — not even an empty stretch at the edge, which a gap-finder reads as a use.
+     */
+    @Test fun `a stretch that ended before the window adds nothing at all`() {
+        val s = walk(0, 60, ev(resumed, "a", -50), ev(paused, "a", -20))
+        assertTrue("expected no stretches, got ${s.map { it.from to it.to }}", s.isEmpty())
+    }
+
+    @Test fun `a screen that went dark before the window leaves nothing at its start`() {
+        val s = walk(0, 60, ev(resumed, "a", -50), device(UsageEvents.Event.SCREEN_NON_INTERACTIVE, -10))
+        assertTrue("expected no stretches, got ${s.map { it.from to it.to }}", s.isEmpty())
+    }
+
+    /**
+     * The recorded run with the window opening at 8 s, in the middle of the Display screen. Read from
+     * before the window, as the walk now is, Display's resume at 6 s is found and Settings counts from
+     * 8 s: 15 seconds. Read from 8 s only, the old way, the 2 seconds already on Display are lost.
+     */
+    @Test fun `the recorded run counts from a window that opens mid-screen`() {
+        val start = 8 * second
+        assertEquals(15L, seconds(walkMs(start, 30 * second, recordedSettingsRun), settings))
+        val fromTheWindowOnly = recordedSettingsRun.filter { it.at >= start }
+        assertEquals(13L, seconds(walkMs(start, 30 * second, fromTheWindowOnly), settings))
     }
 
     // ---- nothing that was right before changes -------------------------------------------------

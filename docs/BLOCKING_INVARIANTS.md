@@ -1492,9 +1492,14 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     in `UsageWalkTest`, beside one case per rule. None of the earlier tests could name a screen,
     which is why all of them passed.
 
-    Known and not fixed: a stretch already open when the window starts is still missed until that
-    app resumes again (`totalMinutesInRange` says so in its KDoc). It undercounts, so a stoppage that
-    began while he was in one app, and that he stayed in, reads low on `used=`.
+    ⚠️ **Also 15 Sep, also before it shipped: the walk began reading at the window's start.** An app
+    already in front when a window opens was resumed before it, so it counted nothing until it was
+    left and opened again — the app he was in when a stoppage began, a film still playing at
+    midnight. `walkForeground` now reads `LEAD_IN_MS` (two hours) before the window. The walker clips
+    every stretch to the window and drops one that ended before it, rather than leaving an empty
+    stretch at the edge that `sessionStatsToday` would read as a use. `CodeShapeTest` pins the
+    lead-in and its size; `UsageWalkTest` pins the clipping, on the recorded run too. A stretch that
+    had already run longer than the lead-in is still missed.
 
     **The shape to grep for: an interval opened by one event and closed only by its partner, with
     "still open" counted as running.**
@@ -1538,6 +1543,12 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     as a background one. Inside those ten minutes it is still the boot, since a listener bound as the
     phone comes up would take the app out of the stopped state. "Can't tell" still reads as a boot,
     as before. A stamp already written wrongly stays until the phone next restarts.
+
+    ⚠️ **15 Sep, later: the first stamp of a boot now stands.** A comeback after a force stop inside
+    those ten minutes is still read as the boot, so `heard` could overwrite a 40-second stamp with a
+    later one. `BootAudit.keepsEarlierStamp` keeps a stamp from the same boot (a readable counter,
+    equal on both sides, and a stored time no later than now); an unreadable counter still stamps
+    every time, as before.
 
     **The shape to grep for: a system broadcast trusted to mean the one thing its name says.**
 
@@ -2586,16 +2597,13 @@ plus one usage-event stream recorded on the API 35 emulator.
 - `BootAudit.isBoot` matches Android's start record by time within 5 s, and "can't tell" still reads
   as a boot.
 
-**Not fixed, recorded:**
+**Recorded here as not fixed, then fixed the same day.** He said "continue ur fixing", and v1.165 was
+still unpublished, so `used=` changes in one release instead of two:
 
-- A stretch already open when a usage window starts is missed until its app resumes again
-  (`totalMinutesInRange` says so). So `used=` reads low for a stoppage that began while he was in one
-  app and stayed in it, and the `STALE` detector waits longer in that case. Changing it would move
-  `used=` again straight after v1.165 moves it once; it wants its own release and its own recorded
-  stream.
-- `BootAudit.heard` overwrites a stamp already written for the same boot. A force stop in the first
-  ten minutes of uptime still counts as the boot (invariant 77), so it can replace a 40-second
-  `bootHeard` with a later one. Rare, and it only ever makes the number larger.
+- A stretch already open when a usage window starts was missed until its app resumed again. The walk
+  now reads `LEAD_IN_MS` before the window (invariant 75).
+- `BootAudit.heard` overwrote a stamp already written for the same boot. The first stamp of a boot
+  now stands (invariant 77).
 
 **Yield: 2 from about 1,900 lines**, one of them in code a day old. Both in instruments, neither in
 enforcement.
