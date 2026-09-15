@@ -2602,7 +2602,24 @@ enforcement.
 
 ### Not yet swept
 
-- **Where else does a null answer mean "no" instead of "don't know"?** Four bugs now share this
+- ~~**Where else does a null answer mean "no" instead of "don't know"?**~~ **Enumerated 15 Sep 2026
+  — CLEAN in the blocking path.** Every `?: return`, `?: false`, `== true` / `!= true` and `?.let {`
+  in the watcher (about 45 sites) and in `ScreenText`, `ScreenJudge`, `WebContentFilter`,
+  `BlockDecision`, `ProtectionState`, `PackageSets` and `BlockOverlay` (about 30). Where a null
+  reaches a decision it takes the blocking or abstaining side on purpose: `stillOnScreen` answers
+  yes to an unreadable tree, an allowlist app with no rule is blocked, `screenIsJudgeable` abstains,
+  a root with no package is still scanned. The permissive ones are the ones already recorded here
+  as choices (purchases by class name, an unreadable SSID, an unusable location fix, an unreadable
+  guard page that re-checks on its content event).
+  - ⚠️ **The one that looked like a hole and is not:** `onScreenOff` empties `lastForegroundPkg`,
+    and the URL scan, the page scan and the re-check loop all `?: return` on it. But the
+    content-event branch of `handleEvent` adopts any package that differs from the cache once the
+    active window confirms it, so the first repaint, scroll or keystroke after an unlock refills the
+    cache through `onForegroundChanged`. An empty cache waits for one event; it does not miss one.
+  - **The one real finding was an instrument, not a decision:** the unbind record's `?: false`
+    (invariant 70, same day).
+
+  The original entry: **Where else does a null answer mean "no" instead of "don't know"?** Four bugs now share this
   root and the enumeration has never been done. The shape to grep for is a nullable read feeding a
   decision where `null` takes the permissive branch — `?: return`, `if (x != null)`, `?.let` around
   a block that blocks. ~~`WebContentFilter.check`'s URL is one~~ — **that one landed** (20 Aug 2026,
