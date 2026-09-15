@@ -40,14 +40,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
 
-      - uses: gradle/actions/setup-gradle@v4
+      # v5, not v6: gradle/actions v6 moved its caching into a proprietary component whose Terms of
+      # Use are accepted by upgrading (see the v6 release notes). That is the owner's decision, not a
+      # version bump. v5 is MIT-licensed and already runs on Node 24.
+      - uses: gradle/actions/setup-gradle@v5
         with:
           gradle-version: "8.9"
 
@@ -73,7 +76,7 @@ jobs:
 
       - name: Keep the test report when something fails
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: rendering-test-report
           # The XML carries the assertion message; the HTML report only names the failing test.
@@ -108,14 +111,14 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v5
         with:
           gradle-version: "8.9"
 
