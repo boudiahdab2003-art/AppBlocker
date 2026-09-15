@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.165
+- A way back after your phone shuts AppBlocker down. With Notification access on, Android starts AppBlocker again after a force stop, and it checks blocking straight away instead of waiting for the next scheduled check. The minutes-of-use number is more honest: it stops counting when the screen turns off, the phone locks or shuts down, matches each stop to the right screen of an app, and now counts the app you were already using when a count began. Reports no longer mix up a restart with a comeback after a force stop. And the Quick Block card now changes the moment you pause or restart it from the quick-settings tile.
+
 ## v1.164
 - When blocking stops while you are using your phone, AppBlocker now opens itself for a few seconds to bring it back - and it checks whether that actually worked, stopping by itself if it does not help. Every stoppage in a report now says what shut the app down, in the words Android itself uses. And the weekend report that put two numbers side by side from different stretches of time now says which stretch each one covers.
 
