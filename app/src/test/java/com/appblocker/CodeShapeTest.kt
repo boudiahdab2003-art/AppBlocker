@@ -1193,6 +1193,42 @@ class CodeShapeTest {
         )
     }
 
+    // ---- the Blocking tab's live state, 15 Sep 2026 -----------------------------------------
+
+    /**
+     * **The Blocking tab follows settings that change while it is showing.** It re-read Quick Block's
+     * pause only on resume, and the Quick Settings tile changes that pause from the pulled-down shade,
+     * which does not pause the activity: on the API 35 emulator on 15 Sep 2026 the tile paused Quick
+     * Block and the card went on saying Stop and Active. A re-read keyed on the resume tick alone is the
+     * shape; and the listener only works while the setting is written through the key it listens for.
+     */
+    @Test
+    fun `the Blocking tab follows settings that change while it is showing`() {
+        val screen = code(source("ui/BlockingScreen.kt").readText())
+        val resumeOnly = screen.lines().filter {
+            Regex("""LaunchedEffect\(\s*perms\s*\)""").containsMatchIn(it) && "SettingsStore." in it
+        }
+        assertEquals(
+            "these re-read a setting only on resume, so a change made while the tab is showing (the Quick " +
+                "Settings tile) is not seen until he leaves and comes back; key them on settingsTick too",
+            emptyList<String>(),
+            resumeOnly.map { it.trim() },
+        )
+        val followed = screen.substringAfter("settingsTick(", "").substringBefore(")")
+        assertTrue("BlockingScreen no longer listens for settings changes", followed.isNotEmpty())
+        assertTrue(
+            "the Quick Block pause is not among the settings the tab follows: $followed",
+            "KEY_QUICK_BLOCK_PAUSED" in followed,
+        )
+        val store = code(source("data/SettingsStore.kt").readText())
+        assertEquals(
+            "the Quick Block pause must be read and written only through KEY_QUICK_BLOCK_PAUSED, the key " +
+                "the tab listens for",
+            1,
+            store.split("\"quick_block_paused\"").size - 1,
+        )
+    }
+
     // ---- invariant 48 ------------------------------------------------------------------------
 
     /**

@@ -2717,6 +2717,12 @@ enforcement.
   part of a day at the edges" understated it, because for *today* the edge is the whole of
   yesterday. The lesson is about the note, not the code: an imprecision worth writing down is worth
   bounding, and "cosmetic" was a guess about size that nobody had measured.
+- **Partly swept, 15 Sep 2026, measured rather than reasoned:** the Blocking tab re-read Quick Block's
+  pause, its mode and the update pause only on resume, while the Quick Settings tile changes the pause
+  from the pulled-down shade, and the shade does not pause the activity. On the API 35 emulator the tile
+  set `quick_block_paused` with AppBlocker still the top resumed activity, and the card went on saying
+  Stop and Active. Those reads now also follow `settingsTick`, and `CodeShapeTest` fails the build on a
+  `LaunchedEffect(perms)` there that re-reads a setting without it. The rest of this item still stands:
 - The rest of the UI's live state. Sweep thirteen took the `remember`-blocks pass and found the
   one that mattered (`KeywordsScreen`'s phase), but only audited the blocks that gate a
   *protection*. `BlockEditorScreen` and `BlockingScreen` cache a dozen settings each and were read

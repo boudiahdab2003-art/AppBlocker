@@ -99,6 +99,14 @@ fun BlockingScreen(
     val remaining by focusVm.remainingMillis.collectAsState()
     // Re-checked on every resume so granting in Settings updates the UI immediately.
     val perms = rememberPermissions()
+    // A setting can change with this tab on screen: the Quick Settings tile pauses Quick Block from
+    // the shade, which does not pause the activity. So the reads below follow those settings as well
+    // as the resume tick (15 Sep 2026: the tile paused it and the card still said Active).
+    val settingsChanged = settingsTick(
+        SettingsStore.KEY_QUICK_BLOCK_PAUSED,
+        SettingsStore.KEY_QUICK_BLOCK_ALLOWLIST,
+        SettingsStore.KEY_UPDATE_PAUSED,
+    )
     val essentialMissing = perms.count { !it.granted && it.essential }
     val adultOn = SettingsStore.blockAdult(context)
     var pending by remember { mutableStateOf<Template?>(null) }
@@ -139,7 +147,7 @@ fun BlockingScreen(
             }
             // After an app update, blocking waits here for the user's go.
             var updatePausedUi by remember { mutableStateOf(SettingsStore.updatePaused(context)) }
-            LaunchedEffect(perms) { updatePausedUi = SettingsStore.updatePaused(context) }
+            LaunchedEffect(perms, settingsChanged) { updatePausedUi = SettingsStore.updatePaused(context) }
             if (updatePausedUi) {
                 UpdatePausedBanner {
                     // Through UpdatePause, not straight at the flag: the pending intent has to go
@@ -161,10 +169,10 @@ fun BlockingScreen(
         // Quick Block card
         item {
             var allowlist by remember { mutableStateOf(SettingsStore.quickBlockAllowlist(context)) }
-            LaunchedEffect(perms) { allowlist = SettingsStore.quickBlockAllowlist(context) }
+            LaunchedEffect(perms, settingsChanged) { allowlist = SettingsStore.quickBlockAllowlist(context) }
             val configured = if (allowlist) appsAllowed > 0 else appsBlocked > 0 || keywords > 0
             var paused by remember { mutableStateOf(SettingsStore.quickBlockPaused(context)) }
-            LaunchedEffect(perms) { paused = SettingsStore.quickBlockPaused(context) }
+            LaunchedEffect(perms, settingsChanged) { paused = SettingsStore.quickBlockPaused(context) }
             val active = configured && !paused
             Card(
                 Modifier.fillMaxWidth()

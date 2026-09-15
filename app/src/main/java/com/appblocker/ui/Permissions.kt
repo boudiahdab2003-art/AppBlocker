@@ -26,6 +26,7 @@ import com.appblocker.Dist
 import com.appblocker.admin.AppBlockerAdminReceiver
 import com.appblocker.data.AdminPrompt
 import com.appblocker.data.DeviceVendor
+import com.appblocker.data.SettingsStore
 import com.appblocker.service.AccessibilityUtil
 import com.appblocker.service.NotificationCountListener
 import com.appblocker.R
@@ -49,6 +50,29 @@ fun resumeTick(): Int {
         val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_RESUME) tick++ }
         owner.lifecycle.addObserver(obs)
         onDispose { owner.lifecycle.removeObserver(obs) }
+    }
+    return tick
+}
+
+/**
+ * Bumps whenever one of [keys] changes in AppBlocker's settings while the screen is showing.
+ *
+ * [resumeTick] only moves on resume, and a setting can change with the app still in front: the Quick
+ * Settings tile pauses Quick Block from the pulled-down shade, and pulling the shade down does not
+ * pause the activity. Measured on the API 35 emulator on 15 Sep 2026: the tile set
+ * `quick_block_paused` while AppBlocker stayed the top resumed activity, and the Blocking tab went on
+ * showing Stop and Active. Key a read of such a setting on this as well as on the resume tick.
+ */
+@Composable
+fun settingsTick(vararg keys: String): Int {
+    val context = LocalContext.current.applicationContext
+    var tick by remember { mutableIntStateOf(0) }
+    val watched = keys.toSet()
+    DisposableEffect(watched) {
+        val stop = SettingsStore.listen(context, watched) { tick++ }
+        // Anything written between the first read and this registration would otherwise be missed.
+        tick++
+        onDispose { stop() }
     }
     return tick
 }

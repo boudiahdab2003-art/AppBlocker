@@ -1,6 +1,7 @@
 package com.appblocker.data
 
 import android.content.Context
+import android.content.SharedPreferences
 
 /** Small on/off settings (shares the prefs file with PinStore). */
 object SettingsStore {
@@ -320,12 +321,33 @@ object SettingsStore {
     fun clearSetupSeen(context: Context) =
         prefs(context).edit().putBoolean("setup_seen", false).apply()
 
+    const val KEY_QUICK_BLOCK_PAUSED = "quick_block_paused"
+
     /** Quick Block paused = its apps aren't enforced (selection kept). Schedules unaffected. */
     fun quickBlockPaused(context: Context): Boolean =
-        prefs(context).getBoolean("quick_block_paused", false)
+        prefs(context).getBoolean(KEY_QUICK_BLOCK_PAUSED, false)
 
     fun setQuickBlockPaused(context: Context, value: Boolean) =
-        prefs(context).edit().putBoolean("quick_block_paused", value).apply()
+        prefs(context).edit().putBoolean(KEY_QUICK_BLOCK_PAUSED, value).apply()
+
+    /**
+     * Calls [onChange] on the main thread whenever one of [keys] changes, until the returned function
+     * is called.
+     *
+     * For a screen that has to follow a setting changed while it is showing. The Quick Settings tile
+     * pauses Quick Block from the pulled-down shade, and pulling the shade down does not pause the
+     * activity, so a read taken on resume goes stale in front of him (see `settingsTick`). The
+     * returned function is also what keeps the listener alive: SharedPreferences holds listeners
+     * only weakly.
+     */
+    fun listen(context: Context, keys: Set<String>, onChange: () -> Unit): () -> Unit {
+        val sp = prefs(context)
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == null || key in keys) onChange()
+        }
+        sp.registerOnSharedPreferenceChangeListener(listener)
+        return { sp.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
 
     const val KEY_QUICK_BLOCK_ALLOWLIST = "quick_block_allowlist"
 
