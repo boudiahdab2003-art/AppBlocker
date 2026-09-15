@@ -1,6 +1,7 @@
 package com.appblocker.service
 
 import com.appblocker.data.OutageLog
+import com.appblocker.data.UpdatePause
 
 /** What the watchdog found. */
 internal enum class ProtectionState {
@@ -217,4 +218,23 @@ internal fun outageEndedBy(state: ProtectionState): String = when (state) {
     ProtectionState.OK -> "recovered"
     ProtectionState.OFF -> "switched-off"
     else -> "paused"
+}
+
+/**
+ * What blocking is left in once the watcher is back — for the one thing it decides, whether the
+ * stoppage it closes is reported `recovered` or `paused` (invariant 78).
+ *
+ * ⚠️ **The watcher coming back is not blocking coming back while an update pause holds.** A new
+ * version's first connect arms the pause a moment before it closes the stoppage, and nothing is
+ * blocked until Reactivate is tapped. On 15 Sep 2026 report #131 said "Blocking stopped and has now
+ * come back" above a table reading `protection PAUSED`. The pause is decided off the main thread, so
+ * a pending one counts, unless a Strict session is running, which the pause never interrupts.
+ * [UpdatePause.resolve] is that decision, asked here rather than copied.
+ */
+internal fun watcherBackState(
+    pause: UpdatePause.PauseState,
+    strictRunning: Boolean,
+): ProtectionState = when {
+    UpdatePause.resolve(pause, strictRunning).paused -> ProtectionState.PAUSED
+    else -> ProtectionState.OK
 }

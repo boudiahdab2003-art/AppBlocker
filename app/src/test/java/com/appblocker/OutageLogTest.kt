@@ -550,7 +550,10 @@ class OutageLogTest {
     @Test
     fun `self-timed endings are exactly the ones the watcher records itself`() {
         assertEquals(
-            setOf(OutageLog.EndedBy.REBOUND, OutageLog.EndedBy.HEARTBEAT, OutageLog.EndedBy.AFTER_OPEN),
+            setOf(
+                OutageLog.EndedBy.REBOUND, OutageLog.EndedBy.HEARTBEAT,
+                OutageLog.EndedBy.AFTER_OPEN, OutageLog.EndedBy.AFTER_UPDATE,
+            ),
             OutageLog.EndedBy.SELF_TIMED,
         )
         // And every one of them has to be a real, decodable ending, not a string nothing produces.
@@ -704,5 +707,81 @@ class OutageLogTest {
         )
         assertEquals(OutageLog.EndedBy.AFTER_OPEN, OutageLog.decode(OutageLog.encode(e))?.endedBy)
         assertTrue(e.render(), "backBy=rebound-after-open" in e.render())
+    }
+
+    // ---- invariant 78: an install that lands during a stoppage is not a recovery ---------------
+
+    /**
+     * Report #131, 15 Sep 2026: a stoppage from 11:20:59 (`outageAt 1789464059`), opened by build 165,
+     * closed by build 166 the minute it was installed at 12:28. Both ways of knowing say so, and
+     * `blame` rightly did not call that install its cause.
+     */
+    @Test
+    fun `the install that ended the report 131 stoppage is seen`() {
+        val startedAt = 1_789_464_059_000L
+        val installedAt = startedAt + 67 * minute
+        assertTrue(OutageLog.updateLandedDuring(startedAt, 165L, lastUpdateAt = installedAt, currentVersion = 166L))
+        assertEquals(OutageLog.Preceded.NOTHING, OutageLog.blame(startedAt, lastUpdateAt = installedAt, bootedAt = 0L))
+    }
+
+    /** Each way of knowing is enough on its own — each given values the other way would refuse. */
+    @Test
+    fun `an older opening version alone, or a late update stamp alone, is enough`() {
+        // Opened by an older version, the update stamped five minutes in: the window alone says no.
+        assertTrue(OutageLog.updateLandedDuring(now, 165L, lastUpdateAt = now + 5 * minute, currentVersion = 166L))
+        // Opened by the version now running (found down only after the install): the stamp alone says yes.
+        assertTrue(OutageLog.updateLandedDuring(now, 166L, lastUpdateAt = now + 60 * minute, currentVersion = 166L))
+    }
+
+    /**
+     * The install that BEGAN a stoppage is `after=update`, and its rebind stays what it was: one install
+     * is never claimed by both fields. Nor is an old update, an unreadable version or a missing start.
+     */
+    @Test
+    fun `the install that began a stoppage, an old update and an unreadable version are not it`() {
+        // Begun by the install: opened by the new version, stamped seconds after the last event.
+        assertFalse(OutageLog.updateLandedDuring(now, 166L, lastUpdateAt = now + 30_000L, currentVersion = 166L))
+        assertEquals(OutageLog.Preceded.UPDATE, OutageLog.blame(now, lastUpdateAt = now + 30_000L, bootedAt = 0L))
+        // The window's own edge still belongs to blame, which counts its edge as the cause.
+        assertFalse(
+            OutageLog.updateLandedDuring(now, 166L, lastUpdateAt = now + OutageLog.BLAME_WINDOW_MS, currentVersion = 166L),
+        )
+        assertEquals(
+            OutageLog.Preceded.UPDATE,
+            OutageLog.blame(now, lastUpdateAt = now + OutageLog.BLAME_WINDOW_MS, bootedAt = 0L),
+        )
+        // An update from days before the stoppage began.
+        assertFalse(OutageLog.updateLandedDuring(now, 166L, lastUpdateAt = now - 3 * 24 * 60 * minute, currentVersion = 166L))
+        // A version that could not be read says nothing, beside a stamp that says nothing either.
+        assertFalse(OutageLog.updateLandedDuring(now, -1L, lastUpdateAt = now + 5 * minute, currentVersion = 166L))
+        assertFalse(OutageLog.updateLandedDuring(now, 165L, lastUpdateAt = now + 5 * minute, currentVersion = -1L))
+        // No start to measure from, and the versions agree.
+        assertFalse(OutageLog.updateLandedDuring(0L, 166L, lastUpdateAt = now, currentVersion = 166L))
+    }
+
+    /** The install outranks our own screen, and either outranks a plain rebind. */
+    @Test
+    fun `a rebind after an install is filed as the install, even with our own screen open`() {
+        assertEquals(OutageLog.EndedBy.AFTER_UPDATE, OutageLog.rebindEnding(updateLanded = true, followedOwnScreen = true))
+        assertEquals(OutageLog.EndedBy.AFTER_UPDATE, OutageLog.rebindEnding(updateLanded = true, followedOwnScreen = false))
+        assertEquals(OutageLog.EndedBy.AFTER_OPEN, OutageLog.rebindEnding(updateLanded = false, followedOwnScreen = true))
+        assertEquals(OutageLog.EndedBy.REBOUND, OutageLog.rebindEnding(updateLanded = false, followedOwnScreen = false))
+    }
+
+    /** Timed by the watcher, stored and printed under its own name — never the same word as `rebound`. */
+    @Test
+    fun `a rebind that followed our own install survives storage under its own name`() {
+        assertTrue(OutageLog.EndedBy.AFTER_UPDATE in OutageLog.EndedBy.ALL)
+        assertFalse(OutageLog.EndedBy.AFTER_UPDATE == OutageLog.EndedBy.REBOUND)
+        val e = OutageLog.Episode(
+            now, 67 * minute, 34 * minute, false, OutageLog.Preceded.NOTHING, false, 165L,
+            endedBy = OutageLog.EndedBy.AFTER_UPDATE,
+        )
+        assertEquals(OutageLog.EndedBy.AFTER_UPDATE, OutageLog.decode(OutageLog.encode(e))?.endedBy)
+        assertTrue(e.render(), "backBy=rebound-after-update" in e.render())
+        assertTrue(
+            "its length is the watcher's own clock",
+            OutageLog.countsAsTimed(OutageLog.EndedBy.AFTER_UPDATE, 67 * minute),
+        )
     }
 }

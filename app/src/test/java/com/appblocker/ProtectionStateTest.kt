@@ -1,6 +1,7 @@
 package com.appblocker
 
 import com.appblocker.data.OutageLog
+import com.appblocker.data.UpdatePause
 import com.appblocker.service.PROBE_FAIL_LIMIT
 import com.appblocker.service.ProtectionState
 import com.appblocker.service.SERVICE_BIND_GRACE_MS
@@ -8,6 +9,8 @@ import com.appblocker.service.STALE_MIN_USED_MINUTES
 import com.appblocker.service.protectionVerdict
 import com.appblocker.service.bindPending
 import com.appblocker.service.protectionState
+import com.appblocker.service.outageEndedBy
+import com.appblocker.service.watcherBackState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -469,5 +472,25 @@ class ProtectionStateTest {
         }
         // A sweep that never reached the state it is about would pass while proving nothing.
         assertTrue("the sweep never produced a STALLED", stalledSeen > 0)
+    }
+
+    /**
+     * **Invariant 78.** Report #131 said blocking had come back above a table reading `protection
+     * PAUSED`: a new version's first connect arms the update pause a moment before it closes the
+     * stoppage. The pause is decided off the main thread, so a pending one counts — unless a Strict
+     * session is running, which the pause never interrupts. An armed pause stays a pause either way.
+     */
+    @Test fun theWatcherBackIsOnlyARecoveryWhenNoUpdatePauseHoldsBlockingOff() {
+        val none = UpdatePause.PauseState(paused = false, pending = false)
+        val pending = UpdatePause.PauseState(paused = false, pending = true)
+        val armed = UpdatePause.PauseState(paused = true, pending = false)
+        assertEquals(ProtectionState.OK, watcherBackState(none, strictRunning = false))
+        assertEquals(ProtectionState.OK, watcherBackState(none, strictRunning = true))
+        assertEquals(ProtectionState.PAUSED, watcherBackState(pending, strictRunning = false))
+        assertEquals(ProtectionState.OK, watcherBackState(pending, strictRunning = true))
+        assertEquals(ProtectionState.PAUSED, watcherBackState(armed, strictRunning = false))
+        assertEquals(ProtectionState.PAUSED, watcherBackState(armed, strictRunning = true))
+        assertEquals("paused", outageEndedBy(watcherBackState(pending, strictRunning = false)))
+        assertEquals("recovered", outageEndedBy(watcherBackState(none, strictRunning = false)))
     }
 }

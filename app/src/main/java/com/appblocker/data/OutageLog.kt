@@ -202,6 +202,19 @@ object OutageLog {
          */
         const val AFTER_OPEN = "rebound-after-open"
 
+        /**
+         * **Android bound the watcher again after one of AppBlocker's own updates was installed while
+         * it was down** — the install ended the stoppage, not the phone recovering.
+         *
+         * Installing replaces the process the stoppage was about, and the new version's first
+         * `onServiceConnected` is what closes it. Timed by the watcher like [REBOUND], so its length is a
+         * measurement. On 15 Sep 2026 report #131 filed exactly this as `rebound`: a watcher killed at
+         * 11:21 came back at 12:28, the minute v1.165 was installed; `reboundWake` scored it `cold`,
+         * Android acting alone; and blocking was not back at all, because the update pause had just
+         * switched it off (invariant 78). When it applies: [updateLandedDuring].
+         */
+        const val AFTER_UPDATE = "rebound-after-update"
+
         /** An episode recorded before this field existed. Never guessed at. */
         const val UNKNOWN = "unknown"
 
@@ -211,7 +224,9 @@ object OutageLog {
          * episode that silently forgets how it ended, which is the one thing this object exists
          * to record. `everyEndingIsDecodable` fails the build on the omission.
          */
-        val ALL = setOf(BACKGROUND, APP_OPENED, BOOT, GLANCED, REBOUND, HEARTBEAT, AFTER_OPEN, UNKNOWN)
+        val ALL = setOf(
+            BACKGROUND, APP_OPENED, BOOT, GLANCED, REBOUND, HEARTBEAT, AFTER_OPEN, AFTER_UPDATE, UNKNOWN,
+        )
 
         /**
          * ⚠️ **The endings whose `durationMs` is a measurement rather than a ceiling.**
@@ -223,10 +238,11 @@ object OutageLog {
          * number nobody could act on.
          *
          * A new ending belongs here only if the thing recording it *is* the thing that knows the
-         * fault is over (invariant 44). If it had to go and check, it does not. [AFTER_OPEN] is the
-         * watcher's own clock as well — what it is not is Android recovering unassisted.
+         * fault is over (invariant 44). If it had to go and check, it does not. [AFTER_OPEN] and
+         * [AFTER_UPDATE] are the watcher's own clock as well — what they are not is Android recovering
+         * unassisted.
          */
-        val SELF_TIMED = setOf(REBOUND, HEARTBEAT, AFTER_OPEN)
+        val SELF_TIMED = setOf(REBOUND, HEARTBEAT, AFTER_OPEN, AFTER_UPDATE)
     }
 
     object DetectedBy {
@@ -449,6 +465,40 @@ object OutageLog {
     }
 
     /**
+     * **Did one of our own installs land while this stoppage was already running?** (invariant 78)
+     *
+     * Two ways to know, and either is enough:
+     *  - the stoppage was opened by an older version than the one closing it — installing is the only
+     *    way the version changes, so an install landed in between, however soon after the start;
+     *  - an update was noticed more than [BLAME_WINDOW_MS] after the stoppage began, which covers a
+     *    watcher that died unnoticed, was updated over, and was only found down by the new version.
+     *
+     * An update noticed inside the window by the version it installed is the install that BEGAN the
+     * stoppage: [blame] files that one as `after=update` and its rebind is left as it was, so one
+     * install is never claimed by both fields. A version that could not be read (-1) says nothing.
+     */
+    internal fun updateLandedDuring(
+        startedAt: Long,
+        openedOnVersion: Long,
+        lastUpdateAt: Long,
+        currentVersion: Long,
+    ): Boolean =
+        (openedOnVersion > 0L && currentVersion > 0L && openedOnVersion != currentVersion) ||
+            (startedAt > 0L && lastUpdateAt - startedAt > BLAME_WINDOW_MS)
+
+    /**
+     * How a rebind ended the stoppage it closed (invariants 74 and 78). Pure, so the order is a test.
+     *
+     * The install outranks our own screen. Updates are installed from inside the app, so the two often
+     * arrive together — and it was the install that replaced the process the stoppage was about.
+     */
+    internal fun rebindEnding(updateLanded: Boolean, followedOwnScreen: Boolean): String = when {
+        updateLanded -> EndedBy.AFTER_UPDATE
+        followedOwnScreen -> EndedBy.AFTER_OPEN
+        else -> EndedBy.REBOUND
+    }
+
+    /**
      * Was our process already running when the watcher last saw something?
      *
      * [Process.getStartElapsedRealtime] is monotonic and the last-event stamp is wall clock, so
@@ -485,6 +535,22 @@ object OutageLog {
      *  stamp, so the two logs can never disagree about whether an update came first. */
     internal fun lastUpdateAt(context: Context): Long =
         runCatching { prefs(context).getLong(KEY_LAST_UPDATE_AT, 0L) }.getOrDefault(0L)
+
+    /**
+     * [updateLandedDuring] for the stoppage open right now — false when none is, or it cannot be read.
+     *
+     * ⚠️ Only meaningful once [UpdatePause.checkVersionChange] has run in this process: that is what
+     * stamps the update. `onServiceConnected` calls it first, and `CodeShapeTest` holds the order.
+     */
+    internal fun updateLandedDuringOpenEpisode(context: Context): Boolean = runCatching {
+        val p = prefs(context)
+        p.contains(KEY_OPEN_STARTED) && updateLandedDuring(
+            startedAt = p.getLong(KEY_OPEN_STARTED, 0L),
+            openedOnVersion = p.getLong(KEY_OPEN_VERSION, -1L),
+            lastUpdateAt = p.getLong(KEY_LAST_UPDATE_AT, 0L),
+            currentVersion = AppVersion.code(context),
+        )
+    }.getOrDefault(false)
 
     /**
      * Blocking has just been found down. Opens an episode if one isn't already open.

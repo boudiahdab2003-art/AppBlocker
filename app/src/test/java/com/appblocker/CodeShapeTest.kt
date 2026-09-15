@@ -976,9 +976,17 @@ class CodeShapeTest {
         assertTrue("noteWatcherAlive must pass a rebind through reboundEnding", "reboundEnding(" in alive)
         val ending = text.substringAfter("private fun reboundEnding(", "").substringBefore("\n    }")
         assertTrue(
-            "reboundEnding must ask both witnesses and be able to answer AFTER_OPEN",
-            "SelfRestoreLog.claimRebind(" in ending && "OwnUi.openedWithin(" in ending &&
-                "EndedBy.AFTER_OPEN" in ending,
+            "reboundEnding must ask both witnesses",
+            "SelfRestoreLog.claimRebind(" in ending && "OwnUi.openedWithin(" in ending,
+        )
+        // Since invariant 78 the answer is filed by OutageLog.rebindEnding, whose order (the install,
+        // then our own screen, then a plain rebind) OutageLogTest pins. What only this file can show is
+        // that the install and both witnesses actually reach it.
+        val filed = callArgs(ending, "OutageLog.rebindEnding(")
+        assertEquals("reboundEnding must file its answer through OutageLog.rebindEnding once", 1, filed.size)
+        assertTrue(
+            "reboundEnding must hand rebindEnding whether an install landed, and both witnesses",
+            "updateLandedDuringOpenEpisode(" in filed.single() && "reopened || opened" in filed.single(),
         )
         for (file in listOf("MainActivity.kt", "ui/RestoreActivity.kt")) {
             val resume = code(source(file).readText())
@@ -989,6 +997,69 @@ class CodeShapeTest {
                 "OwnUi.resumedAtRt" in resume,
             )
         }
+    }
+
+    // ---- invariant 78 ------------------------------------------------------------------------
+
+    /**
+     * **Invariant 78: a new version notices its own install before the watcher closes a stoppage.**
+     *
+     * Report #131's stoppage was closed by v1.165's first `onServiceConnected`, the minute it was
+     * installed, and filed as Android recovering alone. What lets the close know it followed an install
+     * — the update stamp, and the pending pause that makes it `paused` — is written by
+     * `UpdatePause.checkVersionChange`. Run after the close, it is written too late to be read.
+     */
+    @Test
+    fun `a new version notices its own install before the watcher closes a stoppage`() {
+        val connect = code(source("service/BlockerAccessibilityService.kt").readText())
+            .substringAfter("override fun onServiceConnected() {", "")
+            .substringBefore("override fun ")
+        assertTrue("onServiceConnected is gone; this check is reading nothing", connect.isNotEmpty())
+        val version = connect.indexOf("UpdatePause.checkVersionChange(")
+        val close = connect.indexOf("noteWatcherAlive(")
+        assertTrue("onServiceConnected no longer checks for a version change", version >= 0)
+        assertTrue("onServiceConnected no longer closes its own stoppage", close >= 0)
+        assertTrue(
+            "UpdatePause.checkVersionChange must run before noteWatcherAlive, or a stoppage our own " +
+                "install ended is filed as Android recovering alone, and never as paused",
+            version < close,
+        )
+    }
+
+    /**
+     * **And the close says whether blocking really came back.** A fixed `ProtectionState.OK` reports
+     * every close by the watcher as `recovered` — including #131's, where the update pause had just
+     * switched blocking off ("Blocking stopped and has now come back" above `protection PAUSED`).
+     */
+    @Test
+    fun `the watcher's close reads the update pause rather than assuming a recovery`() {
+        val text = code(source("service/ProtectionWatchdog.kt").readText())
+        val alive = text.substringAfter("fun noteWatcherAlive(", "").substringBefore("\n    }")
+        assertTrue("noteWatcherAlive is gone; this check is reading nothing", alive.isNotEmpty())
+        val closes = callArgs(alive, "endOpenOutage(")
+        assertEquals("noteWatcherAlive must close the open stoppage exactly once", 1, closes.size)
+        assertFalse(
+            "noteWatcherAlive passes a fixed ProtectionState.OK, so a close under the update pause " +
+                "reads as a recovery",
+            "ProtectionState.OK" in closes.single(),
+        )
+        assertTrue(
+            "the close must take its state from watcherBackState, with both update-pause flags",
+            "watcherBackState(" in closes.single() && "SettingsStore.updatePauseState(" in closes.single(),
+        )
+    }
+
+    /** **Invariant 72, extended by report #131: a signalled death keeps its signal.** */
+    @Test
+    fun `the exit reader keeps the signal of a signalled death`() {
+        val read = code(source("data/ProcessExits.kt").readText())
+            .substringAfter("fun read(", "").substringBefore("\n    }")
+        assertTrue("ProcessExits.read is gone; this check is reading nothing", read.isNotEmpty())
+        assertTrue(
+            "ProcessExits.read no longer passes the status through signalOf, so `signaled` loses the " +
+                "one detail Android gives it",
+            "signalOf(" in read && "it.status" in read,
+        )
     }
 
     /** **And the reopen is asked for from the stalled branch, and only there** — anywhere else it

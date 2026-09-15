@@ -1552,6 +1552,37 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
 
     **The shape to grep for: a system broadcast trusted to mean the one thing its name says.**
 
+78. **An install that lands during a stoppage is not a recovery.** Report #131 (15 Sep 2026): the
+    watcher was killed at 11:21 (`killedBy=signaled@fg-service`) and came back at 12:28, the minute
+    v1.165 was installed. Installing replaces the process, and the new version's first
+    `onServiceConnected` closed the stoppage through `noteWatcherAlive(REBOUND)` — so it was filed
+    `backBy=rebound`, `reboundWake` scored it `cold` (11/5 → 11/6: Android acting alone), and the
+    report said "Blocking stopped and has now come back" while the update pause had just switched
+    blocking off: the same table reads `protection PAUSED`. Proved from the report rather than
+    assumed: `reportOutage` builds at the close with `BuildConfig.VERSION_NAME`, and #131 says 1.165
+    and lists the install's own exit record (`package-updated … installPackageLI`).
+
+    A rebind now ends `rebound-after-update` when the stoppage was opened by an older version, or an
+    update was noticed more than `BLAME_WINDOW_MS` after it began. Inside the window the install is
+    the one that began it — `blame` already files that as `after=update` — so its rebind is left as
+    it was. The install outranks `rebound-after-open`. Timed, never unassisted, never in
+    `reboundWake`. And every close by the watcher reports `paused` rather than `recovered` while the
+    update pause is in force or about to be: `watcherBackState` asks `UpdatePause.resolve` with both
+    flags and the Strict snapshot, because the pause is decided off the main thread a moment after the
+    connect. `onServiceConnected` must check the version before it closes anything. `CodeShapeTest`
+    holds that order, the witnesses and the state; `OutageLogTest` holds the rule and the precedence.
+    Reproduced on the API 35 emulator, before and after: with the watcher held under
+    `Crashed services` and a stoppage open, installing a newer build cleared the crash mark and bound
+    the watcher within seconds. The unmodified code filed that close `rebound` and scored a cold
+    `reboundWake`; the fixed build filed the same close `rebound-after-update` and left `reboundWake`
+    alone. Both times `update_paused` was already true at the close.
+
+    Also from #131: `signaled` carries no subreason and no description, so its signal number now rides
+    as `sub=sig-N` (`ApplicationExitInfo.getStatus`).
+
+    **The shape to grep for: a "blocking is back" signal that our own action produced, read as the
+    fault ending by itself.**
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused

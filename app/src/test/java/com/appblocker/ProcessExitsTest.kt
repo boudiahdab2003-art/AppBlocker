@@ -143,4 +143,22 @@ class ProcessExitsTest {
         assertTrue(line, "note=frozen" in line)
         assertFalse(line, "down=" in line || "off=" in line)
     }
+
+    // ---- a signalled death names its signal -----------------------------------------------------
+
+    /**
+     * 15 Sep 2026: the first killer the owner's phone named was `signaled@fg-service`, with no
+     * subreason and no description. The status is the signal for that reason only; for the others it
+     * is an exit code or zero, and borrowing it would print a signal that never happened.
+     */
+    @Test fun `a signalled death says which signal, and no other reason borrows the status`() {
+        assertEquals("sig-9", ProcessExits.signalOf(reason = 2, status = 9))
+        assertNull(ProcessExits.signalOf(reason = 2, status = 0))
+        assertNull("exit-self: the status is an exit code", ProcessExits.signalOf(reason = 1, status = 9))
+        assertNull("crash", ProcessExits.signalOf(reason = 4, status = 9))
+        val token = exit(now, reason = "signaled", sub = ProcessExits.signalOf(2, 9), importance = 125).token()
+        assertEquals("signaled:sig-9@fg-service", token)
+        assertEquals("a signal token must survive storage", token, ProcessExits.safeToken(token))
+        assertTrue(exit(now, reason = "signaled", sub = "sig-9", importance = 125).render().contains("sub=sig-9"))
+    }
 }

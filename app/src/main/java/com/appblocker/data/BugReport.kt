@@ -379,6 +379,9 @@ data class BugReport(
         appendLine("**rebound-after-open** is timed by the watcher too, but it came within seconds")
         appendLine("of AppBlocker's own screen being opened — by him, or by the app reopening itself —")
         appendLine("so it is NOT Android recovering alone. Never count it with **rebound**.")
+        appendLine("**rebound-after-update** is the same for an AppBlocker update installed while it")
+        appendLine("was down: installing replaced the process, and the new version's own start ended")
+        appendLine("the stoppage. Whether blocking itself came back then depends on the update pause.")
         appendLine()
         appendLine("`killedBy=` is Android's own record of what closed the process, taken when the")
         appendLine("stoppage was noticed: the first death after the blocker's last sign of life.")
@@ -410,7 +413,8 @@ data class BugReport(
             appendLine("AppBlocker's process ended**, read when this report was written. `reason=` is")
             appendLine("Android's category — **low-memory**, **freezer**, **user-requested** (Force stop,")
             appendLine("or a swipe from Recents), **other** (usually a manufacturer's own kill),")
-            appendLine("**package-updated** (our own install). `sub=` is its detail. `was=` is how")
+            appendLine("**package-updated** (our own install). `sub=` is its detail — for **signaled**,")
+            appendLine("the signal: `sig-9` is SIGKILL, the process killed outright. `was=` is how")
             appendLine("important Android thought the process was: **perceptible** or better means it")
             appendLine("died while still the blocker; **cached** or **empty** means it had already")
             appendLine("stopped being one and was only reclaimed. `note=` is the phone's own wording,")
@@ -431,8 +435,25 @@ data class BugReport(
      * unlike a profile, the entries either side of the gap are exactly what a reader wants.
      */
     private fun outageBody(): String = buildString {
-        appendLine("**Blocking stopped and has now come back.** Nothing crashed — this is the")
-        appendLine("failure that cannot report itself as a fault, so the app times it instead.")
+        // The first sentence is the one that gets read, so it follows how the stoppage ended. Report
+        // #131 opened "has now come back" above a table reading `protection PAUSED` (invariant 78).
+        when (context["outageEnded"]) {
+            "paused" -> {
+                appendLine("**Blocking stopped, and the watcher is back — but blocking is not.** It is")
+                appendLine("paused after an update and stays off until Reactivate is tapped. Nothing")
+                appendLine("crashed — this is the failure that cannot report itself as a fault, so the")
+                appendLine("app times it instead.")
+            }
+            "switched-off" -> {
+                appendLine("**Blocking stopped, and then the accessibility switch was found OFF.** Nothing")
+                appendLine("crashed — this is the failure that cannot report itself as a fault, so the")
+                appendLine("app times it instead.")
+            }
+            else -> {
+                appendLine("**Blocking stopped and has now come back.** Nothing crashed — this is the")
+                appendLine("failure that cannot report itself as a fault, so the app times it instead.")
+            }
+        }
         appendLine("The phone was unprotected for the period below.")
         appendLine()
         appendLine("### Which failure this was")
@@ -462,9 +483,9 @@ data class BugReport(
         appendLine("and shortening it does not need the cause to be known.")
         appendLine()
         appendLine("`outageEnded` says how it stopped. Only **recovered** means blocking came back:")
-        appendLine("**switched-off** is him doing the repair by hand, **paused** is an update landing")
-        appendLine("mid-outage. Counting either as a recovery would flatter the app in the one log")
-        appendLine("written to judge it.")
+        appendLine("**switched-off** is him doing the repair by hand, **paused** is the watcher back")
+        appendLine("while an update pause keeps blocking off. Counting either as a recovery would")
+        appendLine("flatter the app in the one log written to judge it.")
         appendLine()
         appendLine("### Blocks either side of the gap")
         appendLine()

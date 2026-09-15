@@ -4,11 +4,13 @@ import android.content.Context
 import android.os.Process
 import android.os.SystemClock
 import com.appblocker.data.BootAudit
+import com.appblocker.data.DeviceBoot
 import com.appblocker.data.OutageLog
 import com.appblocker.data.OwnUi
 import com.appblocker.data.ProcessExits
 import com.appblocker.data.SelfRestoreLog
 import com.appblocker.data.ServiceHealth
+import com.appblocker.data.SessionClock
 import com.appblocker.data.SettingsStore
 import com.appblocker.data.SwitchOffLog
 import com.appblocker.ui.hasUsageAccess
@@ -254,7 +256,13 @@ object ProtectionWatchdog {
      */
     fun noteWatcherAlive(context: Context, calledBy: String) = guarded(context, "watcherAlive") {
         val ending = if (calledBy == OutageLog.EndedBy.REBOUND) reboundEnding(context) else calledBy
-        endOpenOutage(context, ProtectionState.OK, ending)
+        // Not a fixed OK: straight after our own install the watcher is back while the update pause
+        // keeps blocking off, and that stoppage has to read `paused`, not `recovered` (invariant 78).
+        endOpenOutage(
+            context,
+            watcherBackState(SettingsStore.updatePauseState(context), strictRunning(context)),
+            ending,
+        )
         // A bound watcher is proof the switch is ON, so a switched-off period ends here too.
         endSwitchOff(context, ending)
     }
@@ -273,12 +281,33 @@ object ProtectionWatchdog {
      * `reboundWake` would have scored it `cold`, Android acting on its own. Both halves are always
      * evaluated: the claim settles a pending self-reopen even when his own open already answers
      * (invariant 74).
+     *
+     * ⚠️ **Nor is a rebind that followed our own install** (invariant 78). On 15 Sep 2026 a stoppage
+     * that began with a kill at 11:21 ended at 12:28, the minute v1.165 was installed, and was filed
+     * `rebound` and scored `cold` — by the new version's first connect, which is where this runs. The
+     * install outranks the screen; [OutageLog.rebindEnding] holds that order.
      */
     private fun reboundEnding(context: Context): String {
         val reopened = SelfRestoreLog.claimRebind(context)
         val opened = OwnUi.openedWithin(SystemClock.elapsedRealtime(), OPEN_ATTRIBUTION_MS)
-        return if (reopened || opened) OutageLog.EndedBy.AFTER_OPEN else OutageLog.EndedBy.REBOUND
+        return OutageLog.rebindEnding(
+            updateLanded = OutageLog.updateLandedDuringOpenEpisode(context),
+            followedOwnScreen = reopened || opened,
+        )
     }
+
+    /**
+     * Whether a Strict session is running, answered without waiting for Room: the copy of the session
+     * the watcher keeps for its first seconds ([SettingsStore.strictSnapshot]), on the clock rule
+     * [com.appblocker.data.UpdatePause] decides the pause with. Unreadable counts as not running,
+     * which can only make a stoppage read `paused` — never claim a recovery that did not happen.
+     */
+    private fun strictRunning(context: Context): Boolean = runCatching {
+        val s = SettingsStore.strictSnapshot(context)
+        SessionClock.remaining(
+            s.realtimeStart, s.realtimeEnd, s.wallStart, s.wallEnd, s.bootCount, DeviceBoot.count(context),
+        ) > 0L
+    }.getOrDefault(false)
 
     /**
      * Android's own record of the first death since the watcher's last sign of life — read when an

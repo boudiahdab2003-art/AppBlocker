@@ -217,6 +217,32 @@ class ReportBodyTest {
         assertTrue(without.contains("`killedBy=`"))
         assertTrue(without.contains("`usedWindow=`"))
         assertTrue(without.contains("**rebound-after-open**"))
+        // Invariant 78: an install that ended a stoppage has its own word, and a signal is explained.
+        assertTrue(without.contains("**rebound-after-update**"))
+        assertTrue(with.contains("`sig-9`"))
+    }
+
+    /**
+     * Invariant 78: report #131 opened "Blocking stopped and has now come back" above a table whose own
+     * reading was `protection PAUSED`. The first sentence is the one that is read, so it has to follow
+     * how the stoppage ended.
+     */
+    @Test
+    fun `an outage report says blocking came back only when it did`() {
+        fun outage(ended: String) = BugReport.fromOutage(
+            appVersion = "1.166", flavor = "github", androidSdk = 36, device = "d",
+            context = mapOf("outageAt" to "1789464059", "outageMin" to "67", "outageEnded" to ended),
+            recentBlocks = emptyList(),
+            recentOutages = emptyList(),
+        ).body()
+
+        assertTrue(outage("recovered").contains("has now come back"))
+        val paused = outage("paused")
+        assertFalse(paused, paused.contains("has now come back"))
+        assertTrue(paused, paused.contains("Reactivate"))
+        val off = outage("switched-off")
+        assertFalse(off, off.contains("has now come back"))
+        assertTrue(off, off.contains("found OFF"))
     }
 
     // --- privacy still holds after everything added -------------------------------------------

@@ -71,7 +71,8 @@ object ProcessExits {
         val at: Long,
         /** From [reasonName]'s table. */
         val reason: String,
-        /** Android's subreason as lowercase words joined by `-`, or null when it gave none. */
+        /** Android's subreason as lowercase words joined by `-`; for a signalled death, the signal
+         *  ([signalOf]); null when it gave neither. */
         val sub: String?,
         /** [RunningAppProcessInfo] importance at the moment of death. */
         val importance: Int,
@@ -128,6 +129,19 @@ object ProcessExits {
         if (words.isEmpty() || words == listOf("unknown")) return null
         return words.joinToString("-")
     }
+
+    /**
+     * **Which signal ended the process**, as `sig-9` — for the one reason whose status field is a
+     * signal number ([ApplicationExitInfo.REASON_SIGNALED]), and null for every other.
+     *
+     * On 15 Sep 2026 the first killer the owner's phone ever named was `signaled@fg-service`: ended by
+     * a signal while still the blocker, with no subreason and no description. Which signal is the
+     * next question — 9 is SIGKILL, the process killed outright; any other number points elsewhere —
+     * and [ApplicationExitInfo.getStatus] is public API nothing here read. For every other reason the
+     * status is an exit code or zero, so it is never borrowed.
+     */
+    internal fun signalOf(reason: Int, status: Int): String? =
+        if (reason == ApplicationExitInfo.REASON_SIGNALED && status > 0) "sig-$status" else null
 
     /**
      * How important Android considered the process when it died.
@@ -219,7 +233,7 @@ object ProcessExits {
                     Exit(
                         at = it.timestamp,
                         reason = reasonName(it.reason),
-                        sub = subreasonOf(it.toString()),
+                        sub = subreasonOf(it.toString()) ?: signalOf(it.reason, it.status),
                         importance = it.importance,
                         note = sanitiseNote(it.description),
                     )
