@@ -60,6 +60,47 @@ object SilentInstaller {
      */
     fun install(context: Context, apk: File): Boolean {
         if (!possible()) return false
+        // Marked BEFORE the commit, not after: this process is killed the moment the replacement
+        // lands, so anything written afterwards would never be written at all. The flag is what
+        // stops the new version pausing blocking on the owner's behalf — see the class KDoc, and
+        // SettingsStore.setAutoInstalled on why it is a commit(). A mark that cannot be written is
+        // an install that must not happen: the new version would pause blocking behind his back.
+        if (runCatching { SettingsStore.setAutoInstalled(context, true) }.isFailure) return false
+        val committed = commit(context, listOf("appblocker" to apk), PURPOSE_UPDATE)
+        // The mark must not outlive a failed attempt, or the NEXT update — a manual one he taps
+        // through himself — would skip the pause on the strength of this one.
+        if (!committed) runCatching { SettingsStore.setAutoInstalled(context, false) }
+        return committed
+    }
+
+    /**
+     * **Reinstalls AppBlocker's own installed copy, to make Android bind a killed watcher again**
+     * (invariant 81, [SelfReinstallLog]).
+     *
+     * Same files, same version, same signature: nothing of his changes, and the update pause is not
+     * armed, because [UpdatePause] pauses on a *version change* and there is none. ⚠️ So it must NOT
+     * set [SettingsStore.setAutoInstalled] the way [install] does: with no version change nothing
+     * consumes that mark, and it would sit there until his next real update — which he taps through
+     * himself — and switch that update's pause off.
+     *
+     * Every part of the installed app goes in, the base and any splits, or the system refuses a
+     * session that would drop a part it already has.
+     */
+    fun reinstallSelf(context: Context): Boolean {
+        if (!possible()) return false
+        val info = context.applicationInfo
+        val parts = buildList {
+            add("base.apk" to File(info.sourceDir))
+            info.splitSourceDirs?.forEachIndexed { i, path -> add("split_$i.apk" to File(path)) }
+        }
+        return commit(context, parts, PURPOSE_REPAIR)
+    }
+
+    /**
+     * Streams [parts] into one session and commits it without user action. False when the session
+     * could not even be created, written or committed; true means it was *handed to the system*.
+     */
+    private fun commit(context: Context, parts: List<Pair<String, File>>, purpose: String): Boolean {
         val installer = context.packageManager.packageInstaller
         // Held outside the try so the failure path can abandon it. A session that is created and
         // then never committed or abandoned stays on the system's books: PackageInstaller caps how
@@ -69,11 +110,6 @@ object SilentInstaller {
         // nothing to see.
         var sessionId = -1
         return try {
-            // Marked BEFORE the commit, not after: this process is killed the moment the
-            // replacement lands, so anything written afterwards would never be written at all.
-            // The flag is what stops the new version pausing blocking on the owner's behalf —
-            // see the class KDoc, and SettingsStore.setAutoInstalled on why it is a commit().
-            SettingsStore.setAutoInstalled(context, true)
             val params = PackageInstaller.SessionParams(
                 PackageInstaller.SessionParams.MODE_FULL_INSTALL,
             ).apply {
@@ -84,34 +120,42 @@ object SilentInstaller {
             }
             sessionId = installer.createSession(params)
             installer.openSession(sessionId).use { session ->
-                apk.inputStream().use { input ->
-                    session.openWrite("appblocker", 0, apk.length()).use { output ->
-                        input.copyTo(output)
-                        session.fsync(output)
+                for ((name, apk) in parts) {
+                    apk.inputStream().use { input ->
+                        session.openWrite(name, 0, apk.length()).use { output ->
+                            input.copyTo(output)
+                            session.fsync(output)
+                        }
                     }
                 }
-                session.commit(resultSender(context, sessionId))
+                session.commit(resultSender(context, sessionId, purpose))
             }
             true
         } catch (e: Exception) {
-            // The mark must not outlive a failed attempt, or the NEXT update — a manual one he
-            // taps through himself — would skip the pause on the strength of this one.
-            runCatching { SettingsStore.setAutoInstalled(context, false) }
             if (sessionId != -1) runCatching { installer.abandonSession(sessionId) }
             false
         }
     }
 
+    /** An update to a newer version ([install]). */
+    const val PURPOSE_UPDATE = "update"
+
+    /** The same version reinstalled to revive the watcher ([reinstallSelf]). */
+    const val PURPOSE_REPAIR = "repair"
+
     /** Where the system reports what happened — [com.appblocker.service.InstallResultReceiver],
      *  addressed by class rather than by action so no implicit-broadcast rule can stand between
      *  the installer and the one answer that needs acting on. Required by `commit`, even though
-     *  the interesting outcome (success) kills this process before anything is delivered. */
-    private fun resultSender(context: Context, sessionId: Int): android.content.IntentSender =
+     *  the interesting outcome (success) kills this process before anything is delivered. The
+     *  purpose rides along so a refusal is told apart: an update waits for a tap, a repair is
+     *  blocking waiting for one. */
+    private fun resultSender(context: Context, sessionId: Int, purpose: String): android.content.IntentSender =
         PendingIntent.getBroadcast(
             context,
             sessionId,
             Intent(context, InstallResultReceiver::class.java)
-                .setAction(InstallResultReceiver.ACTION_RESULT),
+                .setAction(InstallResultReceiver.ACTION_RESULT)
+                .putExtra(InstallResultReceiver.EXTRA_PURPOSE, purpose),
             // MUTABLE because the system fills the status (and the confirmation intent) in.
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
         ).intentSender

@@ -8,6 +8,7 @@ import com.appblocker.data.BugReportQueue
 import com.appblocker.data.HealthFacts
 import com.appblocker.data.OutageLog
 import com.appblocker.data.ProtectionPulse
+import com.appblocker.data.SelfReinstallLog
 import com.appblocker.data.SelfRestoreLog
 import com.appblocker.data.ServiceHealth
 import com.appblocker.data.SettingsStore
@@ -55,6 +56,7 @@ object HealthReader {
         val offTotals = runCatching { SwitchOffLog.totals(ctx) }.getOrDefault(SwitchOffLog.Totals())
         val offLast = runCatching { SwitchOffLog.last(ctx) }.getOrNull()
         val restore = runCatching { SelfRestoreLog.counts(ctx) }.getOrDefault(SelfRestoreLog.Counts())
+        val repair = runCatching { SelfReinstallLog.counts(ctx) }.getOrDefault(SelfReinstallLog.Counts())
         // UNKNOWN (-1) means the scheduler has never been seen to run at all, which is not the
         // same as "ran a long time ago" — pass it through rather than flattening to a duration.
         val workerSilentMs = safe(ProtectionPulse.UNKNOWN) { ProtectionPulse.silentFor(ctx) }
@@ -90,6 +92,12 @@ object HealthReader {
             restoreNoRebind = restore.noRebind,
             restoreNotLaunched = restore.notLaunched,
             restoreFutileStreak = restore.futileStreak,
+            repairAttempts = repair.attempts,
+            repairHelped = repair.helped,
+            repairNoRebind = repair.noRebind,
+            repairAskedTap = repair.askedTap,
+            repairFailed = repair.failed,
+            repairFutileStreak = repair.futileStreak,
             notifAccess = runCatching {
                 androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(ctx)
                     .contains(ctx.packageName)

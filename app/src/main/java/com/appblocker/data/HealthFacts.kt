@@ -127,6 +127,14 @@ object HealthFacts {
         val restoreNoRebind: Int = 0,
         val restoreNotLaunched: Int = 0,
         val restoreFutileStreak: Int = 0,
+        /** AppBlocker reinstalling itself when the watcher was found killed — see
+         *  [SelfReinstallLog] (invariant 81). Attempts, and what they came to. */
+        val repairAttempts: Int = 0,
+        val repairHelped: Int = 0,
+        val repairNoRebind: Int = 0,
+        val repairAskedTap: Int = 0,
+        val repairFailed: Int = 0,
+        val repairFutileStreak: Int = 0,
         /** Notification access — the path Android restarts AppBlocker by after a force stop
          *  (invariant 76). Null when it could not be read. */
         val notifAccess: Boolean? = null,
@@ -344,6 +352,7 @@ object HealthFacts {
         }
         outageFact(r)?.let { add(it) }
         switchOffFact(r)?.let { add(it) }
+        selfRepairFact(r)?.let { add(it) }
         selfRestoreFact(r)?.let { add(it) }
         notificationAccessFact(r)?.let { add(it) }
         schedulerFact(r)?.let { add(it) }
@@ -585,6 +594,39 @@ object HealthFacts {
         return Fact(
             "The accessibility switch was found OFF ${r.switchOffCount} time(s)",
             head + cost + last + guard,
+            good = null,
+        )
+    }
+
+    /**
+     * AppBlocker reinstalling itself to bring a killed watcher back — a measurement, never a verdict,
+     * and the one that says whether the one repair seen to work on his phone keeps working
+     * (invariant 81). See [SelfReinstallLog]. It states the try and counts what followed; it does not
+     * argue for itself (the reopen fact's lesson, 18 Sep 2026).
+     */
+    private fun selfRepairFact(r: Reading): Fact? {
+        if (r.repairAttempts <= 0) return null
+        val detail = buildString {
+            append("When your phone shuts the blocker down, AppBlocker reinstalls itself, because an ")
+            append("install is what makes Android start the blocker again. Nothing of yours changes. ")
+            append("Blocking came back within minutes ${r.repairHelped} time(s).")
+            if (r.repairNoRebind > 0) {
+                append(" ${r.repairNoRebind} time(s) it reinstalled and blocking did not come back.")
+            }
+            if (r.repairAskedTap > 0) {
+                append(" ${r.repairAskedTap} time(s) your phone asked you to confirm it first.")
+            }
+            if (r.repairFailed > 0) {
+                append(" ${r.repairFailed} time(s) the phone refused or it could not start.")
+            }
+            if (r.repairFutileStreak >= SelfReinstallLog.MAX_FUTILE_STREAK) {
+                append(" The last ${r.repairFutileStreak} tries did not help, so it has stopped ")
+                append("for a day and leaves it to the alert.")
+            }
+        }
+        return Fact(
+            "AppBlocker reinstalled itself ${r.repairAttempts} time(s) to bring blocking back",
+            detail,
             good = null,
         )
     }

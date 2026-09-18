@@ -9,6 +9,7 @@ import com.appblocker.data.OutageLog
 import com.appblocker.data.OwnSpace
 import com.appblocker.data.OwnUi
 import com.appblocker.data.ProcessExits
+import com.appblocker.data.SelfReinstallLog
 import com.appblocker.data.SelfRestoreLog
 import com.appblocker.data.ServiceHealth
 import com.appblocker.data.SessionClock
@@ -173,7 +174,18 @@ object ProtectionWatchdog {
         // hours that were not an outage at all. An instrument that keeps measuring after the thing
         // it measures has stopped is worse than one that stops.
         val outageWasOpen = OutageLog.isOpen(context)
-        if (state != ProtectionState.STALLED) endOpenOutage(context, state, calledBy)
+        if (state != ProtectionState.STALLED) {
+            // ⚠️ A repair reinstall that has just brought the watcher back is OURS, whichever
+            // observer sees it first (invariant 81). After the reinstall the new process hears both
+            // its own MY_PACKAGE_REPLACED check and the watcher's connect, in no fixed order; filed
+            // by this check it would read `boot` or `background` — the fault ending by itself.
+            val ending = if (state == ProtectionState.OK && SelfReinstallLog.claimRebind(context)) {
+                OutageLog.EndedBy.AFTER_REPAIR
+            } else {
+                calledBy
+            }
+            endOpenOutage(context, state, ending)
+        }
         // ⚠️ **OFF used to be read as a choice and timed by nothing.** On 10 Sep 2026 the switch
         // was found OFF after fourteen hours with no sign of the watcher, and not a line of it
         // reached the stoppage history — so if the phone is what switches it off, the largest gap
@@ -226,16 +238,18 @@ object ProtectionWatchdog {
                 // he has to happen to look at. Re-armed on every check that still sees STALLED,
                 // and cancelled by endOpenOutage on any exit from it.
                 ProtectionScheduler.scheduleStalledRepeat(context)
-                // ⭐ **And do not wait for him.** On 14 Sep 2026 he saw this alert at about 11:02 and
-                // blocking stayed down until he opened the app at 16:58, when it came back within a
-                // second. He chose that the app open itself instead (invariant 74). It declines almost
-                // always — not unbound, phone not in use, tried recently, or given up after tries
-                // that did not help — and every attempt it does make is judged.
-                SelfRestore.maybeReopen(
-                    context,
-                    arm = reading.arm ?: OutageLog.DetectedBy.UNBOUND,
-                    calledBy = calledBy,
-                )
+                // ⭐ **And do not wait for him.** First the repair seen to work on his phone: an
+                // install of our own package makes Android bind the watcher again (15 Sep 2026, #131),
+                // so a killed watcher is answered by reinstalling our own copy (invariant 81). It
+                // replaces this process, so nothing else starts on this check when it goes ahead.
+                val arm = reading.arm ?: OutageLog.DetectedBy.UNBOUND
+                if (!SelfReinstall.maybeRepair(context, arm = arm, calledBy = calledBy)) {
+                    // Otherwise the reopen, his choice on 14 Sep 2026 (invariant 74) — kept on
+                    // 18 Sep although it had not helped yet. It declines almost always — not
+                    // unbound, phone not in use, tried recently, or given up after tries that did
+                    // not help — and every attempt it does make is judged.
+                    SelfRestore.maybeReopen(context, arm = arm, calledBy = calledBy)
+                }
             }
             // Off after an update, pending reactivation. Worth an alert precisely because it is
             // self-inflicted and easy to forget: the app was doing nothing at all, and saying it
@@ -301,10 +315,13 @@ object ProtectionWatchdog {
      * install outranks the screen; [OutageLog.rebindEnding] holds that order.
      */
     private fun reboundEnding(context: Context): String {
+        // All three claims are always made: each settles its own pending attempt, whichever wins.
         val reopened = SelfRestoreLog.claimRebind(context)
+        val repaired = SelfReinstallLog.claimRebind(context)
         val opened = OwnUi.openedWithin(SystemClock.elapsedRealtime(), OPEN_ATTRIBUTION_MS)
         return OutageLog.rebindEnding(
             updateLanded = OutageLog.updateLandedDuringOpenEpisode(context),
+            repaired = repaired,
             followedOwnScreen = reopened || opened,
         )
     }

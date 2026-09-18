@@ -215,6 +215,17 @@ object OutageLog {
          */
         const val AFTER_UPDATE = "rebound-after-update"
 
+        /**
+         * **AppBlocker reinstalled itself to bring the watcher back, and it came back** (invariant 81).
+         *
+         * Installing is the one thing seen to revive a killed watcher on his phone (#131: a stoppage
+         * the phone had left alone for an hour ended the minute v1.165 went on), because Android
+         * rebinds a package's accessibility services whenever the package is replaced. So when the
+         * watcher is found dead, the app reinstalls its own copy ([SelfReinstallLog]). Timed by the
+         * watcher like [REBOUND] — but it is our repair working, never Android recovering alone.
+         */
+        const val AFTER_REPAIR = "rebound-after-repair"
+
         /** An episode recorded before this field existed. Never guessed at. */
         const val UNKNOWN = "unknown"
 
@@ -225,7 +236,8 @@ object OutageLog {
          * to record. `everyEndingIsDecodable` fails the build on the omission.
          */
         val ALL = setOf(
-            BACKGROUND, APP_OPENED, BOOT, GLANCED, REBOUND, HEARTBEAT, AFTER_OPEN, AFTER_UPDATE, UNKNOWN,
+            BACKGROUND, APP_OPENED, BOOT, GLANCED, REBOUND, HEARTBEAT, AFTER_OPEN, AFTER_UPDATE,
+            AFTER_REPAIR, UNKNOWN,
         )
 
         /**
@@ -238,11 +250,11 @@ object OutageLog {
          * number nobody could act on.
          *
          * A new ending belongs here only if the thing recording it *is* the thing that knows the
-         * fault is over (invariant 44). If it had to go and check, it does not. [AFTER_OPEN] and
-         * [AFTER_UPDATE] are the watcher's own clock as well — what they are not is Android recovering
-         * unassisted.
+         * fault is over (invariant 44). If it had to go and check, it does not. [AFTER_OPEN],
+         * [AFTER_UPDATE] and [AFTER_REPAIR] are the watcher's own clock as well — what they are not is
+         * Android recovering unassisted.
          */
-        val SELF_TIMED = setOf(REBOUND, HEARTBEAT, AFTER_OPEN, AFTER_UPDATE)
+        val SELF_TIMED = setOf(REBOUND, HEARTBEAT, AFTER_OPEN, AFTER_UPDATE, AFTER_REPAIR)
     }
 
     object DetectedBy {
@@ -487,13 +499,22 @@ object OutageLog {
             (startedAt > 0L && lastUpdateAt - startedAt > BLAME_WINDOW_MS)
 
     /**
-     * How a rebind ended the stoppage it closed (invariants 74 and 78). Pure, so the order is a test.
+     * How a rebind ended the stoppage it closed (invariants 74, 78 and 81). Pure, so the order is a
+     * test.
      *
      * The install outranks our own screen. Updates are installed from inside the app, so the two often
-     * arrive together — and it was the install that replaced the process the stoppage was about.
+     * arrive together — and it was the install that replaced the process the stoppage was about. A
+     * repair reinstall is an install too, of the same version, so it sits between them: a new version
+     * landing is the stronger fact, and the repair's own install is what replaced the process whether
+     * or not a screen of ours was also up.
      */
-    internal fun rebindEnding(updateLanded: Boolean, followedOwnScreen: Boolean): String = when {
+    internal fun rebindEnding(
+        updateLanded: Boolean,
+        repaired: Boolean,
+        followedOwnScreen: Boolean,
+    ): String = when {
         updateLanded -> EndedBy.AFTER_UPDATE
+        repaired -> EndedBy.AFTER_REPAIR
         followedOwnScreen -> EndedBy.AFTER_OPEN
         else -> EndedBy.REBOUND
     }

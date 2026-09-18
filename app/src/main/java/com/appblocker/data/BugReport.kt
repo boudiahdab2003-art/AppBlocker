@@ -382,6 +382,9 @@ data class BugReport(
         appendLine("**rebound-after-update** is the same for an AppBlocker update installed while it")
         appendLine("was down: installing replaced the process, and the new version's own start ended")
         appendLine("the stoppage. Whether blocking itself came back then depends on the update pause.")
+        appendLine("**rebound-after-repair** is AppBlocker's own repair working: it reinstalled its")
+        appendLine("own copy (same version) because an install makes Android bind the watcher again.")
+        appendLine("Timed by the watcher, and never Android recovering alone.")
         appendLine("⚠️ Plain **rebound** says WHEN the watcher was bound again, not WHO bound it.")
         appendLine("Android restarting it, him switching AppBlocker off and on, and him coming back")
         appendLine("from another space (a space switch binds every accessibility service afresh) look")
@@ -813,6 +816,10 @@ data class BugReport(
             // "3/2/1/0" — AppBlocker reopening itself: attempts, then the ones after which Android
             // bound the watcher again, opened with no rebind, or were never let open. Our integers.
             "selfRestore",
+            // "2/1/1/0/0" — AppBlocker reinstalling itself to revive a killed watcher: attempts, then
+            // the ones after which the watcher was bound again, reinstalled with no rebind, the phone
+            // asking for a tap, and refused. Our integers (invariant 81).
+            "selfRepair",
             // true/false — Notification access, the path Android restarts AppBlocker by after a
             // force stop (invariant 76).
             "notifAccess",

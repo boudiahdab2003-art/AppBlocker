@@ -1078,6 +1078,77 @@ class CodeShapeTest {
         assertEquals("SelfRestore.maybeReopen is called from more than the stalled branch", 1, calls)
     }
 
+    // ---- invariant 81 ------------------------------------------------------------------------
+
+    /**
+     * **Invariant 81: when the watcher is found killed, AppBlocker reinstalls its own copy — tried
+     * first, from the stalled branch only.** An install is the one thing seen to bring a killed watcher
+     * back on the owner's phone (15 Sep 2026, #131), because Android binds a package's accessibility
+     * services again whenever the package is replaced. The reopen, which has never helped there, only
+     * gets its turn when the reinstall declines.
+     */
+    @Test
+    fun `a killed watcher is answered by reinstalling first, from the stalled branch only`() {
+        val text = code(source("service/ProtectionWatchdog.kt").readText())
+        val stalled = text.substringAfter("ProtectionState.STALLED -> {", "")
+            .substringBefore("ProtectionState.PAUSED ->")
+        assertTrue("the STALLED branch is gone; this check is reading nothing", stalled.isNotEmpty())
+        val repair = stalled.indexOf("if (!SelfReinstall.maybeRepair(")
+        val reopen = stalled.indexOf("SelfRestore.maybeReopen(")
+        assertTrue("the stalled branch no longer tries the reinstall, or no longer gates the reopen on it", repair >= 0)
+        assertTrue("the reopen must come after the reinstall declines", reopen > repair)
+        val calls = sourceTree().sumOf { f -> code(f.readText()).split("SelfReinstall.maybeRepair(").size - 1 }
+        assertEquals("SelfReinstall.maybeRepair is called from more than the stalled branch", 1, calls)
+        val act = code(source("service/SelfReinstall.kt").readText())
+        assertTrue("the repair must stay out of the Play build", "Dist.SELF_UPDATE" in act)
+    }
+
+    /**
+     * **A repair reinstall never sets the auto-install marker.** Same version, so UpdatePause (which
+     * acts on a version change) never consumes it: it would sit there until his next real update, which
+     * he taps through himself, and switch that update's pause off.
+     */
+    @Test
+    fun `a repair reinstall never touches the auto-install marker`() {
+        val text = code(source("data/SilentInstaller.kt").readText())
+        val reinstall = text.substringAfter("fun reinstallSelf(", "").substringBefore("\n    fun ")
+            .substringBefore("\n    private fun ")
+        val commit = text.substringAfter("private fun commit(", "").substringBefore("\n    }")
+        assertTrue("reinstallSelf is gone; this check is reading nothing", reinstall.isNotEmpty())
+        assertTrue("the shared commit is gone; this check is reading nothing", commit.isNotEmpty())
+        assertFalse("reinstallSelf sets the auto-install marker", "setAutoInstalled" in reinstall)
+        assertFalse("the shared commit sets the auto-install marker for every purpose", "setAutoInstalled" in commit)
+        val receiver = code(source("service/InstallResultReceiver.kt").readText())
+            .substringAfter("private fun onResult(", "").substringBefore("\n    }")
+        val routed = receiver.indexOf("PURPOSE_REPAIR")
+        val cleared = receiver.indexOf("setAutoInstalled(")
+        assertTrue("a repair result must be routed away before the update path clears the marker",
+            routed in 0 until cleared)
+    }
+
+    /**
+     * **A comeback the repair caused is filed as the repair, whoever notices it first**, and the attempt
+     * is on disk before the install replaces the process. Our own action read as the fault ending by
+     * itself is invariant 78's shape; a lost attempt would leave no cooldown and reinstall again.
+     */
+    @Test
+    fun `a comeback the repair caused is filed as the repair`() {
+        val text = code(source("service/ProtectionWatchdog.kt").readText())
+        val ending = text.substringAfter("private fun reboundEnding(", "").substringBefore("\n    }")
+        assertTrue("reboundEnding must claim the repair", "SelfReinstallLog.claimRebind(" in ending)
+        val filed = callArgs(ending, "OutageLog.rebindEnding(")
+        assertTrue("rebindEnding must be told whether the repair was claimed",
+            filed.singleOrNull()?.contains("repaired = repaired") == true)
+        val check = text.substringAfter("fun checkAndNotify(", "").substringBefore("fun noteWatcherAlive(")
+        val leaving = check.substringAfter("if (state != ProtectionState.STALLED) {", "")
+            .substringBefore("endOpenOutage(")
+        assertTrue("a check that finds blocking back must claim a pending repair before closing",
+            "SelfReinstallLog.claimRebind(" in leaving && "EndedBy.AFTER_REPAIR" in leaving)
+        val mark = code(source("data/SelfReinstallLog.kt").readText())
+            .substringAfter("fun markAttempt(", "").substringBefore("\n    }")
+        assertTrue("markAttempt must commit(): the install kills the process", ".commit()" in mark)
+    }
+
     // ---- invariant 80 ------------------------------------------------------------------------
 
     /**

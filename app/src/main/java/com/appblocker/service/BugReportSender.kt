@@ -27,6 +27,7 @@ import com.appblocker.data.QuickSession
 import com.appblocker.data.SettingsStore
 import com.appblocker.data.ProtectionPulse
 import com.appblocker.data.SilenceLog
+import com.appblocker.data.SelfReinstallLog
 import com.appblocker.data.SelfRestoreLog
 import com.appblocker.data.StoppageHistory
 import com.appblocker.ui.hasUsageAccess
@@ -384,6 +385,13 @@ object BugReportSender {
         field("selfRestore") {
             SelfRestoreLog.counts(ctx).let {
                 "${it.attempts}/${it.helped}/${it.noRebind}/${it.notLaunched}"
+            }
+        }
+        // attempts/helped/noRebind/askedTap/failed — AppBlocker reinstalling itself when the watcher
+        // was found killed (invariant 81). The second number is the one that says it works.
+        field("selfRepair") {
+            SelfReinstallLog.counts(ctx).let {
+                "${it.attempts}/${it.helped}/${it.noRebind}/${it.askedTap}/${it.failed}"
             }
         }
         // Whether Notification access is granted. With it, Android restarted a force-stopped

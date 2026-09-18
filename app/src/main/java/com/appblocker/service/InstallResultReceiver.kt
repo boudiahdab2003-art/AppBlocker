@@ -13,7 +13,9 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.appblocker.R
 import com.appblocker.data.InstallPrompt
+import com.appblocker.data.SelfReinstallLog
 import com.appblocker.data.SettingsStore
+import com.appblocker.data.SilentInstaller
 
 /**
  * Hears what happened to a silent self-update, and asks for a tap when the system insists on one.
@@ -44,6 +46,12 @@ class InstallResultReceiver : BroadcastReceiver() {
 
     private fun onResult(context: Context, intent: Intent) {
         val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, Int.MIN_VALUE)
+        // A repair reinstall never set the auto-install marker, so it must not clear one either: an
+        // update of his own could be in flight with it.
+        if (intent.getStringExtra(EXTRA_PURPOSE) == SilentInstaller.PURPOSE_REPAIR) {
+            onRepairResult(context, intent, status)
+            return
+        }
 
         // **Success must not touch the marker, and this early return is load-bearing.**
         //
@@ -68,6 +76,25 @@ class InstallResultReceiver : BroadcastReceiver() {
     }
 
     /**
+     * What happened to a repair reinstall ([SilentInstaller.reinstallSelf], invariant 81). Success is
+     * not heard here — the process is being replaced — and is judged by the rebind that follows. A
+     * phone that insists on a tap gets the system's confirmation as a notification, worded for what
+     * it really is: blocking waiting on one tap, not an update.
+     */
+    private fun onRepairResult(context: Context, intent: Intent, status: Int) {
+        when (status) {
+            PackageInstaller.STATUS_SUCCESS -> Unit
+            PackageInstaller.STATUS_PENDING_USER_ACTION -> {
+                SelfReinstallLog.noteAskedTap(context)
+                @Suppress("DEPRECATION")
+                val confirm = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT) ?: return
+                runCatching { notifyReady(context, confirm, repair = true) }
+            }
+            else -> SelfReinstallLog.noteFailed(context)
+        }
+    }
+
+    /**
      * The owner tapped the notification. Marks the prompt as ours before opening it — the guard
      * bounces the installer otherwise, and blocking the screen that installs the update is how this
      * whole area went wrong in the first place (see [InstallPrompt]).
@@ -88,6 +115,10 @@ class InstallResultReceiver : BroadcastReceiver() {
 
     companion object {
         const val ACTION_RESULT = "com.appblocker.INSTALL_RESULT"
+
+        /** Which kind of install a result is about — [SilentInstaller.PURPOSE_UPDATE] or
+         *  [SilentInstaller.PURPOSE_REPAIR]. Absent on results from before it existed: an update. */
+        const val EXTRA_PURPOSE = "purpose"
         private const val ACTION_CONFIRM = "com.appblocker.INSTALL_CONFIRM"
         private const val EXTRA_CONFIRM = "confirm_intent"
         private const val CHANNEL_ID = "app_updates"
@@ -104,7 +135,7 @@ class InstallResultReceiver : BroadcastReceiver() {
          * tap and failing invisibly, which is what it was built to stop.
          */
         @SuppressLint("MissingPermission") // guarded by areNotificationsEnabled() below.
-        fun notifyReady(context: Context, confirm: Intent) {
+        fun notifyReady(context: Context, confirm: Intent, repair: Boolean = false) {
             val manager = NotificationManagerCompat.from(context)
             if (!manager.areNotificationsEnabled()) return
             createChannel(context)
@@ -117,18 +148,30 @@ class InstallResultReceiver : BroadcastReceiver() {
                     .putExtra(EXTRA_CONFIRM, confirm),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
+            // A repair is not news about a version: blocking is down and one tap brings it back.
+            val title = if (repair) "Tap to bring blocking back" else "Update ready to install"
+            val text = if (repair) {
+                "Blocking stopped. One tap reinstalls AppBlocker and it switches back on."
+            } else {
+                "Tap to finish — it takes one screen."
+            }
+            val long = if (repair) {
+                "Your phone shut AppBlocker's blocker down. Reinstalling AppBlocker makes Android " +
+                    "start it again. Your phone wants you to confirm it this time. Nothing of " +
+                    "yours changes: same version, same settings."
+            } else {
+                "A new version of AppBlocker is downloaded and ready. Android wants " +
+                    "your permission for this one — once you've installed it yourself, " +
+                    "later updates should arrive without asking."
+            }
             val notification = NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notification)
-                .setContentTitle("Update ready to install")
-                .setContentText("Tap to finish — it takes one screen.")
-                .setStyle(
-                    NotificationCompat.BigTextStyle().bigText(
-                        "A new version of AppBlocker is downloaded and ready. Android wants " +
-                            "your permission for this one — once you've installed it yourself, " +
-                            "later updates should arrive without asking.",
-                    ),
+                .setContentTitle(title)
+                .setContentText(text)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(long))
+                .setPriority(
+                    if (repair) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT,
                 )
-                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                 .setAutoCancel(true)
                 .setContentIntent(tap)
                 .build()

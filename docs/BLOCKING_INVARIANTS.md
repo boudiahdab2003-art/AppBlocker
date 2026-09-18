@@ -1628,6 +1628,30 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     **The shape to grep for: work handed to a Handler, which leaves the guard of the code that
     posted it.**
 
+81. **A killed watcher is answered by reinstalling AppBlocker's own copy.** From 16 to 18 Sep 2026
+    his phone killed the watcher six times during use (`signaled@fg-service`) and it is not known to
+    have come back by itself once; stock Android restarts a killed accessibility service in seconds.
+    Android 16's `AccessibilityManagerService` leaves a killed service marked crashed until the system
+    restarts it, the user toggles it, the user switches spaces, or the package is replaced
+    (`onPackageUpdateFinished` clears the mark and binds it again) — and only the last is something an
+    app can cause. It had already worked on his phone: #131's stoppage (killed 11:21) ended at 12:28,
+    the minute v1.165 was installed. So `SelfReinstall.maybeRepair` runs first in the watchdog's
+    STALLED branch (the reopen only when it declines): the installed base and splits are streamed into
+    a `PackageInstaller` session with `USER_ACTION_NOT_REQUIRED` — Android lets an app update itself
+    without a tap (`isSelfUpdate`) given `UPDATE_PACKAGES_WITHOUT_USER_ACTION` and install permission.
+    Same version, so `UpdatePause` arms nothing; ⚠️ and so it must never set the auto-install marker,
+    which only a version change consumes. A phone that insists on a tap gets the system's confirmation
+    as a "Tap to bring blocking back" notification. Judged like the reopen (`SelfReinstallLog`: helped
+    only on a rebind within 3 min, 10 when a tap was asked; three futile → a day off), declined for
+    the Play build, below API 31, without install permission, when bound, while our own screen is up,
+    during the update pause, inside a 15-min cooldown. The comeback is filed `rebound-after-repair`
+    by whichever observer sees it first — the watcher's connect or the new process's own first check.
+    `CodeShapeTest` holds the order, the marker, the claims and the `commit()`; `SelfReinstallLogTest`
+    and `OutageLogTest` the rules.
+
+    **The shape to grep for: a repair that depends on a platform restart the platform does not do.
+    Find what the platform DOES do for a reason we can cause.**
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused
