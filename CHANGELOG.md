@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.167
+- When your phone kills the blocker, AppBlocker now brings it back by itself. Android starts an app's blocker again whenever the app is installed - on Tuesday your blocker came back the very minute you installed an update. So when AppBlocker finds its blocker dead, it now reinstalls itself (the same version, every block and setting left as it was) and Android switches the blocker back on. If your phone allows it, this needs no tap at all; if your phone insists on asking, you get one notification, 'Tap to bring blocking back'. It judges itself: if three tries in a row do not help it stops for a day, it never runs while AppBlocker is open or during the pause after an update, and your reports show how often it worked.
+
 ## v1.166
 - Your visits to Second Space no longer count as blocking breaking. Your phone only runs the blocker of the space you are in, so while you are in the other space the copy there takes over; AppBlocker in the space you left no longer files a stoppage, sends an alert or tries to reopen itself. Those failed reopenings had made it give up for a day, so it did not even try on Thursday evening, when blocking really did stop for 56 minutes. Reports now say which signal your phone used to kill AppBlocker and how much memory it held at that moment - the two clues that can tell a phone clearing memory apart from something aimed at AppBlocker. A stoppage that an update ends is written down as the update, not as your phone recovering, and the app no longer claims that reopening itself brings blocking back. And everything the blocker hands to its own thread now runs inside its safety net, so one error there can no longer crash it.
 
