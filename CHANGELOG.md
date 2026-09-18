@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.168
+- The reinstalling is switched off, as you chose. You would rather AppBlocker got lighter, so your phone stops shutting it down in the first place, than have it reinstall itself every time with the scan notifications every install brings. When your phone shuts the blocker down you now get the alert and the reopening, exactly as before, and switching AppBlocker off and on in Accessibility is still the quickest way back. Next: your reports now say how much memory AppBlocker was using when it was killed - if it was big, making it lighter is the fix.
+
 ## v1.167
 - When your phone kills the blocker, AppBlocker now brings it back by itself. Android starts an app's blocker again whenever the app is installed - on Tuesday your blocker came back the very minute you installed an update. So when AppBlocker finds its blocker dead, it now reinstalls itself (the same version, every block and setting left as it was) and Android switches the blocker back on. If your phone allows it, this needs no tap at all; if your phone insists on asking, you get one notification, 'Tap to bring blocking back'. It judges itself: if three tries in a row do not help it stops for a day, it never runs while AppBlocker is open or during the pause after an update, and your reports show how often it worked.
 
