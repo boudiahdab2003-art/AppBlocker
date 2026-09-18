@@ -22,6 +22,16 @@ import com.appblocker.data.Updater
 object SelfReinstall {
 
     /**
+     * ⚠️ **OFF — his choice, 18 Sep 2026, the evening it shipped.** Told what the repair costs (an install
+     * each time: Xiaomi's scan notifications, a moment of work), he said: *"if you asked me i would have
+     * chosen to make blocking lighter so it doesnt get turned off by the phone and not get installed each
+     * time"*, and chose "Switch it off now". Kept, not deleted: it is the one repair proven to revive a
+     * killed watcher (API 35 and Android 16 emulators), and he may want it back. `CodeShapeTest` fails if
+     * this becomes true — turning it on again needs his word, not a code review.
+     */
+    const val SWITCHED_ON = false
+
+    /**
      * Called by the watchdog on a check that finds blocking stalled. True when a reinstall was
      * attempted — the process is about to be replaced, so nothing else should start on this check.
      *
@@ -35,6 +45,7 @@ object SelfReinstall {
             val app = context.applicationContext
             SelfReinstallLog.resolveStale(app)
             val skip = SelfReinstallLog.decide(
+                switchedOn = SWITCHED_ON,
                 possible = Dist.SELF_UPDATE && SilentInstaller.possible(),
                 canInstall = Updater.canInstall(app),
                 watcherUnbound = arm == OutageLog.DetectedBy.UNBOUND &&

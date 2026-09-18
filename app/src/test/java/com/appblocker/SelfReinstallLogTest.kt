@@ -16,6 +16,7 @@ class SelfReinstallLogTest {
     private val minute = 60_000L
 
     private fun decide(
+        switchedOn: Boolean = true,
         possible: Boolean = true,
         canInstall: Boolean = true,
         watcherUnbound: Boolean = true,
@@ -25,13 +26,19 @@ class SelfReinstallLogTest {
         sinceLastAttemptMs: Long = -1L,
         futileStreak: Int = 0,
     ) = SelfReinstallLog.decide(
-        possible, canInstall, watcherUnbound, appOpen, updatePaused, attemptPending,
+        switchedOn, possible, canInstall, watcherUnbound, appOpen, updatePaused, attemptPending,
         sinceLastAttemptMs, futileStreak,
     )
 
     @Test
     fun `a killed watcher with nothing in the way is repaired`() {
         assertNull(decide())
+    }
+
+    @Test
+    fun `switched off, it never reinstalls, whatever else is true`() {
+        assertEquals(Skip.SWITCHED_OFF, decide(switchedOn = false))
+        assertEquals(Skip.SWITCHED_OFF, decide(switchedOn = false, possible = false, appOpen = true))
     }
 
     @Test

@@ -1649,6 +1649,12 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     `CodeShapeTest` holds the order, the marker, the claims and the `commit()`; `SelfReinstallLogTest`
     and `OutageLogTest` the rules.
 
+    ⚠️ **Switched OFF the same evening, by his choice (v1.168).** Told the cost (an install each time,
+    with Xiaomi's scan notifications), he said he would rather the blocker were made lighter so the
+    phone stops killing it, "and not get installed each time", and chose "Switch it off now".
+    `SelfReinstall.SWITCHED_ON = false`; `CodeShapeTest` pins it, so turning it on needs his word. The
+    code stays: it is the one repair proven to revive a killed watcher.
+
     **The shape to grep for: a repair that depends on a platform restart the platform does not do.
     Find what the platform DOES do for a reason we can cause.**
 

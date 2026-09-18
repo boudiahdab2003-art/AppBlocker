@@ -1104,6 +1104,23 @@ class CodeShapeTest {
     }
 
     /**
+     * **And it stays switched off: his choice, 18 Sep 2026.** He would rather AppBlocker were made lighter
+     * than reinstalled each time, and chose "Switch it off now". The code is kept because it is the one
+     * repair proven to revive a killed watcher; the switch is pinned so it cannot come back on by a code
+     * change alone. To turn it on, ask him — then change this check with the date of his answer.
+     */
+    @Test
+    fun `the reinstall repair stays switched off until he says otherwise`() {
+        val act = code(source("service/SelfReinstall.kt").readText())
+        assertTrue("SelfReinstall.SWITCHED_ON is gone; this check is reading nothing", "SWITCHED_ON" in act)
+        assertTrue(
+            "the reinstall repair was switched ON; he chose it off on 18 Sep 2026 - ask him first",
+            "const val SWITCHED_ON = false" in act,
+        )
+        assertTrue("maybeRepair no longer passes the switch to decide", "switchedOn = SWITCHED_ON" in act)
+    }
+
+    /**
      * **A repair reinstall never sets the auto-install marker.** Same version, so UpdatePause (which
      * acts on a version change) never consumes it: it would sit there until his next real update, which
      * he taps through himself, and switch that update's pause off.

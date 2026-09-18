@@ -73,7 +73,8 @@ object SelfReinstallLog {
 
     /** Why a reinstall was not attempted. */
     enum class Skip {
-        NOT_POSSIBLE, NO_INSTALL_PERMISSION, NOT_UNBOUND, APP_OPEN, UPDATE_PAUSED, ATTEMPT_PENDING,
+        SWITCHED_OFF, NOT_POSSIBLE, NO_INSTALL_PERMISSION, NOT_UNBOUND, APP_OPEN, UPDATE_PAUSED,
+        ATTEMPT_PENDING,
         GAVE_UP, COOLDOWN,
     }
 
@@ -92,6 +93,7 @@ object SelfReinstallLog {
      * @param sinceLastAttemptMs -1 when there has never been an attempt, or not since this boot.
      */
     internal fun decide(
+        switchedOn: Boolean,
         possible: Boolean,
         canInstall: Boolean,
         watcherUnbound: Boolean,
@@ -101,6 +103,7 @@ object SelfReinstallLog {
         sinceLastAttemptMs: Long,
         futileStreak: Int,
     ): Skip? = when {
+        !switchedOn -> Skip.SWITCHED_OFF
         !possible -> Skip.NOT_POSSIBLE
         !canInstall -> Skip.NO_INSTALL_PERMISSION
         !watcherUnbound -> Skip.NOT_UNBOUND
