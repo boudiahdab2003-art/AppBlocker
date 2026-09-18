@@ -997,13 +997,15 @@ class BlockerAccessibilityService : AccessibilityService() {
     /** Callbacks arrive on a binder thread; every decision below belongs on the main thread. */
     private fun onNetChanged() {
         handler.post {
-            val was = netFilterDown
-            refreshNetFilter()
-            // Only chase when it actually flipped. The cover is raised by the recheck pass rather
-            // than here, so there is one place that decides what covers what.
-            if (netFilterDown != was) {
-                handler.removeCallbacks(recheckRunnable)
-                handler.post(recheckRunnable)
+            guarded(applicationContext, "netChanged") {
+                val was = netFilterDown
+                refreshNetFilter()
+                // Only chase when it actually flipped. The cover is raised by the recheck pass
+                // rather than here, so there is one place that decides what covers what.
+                if (netFilterDown != was) {
+                    handler.removeCallbacks(recheckRunnable)
+                    handler.post(recheckRunnable)
+                }
             }
         }
     }
@@ -1334,13 +1336,19 @@ class BlockerAccessibilityService : AccessibilityService() {
             // when the last one is toggled off, so a disabled schedule can't keep GPS running.
             // Hop to the main thread: requestLocationUpdates needs a looper thread.
             if (scheduleList.any { it.enabled && it.type == ScheduleType.LOCATION }) {
-                handler.post { ensureLocationUpdates() }
+                handler.post { guarded(applicationContext, "location") { ensureLocationUpdates() } }
             } else {
-                handler.post { stopLocationUpdates() }
+                handler.post { guarded(applicationContext, "location") { stopLocationUpdates() } }
             }
             // The unready window is now over — go and look at whatever is already on screen.
             // Until this existed, nothing did: see redecideAfterRulesArrived.
-            if (firstEmission) handler.post { redecideAfterRulesArrived() }
+            // ⚠️ Guarded like every other watcher callback: it runs on EVERY rebind, reads the screen
+            // and can raise a cover, and on 18 Sep 2026 its screen read threw on an Android 16
+            // emulator (SecurityException from getRootInActiveWindow) and took the whole watcher
+            // down, which Android then left under "Crashed services" (invariant 80).
+            if (firstEmission) {
+                handler.post { guarded(applicationContext, "redecide") { redecideAfterRulesArrived() } }
+            }
         }
             // This flow IS the watcher's view of reality — the rules, the Strict session, the
             // blocked words and the schedules. Without a retry, one throw anywhere in it (a bad
@@ -1368,7 +1376,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         scope.launch { runCatching { NewAppWatcher.catchUp(applicationContext) } }
         // Warm the block overlay off the connect path (inflate only, NOT addView), so the
         // very first block doesn't pay layout inflation while the blocked app is visible.
-        handler.post { overlay.warmUp(::onCoverDismissed) }
+        handler.post { guarded(applicationContext, "overlayWarmUp") { overlay.warmUp(::onCoverDismissed) } }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -1916,7 +1924,11 @@ class BlockerAccessibilityService : AccessibilityService() {
         // Not while the exit watcher is holding a cover, though: guard covers aren't app blocks,
         // so this would pull one out from under a "Got it" that is still trying to get the user
         // out of Settings.
-        handler.postDelayed({ if (!overlay.isAppBlock && !exiting()) overlay.remove() }, 1500)
+        handler.postDelayed({
+            guarded(applicationContext, "coverSafetyNet") {
+                if (!overlay.isAppBlock && !exiting()) overlay.remove()
+            }
+        }, 1500)
         return true
     }
 

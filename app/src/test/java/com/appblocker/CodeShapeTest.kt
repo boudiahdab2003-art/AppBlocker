@@ -1078,6 +1078,38 @@ class CodeShapeTest {
         assertEquals("SelfRestore.maybeReopen is called from more than the stalled branch", 1, calls)
     }
 
+    // ---- invariant 80 ------------------------------------------------------------------------
+
+    /**
+     * **Invariant 80: everything the watcher posts to its own thread runs inside the guard.** An
+     * exception that escapes a posted runnable kills the process like one escaping a callback does,
+     * and on HyperOS a crashed watcher stays down until he switches it off and on. On 18 Sep 2026 an
+     * Android 16 emulator showed it happen: `redecideAfterRulesArrived`, posted bare on every rebind,
+     * read the screen, the read threw a SecurityException, and the watcher sat under "Crashed
+     * services". Five other posted lambdas were bare too; every named runnable already guarded itself.
+     */
+    @Test
+    fun `everything the watcher posts to its thread is guarded`() {
+        val text = code(source("service/BlockerAccessibilityService.kt").readText())
+        val lambdas = Regex("""handler\.post(?:Delayed)?\s*\(?\s*\{""").findAll(text).toList()
+        assertTrue("the watcher posts no lambdas; this check is reading nothing", lambdas.size >= 5)
+        val bare = lambdas.mapNotNull { m ->
+            val body = text.substring(m.range.last + 1).trimStart()
+            if (body.startsWith("guarded(") || body.startsWith("runCatching")) null else body.take(70)
+        }
+        assertEquals(
+            "these posted lambdas run outside the watcher's guard, so one throw ends all blocking:" +
+                bare.joinToString(System.lineSeparator(), System.lineSeparator()),
+            emptyList<String>(), bare,
+        )
+        val runnables = Regex("""val (\w+) = (?:object : Runnable|Runnable) \{""").findAll(text).toList()
+        assertTrue("the watcher has no named runnables; this check is reading nothing", runnables.size >= 5)
+        val unguarded = runnables
+            .filter { "guarded(" !in text.substring(it.range.last + 1).substringBefore("\n    }") }
+            .map { it.groupValues[1] }
+        assertEquals("these runnables run outside the watcher's guard", emptyList<String>(), unguarded)
+    }
+
     // ---- invariant 79 ------------------------------------------------------------------------
 
     /**

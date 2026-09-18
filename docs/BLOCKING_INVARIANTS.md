@@ -1613,6 +1613,21 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
 
     **The shape to grep for: a state the platform produces on purpose, read as the fault.**
 
+80. **Everything the watcher posts to its own thread runs inside the guard.** Found on the Android 16
+    emulator while proving 79, not in his reports (his phone has never recorded a `crash` exit):
+    after a reinstall left Android serving the watcher under the app's old uid, the first rule
+    emission after connect posted `redecideAfterRulesArrived` bare, its `getRootInActiveWindow`
+    threw `SecurityException … not allowed to perform ACCESS_ACCESSIBILITY`, and the watcher died
+    and sat under "Crashed services" — the one state HyperOS does not repair by itself. That post
+    runs on every rebind and can raise a cover through `handleAppBlock`, which the event path only
+    ever calls inside `guarded("event")`. Five more posted lambdas were bare (network change, both
+    location hops, the overlay warm-up, the cover safety net); every named runnable already guarded
+    itself. All six now open with `guarded(...)`, and `CodeShapeTest` fails on any posted lambda or
+    named runnable in the watcher that does not.
+
+    **The shape to grep for: work handed to a Handler, which leaves the guard of the code that
+    posted it.**
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused
