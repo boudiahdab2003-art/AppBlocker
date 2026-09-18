@@ -382,6 +382,10 @@ data class BugReport(
         appendLine("**rebound-after-update** is the same for an AppBlocker update installed while it")
         appendLine("was down: installing replaced the process, and the new version's own start ended")
         appendLine("the stoppage. Whether blocking itself came back then depends on the update pause.")
+        appendLine("⚠️ Plain **rebound** says WHEN the watcher was bound again, not WHO bound it.")
+        appendLine("Android restarting it, him switching AppBlocker off and on, and him coming back")
+        appendLine("from another space (a space switch binds every accessibility service afresh) look")
+        appendLine("the same from inside the app. Never read it as Android recovering alone.")
         appendLine()
         appendLine("`killedBy=` is Android's own record of what closed the process, taken when the")
         appendLine("stoppage was noticed: the first death after the blocker's last sign of life.")
@@ -414,11 +418,13 @@ data class BugReport(
             appendLine("Android's category — **low-memory**, **freezer**, **user-requested** (Force stop,")
             appendLine("or a swipe from Recents), **other** (usually a manufacturer's own kill),")
             appendLine("**package-updated** (our own install). `sub=` is its detail — for **signaled**,")
-            appendLine("the signal: `sig-9` is SIGKILL, the process killed outright. `was=` is how")
+            appendLine("the signal: `sig-9` is SIGKILL, the process killed outright; `sig-2` is the")
+            appendLine("interrupt Xiaomi's storage refresh sends to anything holding a file open on")
+            appendLine("shared storage. `was=` is how")
             appendLine("important Android thought the process was: **perceptible** or better means it")
             appendLine("died while still the blocker; **cached** or **empty** means it had already")
-            appendLine("stopped being one and was only reclaimed. `note=` is the phone's own wording,")
-            appendLine("with app names removed.")
+            appendLine("stopped being one and was only reclaimed. `rss=` is the memory it held at")
+            appendLine("that moment. `note=` is the phone's own wording, with app names removed.")
             appendLine()
         }
         appendLine("```")
@@ -789,6 +795,9 @@ data class BugReport(
             // nothing". `foundDead` counts how many times that has happened on this install.
             "serviceRunning",
             "foundDead",
+            // Checks that found another space in front and judged nothing (invariant 79): the
+            // proof that the guard which silences Second Space visits ever fired. Our own integer.
+            "awayChecks",
             // "12/2" — heartbeat nudges that found the watcher silent for three minutes, and how
             // many of those nudges threw. The inside view of `outageDeaf`: a climbing first number
             // is a watcher that keeps going deaf while running, a flat zero alongside outages is

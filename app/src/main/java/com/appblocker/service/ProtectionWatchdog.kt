@@ -6,6 +6,7 @@ import android.os.SystemClock
 import com.appblocker.data.BootAudit
 import com.appblocker.data.DeviceBoot
 import com.appblocker.data.OutageLog
+import com.appblocker.data.OwnSpace
 import com.appblocker.data.OwnUi
 import com.appblocker.data.ProcessExits
 import com.appblocker.data.SelfRestoreLog
@@ -128,6 +129,18 @@ object ProtectionWatchdog {
         // can notice a boot our own receiver never heard. Lazy by necessity: a missed boot only
         // becomes knowable when something finally does run.
         BootAudit.noteRun(context)
+        // ⚠️ **Another space in front is not a stoppage** (invariant 79). Android binds accessibility
+        // services only for the user on screen, so while he is in Second Space this copy's watcher
+        // is unbound ON PURPOSE and nothing here can be opened. Judged anyway, every visit became a
+        // stoppage (used=0), an alert in a shade he could not see, and a reopen that could never
+        // show — counted as a failed try, which stood the repair down for a day before a real
+        // stoppage on 17 Sep 2026. So judge nothing: open nothing, close nothing, alert nothing.
+        // Anything still open is closed by whichever check next runs with this space in front, or
+        // by the rebind when he comes back. Counted, so the silence stays visible.
+        if (!OwnSpace.inFront(context)) {
+            ServiceHealth.recordAwayCheck(context)
+            return@guarded
+        }
         val reading = read(context)
         // Too early to tell: our process is seconds old and Android has not bound the watcher
         // yet — the normal shape of a check that WorkManager cold-started in order to run. There

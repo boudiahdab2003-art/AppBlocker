@@ -78,6 +78,17 @@ object ProcessExits {
         val importance: Int,
         /** [sanitiseNote]'s output, or null. */
         val note: String?,
+        /**
+         * How much memory the process held when it died, in kB ([ApplicationExitInfo.getRss]); 0 when
+         * Android recorded none.
+         *
+         * The one clue the record already carried that nothing printed. By 18 Sep 2026 the owner's
+         * phone had force-stopped AppBlocker six times in three days "due to The system loading
+         * is…", and the in-use kills that cost him real minutes (`signaled@fg-service`) name no
+         * killer at all. A phone short of memory takes the biggest process first, so the size at
+         * death is what separates "it was picked for its size" from "it was picked for being us".
+         */
+        val rssKb: Long = 0L,
     ) {
         /** `low-memory@cached`, `user-requested:force-stop@perceptible` — for a stoppage line. */
         fun token(): String = buildString {
@@ -89,8 +100,12 @@ object ProcessExits {
         /** A report line that names itself, so it can never pass for a stoppage. */
         fun render(): String =
             "at=${StoppageHistory.label(at)}  EXITED  reason=$reason  sub=${sub ?: "?"}  " +
-                "was=${importanceName(importance)}  note=${note ?: "-"}"
+                "was=${importanceName(importance)}  rss=${sizeName(rssKb)}  note=${note ?: "-"}"
     }
+
+    /** `212mb`, rounded to the nearest megabyte; `?` when Android recorded no size — never `0mb`,
+     *  which would read as a process that held nothing. */
+    internal fun sizeName(kb: Long): String = if (kb > 0L) "${(kb + 512) / 1024}mb" else "?"
 
     /** Android's reason code as a word. Unknown codes keep their number rather than a guess. */
     internal fun reasonName(code: Int): String = when (code) {
@@ -236,6 +251,7 @@ object ProcessExits {
                         sub = subreasonOf(it.toString()) ?: signalOf(it.reason, it.status),
                         importance = it.importance,
                         note = sanitiseNote(it.description),
+                        rssKb = it.rss,
                     )
                 }
         }.getOrNull()

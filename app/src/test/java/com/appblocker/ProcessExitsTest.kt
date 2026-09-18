@@ -161,4 +161,16 @@ class ProcessExitsTest {
         assertEquals("a signal token must survive storage", token, ProcessExits.safeToken(token))
         assertTrue(exit(now, reason = "signaled", sub = "sig-9", importance = 125).render().contains("sub=sig-9"))
     }
+
+    /** The memory held at death rides the line, and a record with none never reads as an empty process. */
+    @Test
+    fun `an exit line says how much memory the process held`() {
+        val big = ProcessExits.Exit(now, "signaled", "sig-9", 125, null, rssKb = 212L * 1024 + 300)
+        assertTrue(big.render(), "rss=212mb" in big.render())
+        assertEquals("rounds to the nearest megabyte", "213mb", ProcessExits.sizeName(212L * 1024 + 700))
+        val none = exit(now).render()
+        assertTrue(none, "rss=?" in none)
+        assertFalse(none, "rss=0mb" in none)
+        assertTrue("the size must not push the note off the line", none.endsWith("note=-"))
+    }
 }

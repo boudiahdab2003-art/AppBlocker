@@ -353,6 +353,9 @@ object BugReportSender {
         // between "he switched it off" and "his phone shut it down and told him it was on".
         field("serviceRunning") { BlockerAccessibilityService.isConnected().toString() }
         field("foundDead") { ServiceHealth.foundDeadCount(ctx).toString() }
+        // Checks that found another space (Second Space, another user) in front and judged nothing
+        // (invariant 79). The guard silences stoppages and alerts, so this is the proof it fired.
+        field("awayChecks") { ServiceHealth.awayCheckCount(ctx).toString() }
         // The inside view of aliveButDeaf: how often the heartbeat found the watcher silent for
         // three minutes and re-posted its event mask, and how often that re-post itself threw.
         // "12/2" reads as twelve nudges, two of which found the binding already gone.
@@ -368,8 +371,10 @@ object BugReportSender {
         // ⚠️ **Read this first on any recovery question.** warm/cold: warm means our process was
         // already awake when Android reconnected the watcher, so something woke it and the
         // reconnection followed — a lever the app could pull itself instead of waiting a quarter
-        // of an hour. Cold means the reconnection is what started us and Android acted alone.
-        // Counted only on a rebind that ended a real stoppage.
+        // of an hour. Cold means the reconnection is what started us. ⚠️ Cold is NOT "Android acted
+        // alone": his own toggle, or his return from another space, starts us exactly the same way
+        // (on 16–17 Sep 2026 two cold rebinds were Second Space round trips). Counted only on a
+        // rebind that ended a real stoppage.
         field("reboundWake") {
             "${ServiceHealth.reboundWarmCount(ctx)}/${ServiceHealth.reboundColdCount(ctx)}"
         }

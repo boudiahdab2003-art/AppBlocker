@@ -1583,6 +1583,36 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     **The shape to grep for: a "blocking is back" signal that our own action produced, read as the
     fault ending by itself.**
 
+79. **Another space in front is not a stoppage.** Reports #132–#166 (16–18 Sep 2026). Android binds
+    accessibility services only for the user on screen, so while the owner is in Xiaomi's Second
+    Space (user 10, its own copy of AppBlocker) the main space's watcher is unbound on purpose, and
+    it is bound again when he returns. Every check read that as the blocker failing. The main install
+    filed a stoppage per visit, always `used=0`: `deaf=true, killedBy=none` when the process outlived
+    the unbind, `other@cached` when HyperOS then reclaimed it, and a HyperOS force stop "due to The
+    system loading is…" (`was=cached`) at almost every switch. Proved from timing, not assumed: the
+    Second Space copy's reports went out at 00:55 and 07:40, inside main-space stoppages at
+    00:54–01:01 and 07:16–08:32, and its own stoppage began at 08:30, the minute the main one ended.
+    The Second Space copy filed the mirror image — 68 stoppages and 270 h "unprotected", which were
+    the hours he spent in his main space. And the reopen repair fired from the space behind, where
+    no screen can open: those tries were counted `notLaunched`, fed the futile streak, and had stood
+    the repair down for a day when a real kill cost him 35 minutes of use on 17 Sep at 20:02.
+
+    `checkAndNotify` now asks `OwnSpace.inFront` (`UserManager.isUserForeground`, public from API 31,
+    no permission for the calling user) before it reads anything. Behind: it judges nothing — opens,
+    closes, alerts and reopens nothing — and counts the check in `awayChecks`, because a guard that
+    silences alerts must itself be visible. An episode already open stays open; the next check with
+    the space in front, or the rebind on return, closes it. **Fails open**: below API 31, with no
+    service, or on a throw the answer is "in front", so a doubt can only let a check run as before.
+    `CodeShapeTest` holds the order and the count; `OwnSpaceTest` holds fail-open.
+
+    Also from the same reports: a space switch binds every accessibility service afresh, so two of
+    the week's `rebound` endings (15:17 on 16 Sep, 15:06 on 17 Sep) were him coming back from Second
+    Space, and one ended the minute the switch was seen off and on again (00:43 on 16 Sep, most
+    likely his own toggle; nothing recorded a death then). `rebound` says when, not who; the
+    report legend and `reboundWake`'s comment no longer read cold as "Android acted alone".
+
+    **The shape to grep for: a state the platform produces on purpose, read as the fault.**
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused

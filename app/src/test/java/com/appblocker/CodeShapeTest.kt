@@ -1078,6 +1078,38 @@ class CodeShapeTest {
         assertEquals("SelfRestore.maybeReopen is called from more than the stalled branch", 1, calls)
     }
 
+    // ---- invariant 79 ------------------------------------------------------------------------
+
+    /**
+     * **Invariant 79: another space in front is not a stoppage.** Android binds accessibility services
+     * only for the user on screen, so while the owner is in Second Space this copy's watcher is unbound
+     * on purpose. Judged anyway, every visit on 16–18 Sep 2026 became a stoppage, an alert in a shade he
+     * could not see and a reopen that could never show — and those failed reopens had stood the repair
+     * down for a day when a real stoppage cost him 35 minutes. So the guard comes before anything the
+     * check reads, opens, closes, alerts or reopens, and it counts what it silences.
+     */
+    @Test
+    fun `a check judges nothing while another space is in front`() {
+        val text = code(source("service/ProtectionWatchdog.kt").readText())
+        val body = text.substringAfter("fun checkAndNotify(", "").substringBefore("fun noteWatcherAlive(")
+        assertTrue("checkAndNotify is gone; this check is reading nothing", body.isNotEmpty())
+        val guard = body.indexOf("!OwnSpace.inFront(")
+        assertTrue("checkAndNotify no longer stands down when its own space is behind", guard >= 0)
+        val branch = body.substring(guard).substringAfter("{").substringBefore("}")
+        assertTrue(
+            "the away branch must count what it silences and end the check there: $branch",
+            "ServiceHealth.recordAwayCheck(" in branch && "return@guarded" in branch,
+        )
+        listOf(
+            "read(context)", "endOpenOutage(", "SwitchOffLog.begin(", "OutageLog.begin(",
+            "ProtectionNotifier.", "SelfRestore.maybeReopen(",
+        ).forEach { later ->
+            val at = body.indexOf(later)
+            assertTrue("$later is gone from checkAndNotify; this check is reading nothing", at >= 0)
+            assertTrue("$later runs before the space guard, so a Second Space visit is judged", at > guard)
+        }
+    }
+
     // ---- invariant 70 ------------------------------------------------------------------------
 
     /**

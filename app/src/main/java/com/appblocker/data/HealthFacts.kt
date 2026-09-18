@@ -592,12 +592,17 @@ object HealthFacts {
     /**
      * AppBlocker reopening itself — a measurement, never a verdict, and the one that says whether
      * the repair repairs anything (invariant 74). See [SelfRestoreLog].
+     *
+     * ⚠️ It states the try, not the premise. This used to say opening the app "brought blocking back
+     * when nothing else did" — one afternoon on 14 Sep 2026 — and by 18 Sep his own phone had
+     * answered it three times the other way (two reopens and one open of his own, no rebind). A fact
+     * that argues for the repair is the repair grading itself.
      */
     private fun selfRestoreFact(r: Reading): Fact? {
         if (r.restoreAttempts <= 0) return null
         val detail = buildString {
             append("When blocking stops while you are using the phone, AppBlocker opens itself for ")
-            append("a moment, because opening it brought blocking back when nothing else did. ")
+            append("a moment, to see whether that brings blocking back. ")
             append("Blocking came back within seconds ${r.restoreHelped} time(s).")
             if (r.restoreNoRebind > 0) {
                 append(" ${r.restoreNoRebind} time(s) it opened and blocking did not come back.")

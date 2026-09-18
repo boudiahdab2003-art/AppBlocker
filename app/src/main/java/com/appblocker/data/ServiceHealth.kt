@@ -18,6 +18,7 @@ object ServiceHealth {
     private const val KEY_LAST_EVENT = "health_last_event_at"
     private const val KEY_LAST_ALIVE = "health_last_alive_at"
     private const val KEY_FOUND_DEAD = "health_found_dead_count"
+    private const val KEY_AWAY_CHECKS = "health_away_check_count"
     private const val KEY_REVIVES = "health_revive_count"
     private const val KEY_REVIVE_FAILS = "health_revive_fail_count"
     private const val KEY_PROBE_FAILS = "health_probe_fail_streak"
@@ -125,6 +126,21 @@ object ServiceHealth {
     }
 
     fun foundDeadCount(context: Context): Int = prefs(context).getInt(KEY_FOUND_DEAD, 0)
+
+    /**
+     * Counts checks that found **another space in front** and so judged nothing (invariant 79) —
+     * once per check, which is what it says: how often the guard stood a check down.
+     *
+     * The guard silences alerts and stoppages, and a silence nobody can see is the one thing this
+     * app must never add. With this a report says whether the guard ever fired on his phone, and
+     * `0` beside a Second Space visit would say it did not.
+     */
+    fun recordAwayCheck(context: Context) {
+        val p = prefs(context)
+        p.edit().putInt(KEY_AWAY_CHECKS, p.getInt(KEY_AWAY_CHECKS, 0) + 1).apply()
+    }
+
+    fun awayCheckCount(context: Context): Int = prefs(context).getInt(KEY_AWAY_CHECKS, 0)
 
     /**
      * Counts the heartbeat's re-post of `serviceInfo` — **the only self-repair this app has**, and
