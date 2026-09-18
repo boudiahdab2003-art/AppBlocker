@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.166
+- Your visits to Second Space no longer count as blocking breaking. Your phone only runs the blocker of the space you are in, so while you are in the other space the copy there takes over; AppBlocker in the space you left no longer files a stoppage, sends an alert or tries to reopen itself. Those failed reopenings had made it give up for a day, so it did not even try on Thursday evening, when blocking really did stop for 56 minutes. Reports now say which signal your phone used to kill AppBlocker and how much memory it held at that moment - the two clues that can tell a phone clearing memory apart from something aimed at AppBlocker. A stoppage that an update ends is written down as the update, not as your phone recovering, and the app no longer claims that reopening itself brings blocking back. And everything the blocker hands to its own thread now runs inside its safety net, so one error there can no longer crash it.
+
 ## v1.165
 - A way back after your phone shuts AppBlocker down. With Notification access on, Android starts AppBlocker again after a force stop, and it checks blocking straight away instead of waiting for the next scheduled check. The minutes-of-use number is more honest: it stops counting when the screen turns off, the phone locks or shuts down, matches each stop to the right screen of an app, and now counts the app you were already using when a count began. Reports no longer mix up a restart with a comeback after a force stop. And the Quick Block card now changes the moment you pause or restart it from the quick-settings tile.
 
