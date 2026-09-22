@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.169
+- The reinstalling and the 'AppBlocker is reopening' screen are gone, as you asked - neither ever brought blocking back on your phone. In their place: when your phone kills the blocker, AppBlocker switches itself off and on in Accessibility, silently, the way you do by hand. Tested on your phone tonight, the blocker came back within a second. It now notices a kill within about three or four minutes instead of up to twenty. It needs a one-time permission given from a computer over USB. And AppBlocker is lighter: its screens let go of their memory ten minutes after you leave them.
+
 ## v1.168
 - The reinstalling is switched off, as you chose. You would rather AppBlocker got lighter, so your phone stops shutting it down in the first place, than have it reinstall itself every time with the scan notifications every install brings. When your phone shuts the blocker down you now get the alert and the reopening, exactly as before, and switching AppBlocker off and on in Accessibility is still the quickest way back. Next: your reports now say how much memory AppBlocker was using when it was killed - if it was big, making it lighter is the fix.
 
