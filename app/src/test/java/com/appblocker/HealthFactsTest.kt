@@ -349,30 +349,49 @@ class HealthFactsTest {
         assertTrue(detail, "334 minute(s) of real use fell inside those stoppages" in detail)
     }
 
-    // --- AppBlocker reopening itself (invariant 74) ---------------------------------------------
+    // --- The silent repair (invariant 82) ---------------------------------------------------------
 
     @Test
-    fun `a phone that never reopened itself says nothing about it`() {
-        assertTrue(HealthFacts.verdicts(healthy).none { "reopened itself" in it.title })
+    fun `a build that never offers the silent repair says nothing about it`() {
+        assertTrue(HealthFacts.verdicts(healthy).none { "silent repair" in it.title })
     }
 
+    /** Not set up is a choice that needs a computer, not a fault: named, never a red cross. */
     @Test
-    fun `reopening itself is a measurement that says whether it helped`() {
-        val r = healthy.copy(restoreAttempts = 4, restoreHelped = 1, restoreNoRebind = 2, restoreNotLaunched = 1)
-        val fact = HealthFacts.verdicts(r).first { "reopened itself 4 time(s)" in it.title }
+    fun `a silent repair that is not set up is named but is not a problem`() {
+        val r = healthy.copy(togglePermitted = false)
+        val fact = HealthFacts.verdicts(r).first { it.title == "The silent repair is not set up" }
         assertEquals(null, fact.good)
         assertTrue(problems(r).toString(), problems(r).isEmpty())
-        assertTrue(fact.detail, "within seconds 1 time(s)" in fact.detail)
-        assertTrue(fact.detail, "2 time(s) it opened and blocking did not come back" in fact.detail)
-        assertTrue(fact.detail, "1 time(s) the phone did not let it open" in fact.detail)
-        assertFalse(fact.detail, "stopped reopening itself" in fact.detail)
+        assertTrue(fact.detail, "computer" in fact.detail)
     }
 
     @Test
-    fun `tries that did not help say it has stopped trying`() {
-        val r = healthy.copy(restoreAttempts = 3, restoreNoRebind = 3, restoreFutileStreak = 3)
-        val detail = HealthFacts.verdicts(r).first { "reopened itself" in it.title }.detail
-        assertTrue(detail, "stopped reopening itself for a day" in detail)
+    fun `a silent repair that is set up and never needed is healthy`() {
+        val fact = HealthFacts.verdicts(healthy.copy(togglePermitted = true))
+            .first { it.title == "The silent repair is ready" }
+        assertEquals(true, fact.good)
+    }
+
+    @Test
+    fun `the silent repair is a measurement that says whether it helped`() {
+        val r = healthy.copy(
+            togglePermitted = true, toggleAttempts = 4, toggleHelped = 2, toggleNoRebind = 1, toggleFailed = 1,
+        )
+        val fact = HealthFacts.verdicts(r).first { it.title == "The silent repair ran 4 time(s)" }
+        assertEquals(null, fact.good)
+        assertTrue(problems(r).toString(), problems(r).isEmpty())
+        assertTrue(fact.detail, "within seconds 2 time(s)" in fact.detail)
+        assertTrue(fact.detail, "1 time(s) it switched and blocking did not come back" in fact.detail)
+        assertTrue(fact.detail, "1 time(s) the phone refused the switch" in fact.detail)
+        assertFalse(fact.detail, "waits an hour" in fact.detail)
+    }
+
+    @Test
+    fun `tries that did not help say it has paused trying`() {
+        val r = healthy.copy(togglePermitted = true, toggleAttempts = 3, toggleNoRebind = 3, toggleFutileStreak = 3)
+        val detail = HealthFacts.verdicts(r).first { "silent repair ran" in it.title }.detail
+        assertTrue(detail, "waits an hour" in detail)
     }
 
     /** Invariant 76: named when off, silent when on or unreadable, and never a fault. */

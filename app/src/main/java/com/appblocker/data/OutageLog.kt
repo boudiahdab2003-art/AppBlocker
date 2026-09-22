@@ -192,7 +192,8 @@ object OutageLog {
 
         /**
          * **Android bound the watcher again within seconds of AppBlocker's own screen coming to the
-         * front** — the owner opening the app, or the app reopening itself ([SelfRestoreLog]).
+         * front** — the owner opening the app. (The app reopening itself used to count here too; that
+         * repair is gone, at his request — invariant 82.)
          *
          * Timed by the watcher like [REBOUND], so its length is a measurement — but it is NOT Android
          * recovering alone, and filing it as [REBOUND] answers the recovery question wrongly in the
@@ -216,13 +217,14 @@ object OutageLog {
         const val AFTER_UPDATE = "rebound-after-update"
 
         /**
-         * **AppBlocker reinstalled itself to bring the watcher back, and it came back** (invariant 81).
+         * **AppBlocker's own repair brought the watcher back** (invariant 82): it switched its own
+         * Accessibility entry off and on, which is what makes his phone bind a killed watcher again
+         * (proven on it on 22 Sep 2026 — HyperOS never restarts one by itself). Timed by the watcher
+         * like [REBOUND] — but it is our repair working, never Android recovering alone.
          *
-         * Installing is the one thing seen to revive a killed watcher on his phone (#131: a stoppage
-         * the phone had left alone for an hour ended the minute v1.165 went on), because Android
-         * rebinds a package's accessibility services whenever the package is replaced. So when the
-         * watcher is found dead, the app reinstalls its own copy ([SelfReinstallLog]). Timed by the
-         * watcher like [REBOUND] — but it is our repair working, never Android recovering alone.
+         * The same string once meant the reinstall repair of v1.167 (invariant 81), removed at his
+         * request. That one never brought a watcher back on his phone, so no stored episode carries
+         * the old meaning.
          */
         const val AFTER_REPAIR = "rebound-after-repair"
 
@@ -499,14 +501,13 @@ object OutageLog {
             (startedAt > 0L && lastUpdateAt - startedAt > BLAME_WINDOW_MS)
 
     /**
-     * How a rebind ended the stoppage it closed (invariants 74, 78 and 81). Pure, so the order is a
+     * How a rebind ended the stoppage it closed (invariants 74, 78 and 82). Pure, so the order is a
      * test.
      *
      * The install outranks our own screen. Updates are installed from inside the app, so the two often
-     * arrive together — and it was the install that replaced the process the stoppage was about. A
-     * repair reinstall is an install too, of the same version, so it sits between them: a new version
-     * landing is the stronger fact, and the repair's own install is what replaced the process whether
-     * or not a screen of ours was also up.
+     * arrive together — and it was the install that replaced the process the stoppage was about. Our
+     * own off-and-on repair sits between them (invariant 82): a new version landing is the stronger
+     * fact, and the repair is what bound the watcher again whether or not a screen of ours was also up.
      */
     internal fun rebindEnding(
         updateLanded: Boolean,

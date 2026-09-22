@@ -18,7 +18,7 @@ import android.os.UserManager
  * `killedBy=other@cached` when HyperOS then reclaimed it, and a HyperOS force stop "due to The system
  * loading is…" at almost every switch), always with `used=0`. The copy inside Second Space filed
  * the mirror image: 68 stoppages and 270 hours "unprotected", which were simply the hours he spent
- * in his main space. Worse, the reopen repair ([com.appblocker.service.SelfRestore]) fired from the
+ * in his main space. Worse, the reopen repair (since removed, invariant 82) fired from the
  * space behind, where no screen can open, counted those as tries that did not help, and so had
  * already given up for the day when a real stoppage cost him 35 minutes of use on 17 Sep.
  *

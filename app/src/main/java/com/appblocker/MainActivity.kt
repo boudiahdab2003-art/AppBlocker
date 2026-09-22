@@ -1,11 +1,14 @@
 package com.appblocker
 
 import android.Manifest
+import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -18,6 +21,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.view.WindowCompat
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import com.appblocker.data.AppLocale
 import com.appblocker.data.InstalledAppsRepository
@@ -148,6 +152,63 @@ class MainActivity : ComponentActivity() {
         OwnUi.visible = false
     }
 
+    private val releaseHandler = Handler(Looper.getMainLooper())
+    private val releaseUi = Runnable { releaseIfLeft() }
+
+    override fun onStart() {
+        super.onStart()
+        releaseHandler.removeCallbacks(releaseUi)
+    }
+
+    /**
+     * **The screens are let go of once he has left them for [UI_RELEASE_MS].**
+     *
+     * The watcher shares this process, so whatever the screens hold is held by the blocker too, for
+     * as long as the process lives. Measured on his phone on 22 Sep 2026: the bare watcher holds about
+     * 11 MB of its own; a copy whose screens were opened once and left behind held 58 MB plus 45 MB
+     * swapped out, and the phone that kills the heaviest process first is the one it runs on. Android
+     * would keep a stopped screen for days, so it is finished here instead.
+     *
+     * Ten minutes, so a trip to Settings to grant something, or a quick look at another app, comes
+     * back to the screen exactly as he left it. And never while another app's screen sits on top of
+     * ours in our own task — that is a flow we started, and Back must still lead to us.
+     */
+    override fun onStop() {
+        super.onStop()
+        if (!isChangingConfigurations && !isFinishing) {
+            releaseHandler.removeCallbacks(releaseUi)
+            releaseHandler.postDelayed(releaseUi, UI_RELEASE_MS)
+        }
+    }
+
+    private fun releaseIfLeft() {
+        if (isFinishing || lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) return
+        if (anotherAppOnTopOfOurTask()) {
+            releaseHandler.postDelayed(releaseUi, UI_RELEASE_MS)
+            return
+        }
+        finish()
+    }
+
+    /** Whether our task's top screen belongs to another app — Settings opened from ours, say. Unknown
+     *  answers no: the worst a wrong "no" does is make him open the app again. */
+    private fun anotherAppOnTopOfOurTask(): Boolean = runCatching {
+        val am = getSystemService(ActivityManager::class.java) ?: return@runCatching false
+        val ours = am.appTasks.map { it.taskInfo }.firstOrNull { info ->
+            @Suppress("DEPRECATION")
+            (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) info.taskId else info.id) == taskId
+        } ?: return@runCatching false
+        val top = ours.topActivity?.packageName ?: return@runCatching false
+        top != packageName
+    }.getOrDefault(false)
+
+    override fun onDestroy() {
+        releaseHandler.removeCallbacks(releaseUi)
+        // Only the screens really ending, never a rotation: the list and its icons exist for them.
+        if (isFinishing) InstalledAppsRepository.release()
+        super.onDestroy()
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
@@ -165,6 +226,9 @@ class MainActivity : ComponentActivity() {
     }
 
     companion object {
+        /** How long after he leaves the screens they are let go of — see [onStop]. */
+        const val UI_RELEASE_MS = 10 * 60_000L
+
         const val EXTRA_OPEN_PERMISSIONS = "open_permissions"
 
         /** Sends the user straight to [com.appblocker.ui.RepairScreen]. Its own extra rather than

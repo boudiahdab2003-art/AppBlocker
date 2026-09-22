@@ -74,29 +74,6 @@ object SilentInstaller {
     }
 
     /**
-     * **Reinstalls AppBlocker's own installed copy, to make Android bind a killed watcher again**
-     * (invariant 81, [SelfReinstallLog]).
-     *
-     * Same files, same version, same signature: nothing of his changes, and the update pause is not
-     * armed, because [UpdatePause] pauses on a *version change* and there is none. ⚠️ So it must NOT
-     * set [SettingsStore.setAutoInstalled] the way [install] does: with no version change nothing
-     * consumes that mark, and it would sit there until his next real update — which he taps through
-     * himself — and switch that update's pause off.
-     *
-     * Every part of the installed app goes in, the base and any splits, or the system refuses a
-     * session that would drop a part it already has.
-     */
-    fun reinstallSelf(context: Context): Boolean {
-        if (!possible()) return false
-        val info = context.applicationInfo
-        val parts = buildList {
-            add("base.apk" to File(info.sourceDir))
-            info.splitSourceDirs?.forEachIndexed { i, path -> add("split_$i.apk" to File(path)) }
-        }
-        return commit(context, parts, PURPOSE_REPAIR)
-    }
-
-    /**
      * Streams [parts] into one session and commits it without user action. False when the session
      * could not even be created, written or committed; true means it was *handed to the system*.
      */
@@ -137,18 +114,14 @@ object SilentInstaller {
         }
     }
 
-    /** An update to a newer version ([install]). */
+    /** An update to a newer version ([install]) — the only purpose left. The repair reinstall that
+     *  also used this path is gone, at his request (invariant 82). */
     const val PURPOSE_UPDATE = "update"
-
-    /** The same version reinstalled to revive the watcher ([reinstallSelf]). */
-    const val PURPOSE_REPAIR = "repair"
 
     /** Where the system reports what happened — [com.appblocker.service.InstallResultReceiver],
      *  addressed by class rather than by action so no implicit-broadcast rule can stand between
      *  the installer and the one answer that needs acting on. Required by `commit`, even though
-     *  the interesting outcome (success) kills this process before anything is delivered. The
-     *  purpose rides along so a refusal is told apart: an update waits for a tap, a repair is
-     *  blocking waiting for one. */
+     *  the interesting outcome (success) kills this process before anything is delivered. */
     private fun resultSender(context: Context, sessionId: Int, purpose: String): android.content.IntentSender =
         PendingIntent.getBroadcast(
             context,

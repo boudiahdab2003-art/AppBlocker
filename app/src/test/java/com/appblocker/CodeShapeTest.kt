@@ -965,8 +965,8 @@ class CodeShapeTest {
     /**
      * **Invariant 74: a rebind that followed AppBlocker's own screen is not filed as Android
      * recovering alone.** On 14 Sep 2026 a six-hour stoppage ended the second he opened the app and
-     * was filed `rebound`. Both witnesses — the self-reopen's claim and the owner's own open — must
-     * be asked, and both screens must leave the stamp the second one reads.
+     * was filed `rebound`. Both witnesses — our own repair's claim (invariant 82) and the owner's own
+     * open — must be asked, and the screen must leave the stamp the second one reads.
      */
     @Test
     fun `a rebind that followed our own screen is not filed as unassisted`() {
@@ -977,7 +977,7 @@ class CodeShapeTest {
         val ending = text.substringAfter("private fun reboundEnding(", "").substringBefore("\n    }")
         assertTrue(
             "reboundEnding must ask both witnesses",
-            "SelfRestoreLog.claimRebind(" in ending && "OwnUi.openedWithin(" in ending,
+            "SelfToggleLog.claimRebind(" in ending && "OwnUi.openedWithin(" in ending,
         )
         // Since invariant 78 the answer is filed by OutageLog.rebindEnding, whose order (the install,
         // then our own screen, then a plain rebind) OutageLogTest pins. What only this file can show is
@@ -986,9 +986,9 @@ class CodeShapeTest {
         assertEquals("reboundEnding must file its answer through OutageLog.rebindEnding once", 1, filed.size)
         assertTrue(
             "reboundEnding must hand rebindEnding whether an install landed, and both witnesses",
-            "updateLandedDuringOpenEpisode(" in filed.single() && "reopened || opened" in filed.single(),
+            "updateLandedDuringOpenEpisode(" in filed.single() && "followedOwnScreen = opened" in filed.single(),
         )
-        for (file in listOf("MainActivity.kt", "ui/RestoreActivity.kt")) {
+        for (file in listOf("MainActivity.kt")) {
             val resume = code(source(file).readText())
                 .substringAfter("override fun onResume()", "").substringBefore("override fun ")
             assertTrue(
@@ -1062,108 +1062,138 @@ class CodeShapeTest {
         )
     }
 
-    /** **And the reopen is asked for from the stalled branch, and only there** — anywhere else it
-     *  could open a screen over a phone whose blocking is fine. */
+    // ---- invariant 82 ------------------------------------------------------------------------
+
+    /**
+     * **Invariant 82: a killed watcher is answered by switching its own entry off and on — silently,
+     * from the stalled branch only, and with the alert held while it works.** Proven on his phone on
+     * 22 Sep 2026: HyperOS never restarts a killed watcher, and the off-and-on brings it back within a
+     * second. Anywhere but the stalled branch it could cut off a watcher that is working.
+     */
     @Test
-    fun `the app reopens itself only from the stalled branch`() {
+    fun `a killed watcher is answered by the silent repair, from the stalled branch only`() {
         val text = code(source("service/ProtectionWatchdog.kt").readText())
         val stalled = text.substringAfter("ProtectionState.STALLED -> {", "")
             .substringBefore("ProtectionState.PAUSED ->")
         assertTrue("the STALLED branch is gone; this check is reading nothing", stalled.isNotEmpty())
+        val repair = stalled.indexOf("SelfToggle.maybeRepair(")
+        val alert = stalled.indexOf("ProtectionNotifier.notifyStalled(")
+        assertTrue("the stalled branch no longer tries the silent repair", repair >= 0)
+        assertTrue("the stalled branch no longer alerts at all", alert >= 0)
+        assertTrue("the alert must come after the repair has had its say", alert > repair)
         assertTrue(
-            "the stalled branch no longer asks SelfRestore to reopen the app",
-            "SelfRestore.maybeReopen(" in stalled,
+            "the alert must wait while a repair is under way, or he is told about a stoppage that is " +
+                "already over",
+            "if (!repairing) ProtectionNotifier.notifyStalled(" in stalled,
         )
-        val calls = sourceTree().sumOf { f -> code(f.readText()).split("SelfRestore.maybeReopen(").size - 1 }
-        assertEquals("SelfRestore.maybeReopen is called from more than the stalled branch", 1, calls)
-    }
-
-    // ---- invariant 81 ------------------------------------------------------------------------
-
-    /**
-     * **Invariant 81: when the watcher is found killed, AppBlocker reinstalls its own copy — tried
-     * first, from the stalled branch only.** An install is the one thing seen to bring a killed watcher
-     * back on the owner's phone (15 Sep 2026, #131), because Android binds a package's accessibility
-     * services again whenever the package is replaced. The reopen, which has never helped there, only
-     * gets its turn when the reinstall declines.
-     */
-    @Test
-    fun `a killed watcher is answered by reinstalling first, from the stalled branch only`() {
-        val text = code(source("service/ProtectionWatchdog.kt").readText())
-        val stalled = text.substringAfter("ProtectionState.STALLED -> {", "")
-            .substringBefore("ProtectionState.PAUSED ->")
-        assertTrue("the STALLED branch is gone; this check is reading nothing", stalled.isNotEmpty())
-        val repair = stalled.indexOf("if (!SelfReinstall.maybeRepair(")
-        val reopen = stalled.indexOf("SelfRestore.maybeReopen(")
-        assertTrue("the stalled branch no longer tries the reinstall, or no longer gates the reopen on it", repair >= 0)
-        assertTrue("the reopen must come after the reinstall declines", reopen > repair)
-        val calls = sourceTree().sumOf { f -> code(f.readText()).split("SelfReinstall.maybeRepair(").size - 1 }
-        assertEquals("SelfReinstall.maybeRepair is called from more than the stalled branch", 1, calls)
-        val act = code(source("service/SelfReinstall.kt").readText())
-        assertTrue("the repair must stay out of the Play build", "Dist.SELF_UPDATE" in act)
+        val calls = sourceTree().sumOf { f -> code(f.readText()).split("SelfToggle.maybeRepair(").size - 1 }
+        assertEquals("SelfToggle.maybeRepair is called from more than the stalled branch", 1, calls)
+        val act = code(source("service/SelfToggle.kt").readText())
+        assertTrue("the repair must stay out of the Play build", "Dist.SELF_TOGGLE" in act)
     }
 
     /**
-     * **And it stays switched off: his choice, 18 Sep 2026.** He would rather AppBlocker were made lighter
-     * than reinstalled each time, and chose "Switch it off now". The code is kept because it is the one
-     * repair proven to revive a killed watcher; the switch is pinned so it cannot come back on by a code
-     * change alone. To turn it on, ask him — then change this check with the date of his answer.
+     * **The switch can be left off by our hand only until the next check runs.** The attempt and its
+     * marker are committed before the off write, the on write sits in a `finally`, and every check
+     * finishes an interrupted toggle — and stands aside during a live one — before it reads anything,
+     * or our own OFF is filed as his switch-off and alerted about.
      */
     @Test
-    fun `the reinstall repair stays switched off until he says otherwise`() {
-        val act = code(source("service/SelfReinstall.kt").readText())
-        assertTrue("SelfReinstall.SWITCHED_ON is gone; this check is reading nothing", "SWITCHED_ON" in act)
+    fun `the silent repair can never leave the switch off`() {
+        val log = code(source("data/SelfToggleLog.kt").readText())
+        val mark = log.substringAfter("fun markAttempt(", "").substringBefore("\n    fun ")
+        assertTrue("markAttempt is gone; this check is reading nothing", mark.isNotEmpty())
+        assertTrue("markAttempt must commit(): the next check may run in another process", ".commit()" in mark)
+        val act = code(source("service/SelfToggle.kt").readText())
+        val toggle = act.substringAfter("private fun toggle(", "").substringBefore("\n    private fun ")
+        assertTrue("toggle is gone; this check is reading nothing", toggle.isNotEmpty())
         assertTrue(
-            "the reinstall repair was switched ON; he chose it off on 18 Sep 2026 - ask him first",
-            "const val SWITCHED_ON = false" in act,
+            "the on write must be in a finally",
+            "finally {" in toggle && "writeOn(" in toggle.substringAfter("finally {"),
         )
-        assertTrue("maybeRepair no longer passes the switch to decide", "switchedOn = SWITCHED_ON" in act)
+        val repair = act.substringAfter("fun maybeRepair(", "").substringBefore("\n    private fun ")
+        val marked = repair.indexOf("SelfToggleLog.markAttempt(")
+        val started = repair.indexOf("thread(")
+        assertTrue("the attempt must be marked before the toggle starts", marked in 0 until started)
+        val check = code(source("service/ProtectionWatchdog.kt").readText())
+            .substringAfter("fun checkAndNotify(", "").substringBefore("fun noteWatcherAlive(")
+        val finish = check.indexOf("SelfToggle.finishInterrupted(")
+        assertTrue("checkAndNotify no longer finishes an interrupted toggle", finish >= 0)
+        listOf("!OwnSpace.inFront(", "read(context)", "SwitchOffLog.begin(").forEach { later ->
+            val at = check.indexOf(later)
+            assertTrue("$later is gone from checkAndNotify; this check is reading nothing", at >= 0)
+            assertTrue("$later runs before an interrupted toggle is finished", at > finish)
+        }
     }
 
     /**
-     * **A repair reinstall never sets the auto-install marker.** Same version, so UpdatePause (which
-     * acts on a version change) never consumes it: it would sit there until his next real update, which
-     * he taps through himself, and switch that update's pause off.
+     * **The watcher feeds its own dead-man alarm** — on connect and every heartbeat — and takes it
+     * down on an orderly unbind. Without the pushes the alarm fires on a healthy phone; without the
+     * cancel every space switch starts a pointless check in the space behind.
      */
     @Test
-    fun `a repair reinstall never touches the auto-install marker`() {
-        val text = code(source("data/SilentInstaller.kt").readText())
-        val reinstall = text.substringAfter("fun reinstallSelf(", "").substringBefore("\n    fun ")
-            .substringBefore("\n    private fun ")
-        val commit = text.substringAfter("private fun commit(", "").substringBefore("\n    }")
-        assertTrue("reinstallSelf is gone; this check is reading nothing", reinstall.isNotEmpty())
-        assertTrue("the shared commit is gone; this check is reading nothing", commit.isNotEmpty())
-        assertFalse("reinstallSelf sets the auto-install marker", "setAutoInstalled" in reinstall)
-        assertFalse("the shared commit sets the auto-install marker for every purpose", "setAutoInstalled" in commit)
+    fun `the watcher feeds its dead-man alarm and cancels it when unbound on purpose`() {
+        val text = code(source("service/BlockerAccessibilityService.kt").readText())
+        val connect = text.substringAfter("override fun onServiceConnected() {", "").substringBefore("override fun ")
+        val heartbeat = text.substringAfter("private val heartbeatRunnable", "").substringBefore("handler.postDelayed(this")
+        val destroy = text.substringAfter("override fun onDestroy() {", "").substringBefore("companion object")
+        assertTrue("onServiceConnected must arm the dead-man alarm", "WatcherDeadMan.arm(" in connect)
+        assertTrue("the heartbeat must push the dead-man alarm", "WatcherDeadMan.arm(" in heartbeat)
+        assertTrue("onDestroy must cancel the dead-man alarm", "WatcherDeadMan.cancel(" in destroy)
+    }
+
+    /**
+     * **The two repairs he asked to be rid of stay gone** (22 Sep 2026): the reinstall ("it annoys me
+     * and doesn't work") and the reopen ("it interrupts my call"). Neither ever brought blocking back
+     * on his phone. A repair that takes over the screen or installs anything needs his word first.
+     */
+    @Test
+    fun `the reinstall and the reopen stay gone`() {
+        val banned = listOf("SelfReinstall", "SelfRestore", "RestoreActivity", "reinstallSelf(")
+        val found = sourceTree().flatMap { f ->
+            val c = code(f.readText())
+            banned.filter { it in c }.map { "${f.name}: $it" }
+        }
+        assertEquals("a removed repair is back - ask him first", emptyList<String>(), found)
+    }
+
+    /**
+     * **A late answer to the removed repair reinstall never clears the auto-install marker.** It never
+     * set the marker, so clearing it could switch the pause off for an update of his own in flight.
+     */
+    @Test
+    fun `a late repair result never touches the auto-install marker`() {
         val receiver = code(source("service/InstallResultReceiver.kt").readText())
             .substringAfter("private fun onResult(", "").substringBefore("\n    }")
-        val routed = receiver.indexOf("PURPOSE_REPAIR")
+        val routed = receiver.indexOf("LEGACY_PURPOSE_REPAIR")
         val cleared = receiver.indexOf("setAutoInstalled(")
-        assertTrue("a repair result must be routed away before the update path clears the marker",
-            routed in 0 until cleared)
+        assertTrue(
+            "a repair result must be turned away before the update path clears the marker",
+            routed in 0 until cleared,
+        )
     }
 
     /**
-     * **A comeback the repair caused is filed as the repair, whoever notices it first**, and the attempt
-     * is on disk before the install replaces the process. Our own action read as the fault ending by
-     * itself is invariant 78's shape; a lost attempt would leave no cooldown and reinstall again.
+     * **A comeback the repair caused is filed as the repair, whoever notices it first.** Our own action
+     * read as the fault ending by itself is invariant 78's shape.
      */
     @Test
     fun `a comeback the repair caused is filed as the repair`() {
         val text = code(source("service/ProtectionWatchdog.kt").readText())
         val ending = text.substringAfter("private fun reboundEnding(", "").substringBefore("\n    }")
-        assertTrue("reboundEnding must claim the repair", "SelfReinstallLog.claimRebind(" in ending)
+        assertTrue("reboundEnding must claim the repair", "SelfToggleLog.claimRebind(" in ending)
         val filed = callArgs(ending, "OutageLog.rebindEnding(")
-        assertTrue("rebindEnding must be told whether the repair was claimed",
-            filed.singleOrNull()?.contains("repaired = repaired") == true)
+        assertTrue(
+            "rebindEnding must be told whether the repair was claimed",
+            filed.singleOrNull()?.contains("repaired = repaired") == true,
+        )
         val check = text.substringAfter("fun checkAndNotify(", "").substringBefore("fun noteWatcherAlive(")
         val leaving = check.substringAfter("if (state != ProtectionState.STALLED) {", "")
             .substringBefore("endOpenOutage(")
-        assertTrue("a check that finds blocking back must claim a pending repair before closing",
-            "SelfReinstallLog.claimRebind(" in leaving && "EndedBy.AFTER_REPAIR" in leaving)
-        val mark = code(source("data/SelfReinstallLog.kt").readText())
-            .substringAfter("fun markAttempt(", "").substringBefore("\n    }")
-        assertTrue("markAttempt must commit(): the install kills the process", ".commit()" in mark)
+        assertTrue(
+            "a check that finds blocking back must claim a pending repair before closing",
+            "SelfToggleLog.claimRebind(" in leaving && "EndedBy.AFTER_REPAIR" in leaving,
+        )
     }
 
     // ---- invariant 80 ------------------------------------------------------------------------
@@ -1222,7 +1252,7 @@ class CodeShapeTest {
         )
         listOf(
             "read(context)", "endOpenOutage(", "SwitchOffLog.begin(", "OutageLog.begin(",
-            "ProtectionNotifier.", "SelfRestore.maybeReopen(",
+            "ProtectionNotifier.", "SelfToggle.maybeRepair(",
         ).forEach { later ->
             val at = body.indexOf(later)
             assertTrue("$later is gone from checkAndNotify; this check is reading nothing", at >= 0)

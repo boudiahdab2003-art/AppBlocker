@@ -25,8 +25,7 @@ object OwnUi {
      * The second thing only the activities know, and the one the stoppage log needs: a watcher that
      * Android binds again seconds after our own screen came up did not come back on its own. On
      * 14 Sep 2026 a six-hour stoppage ended the moment the owner opened the app and was filed as
-     * Android recovering alone (invariant 74). Set by [com.appblocker.MainActivity] and
-     * [com.appblocker.ui.RestoreActivity].
+     * Android recovering alone (invariant 74). Set by [com.appblocker.MainActivity].
      */
     @Volatile
     var resumedAtRt: Long = 0L

@@ -66,15 +66,38 @@ object InstalledAppsRepository {
         scope.launch { _usage.value = UsageTracker.minutesByPackageToday(appContext) }
     }
 
-    /** Marks the cache stale and reloads it in the background (e.g. after install/uninstall). */
+    /**
+     * Marks the cache stale and reloads it in the background (e.g. after install/uninstall) — **only
+     * while something is using it.** An app installed while no screen of ours is open used to decode
+     * every launcher icon on the phone into the watcher's process and keep them there; now the list
+     * is simply left unloaded, and the next screen that asks loads it fresh.
+     */
     fun invalidate(context: Context) {
         val appContext = context.applicationContext
         scope.launch {
-            mutex.withLock {
+            val reloaded = mutex.withLock {
+                if (!loaded) return@withLock false
                 _apps.value = loadLaunchableApps(appContext)
-                loaded = true
+                true
             }
-            requestAiCategories(appContext)
+            if (reloaded) requestAiCategories(appContext)
+        }
+    }
+
+    /**
+     * **Lets go of the list and every decoded icon in it** — called when AppBlocker's own screens
+     * close for good. It exists for the screens; the watcher shares the process and keeps running
+     * for hours after them, and on his phone a copy still holding its screens measured 58 MB where
+     * the bare watcher holds 11. The watcher's block screen falls back to PackageManager for a label
+     * or icon it does not find here, so nothing it shows depends on this being loaded.
+     */
+    fun release() {
+        scope.launch {
+            mutex.withLock {
+                _apps.value = emptyList()
+                _usage.value = emptyMap()
+                loaded = false
+            }
         }
     }
 

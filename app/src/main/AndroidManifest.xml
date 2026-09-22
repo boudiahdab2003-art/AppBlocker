@@ -190,17 +190,6 @@
             </intent-filter>
         </activity-alias>
 
-        <!-- AppBlocker reopening itself for a few seconds when the watcher is found unbound while
-             the phone is in use (SelfRestore). Its own task, never in Recents, closes itself. -->
-        <activity
-            android:name=".ui.RestoreActivity"
-            android:exported="false"
-            android:excludeFromRecents="true"
-            android:launchMode="singleTask"
-            android:noHistory="true"
-            android:taskAffinity=""
-            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
-
         <!-- The full-screen "Blocked" page. -->
         <activity
             android:name=".ui.BlockScreenActivity"
@@ -258,6 +247,13 @@
              PendingIntent from ProtectionScheduler.ensureAlarmScheduled. See ProtectionPulse. -->
         <receiver
             android:name=".service.ProtectionAlarmReceiver"
+            android:exported="false" />
+
+        <!-- The watcher's dead-man alarm: pushed two minutes away on every heartbeat, so it only
+             goes off once the watcher's process has vanished (invariant 82). Not exported and no
+             intent-filter — only our own PendingIntent from WatcherDeadMan reaches it. -->
+        <receiver
+            android:name=".service.WatcherDeadManReceiver"
             android:exported="false" />
 
         <!-- Optional: counts daily notifications for the Insights "Distractions" card.

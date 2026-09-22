@@ -53,6 +53,30 @@ object AccessibilityUtil {
             .any { expand(it.trim()).lowercase() == want }
     }
 
+    /**
+     * [setting] with every spelling of [ours] taken out and everything else left exactly as it was —
+     * the off half of [SelfToggle]. Other apps' entries are not ours to touch: this list is shared by
+     * every accessibility service on the phone, so a rewrite that dropped or reordered one would
+     * switch someone else's service off. Empty when ours was the only one.
+     */
+    internal fun listWithout(setting: String?, ours: String): String {
+        val want = expand(ours).lowercase()
+        return setting.orEmpty().split(':')
+            .filter { it.isNotBlank() && expand(it.trim()).lowercase() != want }
+            .joinToString(":")
+    }
+
+    /**
+     * [setting] with [ours] present — appended when missing, unchanged when already listed in any
+     * spelling. The on half of [SelfToggle], built from the list as it reads at the moment of writing
+     * so a change made by anyone else in between survives.
+     */
+    internal fun listWith(setting: String?, ours: String): String {
+        if (isListed(setting, ours)) return setting.orEmpty()
+        val kept = setting.orEmpty().split(':').filter { it.isNotBlank() }
+        return (kept + ours).joinToString(":")
+    }
+
     /** `pkg/.Class` → `pkg/pkg.Class`; anything already absolute is returned unchanged. */
     private fun expand(entry: String): String {
         val slash = entry.indexOf('/')

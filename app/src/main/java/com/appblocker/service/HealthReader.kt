@@ -8,8 +8,7 @@ import com.appblocker.data.BugReportQueue
 import com.appblocker.data.HealthFacts
 import com.appblocker.data.OutageLog
 import com.appblocker.data.ProtectionPulse
-import com.appblocker.data.SelfReinstallLog
-import com.appblocker.data.SelfRestoreLog
+import com.appblocker.data.SelfToggleLog
 import com.appblocker.data.ServiceHealth
 import com.appblocker.data.SettingsStore
 import com.appblocker.data.SilenceLog
@@ -55,8 +54,7 @@ object HealthReader {
             .getOrDefault(OutageLog.Totals(0, 0L, 0L))
         val offTotals = runCatching { SwitchOffLog.totals(ctx) }.getOrDefault(SwitchOffLog.Totals())
         val offLast = runCatching { SwitchOffLog.last(ctx) }.getOrNull()
-        val restore = runCatching { SelfRestoreLog.counts(ctx) }.getOrDefault(SelfRestoreLog.Counts())
-        val repair = runCatching { SelfReinstallLog.counts(ctx) }.getOrDefault(SelfReinstallLog.Counts())
+        val toggle = runCatching { SelfToggleLog.counts(ctx) }.getOrDefault(SelfToggleLog.Counts())
         // UNKNOWN (-1) means the scheduler has never been seen to run at all, which is not the
         // same as "ran a long time ago" — pass it through rather than flattening to a duration.
         val workerSilentMs = safe(ProtectionPulse.UNKNOWN) { ProtectionPulse.silentFor(ctx) }
@@ -87,17 +85,13 @@ object HealthReader {
             switchOffUsedCount = offTotals.usedCount,
             switchOffLastHow = offLast?.how,
             switchOffLastGuard = offLast?.guardArmed,
-            restoreAttempts = restore.attempts,
-            restoreHelped = restore.helped,
-            restoreNoRebind = restore.noRebind,
-            restoreNotLaunched = restore.notLaunched,
-            restoreFutileStreak = restore.futileStreak,
-            repairAttempts = repair.attempts,
-            repairHelped = repair.helped,
-            repairNoRebind = repair.noRebind,
-            repairAskedTap = repair.askedTap,
-            repairFailed = repair.failed,
-            repairFutileStreak = repair.futileStreak,
+            toggleAttempts = toggle.attempts,
+            toggleHelped = toggle.helped,
+            toggleNoRebind = toggle.noRebind,
+            toggleFailed = toggle.failed,
+            toggleFutileStreak = toggle.futileStreak,
+            // Null where the build never offers the repair, so the fact stays silent there.
+            togglePermitted = if (com.appblocker.Dist.SELF_TOGGLE) SelfToggle.permitted(ctx) else null,
             notifAccess = runCatching {
                 androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(ctx)
                     .contains(ctx.packageName)

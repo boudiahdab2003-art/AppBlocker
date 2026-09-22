@@ -2,7 +2,8 @@
 <!-- GitHub (sideloaded) flavor only. The manifest merger unions this with src/main's manifest.
      None of this may ship in the Play flavor: self-updating APKs are forbidden on Play, and the
      location permissions would trigger Google's heaviest review. -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- In-app updater: install the downloaded release APK. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
@@ -11,6 +12,13 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <!-- The silent repair (SelfToggle, invariant 82): switching AppBlocker's own Accessibility
+         entry off and on when the phone has killed the watcher. Only a computer can grant it
+         (`adb shell pm grant com.appblocker android.permission.WRITE_SECURE_SETTINGS`); without the
+         grant the repair simply never runs. Never in the Play build. -->
+    <uses-permission
+        android:name="android.permission.WRITE_SECURE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
 
     <application>
         <!-- Serves the downloaded update APK to the system installer. -->

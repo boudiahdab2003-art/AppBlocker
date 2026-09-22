@@ -9,6 +9,14 @@ object Dist {
     const val LOCATION_SCHEDULES = true
 
     /**
+     * The silent repair — AppBlocker switching its own Accessibility entry off and on when the phone
+     * has killed the watcher ([com.appblocker.service.SelfToggle], invariant 82). It also needs
+     * `WRITE_SECURE_SETTINGS`, declared only in this flavour's manifest and granted only from a
+     * computer, so this flag alone switches nothing on.
+     */
+    const val SELF_TOGGLE = true
+
+    /**
      * **Off because GitHub Sponsors has not been set up yet, not because this build shouldn't
      * ask.** The sideloaded build is given away and may ask for support; the row, `SPONSOR_URL`
      * and `.github/FUNDING.yml` are all written and tested. What is missing is the page at the

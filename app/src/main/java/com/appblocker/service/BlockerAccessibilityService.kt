@@ -585,6 +585,8 @@ class BlockerAccessibilityService : AccessibilityService() {
         override fun run() {
             guarded(applicationContext, "heartbeat") {
                 ServiceHealth.recordAlive(applicationContext)
+                // Still here: push the dead-man alarm another two minutes away (invariant 82).
+                WatcherDeadMan.arm(applicationContext)
                 val silence = stopwatchNow() - lastEventReceivedAt
                 // The end of the window the probe streak measures has to be wired to something,
                 // or a streak of four sits at four for the life of the process and the next quiet
@@ -1198,6 +1200,10 @@ class BlockerAccessibilityService : AccessibilityService() {
         // The same fact, readable from outside this object: "switched on" and "actually running"
         // are different questions, and until now nothing could ask the second one. See [isConnected].
         connected = true
+        // The dead-man alarm, pushed away again on every heartbeat: from here on, this process
+        // vanishing without a word is noticed in minutes rather than at the next scheduled check
+        // (invariant 82). Before anything below can take time or throw.
+        WatcherDeadMan.arm(applicationContext)
         handler.postDelayed(heartbeatRunnable, HEARTBEAT_MS)
         // The service is rebound right after an update installs, so detect it here too —
         // the pause arms even if the app itself isn't opened.
@@ -3593,6 +3599,10 @@ class BlockerAccessibilityService : AccessibilityService() {
         // Cleared FIRST: everything below can throw, and a watcher that has begun tearing itself
         // down is not running whether or not the rest of this method completes.
         connected = false
+        // An orderly unbind — a space switch, or the switch turned off — is nothing dying, so the
+        // dead-man alarm has nothing to report; the ordinary checks own what happens next. A killed
+        // process never reaches this line, which is exactly why its alarm is the one that goes off.
+        WatcherDeadMan.cancel(applicationContext)
         // The binding is being taken down in an orderly way, and *that* is the finding — an OEM
         // force-stop never gets here, and neither does a killed process. See recordUnbind: a
         // stamp at the start of an outage means something ended the binding, and no stamp means

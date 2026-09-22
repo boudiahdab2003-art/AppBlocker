@@ -1467,6 +1467,9 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     **The shape to grep for: an ending or a success counter that cannot tell "it recovered" from "we
     did something, and then it recovered".**
 
+    ⚠️ **The reopen itself was removed on 22 Sep 2026, at his request** ("it interrupts my call"; 0 of
+    14 tries helped) — see invariant 82. The attribution rule stays: his own open is still a witness.
+
 75. **A stretch of use ends when use does, not when its app remembers to pause.** The usage walk
     opened a stretch on a resume, closed it on a pause, and counted anything still open to the end of
     the window. So one missing pause — an activity destroyed without one, a phone that went dark or
@@ -1655,8 +1658,72 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     `SelfReinstall.SWITCHED_ON = false`; `CodeShapeTest` pins it, so turning it on needs his word. The
     code stays: it is the one repair proven to revive a killed watcher.
 
+    ⚠️ **Removed entirely on 22 Sep 2026, at his request** — see invariant 82, which replaced it with a
+    repair that is silent and was proven on his phone.
+
     **The shape to grep for: a repair that depends on a platform restart the platform does not do.
     Find what the platform DOES do for a reason we can cause.**
+
+82. **A killed watcher is revived by switching its own entry off and on — silently.** Reports
+    #163–#188 (15–21 Sep 2026), read on 22 Sep with his phone on the owner's PC over adb. Since v1.166
+    the main space had one real stoppage and Second Space four (19–20 Sep: 226, 71, 45 and 102
+    minutes of use unprotected), every one a watcher killed while it was the bound blocker —
+    `low-memory@fg-service`, `signaled sig-9@fg-service`, and once `other … note=OneKeyClean`,
+    Xiaomi's clean button. Detection was never the long part (`noticedAfter` 3–21 min); recovery was.
+    **Proven on his phone (HyperOS OS3.0.302.0.WPPEUXM, Android 16), not reasoned:** `am crash` on the
+    main-space watcher left it under `dumpsys accessibility` "Crashed services" for 50 s+ with no
+    restart attempt in logcat — stock Android logs `Scheduling restart of crashed service … in
+    1000ms`, HyperOS logs nothing — and writing `enabled_accessibility_services` without it and then
+    with it again, even 0.3 s apart, cleared the mark and bound it within a second. That is exactly
+    his own manual repair. Android 16 clears a crashed service's mark only when it is removed from the
+    enabled list (`removeDisabledServicesFromTemporaryStatesLocked`), the package is replaced, the
+    user switches, or the system restarts it — and the first is the one an app can do.
+
+    `SelfToggle` does it from the watchdog's STALLED branch, only for UNBOUND, only with the switch
+    reading on, and only with `WRITE_SECURE_SETTINGS` — declared in the github manifest alone
+    (`Dist.SELF_TOGGLE`), granted once per space from a computer: `adb shell pm grant com.appblocker
+    android.permission.WRITE_SECURE_SETTINGS` and again with `--user 10`. Xiaomi needs Developer
+    options ▸ "USB debugging (Security settings)" for `pm grant`. The alert is held while a toggle is
+    under way; the five-minute repeat alerts if it did not help. `SelfToggleLog` judges it like the
+    repairs before it (HELPED on a rebind within 30 s; three futile → an hour off, not a day — it is
+    invisible) and the comeback is filed `rebound-after-repair`.
+
+    ⚠️ **The off write is the dangerous half, and it may never outlive the process.** The attempt and
+    an in-flight marker are committed before it; the on write sits in a `finally` with retries and
+    re-reads the list, so another service's entry changed in the gap survives; every check first calls
+    `SelfToggle.finishInterrupted`, which stands aside for 15 s while a toggle is live and afterwards
+    puts back an entry a dead process left off. ⚠️ **And the marker must never read his own switch-off
+    as ours:** only a recent marker from this boot with the entry reading off is finished; anything
+    else is cleared on sight (`SelfToggleLog.markerState`, pinned in `SelfToggleLogTest`). The list is
+    shared by every accessibility service on the phone — his holds Twilight and Xiaomi's MiLink — so
+    the rewrite removes and re-adds our entry only (`AccessibilityUtil.listWithout` / `listWith`).
+    Rewriting it makes Android re-evaluate every enabled service; on his phone that also bound
+    MiLink's, which was enabled and unbound. Harmless, and worth knowing.
+
+    **Noticing sooner: the dead-man alarm** (`WatcherDeadMan`). The watcher pushes one
+    `ELAPSED_REALTIME` alarm two minutes away on connect and every heartbeat, and cancels it in
+    `onDestroy`; only a process that vanished without a word leaves it to go off. Non-wakeup: it never
+    wakes a sleeping phone and is delivered when the phone next wakes, and the receiver answers a
+    false one from the live watcher in this process with no check. A real one waits the bind grace
+    out in-process (`goAsync`) and runs the check. On the Android 16 emulator: due time held 80–90 s
+    ahead while healthy; after a kill it started a process for the check 22 s later; and two checks
+    with the watcher crashed and not restarted each toggled it back within two seconds
+    (`self_toggle.xml`: attempts 2, helped 2).
+
+    **Removed at his request, same day:** the reinstall (invariant 81 — *"i hate this option it
+    annoys me and doesnt work"*, 0 of 2) and the reopen (invariant 74 — *"its annoying sometimes it
+    interrupts my call"*, 0 of 14 across both spaces). `CodeShapeTest` fails if either comes back. A
+    repair that takes over the screen or installs anything needs his word first.
+
+    **Lighter, measured the same evening** (`dumpsys meminfo` on his phone): the bound watcher holds
+    PSS ~11 MB (RSS ~120 MB, ~100 MB of it shared framework every app counts); a copy whose screens
+    had been opened and left held PSS 58 MB + 45 MB swapped, RSS 164 MB. `MainActivity` now finishes
+    ten minutes after he leaves it (never with another app's screen on top of ours in our task — a
+    flow we started), and `InstalledAppsRepository.release` drops the app list and its icons with it;
+    `invalidate` no longer decodes every icon into a process with no screen open.
+
+    **The shape to grep for: a repair that waits for the platform to restart what the platform on
+    this phone never restarts — and, for the next one, any repair that shows itself.**
 
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37

@@ -27,8 +27,7 @@ import com.appblocker.data.QuickSession
 import com.appblocker.data.SettingsStore
 import com.appblocker.data.ProtectionPulse
 import com.appblocker.data.SilenceLog
-import com.appblocker.data.SelfReinstallLog
-import com.appblocker.data.SelfRestoreLog
+import com.appblocker.data.SelfToggleLog
 import com.appblocker.data.StoppageHistory
 import com.appblocker.ui.hasUsageAccess
 import com.appblocker.ui.isIgnoringBattery
@@ -379,21 +378,17 @@ object BugReportSender {
         field("reboundWake") {
             "${ServiceHealth.reboundWarmCount(ctx)}/${ServiceHealth.reboundColdCount(ctx)}"
         }
-        // attempts/helped/noRebind/notLaunched — AppBlocker reopening itself when the watcher was
-        // found unbound during use (invariant 74). A repair that reports only that it ran is
-        // `revives` again; the second number is the one that says whether it works.
-        field("selfRestore") {
-            SelfRestoreLog.counts(ctx).let {
-                "${it.attempts}/${it.helped}/${it.noRebind}/${it.notLaunched}"
+        // attempts/helped/noRebind/failed — AppBlocker switching its own Accessibility entry off and
+        // on when the watcher was found killed (invariant 82). The second number is the one that says
+        // it works; a repair that reports only that it ran is `revives` again. Our own integers.
+        field("selfToggle") {
+            SelfToggleLog.counts(ctx).let {
+                "${it.attempts}/${it.helped}/${it.noRebind}/${it.failed}"
             }
         }
-        // attempts/helped/noRebind/askedTap/failed — AppBlocker reinstalling itself when the watcher
-        // was found killed (invariant 81). The second number is the one that says it works.
-        field("selfRepair") {
-            SelfReinstallLog.counts(ctx).let {
-                "${it.attempts}/${it.helped}/${it.noRebind}/${it.askedTap}/${it.failed}"
-            }
-        }
+        // Whether that repair may run at all: the permission only a computer can give. `false` on a
+        // phone nobody has plugged in, and then every killed watcher waits for his hand. Our boolean.
+        field("toggleGranted") { SelfToggle.permitted(ctx).toString() }
         // Whether Notification access is granted. With it, Android restarted a force-stopped
         // AppBlocker within a second on the emulator; without it nothing of ours runs after a force
         // stop until he opens the app (invariant 76). Our own boolean.

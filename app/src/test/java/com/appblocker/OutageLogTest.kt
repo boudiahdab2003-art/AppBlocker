@@ -553,8 +553,8 @@ class OutageLogTest {
             setOf(
                 OutageLog.EndedBy.REBOUND, OutageLog.EndedBy.HEARTBEAT,
                 OutageLog.EndedBy.AFTER_OPEN, OutageLog.EndedBy.AFTER_UPDATE,
-                // Filed by the watcher's connect or by the new process's own first check, both
-                // within seconds of the reinstall that caused it (invariant 81).
+                // Filed by the watcher's connect, or by a check that sees blocking back first, both
+                // within seconds of the off-and-on that caused it (invariant 82).
                 OutageLog.EndedBy.AFTER_REPAIR,
             ),
             OutageLog.EndedBy.SELF_TIMED,
@@ -772,12 +772,12 @@ class OutageLogTest {
     }
 
     /**
-     * Invariant 81: a rebind our own repair reinstall caused is the repair — never a plain `rebound`, and
-     * ahead of our own screen, since the reinstall is what replaced the process. A new version landing
-     * is the stronger fact and keeps its own name.
+     * Invariant 82: a rebind our own silent repair caused is the repair — never a plain `rebound`, and
+     * ahead of our own screen, since the off-and-on is what bound the watcher again. A new version
+     * landing is the stronger fact and keeps its own name.
      */
     @Test
-    fun `a rebind after a repair reinstall is filed as the repair`() {
+    fun `a rebind after the silent repair is filed as the repair`() {
         assertEquals(OutageLog.EndedBy.AFTER_REPAIR, OutageLog.rebindEnding(updateLanded = false, repaired = true, followedOwnScreen = false))
         assertEquals(OutageLog.EndedBy.AFTER_REPAIR, OutageLog.rebindEnding(updateLanded = false, repaired = true, followedOwnScreen = true))
         assertEquals(OutageLog.EndedBy.AFTER_UPDATE, OutageLog.rebindEnding(updateLanded = true, repaired = true, followedOwnScreen = true))

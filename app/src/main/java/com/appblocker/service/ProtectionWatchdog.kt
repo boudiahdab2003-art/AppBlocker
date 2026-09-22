@@ -9,8 +9,7 @@ import com.appblocker.data.OutageLog
 import com.appblocker.data.OwnSpace
 import com.appblocker.data.OwnUi
 import com.appblocker.data.ProcessExits
-import com.appblocker.data.SelfReinstallLog
-import com.appblocker.data.SelfRestoreLog
+import com.appblocker.data.SelfToggleLog
 import com.appblocker.data.ServiceHealth
 import com.appblocker.data.SessionClock
 import com.appblocker.data.SettingsStore
@@ -130,6 +129,11 @@ object ProtectionWatchdog {
         // can notice a boot our own receiver never heard. Lazy by necessity: a missed boot only
         // becomes knowable when something finally does run.
         BootAudit.noteRun(context)
+        // ⚠️ **Our own off-and-on first** (invariant 82). While the silent repair is between its two
+        // writes, the switch reads OFF because we made it so — judged now, that is a switch-off
+        // filed as his and alerted about. And a repair whose process died between the writes left
+        // the entry off with nobody to put it back: this is the thing that runs next, so it does.
+        if (SelfToggle.finishInterrupted(context)) return@guarded
         // ⚠️ **Another space in front is not a stoppage** (invariant 79). Android binds accessibility
         // services only for the user on screen, so while he is in Second Space this copy's watcher
         // is unbound ON PURPOSE and nothing here can be opened. Judged anyway, every visit became a
@@ -175,11 +179,11 @@ object ProtectionWatchdog {
         // it measures has stopped is worse than one that stops.
         val outageWasOpen = OutageLog.isOpen(context)
         if (state != ProtectionState.STALLED) {
-            // ⚠️ A repair reinstall that has just brought the watcher back is OURS, whichever
-            // observer sees it first (invariant 81). After the reinstall the new process hears both
-            // its own MY_PACKAGE_REPLACED check and the watcher's connect, in no fixed order; filed
-            // by this check it would read `boot` or `background` — the fault ending by itself.
-            val ending = if (state == ProtectionState.OK && SelfReinstallLog.claimRebind(context)) {
+            // ⚠️ A silent off-and-on that has just brought the watcher back is OURS, whichever
+            // observer sees it first (invariant 82). Nearly always the watcher's own connect gets
+            // there first and files it; filed by this check instead it would read `background` —
+            // the fault ending by itself, which is the one thing it was not.
+            val ending = if (state == ProtectionState.OK && SelfToggleLog.claimRebind(context)) {
                 OutageLog.EndedBy.AFTER_REPAIR
             } else {
                 calledBy
@@ -232,24 +236,23 @@ object ProtectionWatchdog {
                         killedBy = { whoClosedIt(context) },
                     )
                 }
-                ProtectionNotifier.notifyStalled(context, force)
+                // ⭐ **Do not wait for him** (invariant 82). His phone never restarts a killed watcher,
+                // and switching the entry off and on is what brings it back — proven on it on
+                // 22 Sep 2026 — so a killed watcher is answered by doing that, silently. It declines
+                // unless the watcher is really unbound, the switch reads on, the permission was given
+                // from a computer, and tries have not stopped helping. The reinstall and the reopen
+                // that came before it are gone, at his request: they interrupted him and never worked.
+                val arm = reading.arm ?: OutageLog.DetectedBy.UNBOUND
+                val repairing = SelfToggle.maybeRepair(context, arm = arm)
+                // No alert while a repair is under way: blocking should be back within seconds, and
+                // telling him about a stoppage that is already over is noise he learns to ignore. The
+                // five-minute repeat below finds out whether it came back, and alerts if it did not.
+                if (!repairing) ProtectionNotifier.notifyStalled(context, force)
                 // Come back in five minutes and float it again. The 15-minute periodic check is
                 // still the backstop; this is what makes the alert insistent rather than a thing
                 // he has to happen to look at. Re-armed on every check that still sees STALLED,
                 // and cancelled by endOpenOutage on any exit from it.
                 ProtectionScheduler.scheduleStalledRepeat(context)
-                // ⭐ **And do not wait for him.** First the repair seen to work on his phone: an
-                // install of our own package makes Android bind the watcher again (15 Sep 2026, #131),
-                // so a killed watcher is answered by reinstalling our own copy (invariant 81). It
-                // replaces this process, so nothing else starts on this check when it goes ahead.
-                val arm = reading.arm ?: OutageLog.DetectedBy.UNBOUND
-                if (!SelfReinstall.maybeRepair(context, arm = arm, calledBy = calledBy)) {
-                    // Otherwise the reopen, his choice on 14 Sep 2026 (invariant 74) — kept on
-                    // 18 Sep although it had not helped yet. It declines almost always — not
-                    // unbound, phone not in use, tried recently, or given up after tries that did
-                    // not help — and every attempt it does make is judged.
-                    SelfRestore.maybeReopen(context, arm = arm, calledBy = calledBy)
-                }
             }
             // Off after an update, pending reactivation. Worth an alert precisely because it is
             // self-inflicted and easy to forget: the app was doing nothing at all, and saying it
@@ -305,24 +308,23 @@ object ProtectionWatchdog {
      *
      * On 14 Sep 2026 a six-hour stoppage ended the second he opened AppBlocker and was filed as
      * `rebound` — the ending this log reads as "blocking came back with nobody doing anything" — and
-     * `reboundWake` would have scored it `cold`, Android acting on its own. Both halves are always
-     * evaluated: the claim settles a pending self-reopen even when his own open already answers
-     * (invariant 74).
+     * `reboundWake` would have scored it `cold`, Android acting on its own (invariant 74).
      *
      * ⚠️ **Nor is a rebind that followed our own install** (invariant 78). On 15 Sep 2026 a stoppage
      * that began with a kill at 11:21 ended at 12:28, the minute v1.165 was installed, and was filed
      * `rebound` and scored `cold` — by the new version's first connect, which is where this runs. The
      * install outranks the screen; [OutageLog.rebindEnding] holds that order.
+     *
+     * ⚠️ **Nor one that followed our own off-and-on** (invariant 82). The claim is always made, even
+     * when an install or his open already answers, because it is also what settles the attempt.
      */
     private fun reboundEnding(context: Context): String {
-        // All three claims are always made: each settles its own pending attempt, whichever wins.
-        val reopened = SelfRestoreLog.claimRebind(context)
-        val repaired = SelfReinstallLog.claimRebind(context)
+        val repaired = SelfToggleLog.claimRebind(context)
         val opened = OwnUi.openedWithin(SystemClock.elapsedRealtime(), OPEN_ATTRIBUTION_MS)
         return OutageLog.rebindEnding(
             updateLanded = OutageLog.updateLandedDuringOpenEpisode(context),
             repaired = repaired,
-            followedOwnScreen = reopened || opened,
+            followedOwnScreen = opened,
         )
     }
 

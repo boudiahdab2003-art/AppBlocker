@@ -120,21 +120,16 @@ object HealthFacts {
         /** [SwitchOffLog.Episode.how] and the guard reading of the most recent period. */
         val switchOffLastHow: String? = null,
         val switchOffLastGuard: Boolean? = null,
-        /** AppBlocker reopening itself when the watcher was found unbound during use — see
-         *  [SelfRestoreLog]. Attempts, and what they came to. */
-        val restoreAttempts: Int = 0,
-        val restoreHelped: Int = 0,
-        val restoreNoRebind: Int = 0,
-        val restoreNotLaunched: Int = 0,
-        val restoreFutileStreak: Int = 0,
-        /** AppBlocker reinstalling itself when the watcher was found killed — see
-         *  [SelfReinstallLog] (invariant 81). Attempts, and what they came to. */
-        val repairAttempts: Int = 0,
-        val repairHelped: Int = 0,
-        val repairNoRebind: Int = 0,
-        val repairAskedTap: Int = 0,
-        val repairFailed: Int = 0,
-        val repairFutileStreak: Int = 0,
+        /** AppBlocker switching its own Accessibility entry off and on when the watcher was found
+         *  killed — see [SelfToggleLog] (invariant 82). Attempts, and what they came to. */
+        val toggleAttempts: Int = 0,
+        val toggleHelped: Int = 0,
+        val toggleNoRebind: Int = 0,
+        val toggleFailed: Int = 0,
+        val toggleFutileStreak: Int = 0,
+        /** Whether that repair may run at all — the permission a computer has to give. Null for a
+         *  build that never offers it (Play), so the fact is not printed there at all. */
+        val togglePermitted: Boolean? = null,
         /** Notification access — the path Android restarts AppBlocker by after a force stop
          *  (invariant 76). Null when it could not be read. */
         val notifAccess: Boolean? = null,
@@ -352,8 +347,7 @@ object HealthFacts {
         }
         outageFact(r)?.let { add(it) }
         switchOffFact(r)?.let { add(it) }
-        selfRepairFact(r)?.let { add(it) }
-        selfRestoreFact(r)?.let { add(it) }
+        selfToggleFact(r)?.let { add(it) }
         notificationAccessFact(r)?.let { add(it) }
         schedulerFact(r)?.let { add(it) }
         speedFact(r)?.let { add(it) }
@@ -599,66 +593,50 @@ object HealthFacts {
     }
 
     /**
-     * AppBlocker reinstalling itself to bring a killed watcher back — a measurement, never a verdict,
-     * and the one that says whether the one repair seen to work on his phone keeps working
-     * (invariant 81). See [SelfReinstallLog]. It states the try and counts what followed; it does not
-     * argue for itself (the reopen fact's lesson, 18 Sep 2026).
-     */
-    private fun selfRepairFact(r: Reading): Fact? {
-        if (r.repairAttempts <= 0) return null
-        val detail = buildString {
-            append("When your phone shuts the blocker down, AppBlocker reinstalls itself, because an ")
-            append("install is what makes Android start the blocker again. Nothing of yours changes. ")
-            append("Blocking came back within minutes ${r.repairHelped} time(s).")
-            if (r.repairNoRebind > 0) {
-                append(" ${r.repairNoRebind} time(s) it reinstalled and blocking did not come back.")
-            }
-            if (r.repairAskedTap > 0) {
-                append(" ${r.repairAskedTap} time(s) your phone asked you to confirm it first.")
-            }
-            if (r.repairFailed > 0) {
-                append(" ${r.repairFailed} time(s) the phone refused or it could not start.")
-            }
-            if (r.repairFutileStreak >= SelfReinstallLog.MAX_FUTILE_STREAK) {
-                append(" The last ${r.repairFutileStreak} tries did not help, so it has stopped ")
-                append("for a day and leaves it to the alert.")
-            }
-        }
-        return Fact(
-            "AppBlocker reinstalled itself ${r.repairAttempts} time(s) to bring blocking back",
-            detail,
-            good = null,
-        )
-    }
-
-    /**
-     * AppBlocker reopening itself — a measurement, never a verdict, and the one that says whether
-     * the repair repairs anything (invariant 74). See [SelfRestoreLog].
+     * The silent repair — AppBlocker switching its own Accessibility entry off and on when the phone
+     * has killed the watcher (invariant 82). See [SelfToggleLog].
      *
-     * ⚠️ It states the try, not the premise. This used to say opening the app "brought blocking back
-     * when nothing else did" — one afternoon on 14 Sep 2026 — and by 18 Sep his own phone had
-     * answered it three times the other way (two reopens and one open of his own, no rebind). A fact
-     * that argues for the repair is the repair grading itself.
+     * Three shapes. Not set up: said plainly, as a choice rather than a fault, because it needs a
+     * computer. Ready and never needed: ✅. Used: a measurement, never a verdict — it states the tries
+     * and counts what followed, the lesson of the reopen fact it replaces, which argued for itself on
+     * one afternoon's evidence while his phone was answering the other way.
      */
-    private fun selfRestoreFact(r: Reading): Fact? {
-        if (r.restoreAttempts <= 0) return null
+    private fun selfToggleFact(r: Reading): Fact? {
+        val permitted = r.togglePermitted ?: return null
+        if (!permitted) {
+            return Fact(
+                "The silent repair is not set up",
+                "When your phone shuts the blocker down, AppBlocker can switch itself off and on " +
+                    "again, silently, the way you do by hand. It needs a one-time permission that " +
+                    "only a computer can give.",
+                good = null,
+            )
+        }
+        if (r.toggleAttempts <= 0) {
+            return Fact(
+                "The silent repair is ready",
+                "When your phone shuts the blocker down, AppBlocker switches itself off and on " +
+                    "again, silently, the way you do by hand. It has not been needed yet.",
+                good = true,
+            )
+        }
         val detail = buildString {
-            append("When blocking stops while you are using the phone, AppBlocker opens itself for ")
-            append("a moment, to see whether that brings blocking back. ")
-            append("Blocking came back within seconds ${r.restoreHelped} time(s).")
-            if (r.restoreNoRebind > 0) {
-                append(" ${r.restoreNoRebind} time(s) it opened and blocking did not come back.")
+            append("When your phone shuts the blocker down, AppBlocker switches itself off and on ")
+            append("again, silently, the way you do by hand. ")
+            append("Blocking came back within seconds ${r.toggleHelped} time(s).")
+            if (r.toggleNoRebind > 0) {
+                append(" ${r.toggleNoRebind} time(s) it switched and blocking did not come back.")
             }
-            if (r.restoreNotLaunched > 0) {
-                append(" ${r.restoreNotLaunched} time(s) the phone did not let it open.")
+            if (r.toggleFailed > 0) {
+                append(" ${r.toggleFailed} time(s) the phone refused the switch.")
             }
-            if (r.restoreFutileStreak >= SelfRestoreLog.MAX_FUTILE_STREAK) {
-                append(" The last ${r.restoreFutileStreak} tries did not help, so it has stopped ")
-                append("reopening itself for a day and leaves it to the alert.")
+            if (r.toggleFutileStreak >= SelfToggleLog.MAX_FUTILE_STREAK) {
+                append(" The last ${r.toggleFutileStreak} tries did not help, so it waits an hour ")
+                append("before trying again and leaves it to the alert.")
             }
         }
         return Fact(
-            "AppBlocker reopened itself ${r.restoreAttempts} time(s) to bring blocking back",
+            "The silent repair ran ${r.toggleAttempts} time(s)",
             detail,
             good = null,
         )

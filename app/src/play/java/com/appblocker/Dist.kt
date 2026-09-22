@@ -10,6 +10,13 @@ object Dist {
     const val LOCATION_SCHEDULES = false
 
     /**
+     * No silent repair here: it rests on `WRITE_SECURE_SETTINGS`, which a Play user cannot grant
+     * without a computer and `adb`, and which this flavour does not declare. Revisit only if the
+     * Play build ever gets a supported way to hand that permission over.
+     */
+    const val SELF_TOGGLE = false
+
+    /**
      * No donate link here, and **this is a decision, not an oversight** — delete the flag and
      * the row appears in a Play build.
      *

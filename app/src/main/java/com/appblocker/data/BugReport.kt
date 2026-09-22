@@ -377,14 +377,14 @@ data class BugReport(
         appendLine("two kinds together.")
         appendLine()
         appendLine("**rebound-after-open** is timed by the watcher too, but it came within seconds")
-        appendLine("of AppBlocker's own screen being opened — by him, or by the app reopening itself —")
-        appendLine("so it is NOT Android recovering alone. Never count it with **rebound**.")
+        appendLine("of AppBlocker's own screen being opened by him, so it is NOT Android recovering")
+        appendLine("alone. Never count it with **rebound**.")
         appendLine("**rebound-after-update** is the same for an AppBlocker update installed while it")
         appendLine("was down: installing replaced the process, and the new version's own start ended")
         appendLine("the stoppage. Whether blocking itself came back then depends on the update pause.")
-        appendLine("**rebound-after-repair** is AppBlocker's own repair working: it reinstalled its")
-        appendLine("own copy (same version) because an install makes Android bind the watcher again.")
-        appendLine("Timed by the watcher, and never Android recovering alone.")
+        appendLine("**rebound-after-repair** is AppBlocker's own silent repair working: it switched")
+        appendLine("its own Accessibility entry off and on, which is what makes this phone bind a")
+        appendLine("killed watcher again. Timed by the watcher, and never Android recovering alone.")
         appendLine("⚠️ Plain **rebound** says WHEN the watcher was bound again, not WHO bound it.")
         appendLine("Android restarting it, him switching AppBlocker off and on, and him coming back")
         appendLine("from another space (a space switch binds every accessibility service afresh) look")
@@ -813,13 +813,13 @@ data class BugReport(
             // counted either way, so read it as "how often did it demonstrably work".
             "revivesHelped",
             "reboundWake",
-            // "3/2/1/0" — AppBlocker reopening itself: attempts, then the ones after which Android
-            // bound the watcher again, opened with no rebind, or were never let open. Our integers.
-            "selfRestore",
-            // "2/1/1/0/0" — AppBlocker reinstalling itself to revive a killed watcher: attempts, then
-            // the ones after which the watcher was bound again, reinstalled with no rebind, the phone
-            // asking for a tap, and refused. Our integers (invariant 81).
-            "selfRepair",
+            // "3/2/1/0" — AppBlocker switching its own Accessibility entry off and on to revive a
+            // killed watcher: attempts, then the ones after which it was bound again, switched with no
+            // rebind, and refused. Our integers (invariant 82).
+            "selfToggle",
+            // true/false — whether that repair may run at all: the permission only a computer can
+            // give. Our boolean.
+            "toggleGranted",
             // true/false — Notification access, the path Android restarts AppBlocker by after a
             // force stop (invariant 76).
             "notifAccess",

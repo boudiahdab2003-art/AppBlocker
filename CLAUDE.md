@@ -72,8 +72,20 @@ cannot produce a fault: nothing throws when Android stops delivering events. Rea
 `data/OutageLog.kt`. **`outageDeaf` is the field to read first** — `false` means the process was
 killed and never rebound, `true` means it was alive the whole time and stopped being delivered to;
 different causes, different fixes. `outagePreceded` tests the standing hypothesis that the owner's
-own frequent self-updates are what kill it. ⚠️ **The cause is not known yet, and Second Space is
-NOT it** — he ruled that out on 28 Aug 2026 (invariant 31). Don't repeat the old explanation to him.
+own frequent self-updates are what kill it. ⚠️ **Second Space visits are NOT the cause** — he ruled
+that out on 28 Aug 2026 (invariant 31), and since v1.166 a visit is not filed at all (invariant 79).
+
+**What the stoppages are, proven on his phone on 22 Sep 2026 (invariant 82):** HyperOS kills the
+bound watcher (`low-memory`, `signaled sig-9`, `OneKeyClean` — read `killedBy=` and the `EXITED`
+lines) and **never restarts it**; switching the Accessibility entry off and on brings it back within a
+second. From v1.169 `SelfToggle` does that itself, silently, noticed by the `WatcherDeadMan` alarm —
+but only with `WRITE_SECURE_SETTINGS`, granted over adb once per space (`adb shell pm grant
+com.appblocker android.permission.WRITE_SECURE_SETTINGS`, and again with `--user 10`). Reports carry
+`toggleGranted` and `selfToggle` (attempts/helped/noRebind/failed): **`toggleGranted false` means
+the grant is missing** (an uninstall loses it) and every kill waits for his hand again. The reinstall
+and reopen repairs are gone at his request and must not come back without his word.
+
+On the owner's PC `gh` works directly: `gh issue list -R boudiahdab2003-art/appblocker-reports`.
 
 From v1.163 the stoppage list also carries **`SWITCHED-OFF` lines** (`data/SwitchOffLog.kt`,
 invariant 70): the switch itself read OFF, which the app used to file as his choice and time not
