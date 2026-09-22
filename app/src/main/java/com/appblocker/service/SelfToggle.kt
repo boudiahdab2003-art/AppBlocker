@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
+import android.os.Looper
 import android.provider.Settings
 import android.util.Log
 import com.appblocker.Dist
@@ -74,9 +75,16 @@ object SelfToggle {
             // writes, this alarm starts a new one within a minute, and its check finishes the job.
             WatcherDeadMan.armSoon(app)
             started = true
-            // Off the calling thread: the checks run on the main thread of receivers, the tile and
-            // the app's own screen, and the gap below must not freeze any of them.
-            thread(name = "appblocker-self-toggle") { toggle(app) }
+            // On the main thread — receivers, the tile, the app's own screen — the gap below must
+            // not freeze anything, so it gets its own thread. Anywhere else it runs right here, to
+            // the end: the worker and the dead-man receiver keep their process alive only until
+            // they return, and returning between the two writes is the one moment the switch would
+            // be left off (the marker and the short alarm would still put it back, a minute later).
+            if (Looper.myLooper() == Looper.getMainLooper()) {
+                thread(name = "appblocker-self-toggle") { toggle(app) }
+            } else {
+                toggle(app)
+            }
         }
         return started
     }
