@@ -28,6 +28,7 @@ import com.appblocker.data.SettingsStore
 import com.appblocker.data.ProtectionPulse
 import com.appblocker.data.SilenceLog
 import com.appblocker.data.SelfToggleLog
+import com.appblocker.data.SpaceReturn
 import com.appblocker.data.StoppageHistory
 import com.appblocker.ui.hasUsageAccess
 import com.appblocker.ui.isIgnoringBattery
@@ -162,8 +163,10 @@ object BugReportSender {
         field("bindPending") { reading?.bindPending?.toString() ?: "?" }
         // How long THIS PROCESS has been alive, against `uptimeMin`'s whole-phone figure. A
         // watcher missing three seconds after a cold start has not died; one missing after two
-        // hours of process life has.
-        field("processAgeMin") { ((reading?.sinceProcessStartMs ?: 0L) / 60_000L).toString() }
+        // hours of process life has. `?` when this report took no reading — never `0`, which is
+        // exactly the cold start this key exists to recognise: on 23 Sep 2026 a profile report
+        // with no reading printed 0 for a process eight hours old (#191, against #196's 518).
+        field("processAgeMin") { reading?.let { (it.sinceProcessStartMs / 60_000L).toString() } ?: "?" }
         // The watchdog re-checked and the watcher was still gone. Non-zero means the phone is
         // killing the process faster than the 45-second grace can wait for it.
         field("bindDeferrals") { SettingsStore.bindDeferrals(ctx).toString() }
@@ -356,6 +359,10 @@ object BugReportSender {
         // Checks that found another space (Second Space, another user) in front and judged nothing
         // (invariant 79). The guard silences stoppages and alerts, so this is the proof it fired.
         field("awayChecks") { ServiceHealth.awayCheckCount(ctx).toString() }
+        // Returns from another space in which a check found the watcher not bound yet and waited for
+        // Android instead of filing a stoppage (invariant 83). Silenced like the away checks, so
+        // counted like them: a return Android never rebinds still becomes a stoppage after the wait.
+        field("returnWaits") { SpaceReturn.waitCount(ctx).toString() }
         // The inside view of aliveButDeaf: how often the heartbeat found the watcher silent for
         // three minutes and re-posted its event mask, and how often that re-post itself threw.
         // "12/2" reads as twelve nudges, two of which found the binding already gone.

@@ -801,6 +801,9 @@ data class BugReport(
             // Checks that found another space in front and judged nothing (invariant 79): the
             // proof that the guard which silences Second Space visits ever fired. Our own integer.
             "awayChecks",
+            // Returns from another space in which a check found the watcher not bound yet and waited
+            // for Android rather than filing a stoppage (invariant 83). Our own integer.
+            "returnWaits",
             // "12/2" — heartbeat nudges that found the watcher silent for three minutes, and how
             // many of those nudges threw. The inside view of `outageDeaf`: a climbing first number
             // is a watcher that keeps going deaf while running, a flat zero alongside outages is
@@ -833,7 +836,8 @@ data class BugReport(
             // Whether that verdict came from the bind grace rather than from evidence.
             "bindPending",
             // Age of THIS PROCESS in minutes, against `uptimeMin`'s whole-phone figure — a missing
-            // watcher three seconds after a cold start has not died.
+            // watcher three seconds after a cold start has not died. `?` when the report took no
+            // reading, which is not the same as a process that has just started.
             "processAgeMin",
             // Times the re-check found the watcher still gone: the phone killing our process
             // faster than the grace period can wait for it.

@@ -13,6 +13,7 @@ import com.appblocker.data.SelfToggleLog
 import com.appblocker.data.ServiceHealth
 import com.appblocker.data.SessionClock
 import com.appblocker.data.SettingsStore
+import com.appblocker.data.SpaceReturn
 import com.appblocker.data.SwitchOffLog
 import com.appblocker.ui.hasUsageAccess
 
@@ -59,6 +60,12 @@ object ProtectionWatchdog {
         val usedMinutes: Int? = null,
         /** How long this process has been alive — separates a cold start from a real death. */
         val sinceProcessStartMs: Long = 0L,
+        /**
+         * How long ago this space was seen back in front while its watcher, unbound by the switch
+         * away, is still awaited — null when nothing is awaited (invariant 83). The second thing,
+         * beside a young process, that makes an unbound watcher a pending bind rather than a death.
+         */
+        val sinceSpaceReturnMs: Long? = null,
     )
 
     /** The current health of blocking, for the watchdog and for the app's own status row. */
@@ -85,6 +92,11 @@ object ProtectionWatchdog {
         val connected = BlockerAccessibilityService.isConnected()
         // Monotonic, from the OS rather than a field of our own (invariant 9).
         val sinceStart = SystemClock.elapsedRealtime() - Process.getStartElapsedRealtime()
+        // ⚠️ And how long ago this space came back to the front, when the switch away is what
+        // unbound the watcher (invariant 83). A process hours old is no proof of death then: Android
+        // binds the watcher again only some seconds after the return, and AppBlocker's own screen
+        // resuming as he comes back is a check that lands in exactly that gap.
+        val sinceReturn = SpaceReturn.sinceReturnMs(context)
         // The watcher's own answer to "can I still read the screen?", counted by the heartbeat.
         // Read here rather than inside protectionState so the whole verdict still comes out of one
         // set of readings — see the Reading KDoc.
@@ -95,13 +107,15 @@ object ProtectionWatchdog {
             serviceConnected = connected,
             msSinceProcessStart = sinceStart,
             probeFailStreak = probeFails,
+            msSinceSpaceReturn = sinceReturn,
         )
         return Reading(
             state = verdict.state,
-            bindPending = bindPending(enabled, connected, sinceStart),
+            bindPending = bindPending(enabled, connected, sinceStart, sinceReturn),
             arm = verdict.arm,
             usedMinutes = usedMinutes,
             sinceProcessStartMs = sinceStart,
+            sinceSpaceReturnMs = sinceReturn,
         )
     }
 
@@ -146,6 +160,14 @@ object ProtectionWatchdog {
             ServiceHealth.recordAwayCheck(context)
             return@guarded
         }
+        // ⚠️ **Nor is coming back** (invariant 83). Android binds this space's watcher again some
+        // seconds after he returns, and a check inside that gap — AppBlocker's own screen resuming,
+        // on the emulator — files a stoppage, runs the silent repair and credits Android's own rebind
+        // to it: the best fit for #196 on 23 Sep 2026. The first check to see this space in front
+        // again starts the wait, and read() then answers a watcher still missing as a pending bind,
+        // the way it answers a process seconds old. Only after the guard: a check run while he is
+        // still away must not start the clock on a return that has not happened.
+        SpaceReturn.noteInFront(context)
         val reading = read(context)
         // Too early to tell: our process is seconds old and Android has not bound the watcher
         // yet — the normal shape of a check that WorkManager cold-started in order to run. There
@@ -161,6 +183,11 @@ object ProtectionWatchdog {
         if (reading.bindPending && deferrals < MAX_BIND_DEFERRALS) {
             SettingsStore.setBindDeferrals(context, deferrals + 1)
             ProtectionScheduler.scheduleRecheckSoon(context)
+            // A return's wait stands in for an answer this check used to give at once, and on his
+            // phone the WorkManager re-check above is the thing that keeps not running. So the
+            // dead-man alarm's short fuse brings the next look within half a minute; it does nothing
+            // if the watcher is back by then, and judges it if it is not (invariant 83).
+            if (reading.sinceSpaceReturnMs != null) WatcherDeadMan.armSoon(context)
             return@guarded
         }
         // A real verdict follows, so the run of deferrals is over.

@@ -31,6 +31,29 @@ internal enum class ProtectionState {
  */
 internal const val SERVICE_BIND_GRACE_MS = 20_000L
 
+/**
+ * [SERVICE_BIND_GRACE_MS]'s twin for **this space coming back to the front** (invariant 83): how long
+ * after a check first sees the return the watcher may still be unbound before that counts as death.
+ *
+ * Android binds the watcher of a space that has come back some seconds after it is in front: about
+ * 30 s on the Android 16 emulator on 24 Sep 2026, measured from the switch, against 20 s of grace for
+ * a process start. Twice that. It runs from the first check that saw the return
+ * ([com.appblocker.data.SpaceReturn]), which can only be at the return or after it, so a watcher that
+ * never comes back is judged at most this much later than it would have been.
+ */
+internal const val SPACE_RETURN_GRACE_MS = 60_000L
+
+/**
+ * **Whether Android may still be about to bind the watcher**: our process is seconds old, or this
+ * space came back to the front seconds ago. One predicate for [protectionVerdict] and [bindPending],
+ * so the verdict and the deferral can never disagree about the grace.
+ *
+ * @param msSinceSpaceReturn null when no return is awaited — the case this read as before it existed.
+ */
+internal fun bindGraceHolds(msSinceProcessStart: Long, msSinceSpaceReturn: Long?): Boolean =
+    msSinceProcessStart < SERVICE_BIND_GRACE_MS ||
+        (msSinceSpaceReturn != null && msSinceSpaceReturn < SPACE_RETURN_GRACE_MS)
+
 /** No event for this long is the first hint that the watcher may have been killed. */
 internal const val STALE_AFTER_MS = 2 * 60 * 60_000L
 
@@ -79,6 +102,9 @@ internal const val PROBE_FAIL_LIMIT = 5
  * @param probeFailStreak consecutive failures of the watcher's own "can I still read the screen?"
  *   probe — see [PROBE_FAIL_LIMIT]. Zero when nothing has been measured, which is the same as
  *   healthy: this arm can only ever *add* a verdict, never soften one.
+ * @param msSinceSpaceReturn how long ago a check first saw this space back in front while its
+ *   watcher, unbound by the switch away, is still awaited — or null when nothing is awaited. Only
+ *   read when [serviceConnected] is false: see [SPACE_RETURN_GRACE_MS].
  */
 internal fun protectionState(
     enabled: Boolean,
@@ -89,9 +115,10 @@ internal fun protectionState(
     serviceConnected: Boolean? = null,
     msSinceProcessStart: Long = Long.MAX_VALUE,
     probeFailStreak: Int = 0,
+    msSinceSpaceReturn: Long? = null,
 ): ProtectionState = protectionVerdict(
     enabled, lastEventAt, now, usedMinutesSinceLastEvent,
-    updatePaused, serviceConnected, msSinceProcessStart, probeFailStreak,
+    updatePaused, serviceConnected, msSinceProcessStart, probeFailStreak, msSinceSpaceReturn,
 ).state
 
 /**
@@ -119,6 +146,7 @@ internal fun protectionVerdict(
     serviceConnected: Boolean? = null,
     msSinceProcessStart: Long = Long.MAX_VALUE,
     probeFailStreak: Int = 0,
+    msSinceSpaceReturn: Long? = null,
 ): Verdict {
     fun ok(state: ProtectionState) = Verdict(state, null)
     fun stalled(arm: String) = Verdict(ProtectionState.STALLED, arm)
@@ -139,8 +167,9 @@ internal fun protectionVerdict(
     // STALLED, `recordFoundDead` never fired and `OutageLog.begin` never opened an episode: the
     // leading hypothesis for the owner's outages was the one case the instrument could not see.
     // The bind grace below, plus bindPending's deferrals, are what stop this crying wolf during
-    // the seconds Android legitimately takes to rebind after an install.
-    if (serviceConnected == false && msSinceProcessStart >= SERVICE_BIND_GRACE_MS) {
+    // the seconds Android legitimately takes to rebind after an install — or after he comes back
+    // from the other space, where the process is hours old and only the return is new (invariant 83).
+    if (serviceConnected == false && !bindGraceHolds(msSinceProcessStart, msSinceSpaceReturn)) {
         return stalled(OutageLog.DetectedBy.UNBOUND)
     }
     // Bound, running its own timer, and unable to read a lit unlocked screen five times running.
@@ -195,14 +224,18 @@ internal fun protectionVerdict(
  * our process — the deferral has to cover the paused case too, or a cold-started check landing
  * seconds after an install would call a watcher dead that Android simply had not bound yet.
  * **The deferral is what makes ranking STALLED above PAUSED safe.**
+ *
+ * ⚠️ **A return from the other space is pending too** (invariant 83): the process is hours old, but
+ * Android is only now binding the watcher it unbound when he switched away — see [bindGraceHolds].
  */
 internal fun bindPending(
     enabled: Boolean,
     serviceConnected: Boolean?,
     msSinceProcessStart: Long,
+    msSinceSpaceReturn: Long? = null,
 ): Boolean = enabled &&
     serviceConnected == false &&
-    msSinceProcessStart < SERVICE_BIND_GRACE_MS
+    bindGraceHolds(msSinceProcessStart, msSinceSpaceReturn)
 
 /**
  * How an outage stopped, for the state the watchdog left STALLED for.

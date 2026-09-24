@@ -913,6 +913,18 @@ class CodeShapeTest {
         }
         .joinToString("\n")
 
+    /** The text inside the brace at [open] up to its match, nested braces respected. */
+    private fun braceBody(text: String, open: Int): String {
+        var depth = 0
+        for (i in open until text.length) {
+            when (text[i]) {
+                '{' -> depth++
+                '}' -> if (--depth == 0) return text.substring(open + 1, i)
+            }
+        }
+        return text.substring(open + 1)
+    }
+
     /** The argument text of every call to [call] (which ends in `(`), nested parentheses respected. */
     private fun callArgs(text: String, call: String): List<String> {
         val out = mutableListOf<String>()
@@ -1258,6 +1270,84 @@ class CodeShapeTest {
             assertTrue("$later is gone from checkAndNotify; this check is reading nothing", at >= 0)
             assertTrue("$later runs before the space guard, so a Second Space visit is judged", at > guard)
         }
+    }
+
+    // ---- invariant 83 ------------------------------------------------------------------------
+
+    /**
+     * **Invariant 83: coming back from the other space is not a stoppage either.** Android binds the
+     * watcher of a space that has come back only some seconds after it is in front, and a check inside
+     * that gap — AppBlocker's own screen resuming as he comes back — files a stoppage, runs the silent
+     * repair, and credits Android's own rebind to it: the best fit for #196 (23 Sep 2026), reproduced
+     * in its exact shape on the Android 16 emulator on 24 Sep. Every part of the wait lives in code
+     * no JVM test can run, so its shape is held here: the watcher records at its unbind whether its
+     * space was behind, and forgets it once bound; the check starts the wait only after its space
+     * guard and before it reads; the one reading hands the wait to the verdict AND to the deferral;
+     * and a return's deferral lights the short fuse, because the WorkManager re-check is what his
+     * phone keeps not running.
+     */
+    @Test
+    fun `a return from the other space is waited out, not judged`() {
+        val watcher = code(source("service/BlockerAccessibilityService.kt").readText())
+        val destroy = watcher.substringAfter("override fun onDestroy() {", "").substringBefore("companion object")
+        val connect = watcher.substringAfter("override fun onServiceConnected() {", "").substringBefore("override fun ")
+        assertTrue("onDestroy is gone; this check is reading nothing", destroy.isNotEmpty())
+        assertTrue("onServiceConnected is gone; this check is reading nothing", connect.isNotEmpty())
+        val unbind = callArgs(destroy, "SpaceReturn.noteUnbind(")
+        assertEquals("onDestroy must record, once, whether its space was behind", 1, unbind.size)
+        assertTrue(
+            "the unbind must pass Android's own answer to whether another space is in front: ${unbind.single()}",
+            "!OwnSpace.inFront(" in unbind.single(),
+        )
+        assertTrue("onServiceConnected must end the wait: the watcher is back", "SpaceReturn.noteBound(" in connect)
+
+        val watchdog = code(source("service/ProtectionWatchdog.kt").readText())
+        val check = watchdog.substringAfter("fun checkAndNotify(", "").substringBefore("fun noteWatcherAlive(")
+        val guard = check.indexOf("!OwnSpace.inFront(")
+        val start = check.indexOf("SpaceReturn.noteInFront(")
+        val read = check.indexOf("read(context)")
+        assertTrue("checkAndNotify lost its guard or its reading; this check is reading nothing", guard >= 0 && read >= 0)
+        assertTrue("checkAndNotify no longer starts a return's wait", start >= 0)
+        assertTrue("the wait must start after the space guard, or a check run while he is away starts it", start > guard)
+        assertTrue("the wait must start before the reading, or the check that sees the return judges it", start < read)
+        val starts = sourceTree().sumOf { f -> code(f.readText()).split("SpaceReturn.noteInFront(").size - 1 }
+        assertEquals("a return's wait is started from more than the watchdog's check", 1, starts)
+
+        val reading = watchdog.substringAfter("internal fun read(", "").substringBefore("\n    }")
+        assertTrue("read() no longer asks how long ago the space came back", "SpaceReturn.sinceReturnMs(" in reading)
+        val verdict = callArgs(reading, "protectionVerdict(")
+        val pending = callArgs(reading, "bindPending(")
+        assertEquals("read() must ask for one verdict and one pending bind", listOf(1, 1), listOf(verdict.size, pending.size))
+        assertTrue("the verdict must be given the return: ${verdict.single()}", "msSinceSpaceReturn = sinceReturn" in verdict.single())
+        assertTrue("the deferral must be given the same return: ${pending.single()}", "sinceReturn" in pending.single())
+
+        val deferral = check.substringAfter("if (reading.bindPending", "").substringBefore("return@guarded")
+        assertTrue("the deferral branch is gone; this check is reading nothing", deferral.isNotEmpty())
+        assertTrue(
+            "a return's deferral must light the short fuse: $deferral",
+            "if (reading.sinceSpaceReturnMs != null) WatcherDeadMan.armSoon(" in deferral,
+        )
+    }
+
+    /**
+     * **A report field read from the watchdog's reading says `?` when the report took none** — never
+     * a number. On 23 Sep 2026 three profile reports took no reading and printed `processAgeMin 0`,
+     * the one value the key exists to single out: a process that has just started (#191's was eight
+     * hours old). Its neighbours always said `?`; it alone fell back to `0L`. The 6 Sep sweep of the
+     * reporting layer's sentinels came before the key did.
+     */
+    @Test
+    fun `a report field read from the watchdog says a question mark when there was no reading`() {
+        val text = code(source("service/BugReportSender.kt").readText())
+        val fields = Regex("""field\("(\w+)"\)\s*\{""").findAll(text)
+            .map { m -> m.groupValues[1] to braceBody(text, m.range.last) }
+            .filter { (_, body) -> "reading?." in body }
+            .toList()
+        assertTrue("fewer than 3 fields read the reading; this check is reading nothing", fields.size >= 3)
+        val numbered = fields
+            .filter { (_, body) -> "\"?\"" !in body || Regex("""\?:\s*-?\d""").containsMatchIn(body) }
+            .map { it.first }
+        assertEquals("these fields print a number when the report took no reading", emptyList<String>(), numbered)
     }
 
     // ---- invariant 70 ------------------------------------------------------------------------

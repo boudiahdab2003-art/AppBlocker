@@ -5,6 +5,7 @@ import com.appblocker.data.UpdatePause
 import com.appblocker.service.PROBE_FAIL_LIMIT
 import com.appblocker.service.ProtectionState
 import com.appblocker.service.SERVICE_BIND_GRACE_MS
+import com.appblocker.service.SPACE_RETURN_GRACE_MS
 import com.appblocker.service.STALE_MIN_USED_MINUTES
 import com.appblocker.service.protectionVerdict
 import com.appblocker.service.bindPending
@@ -336,6 +337,98 @@ class ProtectionStateTest {
                 serviceConnected = false, msSinceProcessStart = 2_000L,
             ),
         )
+
+    // --- Invariant 83: coming back from the other space --------------------------------------
+
+    private val eightHours = 8 * hour
+
+    /**
+     * **The misfire this was written for** (report #196, 23 Sep 2026). He comes back from Second
+     * Space; AppBlocker's own screen resumes and its check runs before Android has bound the watcher
+     * again. The process is hours old, so the process grace says nothing — only the return is new.
+     * Seconds after it, an unbound watcher is a pending bind, not a death, and nothing is filed.
+     */
+    @Test fun aWatcherUnboundSecondsAfterTheSpaceCameBackIsPendingNotStalled() {
+        val verdict = protectionVerdict(
+            true, lastEventAt = now - 9 * 60_000L, now = now, usedMinutesSinceLastEvent = 0,
+            serviceConnected = false, msSinceProcessStart = eightHours, msSinceSpaceReturn = 5_000L,
+        )
+        assertEquals(ProtectionState.OK, verdict.state)
+        assertTrue(
+            bindPending(
+                enabled = true,
+                serviceConnected = false, msSinceProcessStart = eightHours, msSinceSpaceReturn = 5_000L,
+            ),
+        )
+    }
+
+    /** Past the return's grace a watcher still missing is a stoppage again, and it is repaired. */
+    @Test fun pastTheReturnGraceAnUnboundWatcherIsStalledAgain() {
+        val verdict = protectionVerdict(
+            true, lastEventAt = now - 9 * 60_000L, now = now, usedMinutesSinceLastEvent = 0,
+            serviceConnected = false, msSinceProcessStart = eightHours,
+            msSinceSpaceReturn = SPACE_RETURN_GRACE_MS,
+        )
+        assertEquals(ProtectionState.STALLED, verdict.state)
+        assertEquals(OutageLog.DetectedBy.UNBOUND, verdict.arm)
+        assertFalse(
+            bindPending(
+                enabled = true,
+                serviceConnected = false, msSinceProcessStart = eightHours,
+                msSinceSpaceReturn = SPACE_RETURN_GRACE_MS,
+            ),
+        )
+    }
+
+    /** No return awaited: an old process with the watcher gone is judged exactly as before. */
+    @Test fun withNoReturnAwaitedAnOldUnboundProcessIsStalled() {
+        val verdict = protectionVerdict(
+            true, lastEventAt = now - 9 * 60_000L, now = now, usedMinutesSinceLastEvent = 0,
+            serviceConnected = false, msSinceProcessStart = eightHours, msSinceSpaceReturn = null,
+        )
+        assertEquals(ProtectionState.STALLED, verdict.state)
+        assertFalse(
+            bindPending(
+                enabled = true,
+                serviceConnected = false, msSinceProcessStart = eightHours, msSinceSpaceReturn = null,
+            ),
+        )
+    }
+
+    /** A bound watcher, or one nobody could ask about, is never waited for — return or not. */
+    @Test fun aReturnNeverMakesABoundOrUnknownWatcherPending() {
+        assertFalse(bindPending(true, serviceConnected = true, msSinceProcessStart = eightHours, msSinceSpaceReturn = 0L))
+        assertFalse(bindPending(true, serviceConnected = null, msSinceProcessStart = eightHours, msSinceSpaceReturn = 0L))
+        assertFalse(bindPending(false, serviceConnected = false, msSinceProcessStart = eightHours, msSinceSpaceReturn = 0L))
+    }
+
+    /**
+     * The verdict and the deferral answer one question — "may Android still be about to bind it?" —
+     * so across both graces an unbound watcher is pending exactly when it is not STALLED. Two answers
+     * drifting apart is how a deferral ends up closing an open stoppage (see [bindPending]'s KDoc).
+     */
+    @Test fun theVerdictAndTheDeferralAgreeAcrossBothGraces() {
+        val ages = listOf(0L, SERVICE_BIND_GRACE_MS - 1, SERVICE_BIND_GRACE_MS, eightHours)
+        val returns = listOf(null, 0L, SPACE_RETURN_GRACE_MS - 1, SPACE_RETURN_GRACE_MS, 3 * hour)
+        for (age in ages) for (ret in returns) {
+            val state = protectionVerdict(
+                true, lastEventAt = now - 60_000L, now = now, usedMinutesSinceLastEvent = 1,
+                serviceConnected = false, msSinceProcessStart = age, msSinceSpaceReturn = ret,
+            ).state
+            val pending = bindPending(true, false, age, ret)
+            assertEquals("process $age ms, return $ret ms", pending, state != ProtectionState.STALLED)
+        }
+    }
+
+    /**
+     * On the Android 16 emulator on 24 Sep 2026 the watcher came back about 30 s after the switch
+     * back — longer than the 20 s a process start is given. Folding the return into that grace would
+     * have filed the very stoppage this exists to stop, so the return keeps a grace of its own.
+     */
+    @Test fun theReturnGraceOutlastsTheRebindMeasuredOnTheEmulator() {
+        assertTrue(SPACE_RETURN_GRACE_MS > SERVICE_BIND_GRACE_MS)
+        assertTrue("measured ~30 s on the emulator; twice that", SPACE_RETURN_GRACE_MS >= 2 * 28_000L)
+    }
 
     // --- The probe arm: a bound watcher that cannot read the screen ---------------------------
 

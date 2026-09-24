@@ -1725,6 +1725,51 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     **The shape to grep for: a repair that waits for the platform to restart what the platform on
     this phone never restarts — and, for the next one, any repair that shows itself.**
 
+83. **Coming back from the other space is not a stoppage either.** Report #196 (23 Sep 2026), the
+    first stoppage 1.169's silent repair answered by itself on his phone: 09:11–09:20, `deaf=true
+    killedBy=none used=0`, `by=unbound`, `backBy=rebound-after-repair`, `selfToggle 3/3/0/0`. Not a
+    kill: the process lived through it (`processAgeMin 518`), `unbindSeen` rose by one, an ORDERLY
+    `onDestroy` (the only place `connected` goes false, and the repair only runs once it is false,
+    so the unbind came first), and `awayChecks` did not move. His Second Space copy was watching at
+    09:21:59, and he had opened AppBlocker at 09:11. Invariant 79 stood checks down while the other
+    space is in front; nothing covered the way back. Android binds the watcher of a space that has
+    come back only some seconds after it is in front, and a check inside that gap finds the switch on,
+    the watcher gone and a process hours old — every sign of a kill. AppBlocker's own screen resuming
+    as he comes back is exactly such a check. The best fit for #196 (not proven on his phone: nothing
+    recorded which check ran) is that one did: it filed a stoppage, ran the silent repair, and the
+    rebind Android was about to make anyway was credited to the repair — in the one number that
+    decides whether the repair works (the other two of the three were our own test kills).
+    **Reproduced on the Android 16 emulator on 24 Sep** (real user 10, v1.169's code, AppBlocker on
+    top when switching away): screen resumed +7 s after the switch back, stoppage filed +10 s, repair
+    +13 s, bound +28 s, filed `deaf=true … unbound … rebound-after-repair … none`, `helped 1`.
+    Android alone took 33 s there, longer than the 20 s a process start is given.
+
+    So a return is treated like a start. `onDestroy` records whether `OwnSpace.inFront` said another
+    space was in front (`SpaceReturn.noteUnbind`); that leaves a return AWAITED in this boot. The
+    first `checkAndNotify` that sees its space in front again — after the invariant-79 guard, never
+    before it — starts the wait (`noteInFront`, counted once per return in the report's
+    `returnWaits`), and `read()` hands its age to the verdict and to the deferral through one
+    predicate, `bindGraceHolds`, so they cannot disagree. For `SPACE_RETURN_GRACE_MS` (60 s, twice
+    the emulator's) an unbound watcher is a pending bind; the deferral also lights the dead-man
+    alarm's short fuse, because the WorkManager re-check is what his phone keeps not running. The
+    watcher's connect ends the wait (`noteBound`). Past it, a watcher still missing is judged as
+    before and repaired. **Fails open**: a doubt at the unbind, an unreadable boot count, a restart
+    or an unbind with the space in front awaits nothing. On the emulator with the fix: the same
+    round trip filed nothing, tried no repair, `waits 1`, and Android bound the watcher at +33 s;
+    then a real crash in his phone's state (`service_crash_max_retry=1`) was filed `crash@fg-service`
+    and repaired in 2 s, so nothing left over from a return forgives a real kill. NOT verified on
+    HyperOS: how long his phone takes to rebind after a return. `CodeShapeTest` holds the four parts'
+    shape; `ProtectionStateTest` and `SpaceReturnTest` the rules; 13 mutations, all red.
+
+    Also from the same reports: `processAgeMin` printed `0` whenever a report took no reading —
+    #191, #197 and #199, all profile reports, with `protection`, `usedMinutes` and `bindPending`
+    beside it reading `?`. `0` is the one value that key exists to single out, a process that has
+    just started; #191's was eight hours old. It prints `?` now, and `CodeShapeTest` fails on any
+    field that reads the watchdog's reading and falls back to a number.
+
+    **The shape to grep for: a guard for a state the platform makes on purpose that covers the state
+    but not the way out of it.**
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused

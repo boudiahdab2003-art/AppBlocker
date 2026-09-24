@@ -51,6 +51,7 @@ import com.appblocker.data.InstalledAppsRepository
 import com.appblocker.data.LaunchCounter
 import com.appblocker.data.NewAppWatcher
 import com.appblocker.data.OffSwitchGuard
+import com.appblocker.data.OwnSpace
 import com.appblocker.data.OwnUi
 import com.appblocker.data.QuickSession
 import com.appblocker.data.Schedule
@@ -62,6 +63,7 @@ import com.appblocker.data.RuleSnapshot
 import com.appblocker.data.StrictSnapshot
 import com.appblocker.data.SettingsStore
 import com.appblocker.data.SilenceLog
+import com.appblocker.data.SpaceReturn
 import com.appblocker.data.StrictEdits
 import com.appblocker.data.UnlockCounter
 import com.appblocker.data.UpdatePause
@@ -1229,6 +1231,9 @@ class BlockerAccessibilityService : AccessibilityService() {
         // died deaf would combine with a new `connected = true` and condemn a watcher that has
         // just started working.
         runCatching { ServiceHealth.clearProbeStreak(applicationContext) }
+        // The same for a return from the other space: whatever the switch away left awaited has
+        // arrived, so no later check may still be waiting for it (invariant 83).
+        SpaceReturn.noteBound(applicationContext)
         // Re-arm everything that watches this app from outside it. An inexact alarm is re-armed
         // only by its own firing, so a single missed one would end the chain for the life of the
         // install -- and a rebind is a free chance to repair that, right after the events most
@@ -3622,6 +3627,11 @@ class BlockerAccessibilityService : AccessibilityService() {
                 guardArmed = OffSwitchGuard.armed(applicationContext),
             )
         }
+        // And whether this space was behind at that moment — the switch to the other space, after
+        // which Android binds the watcher again only some seconds after he comes back. Asked here
+        // because this is the one moment it is knowable; the first check to see the space in front
+        // again then waits for that rebind instead of filing it as a death (invariant 83).
+        SpaceReturn.noteUnbind(applicationContext, behind = !OwnSpace.inFront(applicationContext))
         handler.removeCallbacks(heartbeatRunnable)
         handler.removeCallbacks(webScanRunnable)
         handler.removeCallbacks(shortsScanRunnable)
