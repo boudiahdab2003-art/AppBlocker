@@ -1807,9 +1807,12 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     30 s alarm: 52 s), `helped 1`, `backBy=switched-back-on`; guard down → stayed off (91 s watched,
     `open_guard_armed=false`, no write); restart with the switch off → back on once Android delivered
     `BOOT_COMPLETED` (6–11 min on that overloaded AVD), credited after the window fix. ⚠️ **NOT verified
-    on HyperOS.** After a restart nothing acts before our process can run: his `bootHeard` is usually
-    93–339 s, but on 26 Sep it was 1445 s — the moment he opened the app — so that exact morning would
-    still have waited for him. 18 mutations over this and the consent change below, all red
+    on HyperOS.** After a restart nothing acts before our process can run, and `BOOT_COMPLETED` is only
+    sent after the first unlock. #201's `bootHeard 1445s` came within the minute he sent the report; with
+    Autostart ON (he confirmed 6 Sep), the likeliest reading is that he first unlocked at ~08:00 and the
+    boot check then found the switch off — the check 1.170 now answers with a write. (1.170's in-app
+    text first said that morning would still have waited for him; corrected on master for 1.171.)
+    18 mutations over this and the consent change below, all red
     (scratchpad `prove_v1170b.py`).
 
     **Same day, same report stream: new installs ask before reporting** (`ReportConsent`). #202 was a
