@@ -7,6 +7,7 @@ import com.appblocker.service.ProtectionState
 import com.appblocker.service.SERVICE_BIND_GRACE_MS
 import com.appblocker.service.SPACE_RETURN_GRACE_MS
 import com.appblocker.service.STALE_MIN_USED_MINUTES
+import com.appblocker.service.SWITCH_ON_GRACE_MS
 import com.appblocker.service.protectionVerdict
 import com.appblocker.service.bindPending
 import com.appblocker.service.protectionState
@@ -337,6 +338,49 @@ class ProtectionStateTest {
                 serviceConnected = false, msSinceProcessStart = 2_000L,
             ),
         )
+
+    // --- Invariant 84: the wait after our own switch-on ----------------------------------------
+
+    /**
+     * 28 Sep 2026, Android 16 emulator: the first check after a restart wrote the switch back on and
+     * the watcher connected 40–50 s later. A check in that gap must wait, not file a stoppage over our
+     * own write and run the silent repair on it.
+     */
+    @Test fun aWatcherUnboundSecondsAfterOurSwitchOnIsPendingNotStalled() {
+        val verdict = protectionVerdict(
+            true, lastEventAt = now - 9 * 60_000L, now = now, usedMinutesSinceLastEvent = 0,
+            serviceConnected = false, msSinceProcessStart = 5 * 60_000L, msSinceSwitchOn = 45_000L,
+        )
+        assertEquals(ProtectionState.OK, verdict.state)
+        assertTrue(
+            bindPending(
+                enabled = true, serviceConnected = false, msSinceProcessStart = 5 * 60_000L,
+                msSinceSwitchOn = 45_000L,
+            ),
+        )
+    }
+
+    /** Past the switch-on's grace a watcher still missing is a stoppage, and it is repaired. */
+    @Test fun pastTheSwitchOnGraceAnUnboundWatcherIsStalledAgain() {
+        val verdict = protectionVerdict(
+            true, lastEventAt = now - 9 * 60_000L, now = now, usedMinutesSinceLastEvent = 0,
+            serviceConnected = false, msSinceProcessStart = 5 * 60_000L, msSinceSwitchOn = SWITCH_ON_GRACE_MS,
+        )
+        assertEquals(ProtectionState.STALLED, verdict.state)
+        assertFalse(
+            bindPending(
+                enabled = true, serviceConnected = false, msSinceProcessStart = 5 * 60_000L,
+                msSinceSwitchOn = SWITCH_ON_GRACE_MS,
+            ),
+        )
+        assertEquals(
+            ProtectionState.STALLED,
+            protectionVerdict(
+                true, lastEventAt = now - 9 * 60_000L, now = now, usedMinutesSinceLastEvent = 0,
+                serviceConnected = false, msSinceProcessStart = 5 * 60_000L, msSinceSwitchOn = -1L,
+            ).state,
+        )
+    }
 
     // --- Invariant 83: coming back from the other space --------------------------------------
 

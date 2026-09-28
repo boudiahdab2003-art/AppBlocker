@@ -1770,6 +1770,59 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     **The shape to grep for: a guard for a state the platform makes on purpose that covers the state
     but not the way out of it.**
 
+84. **A switch found OFF is written back on — his choice, with one exit left open.** Report #201
+    (Sat 26 Sep 2026, 08:01, sent by his own hand): the switch was OFF, the phone had restarted 24
+    minutes earlier, and nothing recorded what switched it off — the third switch-off on record (10,
+    16 and 26 Sep). Asked on 28 Sep, he chose **"Turn back on, always"**: silently, even when he did it
+    himself; the pause inside the app is how blocking stops. Until then an OFF switch was his choice
+    by definition (`SelfToggleLog.decide` still refuses to touch one — the off-and-on is for an entry
+    that is on and dead).
+
+    `SelfToggle.maybeSwitchOn`, from the OFF branch of `checkAndNotify` only, after `SwitchOffLog.begin`
+    (so the period's guard reading exists), writes the entry and the master switch back on — one write,
+    no dangerous half — and holds the "switched off" alert while it takes effect. `SelfEnableLog.decide`
+    refuses: **an install whose watcher has never run** (no alive or event stamp — Accessibility is his
+    to grant; a PC emulator holding the permission, #202, had never been switched on); **a switch-off
+    with the off-switch guard down**, now (`OffSwitchGuard.armed`) or at the unbind that turned it off
+    (`SwitchOffLog.openGuardArmed == false`) — the served two-hour way out promises "the switch works",
+    and a switch-off made in that window stays off after it closes; no permission; a write pending; the
+    one-minute cooldown; three futile writes (an hour off). Needs `WRITE_SECURE_SETTINGS` like 82;
+    `Dist.SELF_TOGGLE` keeps it out of Play.
+
+    Three parts beside the write. **`onDestroy` arms the dead-man alarm's short fuse when the switch
+    reads off** instead of cancelling it — otherwise the switch-on waited for the quarter-hour worker
+    his phone throttles (a space switch, switch still on, cancels as before; an unreadable switch counts
+    as on). **The wait after our own write is a pending bind** (`SWITCH_ON_GRACE_MS`, through
+    `bindGraceHolds` into the verdict AND the deferral, with the short fuse), or a check in the gap files
+    a stoppage over our own write and runs the silent repair on it. **The write is judged on its own
+    window**, `SelfEnableLog.JUDGE_WINDOW_MS` = 120 s (stale at 150 s), not the repair's 30 s: after a
+    restart the emulator's watcher connected 40–50 s after the write, and the first run filed our own
+    write `no_rebind` and the period `backBy=rebound` — Android recovering alone, the one thing it was
+    not. A switch that reads OFF has nothing else waiting to bind it, so the longer window credits
+    nothing that is not ours. The period ends `switched-back-on` (not in `SELF_TIMED`: it never ends an
+    outage); report key `selfEnable` = attempts/helped/noRebind/failed; a health fact once it has run.
+
+    **On the Android 16 emulator, 28 Sep:** a never-switched-on install was left off (a period opened,
+    no write); switched off by hand with the guard up → back on and bound in 55 s (the fuse is an inexact
+    30 s alarm: 52 s), `helped 1`, `backBy=switched-back-on`; guard down → stayed off (91 s watched,
+    `open_guard_armed=false`, no write); restart with the switch off → back on once Android delivered
+    `BOOT_COMPLETED` (6–11 min on that overloaded AVD), credited after the window fix. ⚠️ **NOT verified
+    on HyperOS.** After a restart nothing acts before our process can run: his `bootHeard` is usually
+    93–339 s, but on 26 Sep it was 1445 s — the moment he opened the app — so that exact morning would
+    still have waited for him. 18 mutations over this and the consent change below, all red
+    (scratchpad `prove_v1170b.py`).
+
+    **Same day, same report stream: new installs ask before reporting** (`ReportConsent`). #202 was a
+    stranger's PC emulator (Android 7 "Samsung"; the repo is public), and it sent its profile the
+    moment it opened while the disclosure promised "no server". His answer: ask first on NEW installs.
+    Every automatic shape (`report`, `reportDeviceProfile`, `reportOutage`, `reportWeekly`) asks
+    `automatic(context)`; `flush` sends only `sentByOwner` reports until a yes, so a queue an older build
+    filled never drains unasked; a no drops that queue. His four installs are `OWNER_INSTALLS` and never
+    see the question. The note he sends himself needs no yes. Emulator: 12 checks green.
+
+    **The shape to grep for: a repair that fixes the state it was built for and misfiles its own
+    success — judged on another repair's clock, or read by a check that lands before it lands.**
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused

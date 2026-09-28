@@ -8,8 +8,12 @@ import android.os.Looper
 import android.provider.Settings
 import android.util.Log
 import com.appblocker.Dist
+import com.appblocker.data.OffSwitchGuard
 import com.appblocker.data.OutageLog
+import com.appblocker.data.SelfEnableLog
 import com.appblocker.data.SelfToggleLog
+import com.appblocker.data.ServiceHealth
+import com.appblocker.data.SwitchOffLog
 import kotlin.concurrent.thread
 
 /**
@@ -87,6 +91,44 @@ object SelfToggle {
             }
         }
         return started
+    }
+
+    /**
+     * **Writes the switch back ON when a check finds it off** (invariant 84) — his choice of 28 Sep
+     * 2026, "Turn back on, always". [SelfEnableLog.decide] holds the refusals: never on an install
+     * whose watcher has never run, never a switch-off made with the off-switch guard down (his
+     * served way out), and never faster than once a minute or after writes that changed nothing.
+     *
+     * Only the ON write, so there is no half to leave behind. Runs where it is called: one settings
+     * write, retried only when the phone refuses it.
+     *
+     * @return true when the write went through — the caller then holds its "switched off" alert,
+     *   because the watcher should be bound within a minute or so. The next check that still finds
+     *   the switch off alerts.
+     */
+    fun maybeSwitchOn(context: Context): Boolean {
+        var wrote = false
+        guarded(context, "selfEnable") {
+            val app = context.applicationContext
+            SelfEnableLog.resolveStale(app)
+            val skip = SelfEnableLog.decide(
+                switchedOn = AccessibilityUtil.isEnabled(app),
+                everRan = maxOf(ServiceHealth.lastAliveAt(app), ServiceHealth.lastEventAt(app)) > 0L,
+                guardArmedNow = OffSwitchGuard.armed(app),
+                guardArmedWhenOff = SwitchOffLog.openGuardArmed(app),
+                permitted = permitted(app),
+                attemptPending = SelfEnableLog.isPending(app),
+                sinceLastAttemptMs = SelfEnableLog.sinceLastAttemptMs(app),
+                futileStreak = SelfEnableLog.futileStreak(app),
+            )
+            if (skip != null) return@guarded
+            // Committed before the write, so the rebind it causes always finds the attempt to claim.
+            if (!SelfEnableLog.markAttempt(app)) return@guarded
+            val ours = ComponentName(app, BlockerAccessibilityService::class.java).flattenToString()
+            wrote = writeOn(app, ours)
+            if (!wrote) SelfEnableLog.noteFailed(app)
+        }
+        return wrote
     }
 
     private fun toggle(app: Context) {

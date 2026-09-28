@@ -344,6 +344,19 @@ object SwitchOffLog {
     fun isOpen(context: Context): Boolean =
         runCatching { prefs(context).contains(KEY_OPEN_STARTED) }.getOrDefault(false)
 
+    /**
+     * Whether the off-switch guard was up at the unbind that turned the OPEN period's switch off.
+     * Null when no period is open, when no unbind belongs to it (it went off while the watcher was not
+     * running — a restart, a kill), or when it was not recorded. **`false` is the one answer that
+     * means the guard was down as it went off** — his two-hour way out, served — which is the switch-off
+     * [SelfEnableLog.decide] leaves alone (invariant 84).
+     */
+    fun openGuardArmed(context: Context): Boolean? = runCatching {
+        val p = prefs(context)
+        if (!p.contains(KEY_OPEN_STARTED)) null
+        else p.getString(KEY_OPEN_GUARD, null)?.toBooleanStrictOrNull()
+    }.getOrNull()
+
     /** Every finished period, newest first. */
     internal fun recentEpisodes(context: Context): List<Episode> = runCatching {
         prefs(context).getString(KEY_EPISODES, "").orEmpty()

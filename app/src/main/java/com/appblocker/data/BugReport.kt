@@ -142,6 +142,10 @@ data class BugReport(
      *  the same reason, as [isProfile]: no new field, so the queue's stored format is unchanged. */
     val isOutage: Boolean get() = where == OUTAGE_WHERE && errorClass == null && note == null
 
+    /** Typed and sent by the owner himself ([fromNote]) — the one kind never held back by
+     *  [ReportConsent]: pressing Send is the answer. */
+    val sentByOwner: Boolean get() = where == OWNER_WHERE
+
     /** The weekly health summary. Detected from [where] like the two above, for the same reason. */
     val isWeekly: Boolean get() = where == WEEKLY_WHERE && errorClass == null && note == null
 
@@ -413,6 +417,8 @@ data class BugReport(
             appendLine("blocker was not running — a restart that came back with it off. `guard=true`")
             appendLine("means the off-switch guard was up, so the accessibility page was being bounced.")
             appendLine("`off=` runs from the last sign of life until something saw the switch back on.")
+            appendLine("`backBy=switched-back-on` means AppBlocker wrote the switch back on itself and")
+            appendLine("the watcher was bound within two minutes (invariant 84) — not him, not the phone.")
             appendLine()
         }
         if (recentOutages.any { "  EXITED  " in it }) {
@@ -823,6 +829,9 @@ data class BugReport(
             // true/false — whether that repair may run at all: the permission only a computer can
             // give. Our boolean.
             "toggleGranted",
+            // "2/2/0/0" — AppBlocker writing its own Accessibility entry back on after finding it
+            // off: attempts, helped, no rebind, refused. Our integers (invariant 84).
+            "selfEnable",
             // true/false — Notification access, the path Android restarts AppBlocker by after a
             // force stop (invariant 76).
             "notifAccess",
@@ -978,6 +987,9 @@ data class BugReport(
          */
         const val OUTAGE_WHERE = "outage"
 
+        /** The [where] tag for a report the owner typed and sent himself — see [fromNote]. */
+        const val OWNER_WHERE = "owner"
+
         /**
          * The [where] tag for the weekly health summary.
          *
@@ -1092,7 +1104,7 @@ data class BugReport(
             recentOutages: List<String> = emptyList(),
             healthFacts: List<String> = emptyList(),
         ) = BugReport(
-            where = "owner",
+            where = OWNER_WHERE,
             errorClass = null,
             frames = emptyList(),
             note = note.trim().take(MAX_NOTE),

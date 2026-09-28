@@ -27,6 +27,8 @@ import com.appblocker.data.QuickSession
 import com.appblocker.data.SettingsStore
 import com.appblocker.data.ProtectionPulse
 import com.appblocker.data.SilenceLog
+import com.appblocker.data.ReportConsent
+import com.appblocker.data.SelfEnableLog
 import com.appblocker.data.SelfToggleLog
 import com.appblocker.data.SpaceReturn
 import com.appblocker.data.StoppageHistory
@@ -78,6 +80,14 @@ object BugReportSender {
     /** Whether reporting is configured at all. */
     fun enabled(): Boolean =
         BuildConfig.REPORT_URL.isNotBlank() && BuildConfig.REPORT_SECRET.isNotBlank()
+
+    /**
+     * Whether a report the app files **by itself** may be queued: configured, and this install has
+     * said yes ([ReportConsent] — his choice of 28 Sep 2026, after a stranger's install sent its
+     * profile unasked). Every automatic shape asks this; only [reportNote], which he sends himself,
+     * asks [enabled] alone.
+     */
+    fun automatic(context: Context): Boolean = enabled() && ReportConsent.automaticAllowed(context)
 
     /** The device facts a report is allowed to carry. Kept here so the payload builder stays
      *  free of Android types and therefore unit-testable. */
@@ -396,6 +406,14 @@ object BugReportSender {
         // Whether that repair may run at all: the permission only a computer can give. `false` on a
         // phone nobody has plugged in, and then every killed watcher waits for his hand. Our boolean.
         field("toggleGranted") { SelfToggle.permitted(ctx).toString() }
+        // attempts/helped/noRebind/failed — AppBlocker writing its own Accessibility entry back ON
+        // after a check found it off (invariant 84), on the same permission. Helped is the watcher
+        // bound within two minutes of the write. Our own integers.
+        field("selfEnable") {
+            SelfEnableLog.counts(ctx).let {
+                "${it.attempts}/${it.helped}/${it.noRebind}/${it.failed}"
+            }
+        }
         // Whether Notification access is granted. With it, Android restarted a force-stopped
         // AppBlocker within a second on the emulator; without it nothing of ours runs after a force
         // stop until he opens the app (invariant 76). Our own boolean.
@@ -501,7 +519,7 @@ object BugReportSender {
 
     /** Records an error for later sending. Safe to call from anywhere, including the watcher. */
     fun report(context: Context, where: String, t: Throwable) {
-        if (!enabled()) return
+        if (!automatic(context)) return
         val watch = watchReading(context)
         runCatching {
             BugReportQueue.enqueue(
@@ -540,7 +558,7 @@ object BugReportSender {
      * flushes straight after, and a profile has never been urgent enough to warrant its own post.
      */
     fun reportDeviceProfile(context: Context) {
-        if (!enabled()) return
+        if (!automatic(context)) return
         // ⚠️ **Asked BEFORE the report is built, and that is the whole point of this line.**
         //
         // This runs on every `onResume`. The queue dedupes on the key, and both this function and
@@ -606,7 +624,7 @@ object BugReportSender {
      *   overstate how well the app repairs itself in exactly the log built to measure that.
      */
     fun reportOutage(context: Context, episode: OutageLog.Episode, endedBy: String) {
-        if (!enabled()) return
+        if (!automatic(context)) return
         val watch = watchReading(context)
         runCatching {
             BugReportQueue.enqueue(
@@ -728,7 +746,7 @@ object BugReportSender {
      * getting through" and this deliberately does not pretend to know which.
      */
     fun reportWeekly(context: Context) {
-        if (!enabled()) return
+        if (!automatic(context)) return
         scope.launch { buildWeekly(context) }
     }
 
@@ -877,7 +895,12 @@ object BugReportSender {
                     // intended cost.
                     // Newest first. A backlog drains at MAX_PER_DAY, so the order decides
                     // whether today's twelve describe this morning or last week.
+                    // ⚠️ Without a yes, only what he sent himself goes out. A queue filled by a
+                    // build that never asked (1.169 and before) must not drain on its own the
+                    // moment the question exists and is still unanswered.
+                    val mayAll = ReportConsent.automaticAllowed(app)
                     for (report in BugReportQueue.sendOrder(BugReportQueue.pending(app))) {
+                        if (!mayAll && !report.sentByOwner) continue
                         if (BugReportQueue.remainingToday(app) <= 0) break
                         val outcome = post(report)
                         // Recorded for every attempt, delivered or not. This is the line that

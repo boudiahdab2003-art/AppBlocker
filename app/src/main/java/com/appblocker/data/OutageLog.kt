@@ -228,6 +228,15 @@ object OutageLog {
          */
         const val AFTER_REPAIR = "rebound-after-repair"
 
+        /**
+         * **AppBlocker switched its own Accessibility entry back ON after finding it off** (invariant
+         * 84), and the watcher was bound within two minutes of that write (`SelfEnableLog`'s window —
+         * after a restart it took 40–50 s on the emulator). Ends a SWITCHED-OFF period,
+         * never an outage — which is why it is not in [SELF_TIMED]. It is our write, never the switch
+         * coming back by itself or by his hand.
+         */
+        const val SWITCHED_BACK_ON = "switched-back-on"
+
         /** An episode recorded before this field existed. Never guessed at. */
         const val UNKNOWN = "unknown"
 
@@ -239,7 +248,7 @@ object OutageLog {
          */
         val ALL = setOf(
             BACKGROUND, APP_OPENED, BOOT, GLANCED, REBOUND, HEARTBEAT, AFTER_OPEN, AFTER_UPDATE,
-            AFTER_REPAIR, UNKNOWN,
+            AFTER_REPAIR, SWITCHED_BACK_ON, UNKNOWN,
         )
 
         /**
@@ -254,7 +263,8 @@ object OutageLog {
          * A new ending belongs here only if the thing recording it *is* the thing that knows the
          * fault is over (invariant 44). If it had to go and check, it does not. [AFTER_OPEN],
          * [AFTER_UPDATE] and [AFTER_REPAIR] are the watcher's own clock as well — what they are not is
-         * Android recovering unassisted.
+         * Android recovering unassisted. [SWITCHED_BACK_ON] is not here: it ends a switched-off
+         * period, never an outage, so it has no place in an outage total.
          */
         val SELF_TIMED = setOf(REBOUND, HEARTBEAT, AFTER_OPEN, AFTER_UPDATE, AFTER_REPAIR)
     }

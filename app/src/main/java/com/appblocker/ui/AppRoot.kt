@@ -45,9 +45,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.appblocker.data.OutageLog
+import com.appblocker.data.ReportConsent
 import com.appblocker.data.Schedule
 import com.appblocker.data.ScheduleType
 import com.appblocker.data.SettingsStore
+import com.appblocker.service.BugReportSender
 import com.appblocker.service.ProtectionWatchdog
 import com.appblocker.ui.theme.AppGradients
 import com.appblocker.ui.theme.appBackground
@@ -348,6 +350,51 @@ fun AppRoot(
                 TextButton(
                     onClick = { updateVm.dismissPrompt() }
                 ) { Text(stringResource(R.string.update_later)) }
+            },
+        )
+    }
+
+    // ⚠️ **A new install is asked before it sends anything by itself** (ReportConsent — his choice
+    // of 28 Sep 2026, after a stranger's install sent its profile unasked). After the walkthrough,
+    // never over another dialog, and his own installs already count as yes so they never see it.
+    // Tapping away answers nothing: it comes back on the next open until it is answered.
+    var askReports by remember { mutableStateOf(false) }
+    LaunchedEffect(protectionTick, overlay) {
+        askReports = overlay == null && BugReportSender.enabled() && SettingsStore.setupSeen(context) &&
+            ReportConsent.state(context) == ReportConsent.State.UNASKED
+    }
+    if (askReports && updatePrompt == null && disclosure == null && gate == null) {
+        AlertDialog(
+            onDismissRequest = { askReports = false },
+            title = { Text(stringResource(R.string.report_consent_title)) },
+            text = {
+                Text(
+                    stringResource(R.string.report_consent_body),
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        askReports = false
+                        ReportConsent.answer(context, yes = true)
+                        // The profile the first open would have sent, now that it may be.
+                        BugReportSender.reportDeviceProfile(context.applicationContext)
+                        BugReportSender.flush(context.applicationContext)
+                    },
+                ) {
+                    Text(stringResource(R.string.report_consent_yes), style = MaterialTheme.typography.titleMedium)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        askReports = false
+                        ReportConsent.answer(context, yes = false)
+                    },
+                ) {
+                    Text(stringResource(R.string.report_consent_no), style = MaterialTheme.typography.titleMedium)
+                }
             },
         )
     }

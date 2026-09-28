@@ -1264,7 +1264,7 @@ class CodeShapeTest {
         )
         listOf(
             "read(context)", "endOpenOutage(", "SwitchOffLog.begin(", "OutageLog.begin(",
-            "ProtectionNotifier.", "SelfToggle.maybeRepair(",
+            "ProtectionNotifier.", "SelfToggle.maybeRepair(", "SelfToggle.maybeSwitchOn(",
         ).forEach { later ->
             val at = body.indexOf(later)
             assertTrue("$later is gone from checkAndNotify; this check is reading nothing", at >= 0)
@@ -1327,6 +1327,135 @@ class CodeShapeTest {
             "a return's deferral must light the short fuse: $deferral",
             "if (reading.sinceSpaceReturnMs != null) WatcherDeadMan.armSoon(" in deferral,
         )
+    }
+
+    // ---- invariant 84 ------------------------------------------------------------------------
+
+    /**
+     * **Invariant 84: a switch found OFF is written back on — silently, from the OFF branch only, with
+     * the alert held while it takes effect.** His choice of 28 Sep 2026 ("Turn back on, always"), after
+     * a Saturday morning with the switch off and nobody able to say how. The refusals live in
+     * `SelfEnableLog.decide` and are pinned in `SelfEnableLogTest`; held here is that the write is
+     * handed every one of their inputs, and that it runs after the switch-off period is opened, so the
+     * guard reading of the unbind that turned the switch off exists to be read.
+     */
+    @Test
+    fun `a switch found off is written back on, from the OFF branch only`() {
+        val watchdog = code(source("service/ProtectionWatchdog.kt").readText())
+        val check = watchdog.substringAfter("fun checkAndNotify(", "").substringBefore("fun noteWatcherAlive(")
+        val off = check.substringAfter("ProtectionState.OFF -> {", "").substringBefore("ProtectionState.STALLED ->")
+        assertTrue("the OFF branch is gone; this check is reading nothing", off.isNotEmpty())
+        assertTrue("the OFF branch no longer switches the watcher back on", "SelfToggle.maybeSwitchOn(" in off)
+        assertTrue(
+            "the alert must wait while the switch is being written back on",
+            "if (!switching) ProtectionNotifier.notifyDisabled(" in off,
+        )
+        val opened = check.indexOf("SwitchOffLog.begin(")
+        val branch = check.indexOf("ProtectionState.OFF -> {")
+        assertTrue("the switch-off period must be opened before the write reads its guard", opened in 0 until branch)
+        val calls = sourceTree().sumOf { f -> code(f.readText()).split("SelfToggle.maybeSwitchOn(").size - 1 }
+        assertEquals("SelfToggle.maybeSwitchOn is called from more than the OFF branch", 1, calls)
+
+        val act = code(source("service/SelfToggle.kt").readText())
+        val fn = act.substringAfter("fun maybeSwitchOn(", "").substringBefore("\n    private fun ")
+        assertTrue("maybeSwitchOn is gone; this check is reading nothing", fn.isNotEmpty())
+        val decide = callArgs(fn, "SelfEnableLog.decide(")
+        assertEquals("maybeSwitchOn must ask decide once", 1, decide.size)
+        listOf(
+            "everRan = ", "guardArmedNow = OffSwitchGuard.armed(",
+            "guardArmedWhenOff = SwitchOffLog.openGuardArmed(", "permitted = permitted(",
+        ).forEach { assertTrue("decide must be told $it: ${decide.single()}", it in decide.single()) }
+        val marked = fn.indexOf("SelfEnableLog.markAttempt(")
+        val written = fn.indexOf("writeOn(")
+        assertTrue("the write must be marked before it is made, or its rebind finds nothing to claim", marked in 0 until written)
+        assertTrue("the write must stay out of the Play build", "Dist.SELF_TOGGLE" in act)
+    }
+
+    /**
+     * **A switch turned off brings the next check forward** (invariant 84). `onDestroy` used to cancel
+     * the dead-man alarm on every orderly unbind, which left the switch-on waiting for the quarter-hour
+     * worker his phone throttles. A space switch — the switch still on — still cancels it.
+     */
+    @Test
+    fun `a switch turned off lights the short fuse, a space switch does not`() {
+        val text = code(source("service/BlockerAccessibilityService.kt").readText())
+        val destroy = text.substringAfter("override fun onDestroy() {", "").substringBefore("companion object")
+        val decision = destroy.substringAfter("AccessibilityUtil.isEnabled(", "").substringBefore("ServiceHealth.recordUnbind(")
+        assertTrue("onDestroy no longer asks whether the switch is on", decision.isNotEmpty())
+        val cancel = decision.indexOf("WatcherDeadMan.cancel(")
+        val soon = decision.indexOf("WatcherDeadMan.armSoon(")
+        assertTrue("onDestroy must cancel while on and arm soon when off: $decision", cancel in 0 until soon)
+        assertTrue("an unreadable switch must count as on, the old behaviour", ".getOrDefault(true)" in decision)
+    }
+
+    /**
+     * **The wait after our own switch-on is a pending bind, in the verdict AND the deferral**
+     * (invariant 84), and it lights the short fuse like a return's does. Without it, a check in the
+     * 40–50 s the watcher took after a restart files a stoppage over our own write.
+     */
+    @Test
+    fun `our own switch-on is waited out, not judged`() {
+        val watchdog = code(source("service/ProtectionWatchdog.kt").readText())
+        val reading = watchdog.substringAfter("internal fun read(", "").substringBefore("\n    }")
+        assertTrue("read() no longer asks how long ago we switched it on", "SelfEnableLog.sinceWriteMs(" in reading)
+        val verdict = callArgs(reading, "protectionVerdict(")
+        val pending = callArgs(reading, "bindPending(")
+        assertTrue("the verdict must be given the switch-on: $verdict", verdict.single().contains("msSinceSwitchOn = sinceSwitchOn"))
+        assertTrue("the deferral must be given the same switch-on: $pending", pending.single().contains("sinceSwitchOn"))
+        val check = watchdog.substringAfter("fun checkAndNotify(", "").substringBefore("fun noteWatcherAlive(")
+        val deferral = check.substringAfter("if (reading.bindPending", "").substringBefore("return@guarded")
+        assertTrue(
+            "a switch-on's deferral must light the short fuse: $deferral",
+            "if (reading.sinceSwitchOnMs != null) WatcherDeadMan.armSoon(" in deferral,
+        )
+        val grace = code(source("service/ProtectionState.kt").readText())
+            .substringAfter("internal fun bindGraceHolds(", "").substringBefore("\n\n")
+        assertTrue("bindGraceHolds must honour the switch-on: $grace", "SWITCH_ON_GRACE_MS" in grace)
+    }
+
+    /** **A comeback our switch-on caused is filed as ours, whoever notices it first** (invariant 84). */
+    @Test
+    fun `a comeback the switch-on caused is filed as the switch-on`() {
+        val text = code(source("service/ProtectionWatchdog.kt").readText())
+        val alive = text.substringAfter("fun noteWatcherAlive(", "").substringBefore("\n    }")
+        assertTrue("noteWatcherAlive must claim the switch-on", "SelfEnableLog.claimRebind(" in alive)
+        assertTrue("noteWatcherAlive must file it as ours", "EndedBy.SWITCHED_BACK_ON" in alive)
+        val check = text.substringAfter("fun checkAndNotify(", "").substringBefore("fun noteWatcherAlive(")
+        val closing = check.substringAfter("SwitchOffLog.begin(", "").substringBefore("when (state)")
+        assertTrue(
+            "a check that finds the watcher back must claim a pending switch-on before closing the period",
+            "SelfEnableLog.claimRebind(" in closing && "EndedBy.SWITCHED_BACK_ON" in closing,
+        )
+        // ⚠️ Judged on its own window: on the repair's 30 s, a rebind after a restart (40–50 s on the
+        // emulator, 28 Sep 2026) filed our own write as futile and the period as `rebound`.
+        val judged = callArgs(code(source("data/SelfEnableLog.kt").readText()), "SelfToggleLog.judge(")
+        assertEquals("SelfEnableLog must judge through the repair's one rule, once", 1, judged.size)
+        assertTrue(
+            "the switch-on must be judged on its own window: ${judged.single()}",
+            "windowMs = JUDGE_WINDOW_MS" in judged.single() && "staleMs = STALE_PENDING_MS" in judged.single(),
+        )
+    }
+
+    /**
+     * **Nothing the app files by itself leaves the phone without a yes** (his choice, 28 Sep 2026,
+     * after a stranger's PC emulator sent its profile unasked). Every automatic shape asks
+     * `automatic(context)` first; until the yes, the flush sends only what he sent himself; only the
+     * note he types asks `enabled()` alone.
+     */
+    @Test
+    fun `an install sends nothing by itself without a yes`() {
+        val text = code(source("service/BugReportSender.kt").readText())
+        listOf("fun report(", "fun reportDeviceProfile(", "fun reportOutage(", "fun reportWeekly(").forEach { head ->
+            val body = text.substringAfter(head, "").substringAfter("{").trimStart()
+            assertTrue("$head is gone; this check is reading nothing", body.isNotEmpty())
+            assertTrue("$head must ask for a yes first: ${body.take(60)}", body.startsWith("if (!automatic(context)) return"))
+        }
+        val note = text.substringAfter("fun reportNote(", "").substringAfter("{").trimStart()
+        assertTrue("the note he sends himself needs no yes: ${note.take(60)}", note.startsWith("if (!enabled()) return"))
+        val flush = text.substringAfter("fun flush(", "").substringBefore("\n    private fun ")
+        assertTrue("flush must hold back what he did not send himself", "if (!mayAll && !report.sentByOwner) continue" in flush)
+        val automatic = text.substringAfter("fun automatic(", "").substringBefore("\n")
+        assertTrue("automatic() must ask ReportConsent: $automatic", "ReportConsent.automaticAllowed(" in automatic)
     }
 
     /**

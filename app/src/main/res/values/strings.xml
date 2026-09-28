@@ -255,6 +255,14 @@
 Never sent: your blocked words, the sites you visit, which apps you block, or anything from Recovery.</string>
     <string name="profile_report_send">Send</string>
     <string name="profile_report_thanks">Sent — thank you</string>
+    <string name="profile_autoreport_title">Automatic reports</string>
+    <string name="profile_autoreport_on">Sent by themselves when blocking stops, and once a week. Never your blocked words, sites or apps.</string>
+    <string name="profile_autoreport_off">Off. Nothing is sent unless you press Send in Report a problem.</string>
+
+    <string name="report_consent_title">Send reports to the developer?</string>
+    <string name="report_consent_body">When blocking stops or something goes wrong, AppBlocker can send a short report so it can be fixed: how the blocker is running, your settings and your phone model.\n\nNever sent: your blocked words, the sites you visit, which apps you block, or anything from Recovery.\n\nYou can change this any time in Profile.</string>
+    <string name="report_consent_yes">Yes, send reports</string>
+    <string name="report_consent_no">No thanks</string>
 
     <string name="profile_pin_change">Change PIN</string>
     <string name="profile_pin_set">Set a PIN</string>
@@ -408,7 +416,7 @@ Never sent: your blocked words, the sites you visit, which apps you block, or an
     <string name="disclosure_browser_body">So a blocked site or a blocked word is caught in the browser too, not just in apps. Outside browsers, AppBlocker only looks at which app is open.</string>
     <string name="disclosure_local_title">It never leaves your phone</string>
     <string name="disclosure_local_body">Every check happens on this device. Screen content is never stored and never sent anywhere.</string>
-    <string name="disclosure_noaccount_title">There\'s no account and no server</string>
+    <string name="disclosure_noaccount_title">There\'s no account</string>
     <string name="disclosure_coach_title">The AI Coach never sees your screen</string>
     <string name="disclosure_coach_body">If you switch the coach on, it receives your screen-time numbers and your settings — never the pages you visit or the text on them.</string>
     <string name="disclosure_onlyblocking_title">It\'s only used for blocking</string>
@@ -430,7 +438,7 @@ Never sent: your blocked words, the sites you visit, which apps you block, or an
     <string name="restricted_body">Only if the switch is actually greyed out. Android 13 and newer block it for apps installed outside an app store. To unlock it: Settings ▸ Apps ▸ AppBlocker, tap ⋮ in the top corner, choose “Allow restricted settings”, then come back.</string>
     <string name="restricted_android15">On Android 15 that ⋮ menu may be gone. If you can\'t find it, try the switch again — if it isn\'t greyed out, none of this applies to you.</string>
 
-    <string name="disclosure_noaccount_body">AppBlocker has no sign-in. Nobody — including the developer — can see what\'s on your screen or what you block.</string>
+    <string name="disclosure_noaccount_body">AppBlocker has no sign-in. Nobody — including the developer — can see what\'s on your screen or what you block. Reports to the developer are sent only if you say yes, and never include either.</string>
     <string name="onboarding_stuck_accessibility">Nothing is broken — this screen is easy to miss. %1$s Tap “Try again” and follow the pictures below; the row you are looking for is called AppBlocker.</string>
     <string name="onboarding_stuck_other">Nothing is broken — that list is easy to miss. Tap “Try again”, find AppBlocker in the list, and turn its switch on.</string>
 

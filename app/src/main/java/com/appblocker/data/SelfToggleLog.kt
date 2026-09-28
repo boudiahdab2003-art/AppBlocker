@@ -95,8 +95,10 @@ object SelfToggleLog {
      *
      * ⚠️ **Only the unbound case.** A watcher that is bound but deaf has its own repair (the
      * heartbeat's revive), and toggling a live one would cut off a watcher that may be working.
-     * ⚠️ **Never while the switch reads off.** Off is his choice until shown otherwise; this repair
-     * restores an entry that is on and dead, and must never be what turns blocking on against him.
+     * ⚠️ **Never while the switch reads off.** This repair restores an entry that is on and dead; an
+     * off-and-on of an entry that is already off would only switch it on, with none of the rules
+     * that govern that. Switching an OFF entry back on is [SelfEnableLog]'s job (invariant 84, his
+     * choice of 28 Sep 2026), which leaves alone a switch-off made with the guard down.
      *
      * @param sinceLastAttemptMs -1 when there has never been an attempt, or not since this boot.
      */
@@ -129,11 +131,15 @@ object SelfToggleLog {
         nowRt: Long,
         boot: Int,
         rebound: Boolean,
+        /** How late a rebind may come and still be credited. [SelfEnableLog] passes its own. */
+        windowMs: Long = JUDGE_WINDOW_MS,
+        /** How long an unjudged attempt waits before it is judged. Must outlast [windowMs]. */
+        staleMs: Long = STALE_PENDING_MS,
     ): Verdict? = when {
         pendingRt <= 0L -> null
         pendingBoot != boot -> Verdict.DROPPED
-        rebound && nowRt - pendingRt in 0..JUDGE_WINDOW_MS -> Verdict.HELPED
-        !rebound && nowRt - pendingRt < STALE_PENDING_MS -> null
+        rebound && nowRt - pendingRt in 0..windowMs -> Verdict.HELPED
+        !rebound && nowRt - pendingRt < staleMs -> null
         else -> Verdict.NO_REBIND
     }
 

@@ -9,6 +9,7 @@ import com.appblocker.data.OutageLog
 import com.appblocker.data.OwnSpace
 import com.appblocker.data.OwnUi
 import com.appblocker.data.ProcessExits
+import com.appblocker.data.SelfEnableLog
 import com.appblocker.data.SelfToggleLog
 import com.appblocker.data.ServiceHealth
 import com.appblocker.data.SessionClock
@@ -66,6 +67,9 @@ object ProtectionWatchdog {
          * beside a young process, that makes an unbound watcher a pending bind rather than a death.
          */
         val sinceSpaceReturnMs: Long? = null,
+        /** How long ago our own switch-on was written, while it awaits its rebind — null when none
+         *  does (invariant 84). The third thing that makes an unbound watcher a pending bind. */
+        val sinceSwitchOnMs: Long? = null,
     )
 
     /** The current health of blocking, for the watchdog and for the app's own status row. */
@@ -97,6 +101,11 @@ object ProtectionWatchdog {
         // binds the watcher again only some seconds after the return, and AppBlocker's own screen
         // resuming as he comes back is a check that lands in exactly that gap.
         val sinceReturn = SpaceReturn.sinceReturnMs(context)
+        // ⚠️ And how long ago we wrote our own switch back on, while that write awaits its rebind
+        // (invariant 84). Seconds after the write the watcher is unbound because Android has not bound
+        // it YET — 40–50 s after a restart on the emulator — and judged dead it would be filed as a
+        // stoppage and toggled off and on by the silent repair, over our own write.
+        val sinceSwitchOn = SelfEnableLog.sinceWriteMs(context)
         // The watcher's own answer to "can I still read the screen?", counted by the heartbeat.
         // Read here rather than inside protectionState so the whole verdict still comes out of one
         // set of readings — see the Reading KDoc.
@@ -108,14 +117,16 @@ object ProtectionWatchdog {
             msSinceProcessStart = sinceStart,
             probeFailStreak = probeFails,
             msSinceSpaceReturn = sinceReturn,
+            msSinceSwitchOn = sinceSwitchOn,
         )
         return Reading(
             state = verdict.state,
-            bindPending = bindPending(enabled, connected, sinceStart, sinceReturn),
+            bindPending = bindPending(enabled, connected, sinceStart, sinceReturn, sinceSwitchOn),
             arm = verdict.arm,
             usedMinutes = usedMinutes,
             sinceProcessStartMs = sinceStart,
             sinceSpaceReturnMs = sinceReturn,
+            sinceSwitchOnMs = sinceSwitchOn,
         )
     }
 
@@ -188,6 +199,8 @@ object ProtectionWatchdog {
             // dead-man alarm's short fuse brings the next look within half a minute; it does nothing
             // if the watcher is back by then, and judges it if it is not (invariant 83).
             if (reading.sinceSpaceReturnMs != null) WatcherDeadMan.armSoon(context)
+            // The same for the wait after our own switch-on (invariant 84).
+            if (reading.sinceSwitchOnMs != null) WatcherDeadMan.armSoon(context)
             return@guarded
         }
         // A real verdict follows, so the run of deferrals is over.
@@ -231,14 +244,32 @@ object ProtectionWatchdog {
                 killedBy = { whoClosedIt(context) },
             )
         } else {
-            endSwitchOff(context, calledBy)
+            // ⚠️ A switch-on of ours that has just brought the watcher back is OURS, whichever
+            // observer sees it first (invariant 84) — filed as `calledBy` it would read as the switch
+            // coming back by itself or by his hand.
+            val offEnding = if (state == ProtectionState.OK && SelfEnableLog.claimRebind(context)) {
+                OutageLog.EndedBy.SWITCHED_BACK_ON
+            } else {
+                calledBy
+            }
+            endSwitchOff(context, offEnding)
         }
         when (state) {
             ProtectionState.OK -> {
                 SettingsStore.clearProtectionOffSince(context)
                 ProtectionNotifier.cancel(context)
             }
-            ProtectionState.OFF -> ProtectionNotifier.notifyDisabled(context, force)
+            // ⭐ **Switched back on, silently** (invariant 84). His choice on 28 Sep 2026, after the
+            // switch was found off on a Saturday morning and nobody could say how: "Turn back on,
+            // always". It declines on an install whose watcher has never run, for a switch-off made
+            // with the off-switch guard down (the two-hour way out he can always take), and without
+            // the permission a computer grants. No alert while the write is taking effect: the
+            // watcher should be bound within a minute or so, and the next check that still finds
+            // it off alerts as before.
+            ProtectionState.OFF -> {
+                val switching = SelfToggle.maybeSwitchOn(context)
+                if (!switching) ProtectionNotifier.notifyDisabled(context, force)
+            }
             // Switched on, but nothing has reached the watcher for hours of active use — the
             // signature of an OEM battery manager killing it. Toggling accessibility off/on
             // revives it, which is what the alert sends the user to do.
@@ -320,8 +351,15 @@ object ProtectionWatchdog {
             watcherBackState(SettingsStore.updatePauseState(context), strictRunning(context)),
             ending,
         )
-        // A bound watcher is proof the switch is ON, so a switched-off period ends here too.
-        endSwitchOff(context, ending)
+        // A bound watcher is proof the switch is ON, so a switched-off period ends here too — and one
+        // that our own switch-on ended is filed as ours (invariant 84). Claimed on every rebind, as
+        // the repair's is, because the claim is also what settles the attempt.
+        val offEnding = if (calledBy == OutageLog.EndedBy.REBOUND && SelfEnableLog.claimRebind(context)) {
+            OutageLog.EndedBy.SWITCHED_BACK_ON
+        } else {
+            ending
+        }
+        endSwitchOff(context, offEnding)
     }
 
     /**

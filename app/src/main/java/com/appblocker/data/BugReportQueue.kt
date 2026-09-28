@@ -228,6 +228,16 @@ object BugReportQueue {
     /** Leaves the report queued to try again later — the normal outcome when offline. */
     fun markFailed(context: Context, report: BugReport) = Unit
 
+    /**
+     * Drops every queued report the app filed by itself, keeping only what the owner sent. Called
+     * when this install is told not to send them ([ReportConsent]): a report queued by a build that
+     * never asked must not go out after the answer was no.
+     */
+    fun dropAutomatic(context: Context) = runCatching {
+        val p = prefs(context)
+        p.edit().putString(KEY_PENDING, encode(pending(context).filter { it.sentByOwner })).apply()
+    }.let { }
+
     private fun sentKeys(context: Context): Set<String> =
         prefs(context).getStringSet(KEY_SENT_KEYS, emptySet()).orEmpty()
 

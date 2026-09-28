@@ -41,7 +41,9 @@ Android's **UsageStatsManager**.
 
 ## Privacy
 All blocking rules, statistics, goals and coach data live **only on your device** — no accounts, no
-analytics, no ads, no servers of ours. Blocking and web-filter checks happen entirely on-device. The
+analytics, no ads. Blocking and web-filter checks happen entirely on-device. The direct-download build
+can send reports about how the blocker is running **only if you say yes** when a new install asks
+(Profile ▸ Automatic reports); they never contain what you block, type or see. The
 **optional AI Coach** (enabled only if you paste your own free Gemini API key) sends aggregate usage
 statistics, your goals/profile facts and your chat messages to Google's Gemini API to generate tips
 and replies; remove the key to stop all AI traffic. The launch-time update check contacts GitHub with

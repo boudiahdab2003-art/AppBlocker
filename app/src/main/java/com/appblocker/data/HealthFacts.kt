@@ -130,6 +130,13 @@ object HealthFacts {
         /** Whether that repair may run at all — the permission a computer has to give. Null for a
          *  build that never offers it (Play), so the fact is not printed there at all. */
         val togglePermitted: Boolean? = null,
+        /** AppBlocker writing its own Accessibility entry back ON after finding it off — see
+         *  [SelfEnableLog] (invariant 84). Writes, and what they came to. */
+        val enableAttempts: Int = 0,
+        val enableHelped: Int = 0,
+        val enableNoRebind: Int = 0,
+        val enableFailed: Int = 0,
+        val enableFutileStreak: Int = 0,
         /** Notification access — the path Android restarts AppBlocker by after a force stop
          *  (invariant 76). Null when it could not be read. */
         val notifAccess: Boolean? = null,
@@ -188,6 +195,8 @@ object HealthFacts {
         val reportsLeftToday: Int,
         /** Whether reporting is configured in this build at all. */
         val reportingOn: Boolean = true,
+        /** Whether this install has said yes to reports the app sends by itself ([ReportConsent]). */
+        val autoReports: Boolean = true,
         /**
          * What came back from the last delivery attempt — an HTTP status as text, an exception
          * class name, or null when nothing has ever been tried. **Our own literal either way**;
@@ -347,6 +356,7 @@ object HealthFacts {
         }
         outageFact(r)?.let { add(it) }
         switchOffFact(r)?.let { add(it) }
+        selfEnableFact(r)?.let { add(it) }
         selfToggleFact(r)?.let { add(it) }
         notificationAccessFact(r)?.let { add(it) }
         schedulerFact(r)?.let { add(it) }
@@ -588,6 +598,36 @@ object HealthFacts {
         return Fact(
             "The accessibility switch was found OFF ${r.switchOffCount} time(s)",
             head + cost + last + guard,
+            good = null,
+        )
+    }
+
+    /**
+     * AppBlocker switching its own Accessibility entry back on after finding it off (invariant 84).
+     * Silent until it has run: that it is ready is already said by the silent repair's fact, which
+     * rests on the same permission. Once it has run, a measurement, never a verdict — the writes and
+     * what followed each.
+     */
+    private fun selfEnableFact(r: Reading): Fact? {
+        if (r.togglePermitted == null || r.enableAttempts <= 0) return null
+        val detail = buildString {
+            append("When the Accessibility switch is found off, AppBlocker switches it back on, ")
+            append("silently — unless you switched it off in the 15 minutes after the 2-hour wait. ")
+            append("The blocker was back within two minutes ${r.enableHelped} time(s).")
+            if (r.enableNoRebind > 0) {
+                append(" ${r.enableNoRebind} time(s) it switched it on and the blocker did not come back.")
+            }
+            if (r.enableFailed > 0) {
+                append(" ${r.enableFailed} time(s) the phone refused the switch.")
+            }
+            if (r.enableFutileStreak >= SelfEnableLog.MAX_FUTILE_STREAK) {
+                append(" The last ${r.enableFutileStreak} tries did not help, so it waits an hour ")
+                append("before trying again and leaves it to the alert.")
+            }
+        }
+        return Fact(
+            "AppBlocker switched itself back on ${r.enableAttempts} time(s)",
+            detail,
             good = null,
         )
     }
@@ -891,6 +931,19 @@ object HealthFacts {
                 ),
             )
             return@buildList
+        }
+        // A choice, not a fault: this install was asked and has not said yes (ReportConsent). What
+        // he sends himself still goes, so the delivery facts below still apply to that.
+        if (!r.autoReports) {
+            add(
+                Fact(
+                    "Automatic reports are off on this phone",
+                    "Nothing is sent by itself. A report goes to the developer only when you press " +
+                        "Send in Profile ▸ Report a problem.",
+                    good = null,
+                    group = Group.REPORTING,
+                ),
+            )
         }
         val result = r.lastSendResult
         if (result == null) {

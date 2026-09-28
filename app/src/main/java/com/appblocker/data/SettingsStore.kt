@@ -573,6 +573,19 @@ object SettingsStore {
         return fresh
     }
 
+    /** [installId] if one was ever minted, without minting one. See [ReportConsent]. */
+    internal fun installIdIfMinted(context: Context): String? =
+        prefs(context).getString(KEY_INSTALL_ID, null)
+
+    private const val KEY_REPORT_CONSENT = "report_consent"
+
+    /** The answer to [ReportConsent]'s question as stored — "yes", "no", or null when never given. */
+    internal fun reportConsent(context: Context): String? =
+        prefs(context).getString(KEY_REPORT_CONSENT, null)
+
+    internal fun setReportConsent(context: Context, yes: Boolean) =
+        prefs(context).edit().putString(KEY_REPORT_CONSENT, if (yes) "yes" else "no").apply()
+
     private const val KEY_KEYWORD_SNAPSHOT = "keyword_snapshot"
 
     /** The blocked words the watcher was last told about. Same window, same reason as

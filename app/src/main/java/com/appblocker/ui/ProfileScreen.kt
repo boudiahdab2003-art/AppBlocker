@@ -97,6 +97,7 @@ import com.appblocker.data.DeviceBoot
 import com.appblocker.data.DisplayName
 import com.appblocker.data.OffSwitchGuard
 import com.appblocker.data.PinStore
+import com.appblocker.data.ReportConsent
 import com.appblocker.data.ServiceHealth
 import com.appblocker.data.NetworkFilter
 import com.appblocker.data.SettingsStore
@@ -164,6 +165,8 @@ fun ProfileScreen(
     // Re-read on each resume so PIN / device-admin / permission changes elsewhere are reflected.
     val resumeTick = resumeTick()
     var pinSet by remember(resumeTick) { mutableStateOf(PinStore.isSet(context)) }
+    // Re-read on resume: the first-open question (AppRoot) can answer it while this tab is composed.
+    var autoReports by remember(resumeTick) { mutableStateOf(ReportConsent.automaticAllowed(context)) }
     val protectionStatus = remember(resumeTick) { protectionStatus(context) }
     // Read once per resume, like the status above: NetworkFilter.read is three binder calls into
     // ConnectivityManager, and a row subtitle must not pay that on every recomposition.
@@ -336,7 +339,7 @@ fun ProfileScreen(
                         healthErrors, healthErrors.toString(),
                     ),
                     subtitle = (healthError ?: "Unknown") + "\n" + (
-                        if (BugReportSender.enabled()) {
+                        if (BugReportSender.automatic(context)) {
                             stringResource(R.string.profile_health_reported)
                         } else {
                             stringResource(R.string.profile_health_unreported)
@@ -363,6 +366,28 @@ fun ProfileScreen(
                 enabled = BugReportSender.enabled(),
                 onClick = { showReport = true },
             )
+            // The answer to the first-open question, changeable here (ReportConsent). Allowed
+            // during Strict for the same reason as the row above: it changes no protection.
+            if (BugReportSender.enabled()) {
+                Divider()
+                ProfileRow(
+                    icon = Icons.Filled.PrivacyTip,
+                    title = stringResource(R.string.profile_autoreport_title),
+                    subtitle = stringResource(
+                        if (autoReports) R.string.profile_autoreport_on else R.string.profile_autoreport_off,
+                    ),
+                    badge = autoReports,
+                    enabled = true,
+                    onClick = {
+                        autoReports = !autoReports
+                        ReportConsent.answer(context, yes = autoReports)
+                        if (autoReports) {
+                            BugReportSender.reportDeviceProfile(context.applicationContext)
+                            BugReportSender.flush(context.applicationContext)
+                        }
+                    },
+                )
+            }
         }
         SettingCard {
             ProfileRow(

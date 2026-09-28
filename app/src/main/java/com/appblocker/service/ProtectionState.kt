@@ -1,6 +1,7 @@
 package com.appblocker.service
 
 import com.appblocker.data.OutageLog
+import com.appblocker.data.SelfEnableLog
 import com.appblocker.data.UpdatePause
 
 /** What the watchdog found. */
@@ -44,15 +45,31 @@ internal const val SERVICE_BIND_GRACE_MS = 20_000L
 internal const val SPACE_RETURN_GRACE_MS = 60_000L
 
 /**
- * **Whether Android may still be about to bind the watcher**: our process is seconds old, or this
- * space came back to the front seconds ago. One predicate for [protectionVerdict] and [bindPending],
- * so the verdict and the deferral can never disagree about the grace.
+ * The same twin for **our own switch-on** (invariant 84): how long after AppBlocker wrote its switch
+ * back on the watcher may still be unbound before that counts as death. On the Android 16 emulator on
+ * 28 Sep 2026 the watcher connected 40–50 s after the write made by the first check after a restart,
+ * and a check inside that gap would find the switch on, the watcher gone and the process minutes old —
+ * a stoppage filed, and the silent repair run, over our own write. The switch-on's judge window.
+ */
+internal const val SWITCH_ON_GRACE_MS = SelfEnableLog.JUDGE_WINDOW_MS
+
+/**
+ * **Whether Android may still be about to bind the watcher**: our process is seconds old, this space
+ * came back to the front seconds ago, or AppBlocker has just written its own switch back on. One
+ * predicate for [protectionVerdict] and [bindPending], so the verdict and the deferral can never
+ * disagree about the grace.
  *
  * @param msSinceSpaceReturn null when no return is awaited — the case this read as before it existed.
+ * @param msSinceSwitchOn null when no switch-on of ours is awaiting its rebind (invariant 84).
  */
-internal fun bindGraceHolds(msSinceProcessStart: Long, msSinceSpaceReturn: Long?): Boolean =
+internal fun bindGraceHolds(
+    msSinceProcessStart: Long,
+    msSinceSpaceReturn: Long?,
+    msSinceSwitchOn: Long? = null,
+): Boolean =
     msSinceProcessStart < SERVICE_BIND_GRACE_MS ||
-        (msSinceSpaceReturn != null && msSinceSpaceReturn < SPACE_RETURN_GRACE_MS)
+        (msSinceSpaceReturn != null && msSinceSpaceReturn < SPACE_RETURN_GRACE_MS) ||
+        (msSinceSwitchOn != null && msSinceSwitchOn in 0 until SWITCH_ON_GRACE_MS)
 
 /** No event for this long is the first hint that the watcher may have been killed. */
 internal const val STALE_AFTER_MS = 2 * 60 * 60_000L
@@ -116,9 +133,11 @@ internal fun protectionState(
     msSinceProcessStart: Long = Long.MAX_VALUE,
     probeFailStreak: Int = 0,
     msSinceSpaceReturn: Long? = null,
+    msSinceSwitchOn: Long? = null,
 ): ProtectionState = protectionVerdict(
     enabled, lastEventAt, now, usedMinutesSinceLastEvent,
     updatePaused, serviceConnected, msSinceProcessStart, probeFailStreak, msSinceSpaceReturn,
+    msSinceSwitchOn,
 ).state
 
 /**
@@ -147,6 +166,9 @@ internal fun protectionVerdict(
     msSinceProcessStart: Long = Long.MAX_VALUE,
     probeFailStreak: Int = 0,
     msSinceSpaceReturn: Long? = null,
+    /** How long ago AppBlocker wrote its own switch back on, while that write awaits its rebind —
+     *  null when none does (invariant 84). Read only when [serviceConnected] is false. */
+    msSinceSwitchOn: Long? = null,
 ): Verdict {
     fun ok(state: ProtectionState) = Verdict(state, null)
     fun stalled(arm: String) = Verdict(ProtectionState.STALLED, arm)
@@ -169,7 +191,7 @@ internal fun protectionVerdict(
     // The bind grace below, plus bindPending's deferrals, are what stop this crying wolf during
     // the seconds Android legitimately takes to rebind after an install — or after he comes back
     // from the other space, where the process is hours old and only the return is new (invariant 83).
-    if (serviceConnected == false && !bindGraceHolds(msSinceProcessStart, msSinceSpaceReturn)) {
+    if (serviceConnected == false && !bindGraceHolds(msSinceProcessStart, msSinceSpaceReturn, msSinceSwitchOn)) {
         return stalled(OutageLog.DetectedBy.UNBOUND)
     }
     // Bound, running its own timer, and unable to read a lit unlocked screen five times running.
@@ -233,9 +255,10 @@ internal fun bindPending(
     serviceConnected: Boolean?,
     msSinceProcessStart: Long,
     msSinceSpaceReturn: Long? = null,
+    msSinceSwitchOn: Long? = null,
 ): Boolean = enabled &&
     serviceConnected == false &&
-    bindGraceHolds(msSinceProcessStart, msSinceSpaceReturn)
+    bindGraceHolds(msSinceProcessStart, msSinceSpaceReturn, msSinceSwitchOn)
 
 /**
  * How an outage stopped, for the state the watchdog left STALLED for.

@@ -37,7 +37,8 @@ class SelfToggleLogTest {
     /** A bound watcher that went deaf has its own repair; cutting it off could end one that works. */
     @Test fun `a bound watcher is never toggled`() = assertEquals(Skip.NOT_UNBOUND, decide(unbound = false))
 
-    /** Off is his choice. This repair restores an entry that is on and dead, never one he turned off. */
+    /** This repair restores an entry that is on and dead. An entry that reads off is SelfEnableLog's,
+     *  under its own rules (invariant 84) — the off-and-on must never be what switches it on. */
     @Test fun `a switch that reads off is never turned on`() =
         assertEquals(Skip.SWITCHED_OFF, decide(on = false))
 

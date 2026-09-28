@@ -1,6 +1,6 @@
 # AppBlocker Privacy Policy
 
-**Last updated: August 23, 2026**
+**Last updated: September 28, 2026**
 
 AppBlocker is a screen-time and app-blocking app. It is built around one principle: **your data belongs on your device.**
 
@@ -15,9 +15,9 @@ Everything AppBlocker needs to work is stored **only on your phone**:
 - Your PIN (stored as a one-way hash, never as plain text)
 - Your recovery counter and your journal entries — see the section below
 
-AppBlocker has **no accounts, no sign-up, no sign-in, no analytics, no ads, and no tracking**. There is no user account of any kind: nothing you enter is transmitted to us, because there is nowhere for it to go. We never see your data.
+AppBlocker has **no accounts, no sign-up, no sign-in, no analytics, no ads, and no tracking**. There is no user account of any kind, and nothing you enter is transmitted to us. The one exception is optional: the direct-download build can send short reports about how the blocker is running, **only if you say yes** — see [Reports to the developer](#reports-to-the-developer-direct-download-build-only) below. They never contain what you type, block or see.
 
-Uninstalling the app permanently deletes all of this data. That is also how you request deletion — there is no server-side copy to ask us to remove.
+Uninstalling the app permanently deletes all of this data from your phone. Reports you agreed to send are kept on the developer's private issue tracker; to have them removed, write to the address at the end of this policy.
 
 ## Your counter and your journal
 
@@ -28,7 +28,7 @@ This is the most personal information the app will ever contain, and it is treat
 - Both are stored **only on this phone**, in the app's own database and preferences.
 - **The AI Coach is never given either of them** — not the journal text, and not the day count.
 - **They are never included in a bug report.** A report can only carry a fixed list of named settings values; there is no field in it that could hold your writing or your count.
-- They are not in the one-off device report the direct-download build sends about the phone model.
+- They are not in any report the direct-download build sends.
 - Journal entries are **kept until you delete them**. Emptying an entry removes that day; uninstalling the app removes all of it. There is no copy anywhere else, and no way to recover one.
 - If you set a PIN, both are behind it, because the PIN covers the whole app.
 
@@ -57,6 +57,12 @@ The AI Coach is **off until you choose to enable it** by pasting your own free G
 ## Update check (direct-download build only)
 
 On launch, the direct-download build contacts GitHub to check whether a newer version exists. This request contains no personal data. **The Google Play build does not do this** — Play delivers its own updates.
+
+## Reports to the developer (direct-download build only)
+
+The direct-download build can send short reports that help fix problems: when blocking stops and comes back, a summary once a week, when something inside the app goes wrong, and a description of the phone and the app's setup once per version. **A new install asks first — "Send reports to the developer?" — and sends nothing until you say yes.** You can change the answer at any time in Profile ▸ Automatic reports. A report you write yourself in Profile ▸ Report a problem is sent when you press Send.
+
+A report carries the app and Android versions, the phone model, your settings, and what the blocker knows about itself: whether it is running, when it last saw anything, how fast blocks appear, and every time blocking stopped and came back. **It never carries** your blocked words, the sites you visit, which apps you block, anything on your screen, your location, or anything from Recovery. Reports go to a private issue tracker that only the developer can read. **The Google Play build does not send reports.**
 
 ## Location (direct-download build only)
 

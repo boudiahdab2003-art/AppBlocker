@@ -394,6 +394,39 @@ class HealthFactsTest {
         assertTrue(detail, "waits an hour" in detail)
     }
 
+    /** Invariant 84: silent until it has run, then a measurement of what followed each write. */
+    @Test
+    fun `switching itself back on is a measurement, silent until it has run`() {
+        assertTrue(HealthFacts.verdicts(healthy.copy(togglePermitted = true)).none { "switched itself back on" in it.title })
+        assertTrue(
+            "never printed where the build cannot do it",
+            HealthFacts.verdicts(healthy.copy(togglePermitted = null, enableAttempts = 2)).none { "back on" in it.title },
+        )
+        val r = healthy.copy(
+            togglePermitted = true, enableAttempts = 4, enableHelped = 2, enableNoRebind = 1, enableFailed = 1,
+        )
+        val fact = HealthFacts.verdicts(r).first { it.title == "AppBlocker switched itself back on 4 time(s)" }
+        assertEquals(null, fact.good)
+        assertTrue(problems(r).toString(), problems(r).isEmpty())
+        assertTrue(fact.detail, "within two minutes 2 time(s)" in fact.detail)
+        assertTrue(fact.detail, "1 time(s) it switched it on and the blocker did not come back" in fact.detail)
+        assertTrue(fact.detail, "1 time(s) the phone refused the switch" in fact.detail)
+        assertFalse(fact.detail, "waits an hour" in fact.detail)
+        val stuck = healthy.copy(togglePermitted = true, enableAttempts = 3, enableNoRebind = 3, enableFutileStreak = 3)
+        assertTrue(HealthFacts.verdicts(stuck).first { "back on" in it.title }.detail.contains("waits an hour"))
+    }
+
+    /** A "no" to automatic reports is a choice: named, never a fault. */
+    @Test
+    fun `automatic reports that are off are named but are not a problem`() {
+        val r = healthy.copy(autoReports = false)
+        val fact = HealthFacts.verdicts(r).first { it.title == "Automatic reports are off on this phone" }
+        assertEquals(null, fact.good)
+        assertTrue(problems(r).toString(), problems(r).isEmpty())
+        assertTrue(HealthFacts.verdicts(healthy).none { "Automatic reports" in it.title })
+        assertTrue(HealthFacts.verdicts(healthy.copy(reportingOn = false, autoReports = false)).none { "Automatic reports" in it.title })
+    }
+
     /** Invariant 76: named when off, silent when on or unreadable, and never a fault. */
     @Test
     fun `notification access that is off is named, and on or unknown says nothing`() {

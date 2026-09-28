@@ -3607,7 +3607,15 @@ class BlockerAccessibilityService : AccessibilityService() {
         // An orderly unbind — a space switch, or the switch turned off — is nothing dying, so the
         // dead-man alarm has nothing to report; the ordinary checks own what happens next. A killed
         // process never reaches this line, which is exactly why its alarm is the one that goes off.
-        WatcherDeadMan.cancel(applicationContext)
+        // ⚠️ **Except the switch turned off** (invariant 84): the check that switches it back on
+        // would then wait for the quarter-hour worker his phone keeps not running. The short fuse
+        // brings one within half a minute instead. A switch that cannot be read counts as on: the
+        // old behaviour, never a check nobody asked for.
+        if (runCatching { AccessibilityUtil.isEnabled(applicationContext) }.getOrDefault(true)) {
+            WatcherDeadMan.cancel(applicationContext)
+        } else {
+            WatcherDeadMan.armSoon(applicationContext)
+        }
         // The binding is being taken down in an orderly way, and *that* is the finding — an OEM
         // force-stop never gets here, and neither does a killed process. See recordUnbind: a
         // stamp at the start of an outage means something ended the binding, and no stamp means

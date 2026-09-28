@@ -28,9 +28,11 @@ import kotlin.concurrent.thread
  * after waking is usually a false one; [WatcherDeadManReceiver] answers that from the running
  * watcher in this process, with no check and no new process.
  *
- * Cancelled on an ORDERLY unbind — a space switch or the switch turned off — because then nothing
+ * Cancelled on an ORDERLY unbind with the switch still on — a space switch — because then nothing
  * died and the ordinary checks own what comes next. A killed process runs no callbacks at all,
- * which is exactly why the alarm it leaves behind is the one that goes off.
+ * which is exactly why the alarm it leaves behind is the one that goes off. An unbind that finds the
+ * switch turned off brings it forward instead ([armSoon]), so the check that switches it back on
+ * (invariant 84) comes within half a minute.
  */
 object WatcherDeadMan {
 
@@ -52,7 +54,8 @@ object WatcherDeadMan {
     /** Pushes the alarm [DELAY_MS] away again. Called by the watcher on connect and every heartbeat. */
     fun arm(context: Context) = set(context, DELAY_MS)
 
-    /** Brings it forward to [SOON_MS]: the safety net under [SelfToggle]'s off-and-on. */
+    /** Brings it forward to [SOON_MS]: the safety net under [SelfToggle]'s off-and-on, a return's
+     *  wait (invariant 83), and the switch found off at an unbind (invariant 84). */
     fun armSoon(context: Context) = set(context, SOON_MS)
 
     private fun set(context: Context, delayMs: Long) {
