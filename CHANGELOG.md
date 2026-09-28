@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.170
+- When AppBlocker finds its own switch in Accessibility turned off - after a restart, by your phone, or by hand - it now switches itself back on, silently, as you chose. The one exception is your emergency exit: if you wait out the 2 hours and turn it off in the 15 minutes after, it stays off. New installs now ask before sending any reports; your own phones and tablet already count as yes. And coming back from Second Space no longer counts as blocking stopping.
+
 ## v1.169
 - The reinstalling and the 'AppBlocker is reopening' screen are gone, as you asked - neither ever brought blocking back on your phone. In their place: when your phone kills the blocker, AppBlocker switches itself off and on in Accessibility, silently, the way you do by hand. Tested on your phone tonight, the blocker came back within a second. It now notices a kill within about three or four minutes instead of up to twenty. It needs a one-time permission given from a computer over USB. And AppBlocker is lighter: its screens let go of their memory ten minutes after you leave them.
 
