@@ -8,6 +8,7 @@ import com.appblocker.service.SERVICE_BIND_GRACE_MS
 import com.appblocker.service.SPACE_RETURN_GRACE_MS
 import com.appblocker.service.STALE_MIN_USED_MINUTES
 import com.appblocker.service.SWITCH_ON_GRACE_MS
+import com.appblocker.service.WatcherDeadMan
 import com.appblocker.service.protectionVerdict
 import com.appblocker.service.bindPending
 import com.appblocker.service.protectionState
@@ -472,6 +473,71 @@ class ProtectionStateTest {
     @Test fun theReturnGraceOutlastsTheRebindMeasuredOnTheEmulator() {
         assertTrue(SPACE_RETURN_GRACE_MS > SERVICE_BIND_GRACE_MS)
         assertTrue("measured ~30 s on the emulator; twice that", SPACE_RETURN_GRACE_MS >= 2 * 28_000L)
+    }
+
+    // --- Invariant 85: the dead-man alarm's shorter wait --------------------------------------
+
+    private val shortWait = WatcherDeadMan.KILLED_BIND_WAIT_MS
+
+    private fun unboundVerdict(age: Long, ret: Long? = null, on: Long? = null, grace: Long = SERVICE_BIND_GRACE_MS) =
+        protectionVerdict(
+            true, lastEventAt = now - 60_000L, now = now, usedMinutesSinceLastEvent = 1,
+            serviceConnected = false, msSinceProcessStart = age,
+            msSinceSpaceReturn = ret, msSinceSwitchOn = on, startGraceMs = grace,
+        ).state
+
+    /**
+     * The check the dead-man alarm runs after waiting five seconds in its own process is told so, and
+     * judges a process that old — where any other check still calls it too young until twenty.
+     */
+    @Test fun aShorterStartGraceJudgesAYoungProcessSooner() {
+        assertTrue(bindPending(true, false, msSinceProcessStart = shortWait - 1, startGraceMs = shortWait))
+        assertFalse(bindPending(true, false, msSinceProcessStart = shortWait, startGraceMs = shortWait))
+        assertEquals(ProtectionState.STALLED, unboundVerdict(shortWait, grace = shortWait))
+        // The same process, asked by any other check: still too young to judge.
+        assertTrue(bindPending(true, false, msSinceProcessStart = shortWait))
+        assertEquals(ProtectionState.OK, unboundVerdict(shortWait))
+    }
+
+    /** It shortens the young-process term alone: a return or a switch-on of ours is waited out in full. */
+    @Test fun aShorterStartGraceStillWaitsOutAReturnAndASwitchOn() {
+        assertTrue(bindPending(true, false, eightHours, msSinceSpaceReturn = 0L, startGraceMs = shortWait))
+        assertTrue(bindPending(true, false, eightHours, msSinceSpaceReturn = SPACE_RETURN_GRACE_MS - 1, startGraceMs = shortWait))
+        assertTrue(bindPending(true, false, eightHours, msSinceSwitchOn = 0L, startGraceMs = shortWait))
+        assertTrue(bindPending(true, false, eightHours, msSinceSwitchOn = SWITCH_ON_GRACE_MS - 1, startGraceMs = shortWait))
+        assertEquals(ProtectionState.OK, unboundVerdict(eightHours, ret = 0L, grace = shortWait))
+        assertEquals(ProtectionState.OK, unboundVerdict(eightHours, on = 0L, grace = shortWait))
+    }
+
+    /**
+     * The verdict and the deferral answer one question whatever start grace they are handed, and the
+     * state every screen reads agrees with both — the check reads all three from one `read()`.
+     */
+    @Test fun theVerdictAndTheDeferralAgreeWhateverTheStartGrace() {
+        val graces = listOf(shortWait, SERVICE_BIND_GRACE_MS)
+        val ages = listOf(0L, shortWait - 1, shortWait, SERVICE_BIND_GRACE_MS - 1, SERVICE_BIND_GRACE_MS, eightHours)
+        val returns = listOf(null, 0L, SPACE_RETURN_GRACE_MS)
+        val switchOns = listOf(null, 0L, SWITCH_ON_GRACE_MS)
+        var judged = 0
+        var waited = 0
+        for (grace in graces) for (age in ages) for (ret in returns) for (on in switchOns) {
+            val state = unboundVerdict(age, ret, on, grace)
+            val pending = bindPending(true, false, age, ret, on, grace)
+            val where = "grace $grace, process $age, return $ret, switch-on $on"
+            assertEquals(where, pending, state != ProtectionState.STALLED)
+            assertEquals(
+                where, state,
+                protectionState(
+                    true, lastEventAt = now - 60_000L, now = now, usedMinutesSinceLastEvent = 1,
+                    serviceConnected = false, msSinceProcessStart = age,
+                    msSinceSpaceReturn = ret, msSinceSwitchOn = on, startGraceMs = grace,
+                ),
+            )
+            if (pending) waited++ else judged++
+        }
+        // A sweep that only ever landed on one side would agree with anything.
+        assertTrue("the sweep never judged", judged > 0)
+        assertTrue("the sweep never waited", waited > 0)
     }
 
     // --- The probe arm: a bound watcher that cannot read the screen ---------------------------

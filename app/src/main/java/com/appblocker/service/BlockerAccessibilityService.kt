@@ -567,6 +567,34 @@ class BlockerAccessibilityService : AccessibilityService() {
     @Volatile private var shortsExitJob: Job? = null
 
     /**
+     * **Pushes the dead-man alarm every few seconds while the screen is on** (invariant 85), so a
+     * watcher killed while he uses the phone is noticed within [WatcherDeadMan.FAST_DELAY_MS]
+     * rather than two minutes — his choice of 28 Sep 2026, "make it notice faster", a little battery
+     * for it. It stops itself when it finds the screen off, where the heartbeat's minute feeds the
+     * long delay as before; every connect, the screen coming on and the heartbeat start it again.
+     *
+     * The re-post lives outside the guard, like the heartbeat's (invariant 35): one swallowed throw
+     * must not end it — a pusher that stopped with the screen on would leave a nine-second alarm to
+     * go off every nine seconds.
+     */
+    private val deadManRunnable = object : Runnable {
+        override fun run() {
+            var screenOn: Boolean? = null
+            guarded(applicationContext, "deadMan") {
+                screenOn = interactive()
+                WatcherDeadMan.arm(applicationContext, screenOn)
+            }
+            if (screenOn == true) handler.postDelayed(this, WatcherDeadMan.FAST_PUSH_MS)
+        }
+    }
+
+    /** Starts [deadManRunnable] again from now, replacing any pending run. */
+    private fun restartDeadManPush() {
+        handler.removeCallbacks(deadManRunnable)
+        handler.post(deadManRunnable)
+    }
+
+    /**
      * Proof that the watcher is still alive **when nothing is happening on screen**.
      *
      * [ServiceHealth.recordEvent] only stamps from the event path, so a phone left alone for an
@@ -587,8 +615,11 @@ class BlockerAccessibilityService : AccessibilityService() {
         override fun run() {
             guarded(applicationContext, "heartbeat") {
                 ServiceHealth.recordAlive(applicationContext)
-                // Still here: push the dead-man alarm another two minutes away (invariant 82).
+                // Still here: push the dead-man alarm away again (invariant 82). With the screen on,
+                // also start the pushes every few seconds again — the backstop, should the screen-on
+                // broadcast never have arrived (invariant 85).
                 WatcherDeadMan.arm(applicationContext)
+                if (interactive() == true) restartDeadManPush()
                 val silence = stopwatchNow() - lastEventReceivedAt
                 // The end of the window the probe streak measures has to be wired to something,
                 // or a streak of four sits at four for the life of the process and the next quiet
@@ -1204,8 +1235,10 @@ class BlockerAccessibilityService : AccessibilityService() {
         connected = true
         // The dead-man alarm, pushed away again on every heartbeat: from here on, this process
         // vanishing without a word is noticed in minutes rather than at the next scheduled check
-        // (invariant 82). Before anything below can take time or throw.
+        // (invariant 82). Before anything below can take time or throw. With the screen on it is
+        // pushed every few seconds from here on (invariant 85).
         WatcherDeadMan.arm(applicationContext)
+        restartDeadManPush()
         handler.postDelayed(heartbeatRunnable, HEARTBEAT_MS)
         // The service is rebound right after an update installs, so detect it here too —
         // the pause arms even if the app itself isn't opened.
@@ -2344,6 +2377,9 @@ class BlockerAccessibilityService : AccessibilityService() {
                 when (intent.action) {
                     Intent.ACTION_USER_PRESENT -> UnlockCounter.recordUnlock(applicationContext)
                     Intent.ACTION_SCREEN_OFF -> onScreenOff()
+                    // The dead-man alarm goes back to seconds the moment the screen is on, not at
+                    // the next heartbeat (invariant 85).
+                    Intent.ACTION_SCREEN_ON -> restartDeadManPush()
                 }
             }
         }
@@ -2352,6 +2388,7 @@ class BlockerAccessibilityService : AccessibilityService() {
             IntentFilter().apply {
                 addAction(Intent.ACTION_USER_PRESENT)
                 addAction(Intent.ACTION_SCREEN_OFF)
+                addAction(Intent.ACTION_SCREEN_ON)
             },
             ContextCompat.RECEIVER_NOT_EXPORTED,
         )
@@ -2363,6 +2400,11 @@ class BlockerAccessibilityService : AccessibilityService() {
      *  genuinely blocked app is re-blocked by its own window-state event when reopened.
      *  Shorts covers are owned by their own scan — left alone. */
     private fun onScreenOff() {
+        // First, while this broadcast still holds the phone awake: the pushes every few seconds stop
+        // and the dead-man alarm goes back to its two minutes (invariant 85). A nine-second alarm left
+        // behind would be delivered, for nothing, on the sleeping phone's next wake.
+        handler.removeCallbacks(deadManRunnable)
+        WatcherDeadMan.arm(applicationContext, screenOn = false)
         // This used to bail out entirely while a Shorts cover was up, to leave the Shorts scan's
         // state alone. The effect was that locking the phone mid-Shorts skipped ALL of the
         // cleanup below: the cover stayed attached, the timers stayed armed and the foreground
@@ -3610,7 +3652,9 @@ class BlockerAccessibilityService : AccessibilityService() {
         // ⚠️ **Except the switch turned off** (invariant 84): the check that switches it back on
         // would then wait for the quarter-hour worker his phone keeps not running. The short fuse
         // brings one within half a minute instead. A switch that cannot be read counts as on: the
-        // old behaviour, never a check nobody asked for.
+        // old behaviour, never a check nobody asked for. The screen-on pushes stop first (invariant
+        // 85), or the next one would put back the alarm this has just taken down.
+        handler.removeCallbacks(deadManRunnable)
         if (runCatching { AccessibilityUtil.isEnabled(applicationContext) }.getOrDefault(true)) {
             WatcherDeadMan.cancel(applicationContext)
         } else {

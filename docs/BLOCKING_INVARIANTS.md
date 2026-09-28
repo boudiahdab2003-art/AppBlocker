@@ -1701,7 +1701,8 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     MiLink's, which was enabled and unbound. Harmless, and worth knowing.
 
     **Noticing sooner: the dead-man alarm** (`WatcherDeadMan`). The watcher pushes one
-    `ELAPSED_REALTIME` alarm two minutes away on connect and every heartbeat, and cancels it in
+    `ELAPSED_REALTIME` alarm two minutes away on connect and every heartbeat (since invariant 85: nine
+    seconds away, every five, while the screen is on), and cancels it in
     `onDestroy`; only a process that vanished without a word leaves it to go off. Non-wakeup: it never
     wakes a sleeping phone and is delivered when the phone next wakes, and the receiver answers a
     false one from the live watcher in this process with no check. A real one waits the bind grace
@@ -1826,6 +1827,56 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
 
     **The shape to grep for: a repair that fixes the state it was built for and misfiles its own
     success — judged on another repair's clock, or read by a check that lands before it lands.**
+
+85. **A watcher killed in use is noticed in seconds — while the screen is on.** Reports #203, #204,
+    #208 and #209 (27–28 Sep 2026) are the first real kills the silent repair answered by itself: main
+    space Sun 27 Sep 18:57 `signaled:sig-9@fg-service` and Mon 12:12 `unknown@fg-service`; Second Space
+    Fri 25 Sep 13:30 `other@fg-service note=OneKeyClean` and 14:12 `low-memory@fg-service` (queued in
+    that space, delivered when he next went there). All four `backBy=rebound-after-repair`, four
+    attempts, four helped, each down 2–4 min. The repair takes about a second; nearly all the rest was
+    the dead-man alarm: two minutes of lead, up to 90 s more of inexact-alarm window, then the 20 s
+    bind grace. Asked, he chose **"Make it notice faster (a bit more battery)"** over leaving it.
+
+    **Screen on: pushed every 5 s to 9 s away** (`FAST_PUSH_MS`, `FAST_DELAY_MS`). `deadManRunnable`
+    in the watcher arms for the screen it read and comes back only while it is on; connect, the new
+    `ACTION_SCREEN_ON` in the unlock receiver, and the heartbeat (the backstop) start it; `onScreenOff`
+    stops it and puts `DELAY_MS` back synchronously, while the broadcast still holds the phone awake;
+    `onDestroy` stops it BEFORE the cancel, or the next push would put back the alarm a space switch
+    has just taken down. ⚠️ **Nine seconds, not ten:** `AlarmManagerService.maxTriggerTime` gives an
+    inexact alarm a window of 75% of its lead unless the lead is under `MIN_FUZZABLE_INTERVAL` (10 s),
+    and on the Android 16 emulator a 30 s alarm went off at 52 s. `dumpsys alarm` there: screen on
+    `window=0`, screen off `window=+1m29s999ms`. No exact-alarm permission. **Screen off: unchanged**
+    — `DELAY_MS`, fed by the heartbeat. A nine-second non-wakeup alarm would be delivered on nearly
+    every wake of a sleeping phone, and nothing can be opened on a dark screen anyway.
+
+    **The wait in the alarm's own process: 5 s, not 20** (`KILLED_BIND_WAIT_MS`, chosen by
+    `WatcherDeadMan.bindWaitMs`) — only when the silent repair is permitted and nothing was installed in
+    the last 3 minutes (`PackageInfo.lastUpdateTime`). An install kills our process and Android binds
+    the watcher only once it has finished, while a nine-second alarm pushed just before the kill comes
+    due during it. Without the permission the check can only alert, and a faster alert is not worth a
+    false one: the full grace. Stock Android brings a crashed watcher up with the first process of ours
+    that starts (`attachApplicationLocked`), about a second; HyperOS never does. The receiver hands the
+    grace it waited to `checkAndNotify(startGraceMs = …)`, and `read()` hands it to the verdict AND to
+    `bindPending`, through `bindGraceHolds` — the young-process term only. A return (83) and our own
+    switch-on (84) are waited out in full whoever asks.
+
+    **Cost:** twelve AlarmManager calls a minute with the screen on, instead of one; none of them wakes
+    anything. Screen off unchanged. The block-speed lock ("keep the battery as it is": debounce, node
+    budgets, scans) is untouched.
+
+    **On the Android 16 emulator, 28 Sep, in his phone's state** (`service_crash_max_retry=1` + `am
+    crash`, nothing kicked by hand, the dead-man alarm alone): **1.170** — alarm process 137 s after the
+    kill, repair 157 s, bound 158 s. **This change** — process 6.0 s, repair 12.4 s, bound 13.3 s; again
+    with scrolling up to the kill, 9.8 / 15.4 / 16.2 s, filed `crash@fg-service … rebound-after-repair`,
+    17 s. Killed 30 s after an install: process 6.8 s, repair 27.5 s — the full grace, as meant. A switch
+    to user 10 and back: no alarm pending while away, pushes back at the return. ⚠️ **NOT verified on
+    HyperOS**, which may align alarms: 22 Sep's test kill was noticed ~4 min after it. His reports will
+    say — kills in use should read `noticedAfter`/`down` 0–1 min (`down=` starts at the last event
+    stamp, which is written at most once a minute). `WatcherDeadManTest`, `ProtectionStateTest`, two
+    `CodeShapeTest` checks; 29 mutations, each red in the test named for it (scratchpad `prove_v1171.py`).
+
+    **The shape to grep for: a repair that works in a second, waiting minutes on the thing that calls
+    it — measure which part of the gap dominates before choosing what to shorten.**
 
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37

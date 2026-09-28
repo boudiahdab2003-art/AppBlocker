@@ -76,7 +76,16 @@ object ProtectionWatchdog {
     internal fun state(context: Context, now: Long = System.currentTimeMillis()): ProtectionState =
         read(context, now).state
 
-    internal fun read(context: Context, now: Long = System.currentTimeMillis()): Reading {
+    /**
+     * @param startGraceMs how long a young process is forgiven an unbound watcher — shorter only for
+     *   the check the dead-man alarm runs after waiting in its own process (invariant 85). Handed to
+     *   the verdict AND to [bindPending], so the two can never disagree about it.
+     */
+    internal fun read(
+        context: Context,
+        now: Long = System.currentTimeMillis(),
+        startGraceMs: Long = SERVICE_BIND_GRACE_MS,
+    ): Reading {
         val enabled = AccessibilityUtil.isEnabled(context)
         val lastEventAt = ServiceHealth.lastEventAt(context)
         // Usage access is optional, so this can be null — protectionState then never says STALLED.
@@ -118,10 +127,11 @@ object ProtectionWatchdog {
             probeFailStreak = probeFails,
             msSinceSpaceReturn = sinceReturn,
             msSinceSwitchOn = sinceSwitchOn,
+            startGraceMs = startGraceMs,
         )
         return Reading(
             state = verdict.state,
-            bindPending = bindPending(enabled, connected, sinceStart, sinceReturn, sinceSwitchOn),
+            bindPending = bindPending(enabled, connected, sinceStart, sinceReturn, sinceSwitchOn, startGraceMs),
             arm = verdict.arm,
             usedMinutes = usedMinutes,
             sinceProcessStartMs = sinceStart,
@@ -142,6 +152,10 @@ object ProtectionWatchdog {
         // mean seven different things. See OutageLog.EndedBy — the whole recovery question is
         // whether these come back "background" or "app-opened".
         calledBy: String = OutageLog.EndedBy.UNKNOWN,
+        // How long a young process is forgiven an unbound watcher. Only the dead-man alarm passes a
+        // shorter one, after waiting that long in its own process first (invariant 85); every other
+        // caller keeps the full grace. See read().
+        startGraceMs: Long = SERVICE_BIND_GRACE_MS,
     ) = guarded(context, "watchdog") {
         // Guarded for the same reason the watcher's callbacks are: this runs from the app's own
         // resume effect (AppRoot), the boot receiver and the periodic worker. An exception from
@@ -179,7 +193,7 @@ object ProtectionWatchdog {
         // the way it answers a process seconds old. Only after the guard: a check run while he is
         // still away must not start the clock on a return that has not happened.
         SpaceReturn.noteInFront(context)
-        val reading = read(context)
+        val reading = read(context, startGraceMs = startGraceMs)
         // Too early to tell: our process is seconds old and Android has not bound the watcher
         // yet — the normal shape of a check that WorkManager cold-started in order to run. There
         // is nothing here to report and, more importantly, nothing to CLEAR: falling into the OK

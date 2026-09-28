@@ -1131,7 +1131,7 @@ class CodeShapeTest {
             .substringAfter("fun checkAndNotify(", "").substringBefore("fun noteWatcherAlive(")
         val finish = check.indexOf("SelfToggle.finishInterrupted(")
         assertTrue("checkAndNotify no longer finishes an interrupted toggle", finish >= 0)
-        listOf("!OwnSpace.inFront(", "read(context)", "SwitchOffLog.begin(").forEach { later ->
+        listOf("!OwnSpace.inFront(", "read(context, startGraceMs = startGraceMs)", "SwitchOffLog.begin(").forEach { later ->
             val at = check.indexOf(later)
             assertTrue("$later is gone from checkAndNotify; this check is reading nothing", at >= 0)
             assertTrue("$later runs before an interrupted toggle is finished", at > finish)
@@ -1263,7 +1263,7 @@ class CodeShapeTest {
             "ServiceHealth.recordAwayCheck(" in branch && "return@guarded" in branch,
         )
         listOf(
-            "read(context)", "endOpenOutage(", "SwitchOffLog.begin(", "OutageLog.begin(",
+            "read(context, startGraceMs = startGraceMs)", "endOpenOutage(", "SwitchOffLog.begin(", "OutageLog.begin(",
             "ProtectionNotifier.", "SelfToggle.maybeRepair(", "SelfToggle.maybeSwitchOn(",
         ).forEach { later ->
             val at = body.indexOf(later)
@@ -1305,7 +1305,7 @@ class CodeShapeTest {
         val check = watchdog.substringAfter("fun checkAndNotify(", "").substringBefore("fun noteWatcherAlive(")
         val guard = check.indexOf("!OwnSpace.inFront(")
         val start = check.indexOf("SpaceReturn.noteInFront(")
-        val read = check.indexOf("read(context)")
+        val read = check.indexOf("read(context, startGraceMs = startGraceMs)")
         assertTrue("checkAndNotify lost its guard or its reading; this check is reading nothing", guard >= 0 && read >= 0)
         assertTrue("checkAndNotify no longer starts a return's wait", start >= 0)
         assertTrue("the wait must start after the space guard, or a check run while he is away starts it", start > guard)
@@ -1477,6 +1477,75 @@ class CodeShapeTest {
             .filter { (_, body) -> "\"?\"" !in body || Regex("""\?:\s*-?\d""").containsMatchIn(body) }
             .map { it.first }
         assertEquals("these fields print a number when the report took no reading", emptyList<String>(), numbered)
+    }
+
+    // ---- invariant 85 ------------------------------------------------------------------------
+
+    /**
+     * **Invariant 85: a watcher killed in use is noticed in seconds** — his choice of 28 Sep 2026.
+     * With the screen on the watcher pushes its dead-man alarm every few seconds. Every way the
+     * screen comes on starts the pushes (connect, the screen-on broadcast, the heartbeat as the
+     * backstop); the screen going off stops them and puts the two minutes back while its broadcast
+     * still holds the phone awake; an orderly unbind stops them before it takes the alarm down, or the
+     * next push would put back the alarm it had just cancelled.
+     */
+    @Test
+    fun `the watcher pushes its dead-man alarm every few seconds while the screen is on`() {
+        val text = code(source("service/BlockerAccessibilityService.kt").readText())
+        val pusher = text.substringAfter("private val deadManRunnable", "").substringBefore("\n    }")
+        assertTrue("the screen-on pusher is gone; this check is reading nothing", pusher.isNotEmpty())
+        assertTrue("the pusher must arm for the screen it read", "WatcherDeadMan.arm(applicationContext, screenOn)" in pusher)
+        assertTrue(
+            "the pusher must come back, and only while the screen is on",
+            "if (screenOn == true) handler.postDelayed(this, WatcherDeadMan.FAST_PUSH_MS)" in pusher,
+        )
+        val connect = text.substringAfter("override fun onServiceConnected() {", "").substringBefore("override fun ")
+        assertTrue("onServiceConnected must start the pushes", "restartDeadManPush()" in connect)
+        val heartbeat = text.substringAfter("private val heartbeatRunnable", "").substringBefore("handler.postDelayed(this")
+        assertTrue(
+            "the heartbeat must restart the pushes while the screen is on",
+            "if (interactive() == true) restartDeadManPush()" in heartbeat,
+        )
+        val receiver = text.substringAfter("private fun registerUnlockReceiver()", "").substringBefore("\n    }\n")
+        assertTrue("the screen coming on must restart the pushes", "Intent.ACTION_SCREEN_ON -> restartDeadManPush()" in receiver)
+        assertTrue("the screen-on broadcast must be registered", "addAction(Intent.ACTION_SCREEN_ON)" in receiver)
+        val screenOff = text.substringAfter("private fun onScreenOff() {", "").substringBefore("\n    }\n")
+        val stop = screenOff.indexOf("handler.removeCallbacks(deadManRunnable)")
+        val long = screenOff.indexOf("WatcherDeadMan.arm(applicationContext, screenOn = false)")
+        assertTrue("the screen going off must stop the pushes", stop >= 0)
+        assertTrue("the screen going off must put the two minutes back after stopping the pushes", long > stop)
+        val destroy = text.substringAfter("override fun onDestroy() {", "").substringBefore("companion object")
+        val halt = destroy.indexOf("handler.removeCallbacks(deadManRunnable)")
+        val cancel = destroy.indexOf("WatcherDeadMan.cancel(")
+        assertTrue("onDestroy must stop the pushes", halt >= 0)
+        assertTrue("onDestroy must stop the pushes before it takes the alarm down", halt < cancel)
+        val arm = code(source("service/WatcherDeadMan.kt").readText())
+            .substringAfter("fun arm(", "").substringBefore("\n")
+        assertTrue("arm() must set the delay for the screen it was given: $arm", "set(context, delayMs(screenOn))" in arm)
+    }
+
+    /**
+     * **Invariant 85: the dead-man check judges on the wait it served.** The receiver waits
+     * `bindWaitMs` in its own process and hands the same number to the check, and the check hands it
+     * to the verdict AND to the deferral — or the check either judges a process no wait covered, or
+     * defers for the full twenty seconds the wait was there to cut.
+     */
+    @Test
+    fun `the dead-man check judges on the wait it served`() {
+        val receiver = code(source("service/WatcherDeadMan.kt").readText())
+            .substringAfter("class WatcherDeadManReceiver", "")
+        assertTrue("the receiver is gone; this check is reading nothing", receiver.isNotEmpty())
+        assertTrue("the wait must come from bindWaitMs", "val grace = WatcherDeadMan.bindWaitMs(" in receiver)
+        assertTrue("the receiver must wait out the grace it chose", "val wait = grace + 1_000L - age" in receiver)
+        assertTrue("the check must be told the grace that was waited", "startGraceMs = grace)" in receiver)
+        val watchdog = code(source("service/ProtectionWatchdog.kt").readText())
+        val check = watchdog.substringAfter("fun checkAndNotify(", "").substringBefore("fun noteWatcherAlive(")
+        assertTrue("checkAndNotify must read with the grace it was given", "read(context, startGraceMs = startGraceMs)" in check)
+        val read = watchdog.substringAfter("internal fun read(", "").substringBefore("fun checkAndNotify(")
+        val verdict = read.substringAfter("protectionVerdict(", "").substringBefore(")\n")
+        assertTrue("the verdict must be given the start grace", "startGraceMs = startGraceMs" in verdict)
+        val pending = read.substringAfter("bindPending = bindPending(", "").substringBefore("\n")
+        assertTrue("the deferral must be given the same start grace: $pending", pending.trimEnd().endsWith("startGraceMs),"))
     }
 
     // ---- invariant 70 ------------------------------------------------------------------------
