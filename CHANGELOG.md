@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.171
+- When your phone kills the blocker while you are using it, AppBlocker now notices within about ten seconds instead of two to four minutes, as you chose: while the screen is on it checks in every five seconds, and the silent repair switches it off and on straight away. With the screen off nothing changes. On an Android 16 test phone killed the same way, blocking was back in 13 seconds; the last version took 2 minutes 38.
+
 ## v1.170
 - When AppBlocker finds its own switch in Accessibility turned off - after a restart, by your phone, or by hand - it now switches itself back on, silently, as you chose. The one exception is your emergency exit: if you wait out the 2 hours and turn it off in the 15 minutes after, it stays off. New installs now ask before sending any reports; your own phones and tablet already count as yes. And coming back from Second Space no longer counts as blocking stopping.
 

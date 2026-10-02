@@ -21,8 +21,8 @@ android {
         applicationId = "com.appblocker"
         minSdk = 24
         targetSdk = 35 // Google Play requires 35+ for new app submissions
-        versionCode = 171
-        versionName = "1.170"
+        versionCode = 172
+        versionName = "1.171"
 
         // Runs the rendering tests in app/src/androidTest — the layer that catches what unit tests
         // structurally cannot: a button under the keyboard, a label clipped at a large system font,
