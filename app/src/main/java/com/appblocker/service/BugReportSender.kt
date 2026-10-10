@@ -348,6 +348,8 @@ object BugReportSender {
         }
         field("adultPack") { SettingsStore.adultWordsPack(ctx).toString() }
         field("scanEverywhere") { SettingsStore.keywordsEverywhere(ctx).toString() }
+        // How many apps "every app" leaves out (invariant 87) - a count, never which ones.
+        field("scanSkips") { SettingsStore.wordSkipApps(ctx).size.toString() }
         field("blockUnsupported") { SettingsStore.blockUnsupportedBrowsers(ctx).toString() }
         field("overlayPermission") { Settings.canDrawOverlays(ctx).toString() }
         field("usageAccess") { hasUsageAccess(ctx).toString() }

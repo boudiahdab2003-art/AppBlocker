@@ -12,6 +12,7 @@ import com.appblocker.data.QuickSession
 import com.appblocker.data.SettingsStore
 import com.appblocker.data.SiteWord
 import com.appblocker.data.StrictEdits
+import com.appblocker.data.WordSkip
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -90,6 +91,19 @@ class WebFilterViewModel(app: Application) : AndroidViewModel(app) {
                 SettingsStore.quickBlockPaused(ctx),
             ),
         )
+    }
+
+    /**
+     * Store the apps "check every app" leaves out (invariant 87). The Strict rule lives here, at the
+     * write, for the same reason [setKeywords]'s does: during a session nothing can be added to the
+     * list, whatever the screen let through; taking an app off always goes through.
+     */
+    fun setWordSkipApps(target: Set<String>) {
+        viewModelScope.launch {
+            val ctx = getApplication<Application>()
+            val strict = strictRemaining(focusDao.get().first()) > 0L
+            SettingsStore.setWordSkipApps(ctx, WordSkip.allowed(SettingsStore.wordSkipApps(ctx), target, strict))
+        }
     }
 
     /** The same reckoning [FocusViewModel] and the watcher use — never a third one. */

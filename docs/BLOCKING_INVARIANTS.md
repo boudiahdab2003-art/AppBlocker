@@ -1917,6 +1917,34 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     **The shape to grep for: work triggered by "something changed" that never asks *what* changed —
     an event from anywhere arming a read of one particular thing.**
 
+87. **"Check every app" can leave apps out — his list, with three things it never reaches.** 10 Oct
+    2026, after 86: *"we don't need to check for words in YouTube and Claude and WhatsApp"*. A word scan
+    of an app's screen is the heaviest thing the watcher does, and he named the apps where it buys him
+    nothing. This is not the old opt-in list (`keyword_scan_apps`, replaced by "every app" so that
+    nobody had to pick the apps to protect one by one). "Every app" stays the
+    default, and the list names exceptions.
+
+    `SettingsStore.wordSkipApps` (`KEY_WORD_SKIP_APPS`), decided by `WordSkip.skips` inside
+    `shouldScanPkg`, the one gate the event scans and the blind scans (`coverBlindly`) share. The
+    watcher reads the list on all three paths a listener-fed setting needs (invariant 29): connect,
+    the prefs listener, and the once-a-minute backstop. **Never reached:** browsers (the site layer,
+    adult list and blocked apps' sites live in that scan; the picker does not offer them and `skips`
+    answers no anyway), the danger hour (it reads every app on purpose), and Shorts (a different
+    scan, `scheduleShortsScan`). A keyword lockout on a skipped app still covers it through
+    `blockReason` on a foreground change; only the scan's extra cover path stops.
+
+    **Strict:** skipping is a weakening, so during a session nothing can be added and anything can be
+    taken off (invariant 16). The rule is on the write (`WebFilterViewModel.setWordSkipApps` →
+    `WordSkip.allowed`), with the picker's `enabled = ed || checked` as its mirror rather than its
+    guard. Reports carry `scanSkips`, a count only. A key named for words would trip
+    `BugReportTest`'s content tripwire, and the names would say which apps he uses.
+    `WordSkipTest` (9 cases) and one `CodeShapeTest` check. ⚠️ **No rendering test** for the picker,
+    and no device run. It is a plain list in the activity window, the shape the friction gate already
+    proved, not a layout fix.
+
+    **The shape to grep for: a setting cached in the watcher that only some of its refresh paths
+    update.**
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused

@@ -379,6 +379,17 @@ object SettingsStore {
     fun setKeywordsEverywhere(context: Context, value: Boolean) =
         prefs(context).edit().putBoolean(KEY_KEYWORDS_EVERYWHERE, value).apply()
 
+    const val KEY_WORD_SKIP_APPS = "word_skip_apps"
+
+    /** Apps "check every app" leaves out — his own list (invariant 87). Browsers and the danger hour
+     *  ignore it: see [WordSkip.skips]. Write through `WebFilterViewModel.setWordSkipApps`, which
+     *  holds the Strict rule, never from a screen directly. */
+    fun wordSkipApps(context: Context): Set<String> =
+        prefs(context).getStringSet(KEY_WORD_SKIP_APPS, null)?.toSet() ?: emptySet()
+
+    fun setWordSkipApps(context: Context, value: Set<String>) =
+        prefs(context).edit().putStringSet(KEY_WORD_SKIP_APPS, value.toSet()).apply()
+
     /** Whether the one-time purge of template-injected app-name words has run (see
      *  BlockerAccessibilityService.purgeTemplateWordsOnce). */
     fun templateWordsPurged(context: Context): Boolean =

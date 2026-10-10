@@ -774,6 +774,10 @@ data class BugReport(
             "blocksToday",
             "adultPack",
             "scanEverywhere",
+            // How many apps he left out of "every app" (invariant 87). A count, never which ones:
+            // the list names apps he uses, and the number alone says whether word scanning is
+            // narrower than scanEverywhere suggests.
+            "scanSkips",
             // Whether "block unsupported browsers" is on. A setting, not content — and the fact
             // that decided a whole diagnosis: a screenshot of instagram.com unblocked in Mi
             // Browser looked like a regression I had just shipped, and the answer to this one

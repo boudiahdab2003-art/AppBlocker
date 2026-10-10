@@ -803,6 +803,11 @@ Never sent: your blocked words, the sites you visit, which apps you block, or an
     <string name="words_pack_waiting">Turn-off requested. The pack keeps protecting you for another %1$s.</string>
     <string name="words_everywhere">Block these words in every app</string>
     <string name="words_everywhere_desc">Recommended. When off, words are only blocked in your browser.</string>
+    <string name="words_skip_title">Skip these apps</string>
+    <string name="words_skip_none">None. Every app is checked.</string>
+    <string name="words_skip_picker_title">Apps to skip</string>
+    <string name="words_skip_desc">Blocked words are not looked for in the apps you tick, which saves battery. Browsers are always checked, YouTube Shorts stay blocked, and during a danger hour every app is checked again.</string>
+    <string name="words_skip_strict">Strict Mode is on: you can take apps off this list, but not add them.</string>
     <string name="gate_adult_title">Turn off adult protection</string>
     <string name="gate_adult_blurb">This lowers your guard. Type the paragraph below — you can\'t paste it — before the clock runs out.</string>
     <string name="gate_adult_detail">Miss the clock and you get a fresh paragraph and a fresh clock, as many times as it takes. Even once you\'ve typed it, the pack stays on for another 24 hours; only after that can you flip the switch off.</string>

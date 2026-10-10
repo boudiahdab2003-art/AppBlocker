@@ -39,9 +39,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.appblocker.data.DeviceBoot
+import com.appblocker.data.InstalledAppsRepository
 import com.appblocker.data.OffSwitchGuard
 import com.appblocker.data.SettingsStore
 import com.appblocker.data.StrictEdits
+import com.appblocker.data.WordSkip
 import kotlinx.coroutines.delay
 import androidx.compose.ui.res.stringResource
 import com.appblocker.R
@@ -63,6 +65,16 @@ fun KeywordsScreen(
     val siteWords by webVm.liveSiteWords.collectAsState()
     var newWord by remember { mutableStateOf("") }
     var everywhere by remember { mutableStateOf(SettingsStore.keywordsEverywhere(context)) }
+    // The apps "every app" leaves out (invariant 87) and their names for the row under the switch.
+    var skipped by remember { mutableStateOf(SettingsStore.wordSkipApps(context)) }
+    var showSkipPicker by remember { mutableStateOf(false) }
+    // Only to name them: with nothing skipped there is nothing to name, and loading every app's
+    // icon would be paid on every visit to this screen. The picker loads the list for itself.
+    LaunchedEffect(skipped.isNotEmpty()) {
+        if (skipped.isNotEmpty()) InstalledAppsRepository.ensureLoaded(context)
+    }
+    val installed by InstalledAppsRepository.apps.collectAsState()
+    val skippedNames = installed.filter { it.packageName in skipped }.map { it.label }.sorted()
     var adultPack by remember { mutableStateOf(SettingsStore.adultWordsPack(context)) }
     var showDisableGate by remember { mutableStateOf(false) }
     val ed = !strictActive // words can always be added; removal is locked during Strict Mode
@@ -241,9 +253,26 @@ fun KeywordsScreen(
                             SettingsStore.setKeywordsEverywhere(context, it)
                         },
                     )
+                    if (everywhere) {
+                        Spacer(Modifier.padding(top = 8.dp))
+                        WordSkipRow(skippedNames, onClick = { showSkipPicker = true })
+                    }
                     Spacer(Modifier.padding(top = 24.dp))
                 }
             }
+        }
+
+        if (showSkipPicker) {
+            WordSkipPicker(
+                skipped = skipped,
+                strictActive = strictActive,
+                onChange = { target ->
+                    // Shown as the write will store it; the write re-checks Strict regardless.
+                    skipped = WordSkip.allowed(skipped, target, strict = strictActive)
+                    webVm.setWordSkipApps(target)
+                },
+                onDismiss = { showSkipPicker = false },
+            )
         }
 
         // Drawn on top of the whole screen. NOT a Dialog: dialog windows report zero insets

@@ -870,6 +870,11 @@
     <string name="words_pack_waiting">طُلب الإيقاف. وتبقى الحزمة تحميك %1$s أخرى.</string>
     <string name="words_everywhere">احظر هذه الكلمات في كل تطبيق</string>
     <string name="words_everywhere_desc">موصى به. عند إيقافه تُحظر الكلمات في متصفحك فقط.</string>
+    <string name="words_skip_title">تخطَّ هذه التطبيقات</string>
+    <string name="words_skip_none">لا شيء. يُفحص كل تطبيق.</string>
+    <string name="words_skip_picker_title">التطبيقات المستثناة</string>
+    <string name="words_skip_desc">لا يُبحث عن الكلمات المحظورة في التطبيقات التي تختارها، وهذا يوفّر البطارية. المتصفحات تُفحص دائمًا، ومقاطع YouTube Shorts تبقى محظورة، وفي ساعة الخطر يُفحص كل تطبيق من جديد.</string>
+    <string name="words_skip_strict">الوضع الصارم مفعّل: يمكنك إزالة تطبيقات من هذه القائمة، لكن لا يمكنك إضافتها.</string>
     <string name="gate_adult_title">إيقاف حماية البالغين</string>
     <string name="gate_adult_blurb">هذا يخفض حارسك. اكتب الفقرة أدناه — لا يمكنك لصقها — قبل أن ينفد الوقت.</string>
     <string name="gate_adult_detail">إن فاتك الوقت حصلت على فقرة جديدة ومؤقّت جديد، مهما تكرّر ذلك. وحتى بعد أن تكتبها، تبقى الحزمة مُفعَّلة 24 ساعة أخرى؛ وبعدها فقط تستطيع إيقاف المفتاح.</string>

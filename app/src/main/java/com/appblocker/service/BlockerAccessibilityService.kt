@@ -31,6 +31,7 @@ import com.appblocker.BuildConfig
 import com.appblocker.R
 import com.appblocker.data.AppLocale
 import com.appblocker.data.Words
+import com.appblocker.data.WordSkip
 import com.appblocker.data.AppRule
 import com.appblocker.data.AdminPrompt
 import com.appblocker.data.AdminScreens
@@ -165,6 +166,8 @@ class BlockerAccessibilityService : AccessibilityService() {
     // Whether blocked words are matched in every app (default) or browsers only. Cached here
     // and refreshed by a prefs listener so the toggle applies without restarting the service.
     @Volatile private var keywordsEverywhere: Boolean = true
+    // The apps "every app" leaves out (invariant 87, WordSkip). Same freshness mechanism.
+    @Volatile private var wordSkipApps: Set<String> = emptySet()
     // Whether the built-in adult word pack (English + Arabic) is enforced. Same freshness
     // mechanism as keywordsEverywhere.
     @Volatile private var adultPackOn: Boolean = true
@@ -1125,6 +1128,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (now - cachedSettingsCheckedAt < CACHED_SETTINGS_POLL_MS) return
         cachedSettingsCheckedAt = now
         keywordsEverywhere = SettingsStore.keywordsEverywhere(this)
+        wordSkipApps = SettingsStore.wordSkipApps(this)
         adultPackOn = SettingsStore.adultWordsPack(this)
         updatePaused = SettingsStore.updatePaused(this)
         allowlistMode = SettingsStore.quickBlockAllowlist(this)
@@ -1249,6 +1253,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         refreshNetFilter()
         registerNetworkWatch()
         keywordsEverywhere = SettingsStore.keywordsEverywhere(this)
+        wordSkipApps = SettingsStore.wordSkipApps(this)
         adultPackOn = SettingsStore.adultWordsPack(this)
         updatePaused = SettingsStore.updatePaused(this)
         allowlistMode = SettingsStore.quickBlockAllowlist(this)
@@ -1316,6 +1321,8 @@ class BlockerAccessibilityService : AccessibilityService() {
             when (key) {
                 SettingsStore.KEY_KEYWORDS_EVERYWHERE ->
                     keywordsEverywhere = SettingsStore.keywordsEverywhere(this)
+                SettingsStore.KEY_WORD_SKIP_APPS ->
+                    wordSkipApps = SettingsStore.wordSkipApps(this)
                 SettingsStore.KEY_ADULT_WORDS_PACK ->
                     adultPackOn = SettingsStore.adultWordsPack(this)
                 SettingsStore.KEY_UPDATE_PAUSED ->
@@ -1690,6 +1697,11 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (dangerZoneRemaining() <= 0L &&
             ((activeKeywords().isEmpty() && !adultPackOn) || !keywordsEverywhere)
         ) return false
+        // The apps he chose to leave out (invariant 87). Below the browser return on purpose, and
+        // WordSkip says no for a browser and during the danger hour anyway.
+        if (WordSkip.skips(pkg, wordSkipApps, isBrowser = pkg in browserPackages, dangerZoneOn = dangerZoneRemaining() > 0L)) {
+            return false
+        }
         return !isLauncherPkg(pkg) && pkg !in KEYWORD_SCAN_EXCLUDED
     }
 

@@ -1514,6 +1514,37 @@ class CodeShapeTest {
         assertTrue("an event from elsewhere must still run the Shorts clean-up", "scheduleShortsScan()" in elsewhere)
     }
 
+    // ---- invariant 87 ------------------------------------------------------------------------
+
+    /**
+     * **Invariant 87: the skip list reaches the watcher on every path, and only through the scan
+     * gate.** A setting refreshed by one of its three paths is invariant 29's shape: seeded at connect,
+     * kept fresh by the prefs listener, and re-read by the once-a-minute backstop in case the listener
+     * is dropped. And it is consulted in `shouldScanPkg`, the one gate the event scans and the blind
+     * scans share, so no second scanning policy grows beside it. The write holds the Strict rule.
+     */
+    @Test
+    fun `the word skip list is read on every path and decided in one place`() {
+        val text = code(source("service/BlockerAccessibilityService.kt").readText())
+        val reads = Regex("""wordSkipApps = SettingsStore\.wordSkipApps\(this\)""").findAll(text).count()
+        assertEquals("wordSkipApps must be read at connect, by the prefs listener and by the backstop", 3, reads)
+        val backstop = text.substringAfter("private fun refreshCachedSettingsIfStale()", "").substringBefore("\n    }")
+        assertTrue("the backstop must re-read wordSkipApps", "SettingsStore.wordSkipApps(this)" in backstop)
+        val listener = text.substringAfter("prefsListener = SharedPreferences.OnSharedPreferenceChangeListener", "")
+            .substringBefore(".also {")
+        assertTrue("the prefs listener must refresh wordSkipApps", "SettingsStore.KEY_WORD_SKIP_APPS" in listener)
+        val gate = text.substringAfter("private fun shouldScanPkg(", "").substringBefore("\n    }")
+        assertTrue("shouldScanPkg is gone; this check is reading nothing", gate.isNotEmpty())
+        assertTrue(
+            "shouldScanPkg must ask WordSkip with the real browser answer and the danger hour",
+            "WordSkip.skips(pkg, wordSkipApps, isBrowser = pkg in browserPackages, dangerZoneOn = dangerZoneRemaining() > 0L)" in gate,
+        )
+        assertEquals("the skip list is decided in shouldScanPkg only", 1, text.split("WordSkip.skips(").size - 1)
+        val vm = code(source("ui/WebFilterViewModel.kt").readText())
+        val write = vm.substringAfter("fun setWordSkipApps(", "").substringBefore("\n    }")
+        assertTrue("the skip list's write must apply the Strict rule", "WordSkip.allowed(" in write && "strictRemaining(" in write)
+    }
+
     // ---- invariant 85 ------------------------------------------------------------------------
 
     /**
