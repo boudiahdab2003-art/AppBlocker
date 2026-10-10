@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.172
+- Less battery. The blocker no longer re-reads the app you are in when only the status bar, a notification or the keyboard changed. New on Blocked words: Skip these apps, to leave apps like YouTube, Claude and WhatsApp out of the word check (browsers, Shorts and the danger hour stay protected). And the check-in is once a minute again instead of every 5 seconds, as you asked: if your phone kills the blocker, it now comes back in 2-4 minutes instead of seconds.
+
 ## v1.171
 - When your phone kills the blocker while you are using it, AppBlocker now notices within about ten seconds instead of two to four minutes, as you chose: while the screen is on it checks in every five seconds, and the silent repair switches it off and on straight away. With the screen off nothing changes. On an Android 16 test phone killed the same way, blocking was back in 13 seconds; the last version took 2 minutes 38.
 
