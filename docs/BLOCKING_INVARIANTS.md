@@ -1878,6 +1878,45 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     **The shape to grep for: a repair that works in a second, waiting minutes on the thing that calls
     it — measure which part of the gap dominates before choosing what to shorten.**
 
+86. **Only the app in front's own content events re-read it.** 10 Oct 2026: *"my battery is draining a
+    lot, can you make the app save some power"*. His reports rule out the obvious suspects:
+    `scheduleCount 0` (location updates never start), the liveness write is throttled to a minute, and
+    the background checks are a 15-minute worker and a 20-minute alarm. They also show
+    `scanEverywhere true`, which makes every app's text scannable — so the cost of each content event
+    matters more on his phone than on any default install.
+
+    The content branch of `handleEvent` treated every event the same way. For an event whose package was
+    not `lastForegroundPkg` it made a `rootInActiveWindow` call (cross-process, with the framework's
+    node prefetch from the app in front) to ask whether that package had come to the front. When the
+    answer was no, it re-armed `scheduleUrlScan`, `scheduleWebScan` and `scheduleShortsScan` for the
+    app in front. That covers the status-bar clock and network meter, notifications, the keyboard
+    redrawing its suggestions, widgets and picture-in-picture: none of them changes the app in front.
+    For a transient surface (`isTransientSurface`), the lookup's "yes" answer was thrown away on
+    `onForegroundChanged`'s first line. The rescan read a screen that had not changed. A screen cannot
+    change without an event from its own package (the premise of invariant 56's blind scans), so that
+    read could only find what the last one found: up to 400 nodes, after almost every tick, while he
+    read anything static.
+
+    Now `ContentEvents.route` decides: **the front app's own events (or a null package) →
+    `RESCAN_FRONT`**, exactly as before. **A transient surface → `ELSEWHERE`**, with no lookup.
+    **Any other package → `CONFIRM_SWITCH`**: the window is still asked, so the fast path that covers a
+    new app before its window event arrives is untouched; a "no" lands in `ELSEWHERE`. `ELSEWHERE`
+    (`contentChangedElsewhere`) keeps two things: the settings guard, which reads the real screen, and
+    `scheduleShortsScan`, whose other half takes a Shorts cover down when YouTube leaves or Quick Block
+    ends, which must not wait for YouTube's own next event.
+
+    **What this gives up, and why it is nothing.** First, a stale `lastForegroundPkg` (missed window
+    event) whose new app's tree is unreadable at the first content event: the old rescan read the
+    active window under the stale label. The next content event from that app asks the window again,
+    and a confirmed switch arms all three scans. Second, a page changing without an event from its own
+    package: no browser or WebView host does this, because events are attributed to the window's
+    owner. `ContentEventsTest` (7 cases) and one `CodeShapeTest` check. ⚠️ **Not measured on a device**:
+    no event-rate or battery figure was taken. Android's own battery screen on his phone is the reading
+    that counts.
+
+    **The shape to grep for: work triggered by "something changed" that never asks *what* changed —
+    an event from anywhere arming a read of one particular thing.**
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused

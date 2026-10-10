@@ -1463,25 +1463,46 @@ class BlockerAccessibilityService : AccessibilityService() {
             // Scrolling doesn't emit content-change events in every app — listen to the
             // scroll itself so new text coming into view is scanned while the user scrolls.
             AccessibilityEvent.TYPE_VIEW_SCROLLED -> {
-                // Fast path: a NEW app's content events usually beat its window-state event,
-                // so acting here covers a blocked app sooner (less visible flash). Confirm
-                // with the real active window before trusting the event's package, so a
-                // background repaint (widget host, notification) can't hijack the cache —
-                // the binder call only happens on a package change, not per content event.
-                if (pkg != null && pkg != lastForegroundPkg &&
-                    rootInActiveWindow?.packageName?.toString() == pkg
-                ) {
-                    onForegroundChanged(pkg, event.className?.toString())
-                } else {
-                    // The dangerous Settings pages often fill in their title/labels on a
-                    // content event after the window opens, so re-check the guard here too.
-                    if (pkg != null) handleSettingsGuard(pkg, event.className?.toString())
-                    scheduleUrlScan()
-                    scheduleWebScan()
-                    scheduleShortsScan()
+                val className = event.className?.toString()
+                // Who this event is about decides what it may cost — invariant 86, ContentEvents.
+                when (ContentEvents.route(pkg, lastForegroundPkg, ::isTransientSurface)) {
+                    ContentEvents.Route.RESCAN_FRONT -> {
+                        // The dangerous Settings pages often fill in their title/labels on a
+                        // content event after the window opens, so re-check the guard here too.
+                        if (pkg != null) handleSettingsGuard(pkg, className)
+                        scheduleUrlScan()
+                        scheduleWebScan()
+                        scheduleShortsScan()
+                    }
+                    // Fast path: a NEW app's content events usually beat its window-state event,
+                    // so acting here covers a blocked app sooner (less visible flash). Confirm
+                    // with the real active window before trusting the event's package, so a
+                    // background repaint (widget host, notification) can't hijack the cache.
+                    ContentEvents.Route.CONFIRM_SWITCH ->
+                        if (rootInActiveWindow?.packageName?.toString() == pkg) {
+                            onForegroundChanged(pkg, className)
+                        } else {
+                            contentChangedElsewhere(pkg, className)
+                        }
+                    ContentEvents.Route.ELSEWHERE -> contentChangedElsewhere(pkg, className)
                 }
             }
         }
+    }
+
+    /**
+     * A content event from something other than the app in front — the status bar, the keyboard,
+     * a notification, a background window (invariant 86). The app in front did not change, so it
+     * is **not** re-read: that read could only find what the last one found.
+     *
+     * Two things still run, both as before. The settings guard, because it reads the real screen
+     * rather than this event, and an early bounce is the safe direction. And [scheduleShortsScan],
+     * because its other half takes a Shorts cover down when YouTube is no longer in front or Quick
+     * Block has ended — clean-up that must not wait for YouTube's own next event.
+     */
+    private fun contentChangedElsewhere(pkg: String?, className: String?) {
+        if (pkg != null) handleSettingsGuard(pkg, className)
+        scheduleShortsScan()
     }
 
     /** Everything that runs when the foreground app changes: launch counting, location

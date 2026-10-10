@@ -1479,6 +1479,41 @@ class CodeShapeTest {
         assertEquals("these fields print a number when the report took no reading", emptyList<String>(), numbered)
     }
 
+    // ---- invariant 86 ------------------------------------------------------------------------
+
+    /**
+     * **Invariant 86: only the app in front's own events re-read it.** A status-bar tick, the
+     * keyboard or a notification used to cost a window lookup and a full page walk of a screen that
+     * had not changed — with "check every app" on, a walk after almost every tick (10 Oct 2026, "my
+     * battery is draining a lot"). The rule is [com.appblocker.service.ContentEvents]; this pins the
+     * wiring, which no JVM test can reach.
+     */
+    @Test
+    fun `content events from elsewhere do not re-read the app in front`() {
+        val text = code(source("service/BlockerAccessibilityService.kt").readText())
+        val handler = text.substringAfter("private fun handleEvent(", "").substringBefore("\n    private fun ")
+        assertTrue("handleEvent is gone; this check is reading nothing", handler.isNotEmpty())
+        assertTrue(
+            "content events must be routed through ContentEvents.route, or every status-bar tick " +
+                "re-reads the app in front again",
+            "ContentEvents.route(pkg, lastForegroundPkg, ::isTransientSurface)" in handler,
+        )
+        // The page and address scans are armed from the front app's own branch only. Once each:
+        // a second call is a second branch arming them, which is the waste coming back.
+        listOf("scheduleUrlScan()", "scheduleWebScan()").forEach {
+            assertEquals("$it must be armed only for the app in front's own events", 1, handler.split(it).size - 1)
+        }
+        val elsewhere = text.substringAfter("private fun contentChangedElsewhere(", "").substringBefore("\n    }")
+        assertTrue("contentChangedElsewhere is gone; this check is reading nothing", elsewhere.isNotEmpty())
+        listOf("scheduleUrlScan()", "scheduleWebScan()").forEach {
+            assertFalse("contentChangedElsewhere must not re-read the app in front ($it)", it in elsewhere)
+        }
+        // What it must keep: the guard reads the real screen, and the Shorts clean-up must not wait
+        // for YouTube's own next event.
+        assertTrue("an event from elsewhere must still run the settings guard", "handleSettingsGuard(" in elsewhere)
+        assertTrue("an event from elsewhere must still run the Shorts clean-up", "scheduleShortsScan()" in elsewhere)
+    }
+
     // ---- invariant 85 ------------------------------------------------------------------------
 
     /**
