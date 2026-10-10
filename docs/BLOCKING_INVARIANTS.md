@@ -1828,7 +1828,8 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     **The shape to grep for: a repair that fixes the state it was built for and misfiles its own
     success — judged on another repair's clock, or read by a check that lands before it lands.**
 
-85. **A watcher killed in use is noticed in seconds — while the screen is on.** Reports #203, #204,
+85. **A watcher killed in use is noticed in seconds — while the screen is on.** ⚠️ **The screen-on
+    pushes were taken back out on 10 Oct 2026 — see invariant 88.** The shorter bind wait below stays. Reports #203, #204,
     #208 and #209 (27–28 Sep 2026) are the first real kills the silent repair answered by itself: main
     space Sun 27 Sep 18:57 `signaled:sig-9@fg-service` and Mon 12:12 `unknown@fg-service`; Second Space
     Fri 25 Sep 13:30 `other@fg-service note=OneKeyClean` and 14:12 `low-memory@fg-service` (queued in
@@ -1944,6 +1945,28 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
 
     **The shape to grep for: a setting cached in the watcher that only some of its refresh paths
     update.**
+
+88. **The dead-man alarm is pushed once a minute, by the heartbeat, screen on or off.** 10 Oct 2026,
+    the same evening as 86 and 87. Offered "slow the 5-second check-in back down to 2 minutes (a kill
+    noticed in 2–4 min instead of ~15 s)", he answered *"and slow the check"*. This reverses invariant
+    85's screen-on half only: `deadManRunnable`, `restartDeadManPush`, the `ACTION_SCREEN_ON`
+    registration and the `onScreenOff`/`onDestroy` stops are gone, and with them `FAST_PUSH_MS`,
+    `FAST_DELAY_MS`, `delayMs` and `screenOn`. `arm()` sets `DELAY_MS` unconditionally, pushed at
+    connect and by the heartbeat, which is v1.170's behaviour. **Kept:** `KILLED_BIND_WAIT_MS` and its
+    hand-off to the verdict (85's second half). It runs only after a kill, so it costs nothing on a
+    healthy phone.
+
+    **Cost and benefit, honestly.** The pushes were twelve AlarmManager binder calls a minute with the
+    screen on, none of them a wakeup: small next to an accessibility service's event traffic. He chose
+    the battery over the faster notice, and that is his trade to make. Expect kills in use to read
+    `noticedAfter`/`down` 2–4 min again, as #203–#209 did.
+
+    `CodeShapeTest` now pins the absence of the pusher, plus connect and heartbeat still arming. An
+    alarm nobody pushes would go off every two minutes on a healthy phone. `WatcherDeadManTest` drops
+    its three screen-on cases and keeps the bind-wait ones.
+
+    **The shape to grep for: a choice made for one cost that he later reverses. Take out the whole
+    mechanism, not just its constant, and pin the absence.**
 
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37

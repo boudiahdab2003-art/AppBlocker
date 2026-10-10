@@ -79,7 +79,8 @@ that out on 28 Aug 2026 (invariant 31), and since v1.166 a visit is not filed at
 bound watcher (`low-memory`, `signaled sig-9`, `OneKeyClean` — read `killedBy=` and the `EXITED`
 lines) and **never restarts it**; switching the Accessibility entry off and on brings it back within a
 second. From v1.169 `SelfToggle` does that itself, silently, noticed by the `WatcherDeadMan` alarm
-(from v1.171 within seconds while the screen is on — invariant 85) —
+(two minutes, pushed once a minute by the heartbeat: v1.171's seconds-while-the-screen-is-on,
+invariant 85, was taken back out for battery at his request — invariant 88) —
 but only with `WRITE_SECURE_SETTINGS`, granted over adb once per space (`adb shell pm grant
 com.appblocker android.permission.WRITE_SECURE_SETTINGS`, and again with `--user 10`). Reports carry
 `toggleGranted` and `selfToggle` (attempts/helped/noRebind/failed): **`toggleGranted false` means

@@ -1548,46 +1548,26 @@ class CodeShapeTest {
     // ---- invariant 85 ------------------------------------------------------------------------
 
     /**
-     * **Invariant 85: a watcher killed in use is noticed in seconds** — his choice of 28 Sep 2026.
-     * With the screen on the watcher pushes its dead-man alarm every few seconds. Every way the
-     * screen comes on starts the pushes (connect, the screen-on broadcast, the heartbeat as the
-     * backstop); the screen going off stops them and puts the two minutes back while its broadcast
-     * still holds the phone awake; an orderly unbind stops them before it takes the alarm down, or the
-     * next push would put back the alarm it had just cancelled.
+     * **Invariant 88: the dead-man alarm is pushed once a minute, by the heartbeat — screen on or
+     * off.** 10 Oct 2026, his request, "slow the check": v1.171's screen-on pushes every five seconds
+     * (invariant 85) cost twelve AlarmManager calls a minute and he chose the battery. This pins both
+     * halves: the pusher stays gone, and the two places that must still push it (connect and the
+     * heartbeat) still do — an alarm nobody pushes goes off every two minutes on a healthy phone.
      */
     @Test
-    fun `the watcher pushes its dead-man alarm every few seconds while the screen is on`() {
+    fun `the dead-man alarm is pushed by the heartbeat alone`() {
         val text = code(source("service/BlockerAccessibilityService.kt").readText())
-        val pusher = text.substringAfter("private val deadManRunnable", "").substringBefore("\n    }")
-        assertTrue("the screen-on pusher is gone; this check is reading nothing", pusher.isNotEmpty())
-        assertTrue("the pusher must arm for the screen it read", "WatcherDeadMan.arm(applicationContext, screenOn)" in pusher)
-        assertTrue(
-            "the pusher must come back, and only while the screen is on",
-            "if (screenOn == true) handler.postDelayed(this, WatcherDeadMan.FAST_PUSH_MS)" in pusher,
-        )
+        listOf("deadManRunnable", "restartDeadManPush", "ACTION_SCREEN_ON").forEach {
+            assertFalse("$it is back: the seconds-apart pushes he turned down for battery (invariant 88)", it in text)
+        }
         val connect = text.substringAfter("override fun onServiceConnected() {", "").substringBefore("override fun ")
-        assertTrue("onServiceConnected must start the pushes", "restartDeadManPush()" in connect)
+        assertTrue("onServiceConnected must push the dead-man alarm", "WatcherDeadMan.arm(applicationContext)" in connect)
         val heartbeat = text.substringAfter("private val heartbeatRunnable", "").substringBefore("handler.postDelayed(this")
-        assertTrue(
-            "the heartbeat must restart the pushes while the screen is on",
-            "if (interactive() == true) restartDeadManPush()" in heartbeat,
-        )
-        val receiver = text.substringAfter("private fun registerUnlockReceiver()", "").substringBefore("\n    }\n")
-        assertTrue("the screen coming on must restart the pushes", "Intent.ACTION_SCREEN_ON -> restartDeadManPush()" in receiver)
-        assertTrue("the screen-on broadcast must be registered", "addAction(Intent.ACTION_SCREEN_ON)" in receiver)
-        val screenOff = text.substringAfter("private fun onScreenOff() {", "").substringBefore("\n    }\n")
-        val stop = screenOff.indexOf("handler.removeCallbacks(deadManRunnable)")
-        val long = screenOff.indexOf("WatcherDeadMan.arm(applicationContext, screenOn = false)")
-        assertTrue("the screen going off must stop the pushes", stop >= 0)
-        assertTrue("the screen going off must put the two minutes back after stopping the pushes", long > stop)
-        val destroy = text.substringAfter("override fun onDestroy() {", "").substringBefore("companion object")
-        val halt = destroy.indexOf("handler.removeCallbacks(deadManRunnable)")
-        val cancel = destroy.indexOf("WatcherDeadMan.cancel(")
-        assertTrue("onDestroy must stop the pushes", halt >= 0)
-        assertTrue("onDestroy must stop the pushes before it takes the alarm down", halt < cancel)
+        assertTrue("the heartbeat is gone; this check is reading nothing", heartbeat.isNotEmpty())
+        assertTrue("the heartbeat must push the dead-man alarm", "WatcherDeadMan.arm(applicationContext)" in heartbeat)
         val arm = code(source("service/WatcherDeadMan.kt").readText())
             .substringAfter("fun arm(", "").substringBefore("\n")
-        assertTrue("arm() must set the delay for the screen it was given: $arm", "set(context, delayMs(screenOn))" in arm)
+        assertTrue("arm() must push the alarm the full two minutes: $arm", "set(context, DELAY_MS)" in arm)
     }
 
     /**

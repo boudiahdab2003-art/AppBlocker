@@ -7,44 +7,15 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * **Invariant 85: a watcher killed in use is noticed in seconds** — his choice of 28 Sep 2026, "make
- * it notice faster", a little battery for it. These pin the numbers the choice turns on: seconds only
- * while the screen is on, an alarm Android will not defer, and the shorter wait only where the silent
- * repair can act on it and no install is about to bind the watcher.
+ * **The dead-man alarm** (invariants 82, 85, 88). Invariant 85 made it seconds while the screen was
+ * on; on 10 Oct 2026 he chose the battery instead (invariant 88), so the alarm is two minutes again,
+ * pushed by the heartbeat alone. What 85 left behind costs nothing and stays pinned here: the shorter
+ * wait only where the silent repair can act on it and no install is about to bind the watcher.
  */
 class WatcherDeadManTest {
 
-    /** Android does not defer an inexact alarm due in less than this (`MIN_FUZZABLE_INTERVAL`). */
-    private val notDeferredUnder = 10_000L
-
-    /** …and never sets one closer than this (`MIN_FUTURITY`): a shorter lead buys nothing. */
-    private val closestAllowed = 5_000L
-
-    @Test fun theAlarmIsSecondsAwayOnlyWhileTheScreenIsOn() {
-        assertEquals(WatcherDeadMan.FAST_DELAY_MS, WatcherDeadMan.delayMs(screenOn = true))
-        assertEquals(WatcherDeadMan.DELAY_MS, WatcherDeadMan.delayMs(screenOn = false))
-        // Unreadable is not "on": the behaviour before invariant 85, never a guess.
-        assertEquals(WatcherDeadMan.DELAY_MS, WatcherDeadMan.delayMs(screenOn = null))
-    }
-
-    /**
-     * An inexact alarm may go off up to 75% of its lead late — a 30 s one went off at 52 s on the
-     * Android 16 emulator — except when it is due in under ten seconds. Ten or more, and "seconds"
-     * quietly becomes a quarter of a minute more.
-     */
-    @Test fun theScreenOnAlarmIsOneAndroidDeliversOnTime() {
-        assertTrue(WatcherDeadMan.FAST_DELAY_MS < notDeferredUnder)
-        assertTrue(WatcherDeadMan.FAST_DELAY_MS >= closestAllowed)
-    }
-
-    /** A push a few seconds late must not set the alarm off — harmless if it did, but not free. */
-    @Test fun aLatePushIsForgiven() {
-        assertTrue(WatcherDeadMan.FAST_PUSH_MS < WatcherDeadMan.FAST_DELAY_MS)
-        assertTrue(WatcherDeadMan.FAST_DELAY_MS - WatcherDeadMan.FAST_PUSH_MS >= 3_000L)
-    }
-
-    /** The screen-off side is what it was: the battery there is his "keep it as it is". */
-    @Test fun theScreenOffDelayIsUnchanged() = assertEquals(2 * 60_000L, WatcherDeadMan.DELAY_MS)
+    /** Two minutes, screen on or off: two heartbeats, so one late tick is forgiven (invariant 88). */
+    @Test fun theAlarmIsTwoMinutesAway() = assertEquals(2 * 60_000L, WatcherDeadMan.DELAY_MS)
 
     /**
      * The five seconds only where they buy something: the silent repair is there to act on the
