@@ -338,7 +338,7 @@
     <string name="profile_guard_strict">مُفعَّل، ومُقفل ما دام الوضع الصارم يعمل. لا يمكنك خفضه قبل انتهاء الجلسة.</string>
     <string name="profile_guard_waiting">سيُفتح خلال %1$s. الحارس ما زال قائمًا.</string>
     <string name="profile_guard_open">مفتوح — اضغط لإيقاف الحارس. يُغلق مجددًا خلال %1$s.</string>
-    <string name="profile_guard_on">مُفعَّل. صفحة إمكانية الوصول محظورة، فلا يمكن إيقاف الحظر في لحظة اندفاع. إيقاف هذا يستغرق %1$s.</string>
+    <string name="profile_guard_on">مُفعَّل. صفحة إمكانية الوصول وصفحة معلومات تطبيق AppBlocker محظورتان، فلا يمكن إيقاف الحظر في لحظة اندفاع. إيقاف هذا يستغرق %1$s.</string>
     <string name="profile_guard_cancel_title">إلغاء طلب الفتح</string>
     <string name="profile_guard_cancel_subtitle">غيّرت رأيك — يبقى الحارس قائمًا ويُلغى الطلب.</string>
 

@@ -1968,6 +1968,34 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     **The shape to grep for: a choice made for one cost that he later reverses. Take out the whole
     mechanism, not just its constant, and pin the absence.**
 
+89. **Our App-info page is bounced whenever the guard stands, not only during Strict.** 16 Oct 2026,
+    his choice "Guard it always". Read off his phone over USB that morning (read-only): Second Space,
+    15 Oct 18:41, Chrome → home → our App info (`InstalledAppDetailsTop` handing over to HyperOS's
+    `com.miui.securitycenter/com.miui.appmanager.ApplicationsDetailsActivity`) → exit-info
+    `USER REQUESTED / FORCE STOP`, `description=stop com.appblocker due to from process:
+    com.miui.securitycenter`, importance 125, about four seconds after the page opened, then back to
+    Chrome. No session was running, so the page was open by design. The force stop removed the
+    switch, and nothing of ours ran in that space until he opened the app at 10:24 the next day. The
+    three night-time `SWITCHED-OFF` episodes of 7, 10 and 15 Oct (`selfEnable 3/3/0/0`, noticed after
+    8–13 h) are the same shape; their own records had already rolled out.
+
+    `handleSettingsGuard`: `ourOwnAppInfoPage(cn, text) -> GUARD_APPINFO` without `strict &&`. It runs
+    only when Strict is on or `OffSwitchGuard.armed`, so the guard's 2-hour unlock opens it with the
+    others and a guard switched off leaves it alone; the battery setting stays reachable that way.
+    `AppInfoScreen.CLASS_HINTS` gains `applicationsdetails`, the HyperOS class measured that day, as a
+    language-proof second signal beside the printed version; its app list
+    (`AppManagerMainActivity`) does not match. `aboutUs` still has to read "appblocker", so every other
+    app's page stays open. The app's own buttons that fall back to App info (location, the keep-alive
+    and notification fallbacks, the schedule editor) bounce while the guard stands, as they already
+    did during Strict: no pass, on purpose, because a pass would be a Force stop path.
+
+    `CodeShapeTest` pins the arm ungated; `AppInfoScreenTest` gains the HyperOS class and its list.
+    ⚠️ **The positive case exists only on HyperOS**: AOSP's App info is `SpaActivity` with no
+    version, which fails open on the emulators.
+
+    **The shape to grep for: a guard scoped to "when he chose to be strict" while the moment it
+    exists for arrives on an ordinary day.**
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused

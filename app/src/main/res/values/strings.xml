@@ -281,7 +281,7 @@ Never sent: your blocked words, the sites you visit, which apps you block, or an
     <string name="profile_guard_strict">On, and locked while Strict Mode is running. You can\'t lower it until the session ends.</string>
     <string name="profile_guard_waiting">Unlocking in %1$s. The guard is still on.</string>
     <string name="profile_guard_open">Unlocked — tap to turn the guard off. Closes again in %1$s.</string>
-    <string name="profile_guard_on">On. The Accessibility page is blocked, so blocking can\'t be switched off on a whim. Turning this off takes %1$s.</string>
+    <string name="profile_guard_on">On. The Accessibility page and AppBlocker\'s own App info page are blocked, so blocking can\'t be switched off on a whim. Turning this off takes %1$s.</string>
     <string name="profile_guard_cancel_title">Cancel the unlock</string>
     <string name="profile_guard_cancel_subtitle">Change your mind — the guard stays on and the wait is dropped.</string>
 

@@ -9,10 +9,12 @@ package com.appblocker.service
  * permissions, storage and uninstall all live on it — and guarding it for everyone cost him the
  * rest. The trade assumed force-stop was survivable because the service comes back by itself.
  *
- * So this is narrow by design and used in exactly one place: with `aboutUs(text) == true`, during
- * a Strict session only. Every other app's App info page, and every page outside a session, is
- * untouched. That narrowness is the point — the broad version of this guard is what made Strict
- * "block the whole Settings" across v1.104→v1.110.
+ * So this is narrow by design and used in exactly one place: with `aboutUs(text) == true`, so
+ * only OUR App info page. Every other app's App info page is untouched. That narrowness is the
+ * point — the broad version of this guard is what made Strict "block the whole Settings" across
+ * v1.104→v1.110. Since invariant 89 (16 Oct 2026) it bounces whenever the off-switch guard stands,
+ * not only during Strict: a force stop outside any session ended protection in Second Space
+ * until the next morning.
  *
  * **It fails open.** An OEM that hides the version and uses an unrecognised class name gets
  * "no", and the page behaves exactly as it does today. That direction is deliberate: this guard's
@@ -27,8 +29,13 @@ object AppInfoScreen {
      * the page through a shared container (AOSP's `SpaActivity`) that cannot be matched without
      * catching half of Settings with it. Those are deliberately absent, which is why the version
      * string below exists as an independent second signal.
+     *
+     * `applicationsdetails` is HyperOS's own page, `com.miui.securitycenter/
+     * com.miui.appmanager.ApplicationsDetailsActivity`, read off the owner's phone on 16 Oct 2026
+     * (Settings' `InstalledAppDetailsTop` hands over to it within a second). Its app LIST is
+     * `AppManagerMainActivity`, which this does not match.
      */
-    val CLASS_HINTS = listOf("installedappdetails", "appinfodashboard")
+    val CLASS_HINTS = listOf("installedappdetails", "appinfodashboard", "applicationsdetails")
 
     /*
      * Measured on both builds this app actually meets, because they differ and only one of them

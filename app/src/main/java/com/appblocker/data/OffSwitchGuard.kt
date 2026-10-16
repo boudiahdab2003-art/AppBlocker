@@ -146,8 +146,8 @@ object OffSwitchGuard {
      * it — against a first run that was broken for everyone. Eight seconds is enough to read the
      * confirmation dialog and walk out of Settings, and short enough not to be an off-switch.
      *
-     * Deliberately scoped to that page and no other: uninstall, device-admin removal and the
-     * App-info page during Strict have nothing to do with enabling the service, so they keep
+     * Deliberately scoped to that page and no other: uninstall, device-admin removal and our
+     * App-info page have nothing to do with enabling the service, so they keep
      * bouncing throughout. See `handleSettingsGuard`.
      */
     const val ENABLE_GRACE_MS = 8_000L

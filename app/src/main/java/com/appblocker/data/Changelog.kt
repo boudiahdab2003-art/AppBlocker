@@ -13,6 +13,13 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.173", "Oct 16, 2026", "Force stop is guarded every day, not only in Strict", listOf(
+        "**AppBlocker's own App info page is now guarded all the time, as you chose.** However you reach it, from the home screen, Recents or Settings, it sends you straight back out, the way the Accessibility page already does. Until now it was guarded only during a Strict session.",
+        "**Why:** on Thursday evening your phone's own record shows AppBlocker was force-stopped from that page in Second Space, outside any session. A force stop is the one off-switch Android never lets an app undo by itself: nothing of AppBlocker could run in Second Space until it was opened again the next morning. It is also why the switch-backs-on in your reports came hours late.",
+        "**Every other app's App info page still opens normally.** Only AppBlocker's own page is guarded, and only while \"Guard the off-switch\" is on in Profile.",
+        "**Your way out stays the same.** If you really need that page, the 2-hour unlock in Profile opens it together with the Accessibility page, for 15 minutes.",
+        "**The honest part:** this sends you out a fraction of a second after the page opens. A very fast tap can still land, and Android gives no app a way to switch the Force stop button off. What it does is put a wall in front of the moment.",
+    )),
     VersionLog("1.172", "Oct 10, 2026", "Less battery: fewer screen reads, apps you can leave out of word checks, and a slower check-in", listOf(
         "**You said your battery was draining a lot, so I went looking for work AppBlocker does that buys you nothing.** I found some. Your phone sends the blocker a small message every time anything on screen changes. Many of those messages are not about the app you are using at all: the clock or network speed in the status bar ticking over, a notification sliding in, your keyboard redrawing its word suggestions.",
         "**Each of those made the blocker read the whole screen of the app you were in again**, even though that app had not changed. You have \"check every app\" switched on, so that could mean a full read of your screen after almost every tick of the status bar while you sat reading something. An unchanged screen can only give the same answer twice, so that read was wasted every time.",

@@ -1906,19 +1906,23 @@ class BlockerAccessibilityService : AccessibilityService() {
         // so the "protection turned off" alert cannot fire. The owner hit exactly this during a
         // Strict session: "no protection anymore".
         //
-        // So the fourth screen is added back at the narrowest scope that fixes it, which is the
-        // scope the owner chose: OUR page, and only while a Strict session is running. Every
-        // other app's App-info page stays open, and outside a session nothing changes at all —
-        // so the battery setting he is told to change is reachable whenever no session is on,
-        // which is what made the broad rule intolerable.
+        // So the fourth screen is added back at the narrowest scope that fixes it: OUR page.
+        // Every other app's App-info page stays open.
+        //
+        // Invariant 89 (16 Oct 2026, his choice "Guard it always"): our page now bounces
+        // whenever the guard stands, not only in Strict. Read off his phone that day: Second
+        // Space, Chrome → home → our App info → Force stop in about four seconds, outside any
+        // session, and nothing of ours ran again until he opened the app the next morning. The
+        // battery setting is still reachable: the guard's 2-hour unlock opens this page with the
+        // rest, and with the guard switched off nothing here applies at all.
         // The accessibility page is the one screen a user is NECESSARILY on at the moment they
         // switch the service on, and the guard used to bounce them for it — the service starts,
         // sees its own off-switch page, and fires HOME at somebody who just turned protection on.
         // Reported from the owner's tablet, and it broke the first run for every new user, since
         // the disclosure screen sends them to exactly this page. See OffSwitchGuard.justEnabled.
         //
-        // The grace is scoped to this arm alone. Uninstall, device-admin removal and the App-info
-        // page during Strict are nothing to do with enabling the service, so they keep bouncing
+        // The grace is scoped to this arm alone. Uninstall, device-admin removal and our App-info
+        // page are nothing to do with enabling the service, so they keep bouncing
         // from the first millisecond — a blanket "guard off after connect" would weaken three
         // screens to fix one.
         val justEnabled = OffSwitchGuard.justEnabled(stopwatchNow() - serviceConnectedAt)
@@ -1935,7 +1939,7 @@ class BlockerAccessibilityService : AccessibilityService() {
             ourOwnServicePage(text) && !justEnabled -> BlockWhy.GUARD_SERVICE
             uninstallConfirmation(pkg, cn, text) -> BlockWhy.GUARD_UNINSTALL
             deviceAdminRemoval(cn, text) -> BlockWhy.GUARD_ADMIN
-            strict && ourOwnAppInfoPage(cn, text) -> BlockWhy.GUARD_APPINFO
+            ourOwnAppInfoPage(cn, text) -> BlockWhy.GUARD_APPINFO
             else -> return false
         }
 
@@ -2064,7 +2068,8 @@ class BlockerAccessibilityService : AccessibilityService() {
     }
 
     /**
-     * **Our own** App-info page — the one carrying Force stop. Strict-only; see the call site.
+     * **Our own** App-info page — the one carrying Force stop. Bounced whenever the guard stands,
+     * Strict or not (invariant 89); see the call site.
      *
      * Two conditions, and the order matters. [aboutUs] must answer a definite `true`: a page that
      * cannot be read yet answers null, and null must not bounce (v1.104 — answering "yes" on an

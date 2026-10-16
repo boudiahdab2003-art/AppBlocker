@@ -62,7 +62,7 @@ internal object BlockWhy {
     const val GUARD_SERVICE = "guard-service"      // our own accessibility page
     const val GUARD_UNINSTALL = "guard-uninstall"  // the "uninstall this app?" dialog
     const val GUARD_ADMIN = "guard-admin"          // deactivating device admin
-    const val GUARD_APPINFO = "guard-appinfo"      // our App-info page during Strict (Force stop)
+    const val GUARD_APPINFO = "guard-appinfo"      // our App-info page (Force stop)
     const val PURCHASE = "purchase"        // the Play billing sheet
 
     /**

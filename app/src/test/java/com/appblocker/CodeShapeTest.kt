@@ -1571,6 +1571,22 @@ class CodeShapeTest {
     }
 
     /**
+     * **Invariant 89: our App-info page is bounced whenever the guard stands, not only in Strict.**
+     * 16 Oct 2026, his choice "Guard it always", after his phone's own record showed a Force stop
+     * from that page, outside any session, ending protection in Second Space until the next
+     * morning. A `strict &&` back in front of this arm reopens Force stop on every ordinary day.
+     */
+    @Test
+    fun `our app info page is guarded outside strict too`() {
+        val guard = code(source("service/BlockerAccessibilityService.kt").readText())
+            .substringAfter("private fun handleSettingsGuard(", "").substringBefore("private fun ")
+        assertTrue("handleSettingsGuard is gone; this check is reading nothing", guard.isNotEmpty())
+        val arm = guard.lines().firstOrNull { "BlockWhy.GUARD_APPINFO" in it }.orEmpty()
+        assertTrue("the App-info arm is gone from the guard: '$arm'", "ourOwnAppInfoPage(cn, text)" in arm)
+        assertFalse("the App-info arm is gated again (invariant 89): $arm", "strict" in arm)
+    }
+
+    /**
      * **Invariant 85: the dead-man check judges on the wait it served.** The receiver waits
      * `bindWaitMs` in its own process and hands the same number to the check, and the check hands it
      * to the verdict AND to the deferral — or the check either judges a process no wait covered, or

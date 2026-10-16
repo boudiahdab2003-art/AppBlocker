@@ -6,7 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The App-info matcher behind the Strict-Mode Force-stop guard.
+ * The App-info matcher behind the Force-stop guard (Strict, and since invariant 89 the everyday guard).
  *
  * Guarding this page is the change the owner asked for after reaching Force stop mid-session, and
  * it is also the change most likely to go wrong: the broad version of this guard bounced every
@@ -38,7 +38,30 @@ class AppInfoScreenTest {
         )
     }
 
+    /** HyperOS's App info, by the class read off the owner's phone on 16 Oct 2026 (invariant 89). */
+    @Test
+    fun `hyperos app info is recognised by its activity class`() {
+        assertTrue(
+            AppInfoScreen.looksLikeAppInfo(
+                "com.miui.appmanager.ApplicationsDetailsActivity",
+                "app info appblocker force stop uninstall",
+                version,
+            )
+        )
+    }
+
     // --- the negatives: what must NOT bounce -------------------------------------------------
+
+    /** HyperOS's app LIST lives beside its App info page and names every app, ours included. */
+    @Test
+    fun `the hyperos app list is not an app info page`() {
+        val appList = "manage apps appblocker appblock calculator chrome 25.3 mb 4.33 mb"
+        assertFalse(
+            AppInfoScreen.looksLikeAppInfo(
+                "com.miui.appmanager.AppManagerMainActivity", appList, version,
+            )
+        )
+    }
 
     /**
      * The Settings app LIST names every installed app, ours included, so "is AppBlocker on this
