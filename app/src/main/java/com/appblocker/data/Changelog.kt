@@ -18,6 +18,7 @@ val changelog: List<VersionLog> = listOf(
         "**How it tells:** not by a list of names, so it also covers blockers nobody here has heard of. Android only lets an app enforce things on other apps in three ways: an accessibility service, a device-admin role, or a VPN filter. An app that has any of the three is treated as a protection app.",
         "**Browsers are not affected.** A browser is still checked for blocked words and adult sites even if it also has a VPN, so this cannot become a way around the filter.",
         "**The honest part:** I could not test this on a phone from here. If one of your other blockers is still being covered, open Profile ▸ \"What the blocker sees\" and send me a screenshot, or send a report right after it happens.",
+        "**The Arabic word نيك is no longer blocked on its own.** It is how Arabic spells the name Nick, so pages about the player Nik Walker were being covered. The longer forms of the word (النيك، نيكها، ينيك، نيكني) and the phrases containing it are still blocked.",
     )),
     VersionLog("1.173", "Oct 16, 2026", "Force stop is guarded every day, not only in Strict", listOf(
         "**AppBlocker's own App info page is now guarded all the time, as you chose.** However you reach it, from the home screen, Recents or Settings, it sends you straight back out, the way the Accessibility page already does. Until now it was guarded only during a Strict session.",

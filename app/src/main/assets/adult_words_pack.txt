@@ -365,7 +365,8 @@ onahole
 سكسية
 
 # vulgar core + glued forms
-نيك
+# Bare "نيك" is omitted: it is how Arabic spells the name Nick (Nik Walker, Nick Jonas), so it
+# covered sports and film pages. The derived forms and phrases below still match.
 النيك
 نيكها
 ينيك
