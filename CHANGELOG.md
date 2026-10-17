@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.174
+- Other porn blockers and protection apps are no longer covered by the blocked-word check, and the Arabic word نيك no longer blocks pages on its own (it is how Arabic spells the name Nick).
+
 ## v1.173
 - AppBlocker's own App info page (Force stop) is now guarded every day while Guard the off-switch is on, not only during Strict.
 
