@@ -160,6 +160,10 @@ class BlockerAccessibilityService : AccessibilityService() {
     // Negative cache for isLauncherPkg, so its throttled re-detection only runs on new packages.
     @Volatile private var knownNonLauncherPkgs: Set<String> = emptySet()
     @Volatile private var lastLauncherRefreshAt = 0L
+    // Answers of isProtectiveApp per package (other blockers / parental controls / VPN filters),
+    // so the word scan asks PackageManager once per app, not once per screen event. Cleared on
+    // any install or removal, since a new package is the only thing that changes the answer.
+    private val protectiveAppCache = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
     // The current keyboard, cached for isTransientSurface's hot path — see imePackage().
     @Volatile private var cachedImePkg: String? = null
     @Volatile private var lastImeRefreshAt = 0L
@@ -1671,8 +1675,16 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (WordSkip.skips(pkg, wordSkipApps, isBrowser = pkg in browserPackages, dangerZoneOn = dangerZoneRemaining() > 0L)) {
             return false
         }
+        // Other porn blockers / parental controls: their whole screen is the words we block
+        // ("porn", "adult", site names), so reading them covers the very apps he installed to
+        // help. Structural (accessibility / VPN / device-admin), not a name list. Browsers
+        // returned above, so a browser that happens to be a VPN is still scanned.
+        if (isOtherProtectiveApp(pkg)) return false
         return !isLauncherPkg(pkg) && pkg !in KEYWORD_SCAN_EXCLUDED
     }
+
+    private fun isOtherProtectiveApp(pkg: String): Boolean =
+        protectiveAppCache.getOrPut(pkg) { isProtectiveApp(applicationContext, pkg) }
 
     /** Debounce: run the scan once events pause, but never later than the max-wait cap —
      *  a page that never goes quiet (animations, video, continuous scrolling) used to
@@ -2361,6 +2373,7 @@ class BlockerAccessibilityService : AccessibilityService() {
             override fun onReceive(context: Context, intent: Intent) {
                 scope.launch {
                     knownNonLauncherPkgs = emptySet() // a new install may be a launcher
+                    protectiveAppCache.clear()
                     refreshPackageSets()
                 }
             }

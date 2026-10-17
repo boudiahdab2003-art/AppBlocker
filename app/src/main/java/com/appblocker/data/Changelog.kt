@@ -13,6 +13,12 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.174", "Oct 17, 2026", "Your other porn blockers are no longer blocked", listOf(
+        "**AppBlocker no longer reads the screens of other protection apps for blocked words.** Porn blockers and similar apps are full of the very words AppBlocker blocks, so with \"check every app\" on, it was covering them the moment you opened one. Now any app that works as a blocker, a parental control or a content filter is left alone by the word check.",
+        "**How it tells:** not by a list of names, so it also covers blockers nobody here has heard of. Android only lets an app enforce things on other apps in three ways: an accessibility service, a device-admin role, or a VPN filter. An app that has any of the three is treated as a protection app.",
+        "**Browsers are not affected.** A browser is still checked for blocked words and adult sites even if it also has a VPN, so this cannot become a way around the filter.",
+        "**The honest part:** I could not test this on a phone from here. If one of your other blockers is still being covered, open Profile ▸ \"What the blocker sees\" and send me a screenshot, or send a report right after it happens.",
+    )),
     VersionLog("1.173", "Oct 16, 2026", "Force stop is guarded every day, not only in Strict", listOf(
         "**AppBlocker's own App info page is now guarded all the time, as you chose.** However you reach it, from the home screen, Recents or Settings, it sends you straight back out, the way the Accessibility page already does. Until now it was guarded only during a Strict session.",
         "**Why:** on Thursday evening your phone's own record shows AppBlocker was force-stopped from that page in Second Space, outside any session. A force stop is the one off-switch Android never lets an app undo by itself: nothing of AppBlocker could run in Second Space until it was opened again the next morning. It is also why the switch-backs-on in your reports came hours late.",
