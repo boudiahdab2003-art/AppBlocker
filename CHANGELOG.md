@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.175
+- Fewer reports: short stoppages that AppBlocker fixes by itself in under 10 minutes are no longer sent one by one. They are still counted and listed in the weekly report.
+
 ## v1.174
 - Other porn blockers and protection apps are no longer covered by the blocked-word check, and the Arabic word نيك no longer blocks pages on its own (it is how Arabic spells the name Nick).
 
