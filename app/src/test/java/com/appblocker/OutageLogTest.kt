@@ -802,4 +802,34 @@ class OutageLogTest {
             OutageLog.countsAsTimed(OutageLog.EndedBy.AFTER_UPDATE, 67 * minute),
         )
     }
+
+    // ---- which finished episodes file an issue of their own (invariant 90) ------------------
+
+    private fun ended(endedBy: String, durationMs: Long) = OutageLog.Episode(
+        now, durationMs, durationMs, false, OutageLog.Preceded.NOTHING, false, 175L,
+        OutageLog.DetectedBy.UNBOUND, endedBy,
+    )
+
+    /** The routine one: the repair ran and blocking was back in minutes. The weekly list has it. */
+    @Test fun aShortRepairedStoppageIsNotFiledOnItsOwn() {
+        assertFalse(OutageLog.filesOwnReport(ended(OutageLog.EndedBy.AFTER_REPAIR, 3 * minute)))
+        assertFalse(OutageLog.filesOwnReport(ended(OutageLog.EndedBy.AFTER_REPAIR, 0L)))
+    }
+
+    @Test fun aLongRepairedStoppageStillIs() {
+        assertTrue(OutageLog.filesOwnReport(ended(OutageLog.EndedBy.AFTER_REPAIR, 10 * minute)))
+        assertTrue(OutageLog.filesOwnReport(ended(OutageLog.EndedBy.AFTER_REPAIR, 218 * minute)))
+    }
+
+    /** A reboot makes the length unknown, and unknown is not short. */
+    @Test fun aRepairedStoppageOfUnknownLengthStillIs() {
+        assertTrue(OutageLog.filesOwnReport(ended(OutageLog.EndedBy.AFTER_REPAIR, -1L)))
+    }
+
+    /** Only the repair's own ending is spared: every other way back is still news, however short. */
+    @Test fun aShortStoppageThatEndedAnyOtherWayStillIs() {
+        for (other in OutageLog.EndedBy.ALL - OutageLog.EndedBy.AFTER_REPAIR) {
+            assertTrue(other, OutageLog.filesOwnReport(ended(other, 2 * minute)))
+        }
+    }
 }

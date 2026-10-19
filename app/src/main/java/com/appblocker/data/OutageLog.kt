@@ -821,6 +821,25 @@ object OutageLog {
     internal fun countsAsTimed(endedBy: String, durationMs: Long): Boolean =
         endedBy in EndedBy.SELF_TIMED && durationMs >= 0L
 
+    /** Below this, a stoppage the silent repair ended is not filed on its own — see [filesOwnReport]. */
+    const val OWN_REPORT_AFTER_MS = 10 * 60_000L
+
+    /**
+     * **Does this finished episode get an issue of its own?** Invariant 90.
+     *
+     * Everything except the routine case does: a stoppage [EndedBy.AFTER_REPAIR] ended within
+     * [OWN_REPORT_AFTER_MS]. That is the repair doing its job (`selfToggle 33/31/2/0` by 17 Oct
+     * 2026), and filed one by one it was two or three issues a day saying so — 157 of the 262 open
+     * in his inbox on 19 Oct, which he read as "my GitHub is full". He chose to stop them.
+     *
+     * ⚠️ **Not filing is not forgetting.** The episode is still written to the log, still in every
+     * total, and still a line in the stoppage list every weekly and profile report carries. Only the
+     * separate issue goes. A repair that did not bring blocking back never ends here, a reboot makes
+     * the length -1 and unknown, and a long one is worth reading on its own — all three still file.
+     */
+    internal fun filesOwnReport(e: Episode): Boolean =
+        !(e.endedBy == EndedBy.AFTER_REPAIR && e.durationMs in 0L until OWN_REPORT_AFTER_MS)
+
     internal fun encode(e: Episode): String = listOf(
         e.startedAt, e.durationMs, e.detectedAfterMs, e.aliveButDeaf,
         e.precededBy, e.rebooted, e.versionCode, e.detectedBy, e.endedBy, e.usedDuringMin,

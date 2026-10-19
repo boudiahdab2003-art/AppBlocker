@@ -627,6 +627,9 @@ object BugReportSender {
      */
     fun reportOutage(context: Context, episode: OutageLog.Episode, endedBy: String) {
         if (!automatic(context)) return
+        // A short stoppage the silent repair ended stays in the log and the weekly list, not its own
+        // issue (invariant 90).
+        if (!OutageLog.filesOwnReport(episode)) return
         val watch = watchReading(context)
         runCatching {
             BugReportQueue.enqueue(

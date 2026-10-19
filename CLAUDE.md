@@ -86,6 +86,10 @@ com.appblocker android.permission.WRITE_SECURE_SETTINGS`, and again with `--user
 `toggleGranted` and `selfToggle` (attempts/helped/noRebind/failed): **`toggleGranted false` means
 the grant is missing** (an uninstall loses it) and every kill waits for his hand again. The reinstall
 and reopen repairs are gone at his request and must not come back without his word.
+From v1.175 a stoppage the repair ended in under 10 min is **not filed as its own issue** (invariant
+90, his choice after 262 open issues filled the inbox on 19 Oct 2026). It is still in the log, the
+totals and every weekly report's stoppage list, so read the weekly for the routine ones. Close
+reports once read; that inbox had never been emptied.
 
 On the owner's PC `gh` works directly: `gh issue list -R boudiahdab2003-art/appblocker-reports`.
 

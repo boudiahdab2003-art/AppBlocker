@@ -1996,6 +1996,22 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     **The shape to grep for: a guard scoped to "when he chose to be strict" while the moment it
     exists for arrives on an ordinary day.**
 
+90. **A short stoppage the silent repair ended is not filed as an issue of its own.** 19 Oct 2026,
+    his choice, after "my GitHub is full": the reports repo held 262 open issues, none ever closed,
+    157 of them `STOPPED` — since v1.172 nearly all `down=2-3min … backBy=rebound-after-repair`, the
+    repair working (`selfToggle 33/31/2/0`). All 262 were closed that day (closed, not deleted).
+
+    `OutageLog.filesOwnReport` is the whole rule: `endedBy == AFTER_REPAIR` and a known length under
+    `OWN_REPORT_AFTER_MS` (10 min) does not file; everything else does: a longer one, one whose
+    length a reboot made unknown (-1 is not short), and every other ending however short.
+    `BugReportSender.reportOutage` checks it before building anything. ⚠️ **Only the issue goes.**
+    `OutageLog.end` still writes the episode and its totals, and the stoppage list in every weekly
+    and profile report still has the line, so the count and the trend are still there.
+    `OutageLogTest` pins all four cases.
+
+    **The shape to grep for: a report that files the expected outcome as news. When a fix works,
+    its success belongs in the summary, not the inbox.**
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused

@@ -13,6 +13,11 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.175", "Oct 19, 2026", "Fewer reports: the routine ones stay on your phone", listOf(
+        "**Your reports inbox had 262 open reports, so I read them and closed them all.** Nothing is deleted: they are still there under Closed, and any of them can be reopened.",
+        "**Most of them were the same good news.** When your phone kills the blocker, AppBlocker now switches it off and on by itself, and since early October blocking has come back within about three minutes nearly every time. Each one of those was sent to you as its own report, two or three a day.",
+        "**Now those short, self-fixed stoppages are no longer sent one by one, as you chose.** They are still counted, and each one is still a line in the weekly report's list of stoppages, so nothing is hidden. A report of its own still goes out when a stoppage lasts 10 minutes or more, when the repair did not bring blocking back, or when it came back some other way.",
+    )),
     VersionLog("1.174", "Oct 17, 2026", "Your other porn blockers are no longer blocked", listOf(
         "**AppBlocker no longer reads the screens of other protection apps for blocked words.** Porn blockers and similar apps are full of the very words AppBlocker blocks, so with \"check every app\" on, it was covering them the moment you opened one. Now any app that works as a blocker, a parental control or a content filter is left alone by the word check.",
         "**How it tells:** not by a list of names, so it also covers blockers nobody here has heard of. Android only lets an app enforce things on other apps in three ways: an accessibility service, a device-admin role, or a VPN filter. An app that has any of the three is treated as a protection app.",
