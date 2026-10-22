@@ -13,6 +13,11 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.176", "Oct 22, 2026", "Your browsers stay open when you use your university's VPN", listOf(
+        "**AppBlocker no longer closes your browsers when the family DNS filter is off, as you asked.** Your university asked you to use a VPN. A VPN sends your phone's lookups through its own server, so while it is connected your phone reads as \"family filter off\". Before this version, that closed every browser after a minute, for as long as the VPN stayed on.",
+        "**The rest of blocking is unchanged.** Blocked apps, blocked websites, blocked words, the adult-site check, Shorts and the danger hour all work exactly as before, with the VPN on or off.",
+        "**The family filter itself still works whenever the VPN is off.** Profile ▸ Family filter still shows whether it is running and how to set it up. Only the punishment for it being off is gone, and so is the 24-hour wait to switch that punishment off, since there is nothing left to switch off.",
+    )),
     VersionLog("1.175", "Oct 19, 2026", "Fewer reports: the routine ones stay on your phone", listOf(
         "**Your reports inbox had 262 open reports, so I read them and closed them all.** Nothing is deleted: they are still there under Closed, and any of them can be reopened.",
         "**Most of them were the same good news.** When your phone kills the blocker, AppBlocker now switches it off and on by itself, and since early October blocking has come back within about three minutes nearly every time. Each one of those was sent to you as its own report, two or three a day.",

@@ -8,13 +8,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The network filter's two decisions, both pure: **what is the phone's DNS doing**, and **is that
- * worth shutting the browsers over**.
- *
- * The second one is why this file is careful. Every other layer in the app answers "should this
- * screen be covered"; this one answers "should every browser on the phone stop working", from a
- * reading of a system setting that can be missing, stale or mid-change. A wrong `true` here is not
- * a false-positive block — it is a phone that cannot reach the internet and cannot be told why.
+ * The network filter's one decision, pure: **what is the phone's DNS doing**. (It used to make a
+ * second one — whether to shut the browsers over it — removed on 22 Oct 2026 because his
+ * university's VPN reads as "filter off"; see [NetworkFilter].)
  */
 class NetworkFilterTest {
 
@@ -24,7 +20,7 @@ class NetworkFilterTest {
 
     @Test fun `an old phone can never be read, so it is never judged`() {
         // Private DNS arrived in Android 9 and minSdk is 24. "I cannot tell" is the honest answer
-        // and it must not decay into "off" — see enforcement below, where off has consequences.
+        // and it must not decay into "off", which the setup screen paints as his failure.
         assertEquals(
             FilterState.CANT_TELL,
             NetworkFilter.classify(apiSupported = false, linkKnown = true, privateDnsActive = true, hostname = family),
@@ -87,54 +83,6 @@ class NetworkFilterTest {
         )
     }
 
-    // ---- enforce: is this worth shutting every browser over -------------------------------
-
-    private fun enforce(
-        state: FilterState,
-        validated: Boolean = true,
-        offForMs: Long = NetworkFilter.SETTLE_MS,
-        armed: Boolean = true,
-    ) = NetworkFilter.shouldShutBrowsers(state, validated, offForMs, armed)
-
-    @Test fun `not being able to tell never shuts anything`() {
-        assertFalse(enforce(FilterState.CANT_TELL))
-        assertFalse(enforce(FilterState.CANT_TELL, validated = false))
-        assertFalse(enforce(FilterState.CANT_TELL, offForMs = Long.MAX_VALUE))
-    }
-
-    @Test fun `a working filter shuts nothing`() {
-        assertFalse(enforce(FilterState.FILTERING))
-    }
-
-    @Test fun `the filter being off shuts the browsers`() {
-        assertTrue(enforce(FilterState.OFF))
-        // …and so does the encrypted-but-not-filtering case, or it becomes the way out.
-        assertTrue(enforce(FilterState.ON_BUT_UNKNOWN))
-    }
-
-    /**
-     * **The hotel wifi case.** A captive portal is a network that exists but resolves nothing until
-     * you log in, and Private DNS breaks on it by design. Shutting the browsers there leaves him
-     * unable to reach the login page *and* unable to fix the filter — a phone with no way out.
-     *
-     * The screen-reading blocker still applies on that network. Only this layer stands down.
-     */
-    @Test fun `an unvalidated network is not judged`() {
-        assertFalse(enforce(FilterState.OFF, validated = false))
-        assertFalse(enforce(FilterState.ON_BUT_UNKNOWN, validated = false))
-    }
-
-    /**
-     * The reading churns every time the phone changes network — Wi-Fi to mobile, a tunnel coming
-     * up, the screen waking. Acting on the first frame of that would shut the browsers for a few
-     * seconds several times a day, which is how a protection becomes the thing he switches off.
-     */
-    @Test fun `a reading has to hold still before it costs anything`() {
-        assertFalse(enforce(FilterState.OFF, offForMs = 0L))
-        assertFalse(enforce(FilterState.OFF, offForMs = NetworkFilter.SETTLE_MS - 1))
-        assertTrue(enforce(FilterState.OFF, offForMs = NetworkFilter.SETTLE_MS))
-    }
-
     // ---- the shipped list ------------------------------------------------------------------
 
     @Test fun `every accepted resolver is a hostname and is the recommended one or better`() {
@@ -149,31 +97,12 @@ class NetworkFilterTest {
         )
     }
 
-    /**
-     * **The update case, and the worst thing this feature could do.** v1.142 arrives on a phone
-     * that has never set the filter up: the reading is honestly OFF, the network is fine, and it
-     * has been that way for months. Without arming, every browser closes on first launch and the
-     * only screen that could explain it is behind a browser-shaped hole.
-     *
-     * So the guard defends what it has watched working, and nothing else.
-     */
-    @Test fun `a phone that never set the filter up is never punished for it`() {
-        assertFalse(enforce(FilterState.OFF, armed = false))
-        assertFalse(enforce(FilterState.ON_BUT_UNKNOWN, armed = false, offForMs = Long.MAX_VALUE))
-        assertTrue("and once it has been seen working, it is defended", enforce(FilterState.OFF, armed = true))
-    }
-
 
     /**
      * **Fixed means fixed.** The list was four resolvers until he pointed out that both his
      * devices were already on one of them: *"just make it fixed"*. So another operator's family
-     * filter — genuinely a filter, genuinely blocking this material — no longer counts, and
-     * changing the resolver costs the browsers exactly like switching it off.
-     *
-     * The cost of the choice, stated so nobody quietly "fixes" it later: if CleanBrowsing were
-     * ever unreachable he could not fall back to Cloudflare's family filter without the guard
-     * acting. That is survivable because an unreachable resolver stops the network validating,
-     * and an unvalidated network is never judged — but it is the trade, and it was his to make.
+     * filter — genuinely a filter, genuinely blocking this material — no longer counts, and the
+     * setup screen reads it as not filtering.
      */
     @Test fun `only his resolver counts, not merely a good one`() {
         assertEquals(listOf(NetworkFilter.RECOMMENDED), NetworkFilter.KNOWN_FAMILY_RESOLVERS)

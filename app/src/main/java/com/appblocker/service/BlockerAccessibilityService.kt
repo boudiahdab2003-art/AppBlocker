@@ -13,8 +13,6 @@ import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
 import android.net.ConnectivityManager
-import android.net.LinkProperties
-import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import android.os.Build
@@ -44,8 +42,6 @@ import com.appblocker.data.BlockedKeyword
 import com.appblocker.data.BlockerDatabase
 import com.appblocker.data.DangerZone
 import com.appblocker.data.DeviceBoot
-import com.appblocker.data.FilterState
-import com.appblocker.data.NetworkFilter
 import com.appblocker.data.FocusState
 import com.appblocker.data.GuardedDeadline
 import com.appblocker.data.InstalledAppsRepository
@@ -880,8 +876,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                 lastBlockedPkg = null
                 overlay.remove()
             }
-            refreshNetFilter()
-            return recheckMatters(pkg) || netFilterDown
+            return recheckMatters(pkg)
         }
     }
 
@@ -964,119 +959,6 @@ class BlockerAccessibilityService : AccessibilityService() {
     /** Millis left on the danger zone, 0 when it is not armed. */
     private fun dangerZoneRemaining(): Long =
         dangerZone?.remaining(DeviceBoot.count(applicationContext)) ?: 0L
-
-    /**
-     * Whether the phone's family DNS filter is down far enough to shut the browsers.
-     *
-     * Cached rather than read per decision: [NetworkFilter.read] is three binder calls into
-     * ConnectivityManager and `decideBlock` runs on every foreground change. Refreshed by
-     * [refreshNetFilter] on the recheck tick and whenever the watcher reconnects, which is well
-     * inside the [NetworkFilter.SETTLE_MS] the decision needs anyway.
-     */
-    @Volatile private var netFilterDown = false
-
-    /**
-     * Watches the network for the filter being switched off.
-     *
-     * **The recheck tick is not enough on its own, and assuming it was is the bug this exists to
-     * fix.** `recheckRunnable` only re-arms while [recheckMatters] holds — a rule, a lockout, a
-     * schedule or a cover — so on a plain browser with no rule on it the tick never runs and the
-     * cached reading never refreshes. Switching Private DNS off in Settings and opening a browser
-     * would have cost nothing at all, which is the one case the whole feature is about.
-     *
-     * A default-network callback is the right shape anyway: changing Private DNS *is* a link-
-     * properties change, so this fires within moments of him touching the setting, costs nothing
-     * while nothing changes, and needs no polling of its own.
-     */
-    private var networkCallback: ConnectivityManager.NetworkCallback? = null
-
-    private fun registerNetworkWatch() {
-        if (networkCallback != null) return
-        val cm = getSystemService(CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return
-        val cb = object : ConnectivityManager.NetworkCallback() {
-            // All four, because "the filter is protecting me" can stop being true through any of
-            // them: the setting changing (link properties), the network going away or arriving,
-            // and a captive portal being signed into (capabilities).
-            override fun onLinkPropertiesChanged(n: Network, lp: LinkProperties) = onNetChanged()
-            override fun onCapabilitiesChanged(n: Network, c: NetworkCapabilities) = onNetChanged()
-            override fun onAvailable(n: Network) = onNetChanged()
-            override fun onLost(n: Network) = onNetChanged()
-        }
-        // Guarded: registering can throw on an OEM that has no default network yet, and a watcher
-        // that cannot register a listener must still be a watcher.
-        if (runCatching { cm.registerDefaultNetworkCallback(cb) }.isSuccess) networkCallback = cb
-    }
-
-    /** Callbacks arrive on a binder thread; every decision below belongs on the main thread. */
-    private fun onNetChanged() {
-        handler.post {
-            guarded(applicationContext, "netChanged") {
-                val was = netFilterDown
-                refreshNetFilter()
-                // Only chase when it actually flipped. The cover is raised by the recheck pass
-                // rather than here, so there is one place that decides what covers what.
-                if (netFilterDown != was) {
-                    handler.removeCallbacks(recheckRunnable)
-                    handler.post(recheckRunnable)
-                }
-            }
-        }
-    }
-
-    /**
-     * Re-reads the filter and keeps the "off since" anchor honest.
-     *
-     * The anchor is **cleared** whenever the filter is protecting *or* unreadable, so the settle
-     * time only ever accumulates while it is genuinely off on a working network. Letting an
-     * unreadable moment count would mean a flight, a dead spot or an OEM throwing from
-     * ConnectivityManager silently paying down the wait — the state that costs him his browsers
-     * should only be reached by the filter actually being off.
-     */
-    private fun refreshNetFilter() {
-        val reading = NetworkFilter.read(applicationContext)
-        val ctx = applicationContext
-        if (NetworkFilter.protecting(reading.state)) {
-            // The one place arming happens: the app has now watched it work.
-            if (!SettingsStore.netFilterSeen(ctx)) SettingsStore.setNetFilterSeen(ctx)
-        }
-        if (NetworkFilter.protecting(reading.state) ||
-            reading.state == FilterState.CANT_TELL ||
-            !reading.validated
-        ) {
-            SettingsStore.clearNetFilterOffSince(ctx)
-            netFilterDown = false
-            return
-        }
-        val boot = DeviceBoot.count(ctx)
-        if (SettingsStore.netFilterOffSince(ctx) == null) {
-            SettingsStore.startNetFilterOffSince(ctx, boot)
-        }
-        val left = SettingsStore.netFilterOffSince(ctx)?.remaining(boot) ?: NetworkFilter.SETTLE_MS
-        netFilterDown = NetworkFilter.shouldShutBrowsers(
-            reading.state,
-            networkValidated = reading.validated,
-            offForMs = NetworkFilter.SETTLE_MS - left,
-            armed = SettingsStore.netFilterSeen(ctx) && SettingsStore.netFilterGuard(ctx),
-        )
-    }
-
-    /** Last backstop read, monotonic (invariant 9). */
-    @Volatile private var netFilterCheckedAt = 0L
-
-    /**
-     * The backstop, on the path every foreground change already takes.
-     *
-     * The callback above is the fast route and this is the one that makes a *missed* callback cost
-     * a minute rather than a reboot — OEM connectivity stacks drop them, and this layer's failure
-     * is silent by nature: nothing looks wrong, the browsers simply stop being defended.
-     * Throttled because [NetworkFilter.read] is three binder calls and app switches are frequent.
-     */
-    private fun refreshNetFilterIfStale() {
-        val now = stopwatchNow()
-        if (now - netFilterCheckedAt < NET_FILTER_POLL_MS) return
-        netFilterCheckedAt = now
-        refreshNetFilter()
-    }
 
     /** Last backstop re-read of the listener-fed settings, monotonic (invariant 9). */
     @Volatile private var cachedSettingsCheckedAt = 0L
@@ -1221,10 +1103,6 @@ class BlockerAccessibilityService : AccessibilityService() {
         // the pause arms even if the app itself isn't opened.
         UpdatePause.checkVersionChange(this)
         refreshPackageSets()
-        // Before the first decision, not after it: the service is rebound after every update and
-        // every space switch, and a stale "the filter is fine" would survive both.
-        refreshNetFilter()
-        registerNetworkWatch()
         keywordsEverywhere = SettingsStore.keywordsEverywhere(this)
         wordSkipApps = SettingsStore.wordSkipApps(this)
         adultPackOn = SettingsStore.adultWordsPack(this)
@@ -2173,10 +2051,6 @@ class BlockerAccessibilityService : AccessibilityService() {
      * lambda, so a package with no rules and no schedules costs nothing beyond the flags.
      */
     private fun blockReason(pkg: String): BlockReason? {
-        // Throttled, so this is a comparison on all but one call a minute. Here rather than only
-        // on the recheck tick because that tick does not run for an app with no rule on it - the
-        // exact case this layer exists for.
-        refreshNetFilterIfStale()
         refreshCachedSettingsIfStale()
         val session = QuickSession.state(this)
         val strict = strictRemaining() > 0L
@@ -2188,7 +2062,6 @@ class BlockerAccessibilityService : AccessibilityService() {
                 updatePaused = updatePauseActive(),
                 lockoutRemainingMs = keywordLockoutRemaining(pkg),
                 dangerZoneRemainingMs = dangerZoneRemaining(),
-                netFilterDown = netFilterDown,
                 isRealBrowser = isRealBrowserPkg(pkg),
                 lockoutWord = keywordLockoutWord(pkg),
                 strict = strict,
@@ -3703,13 +3576,6 @@ class BlockerAccessibilityService : AccessibilityService() {
         exitTarget = null
         // Stop location updates so they don't leak past the service (battery + privacy).
         stopLocationUpdates()
-        networkCallback?.let { cb ->
-            runCatching {
-                (getSystemService(CONNECTIVITY_SERVICE) as? ConnectivityManager)
-                    ?.unregisterNetworkCallback(cb)
-            }
-        }
-        networkCallback = null
         prefsListener?.let {
             runCatching {
                 getSharedPreferences("appblocker_prefs", Context.MODE_PRIVATE)
@@ -3784,10 +3650,6 @@ class BlockerAccessibilityService : AccessibilityService() {
          */
         private const val GRACE_RECHECK_MARGIN_MS = 250L
 
-        /** How stale a filter reading may get on the foreground path. Well inside
-         *  [NetworkFilter.SETTLE_MS], so the backstop can never delay a decision the settle
-         *  window has already allowed. */
-        private const val NET_FILTER_POLL_MS = 20_000L
         // Throttle for refreshCachedSettingsIfStale. A minute: the listener is the fast route,
         // and this only has to bound how long a MISSED delivery can last.
         private const val CACHED_SETTINGS_POLL_MS = 60_000L

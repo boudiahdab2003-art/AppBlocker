@@ -26,7 +26,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,16 +39,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.appblocker.R
-import com.appblocker.data.DeviceBoot
 import com.appblocker.data.FilterState
 import com.appblocker.data.NetworkFilter
-import com.appblocker.data.OffSwitchGuard
-import com.appblocker.data.SettingsStore
 import com.appblocker.ui.theme.AppCard
 import com.appblocker.ui.theme.Space
 import com.appblocker.ui.theme.appBackground
 import com.appblocker.ui.theme.pageWidth
-import kotlinx.coroutines.delay
 
 /** Test tags for the rendering test. */
 const val NETDNS_STATUS_TAG = "netdns_status"
@@ -80,28 +75,6 @@ const val NETDNS_LIST_TAG = "netdns_list"
 fun NetworkFilterScreen(onBack: () -> Unit, stateOverride: FilterState? = null) {
     val context = LocalContext.current
     var copied by remember { mutableStateOf(false) }
-    val boot = remember { DeviceBoot.count(context) }
-    var guardOn by remember { mutableStateOf(SettingsStore.netFilterGuard(context)) }
-    var offRequest by remember { mutableStateOf(SettingsStore.netFilterOffRequest(context)) }
-    var showGate by remember { mutableStateOf(false) }
-    var tick by remember { mutableStateOf(0) }
-    val untilUnlock = offRequest?.remaining(boot) ?: 0L
-    val untilExpiry = offRequest?.remaining(boot, extraMs = OFF_WINDOW_MS) ?: 0L
-    // The same tested phase machine the adult pack and the off-switch guard use, called rather
-    // than re-derived: two copies of one state machine, one of them incomplete, is the first bug
-    // shape in docs/BLOCKING_INVARIANTS.md. In particular `untilUnlock <= 0` alone never asks
-    // whether the window has since CLOSED, and a lapsed request must never read as an open door.
-    val phase = OffSwitchGuard.phase(offRequest != null, untilUnlock, untilExpiry)
-    LaunchedEffect(offRequest, tick) {
-        if (offRequest == null) return@LaunchedEffect
-        if (untilExpiry <= 0L) {
-            offRequest = null
-            SettingsStore.clearNetFilterOffRequest(context)
-            return@LaunchedEffect
-        }
-        delay(30_000)
-        tick++
-    }
     // Recomputed on every recomposition on purpose: coming back from Settings recomposes, and a
     // remembered reading is exactly how a screen ends up telling him it is off after he fixed it.
     val state = stateOverride ?: NetworkFilter.read(context).state
@@ -149,108 +122,11 @@ fun NetworkFilterScreen(onBack: () -> Unit, stateOverride: FilterState? = null) 
                     }
                 }
 
-                item { Card(R.string.netdns_cost_title, R.string.netdns_cost_body, R.string.netdns_cost_body_2) }
                 item { Card(R.string.netdns_why_title, R.string.netdns_why_body) }
-            }
-            // Only ever offered once the guard is real - before the filter has been seen
-            // working it defends nothing, and a switch for turning off something that is not
-            // happening is just a way to talk him out of setting it up.
-            if (SettingsStore.netFilterSeen(context)) {
-                item {
-                    AppCard {
-                        Heading(stringResource(R.string.netdns_off_title))
-                        Spacer(Modifier.height(Space.sm))
-                        Text(
-                            stringResource(R.string.netdns_off_body),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Spacer(Modifier.height(Space.md))
-                        when {
-                            !guardOn -> {
-                                Text(
-                                    stringResource(R.string.netdns_off_done),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.error,
-                                )
-                                Spacer(Modifier.height(Space.sm))
-                                GradientButton(
-                                    text = stringResource(R.string.netdns_off_back_on),
-                                    // Arming a protection is instant and always allowed, in every
-                                    // state including Strict - refusing to let someone turn a
-                                    // protection back ON is the v1.127 mistake (invariant 14).
-                                    onClick = {
-                                        SettingsStore.setNetFilterGuard(context, true)
-                                        guardOn = true
-                                    },
-                                )
-                            }
-                            phase == OffSwitchGuard.Phase.OPEN -> GradientButton(
-                                text = stringResource(R.string.netdns_off_now),
-                                onClick = {
-                                    SettingsStore.setNetFilterGuard(context, false)
-                                    SettingsStore.clearNetFilterOffRequest(context)
-                                    guardOn = false
-                                    offRequest = null
-                                },
-                            )
-                            phase == OffSwitchGuard.Phase.WAITING -> {
-                                Text(
-                                    stringResource(
-                                        R.string.netdns_off_waiting,
-                                        hoursMinutes(untilUnlock),
-                                    ),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                                Spacer(Modifier.height(Space.sm))
-                                GradientButton(
-                                    text = stringResource(R.string.netdns_off_cancel),
-                                    onClick = {
-                                        SettingsStore.clearNetFilterOffRequest(context)
-                                        offRequest = null
-                                    },
-                                )
-                            }
-                            else -> GradientButton(
-                                text = stringResource(R.string.netdns_off_start),
-                                onClick = { showGate = true },
-                            )
-                        }
-                    }
-                }
             }
             item { Spacer(Modifier.height(Space.lg)) }
         }
     }
-
-    if (showGate) {
-        FrictionGate(
-            title = stringResource(R.string.gate_netdns_title),
-            blurb = stringResource(R.string.gate_netdns_blurb),
-            detail = stringResource(R.string.gate_netdns_detail),
-            confirmLabel = stringResource(R.string.gate_netdns_confirm),
-            onDismiss = { showGate = false },
-            onConfirm = {
-                // Passing the gate does NOT switch anything off. It starts the wait, and the
-                // filter is defended for every minute of it.
-                SettingsStore.setNetFilterOffRequest(context, OFF_DELAY_MS, boot)
-                offRequest = SettingsStore.netFilterOffRequest(context)
-                showGate = false
-            },
-        )
-    }
-}
-
-/** The wait before the guard can actually be dropped, and the window to do it in afterwards -
- *  the adult pack's numbers, because it is the same promise about the same kind of protection. */
-private const val OFF_DELAY_MS = 24 * 60 * 60_000L
-private const val OFF_WINDOW_MS = 15 * 60_000L
-
-/** "3h 20m" / "12m" - a countdown he can act on, never raw millis. */
-private fun hoursMinutes(ms: Long): String {
-    val mins = ((ms + 59_999L) / 60_000L).toInt()
-    return if (mins >= 60) "${mins / 60}h ${mins % 60}m" else "${mins}m"
 }
 
 @Composable

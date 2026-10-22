@@ -605,6 +605,12 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     **The shape to grep for: a new layer whose failure mode is not "it didn't block" but "the
     phone stopped working", judged by the same standards as a layer that only raises a cover.**
 
+    ⚠️ **The DNS-filter browser shutdown that taught invariants 27–29 was removed on 22 Oct 2026**,
+    at the owner's request: his university requires a VPN, a VPN carries its own DNS, and the phone
+    therefore reads as "filter off" for every hour he is connected. `NetworkFilter` still *reads*
+    the filter for the setup screen, diagnostics and reports; nothing is shut over it. The
+    invariants stand as lessons for the next layer that can cost him the phone.
+
 28. **A switch that reads "on" is not a protection; the thing it points at is.** Android's Private
     DNS can be on and filtering nothing — "automatic" mode, or any of the popular resolvers that
     encrypt lookups without blocking a single site. Reading the switch would have called that
@@ -619,6 +625,7 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     **the app must read the thing, not the claim about the thing.**
 
 29. **A value cached behind a conditional tick is not refreshed — it is frozen.** `netFilterDown`
+    (removed 22 Oct 2026 with the shutdown itself, see the note under 27)
     was recomputed inside `recheckRunnable`, which looked like a 30-second poll and is not one:
     that runnable only re-arms while `recheckMatters` holds — a rule, a lockout, a schedule or a
     cover on the current app. On a plain browser with no rule on it, it never runs. So switching
@@ -723,7 +730,8 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
 34. **A rule that fails safe for one caller may fail open for the next one.** `refreshPackageSets`
     let `realBrowserPackages` be empty deliberately, and said why: an empty set "costs only the
     blunt block, never filtering". True when it was written. Since v1.139 and v1.142 that same set
-    gates the **danger-zone hour** and the **DNS-filter browser shutdown** — `BlockDecision`'s two
+    gates the **danger-zone hour** and the **DNS-filter browser shutdown** (the latter removed
+    22 Oct 2026) — `BlockDecision`'s two
     top layers, both requiring `isRealBrowser`. One swallowed PackageManager failure at connect
     therefore switched off two whole protections for the life of the service, silently.
 
@@ -3152,7 +3160,9 @@ enforcement.
   established and clears every earlier guess on a fresh answer; `isRealBrowserPkg` re-reads only
   from empty and says why. Both were swept before and have stayed correct.
 
-- ~~**The DNS filter.**~~ **Swept 7 Sep 2026 — CLEAN end to end. Keep it as a gate.** The subsystem
+- ~~**The DNS filter.**~~ **Its enforcement was removed on 22 Oct 2026** (his university's VPN reads
+  as "filter off"; see the note under invariant 27). Only `classify`/`read` remain, for the setup
+  screen and reports. The sweep below is history. **Swept 7 Sep 2026 — CLEAN end to end.** The subsystem
   most able to make the phone unusable, and it holds up:
   - `shouldShutBrowsers` is pure and its four refusals are all present and all tested — CANT_TELL
     costs nothing, an unvalidated network (captive portal) is not judged, the reading must hold

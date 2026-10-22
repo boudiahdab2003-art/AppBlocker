@@ -18,7 +18,7 @@ enum class FilterState {
     OFF,
 
     /** No answer available: Android 8 or older, no readable network, a system call that threw.
-     *  A distinct state on purpose — see [NetworkFilter.shouldShutBrowsers]. */
+     *  A distinct state on purpose: "can't tell" is not his failure and must not read as one. */
     CANT_TELL,
 }
 
@@ -41,7 +41,15 @@ enum class FilterState {
  * and draw Play review. The one thing it would win is setting itself — and it cannot be set for
  * him anyway without `WRITE_SECURE_SETTINGS`, which means a cable, which this app does not ask for.
  *
- * So the app's job here is not to *be* the filter. It is to **guide it, verify it, and defend it**.
+ * So the app's job here is not to *be* the filter. It is to **guide it and verify it**.
+ *
+ * ## It no longer defends it
+ *
+ * From v1.142 a filter that stopped (switched off, or pointed at another resolver) shut every
+ * browser after a minute. Removed on 22 Oct 2026 at his request: his university requires a VPN,
+ * and a VPN carries its own DNS, so the phone reads as "filter off" for as long as it is connected.
+ * Defending the setting would have closed his browsers for every hour of study. The screen still
+ * shows whether the filter is running and how to set it up; nothing is shut over it any more.
  *
  * ## What this cannot do
  *
@@ -87,16 +95,6 @@ internal object NetworkFilter {
      */
     val KNOWN_FAMILY_RESOLVERS = listOf(RECOMMENDED)
 
-    /**
-     * How long a reading has to hold still before it costs him anything.
-     *
-     * The state churns on every network change — Wi-Fi to mobile, a tunnel coming up, the screen
-     * waking. Acting on the first frame would shut every browser for a few seconds several times a
-     * day, and a protection that misfires that often is one that gets switched off. A minute is
-     * long enough to outlast a handover and far too short to be worth using as a way out.
-     */
-    const val SETTLE_MS = 60_000L
-
     /** True only for the one state that means adult content is actually being filtered. */
     fun protecting(state: FilterState) = state == FilterState.FILTERING
 
@@ -127,45 +125,6 @@ internal object NetworkFilter {
     private fun isFamilyResolver(hostname: String?): Boolean {
         val h = hostname?.trim()?.lowercase()?.trimEnd('.')?.takeIf { it.isNotEmpty() } ?: return false
         return h in KNOWN_FAMILY_RESOLVERS
-    }
-
-    /**
-     * **Whether to shut every browser on the phone**, which is what he chose should happen when the
-     * filter stops: *"i dont want the capability to turn it off"*. Android does not let an app be
-     * un-switchable, so switching it off costs the browsers instead — immediately, and only the
-     * browsers (`decideBlock` gates it on the strict self-declared browser set, invariant 13, so
-     * maps, the dialer, Settings and the bank app are never touched).
-     *
-     * Three refusals, each one a way this could otherwise leave him with a phone he cannot use:
-     *
-     *  - **[FilterState.CANT_TELL] never costs anything.** Invariant 4 says a failed measurement is
-     *    not permission; the reverse is just as true — a failed measurement is not a punishment.
-     *  - **An unvalidated network is not judged.** A captive portal (hotel, airport) resolves
-     *    nothing until you log in and breaks Private DNS by design. Shutting the browsers there
-     *    would leave him unable to reach the login page *and* unable to fix the filter. The
-     *    screen-reading blocker still covers that network; only this layer stands down.
-     *  - **A reading has to hold still for [SETTLE_MS].**
-     *
-     * @param armed the filter has been seen working on this phone at least once, and he has
-     *   not since spent the cooling-off to switch the guard off. **Without this an update would
-     *   shut the browsers of every phone that never set the filter up** — the app would arrive,
-     *   find no filter, and take the browsers away from someone who was never told why. A
-     *   protection may only defend a thing it has watched working.
-     * @param offForMs how long the state has continuously not been protecting. Passed in rather
-     *   than read here so the caller can anchor it monotonically (invariant 9) and so this stays
-     *   a pure function — unit tests return 0 from `SystemClock.elapsedRealtime()`.
-     */
-    fun shouldShutBrowsers(
-        state: FilterState,
-        networkValidated: Boolean,
-        offForMs: Long,
-        armed: Boolean,
-    ): Boolean {
-        if (!armed) return false
-        if (state == FilterState.CANT_TELL) return false
-        if (protecting(state)) return false
-        if (!networkValidated) return false
-        return offForMs >= SETTLE_MS
     }
 
     /**

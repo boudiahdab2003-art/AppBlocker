@@ -485,17 +485,15 @@ object BugReportSender {
             if (left > 0L) "on ${(left + 59_999L) / 60_000L}min" else "off"
         }
         field("dangerStrikes") { SettingsStore.dangerStrikes(ctx).size.toString() }
-        // Whether the network-level filter is running, and whether it is being defended. A report
-        // sent while the browsers are shut over this would otherwise be inexplicable.
+        // Whether the network-level filter is running. (It is no longer defended: a VPN reads as
+        // "off", so nothing is shut over it since 22 Oct 2026; see NetworkFilter.)
         field("dnsFilter") {
-            val state = when (NetworkFilter.read(ctx).state) {
+            when (NetworkFilter.read(ctx).state) {
                 FilterState.FILTERING -> "filtering"
                 FilterState.ON_BUT_UNKNOWN -> "encrypted-only"
                 FilterState.OFF -> "off"
                 FilterState.CANT_TELL -> "unknown"
             }
-            val armed = SettingsStore.netFilterSeen(ctx) && SettingsStore.netFilterGuard(ctx)
-            "$state${if (armed) " armed" else ""}"
         }
         field("learnedCount") { SettingsStore.learnedDomains(ctx).size.toString() }
         // --- the last stoppage, on EVERY report ---
