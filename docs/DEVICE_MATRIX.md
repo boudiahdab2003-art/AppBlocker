@@ -18,6 +18,9 @@ have stopped being guesses.
 | Phone | Android | Uninstall screen | Keep-alive page | `<queries>` visible | Browsers read | Measured |
 |---|---|---|---|---|---|---|
 | Xiaomi (owner's, HyperOS) | 15 | ✅ `com.miui.packageinstaller` | ✅ MIUI security centre | ✅ | ✅ Mi Browser, read 14 Aug 2026 | in use daily |
+| **Xiaomi 25080RABDG** (owner's phone now, both spaces) | **16** (SDK 36) | ✅ but **`com.google.android.packageinstaller`** — no longer MIUI's own; `RECOGNISED` | ✅ `com.miui.securitycenter/AutoStartManagementActivity` | ✅ | ✅ Chrome, Brave, Mi Browser all read (none unproven) | profile reports #271–#278, 21–22 Oct 2026 |
+| **Xiaomi 24091RPADG** (owner's second phone) | 16 (SDK 36) | ✅ `com.google.android.packageinstaller`, `RECOGNISED` | ✅ same AutoStart page | ✅ | ❌ Chrome, Brave, Mi Browser claimed, **none read on this install** (a fresh install, `ruleCount 0`; the earlier one read 5) | profile reports #269, #279, 20–22 Oct 2026 |
+| **Xiaomi M2007J3SG** (Mi 10T Pro, owner's older phone) | 12 (SDK 31) | ✅ `com.google.android.packageinstaller`, `RECOGNISED` | ✅ same AutoStart page | ✅ | ❌ Chrome, Brave claimed, never read — **the blocker was switched off** when it reported | profile report #281, 24 Oct 2026 |
 | Emulator `appblocker_test` | 14 | ✅ AOSP installer | — generic advice, no link | ✅ | Chrome only | every release |
 | Emulator `appblocker_a15` | 15 | ✅ `com.google.android.packageinstaller` | — generic advice, no link | ✅ all 7 | Chrome only | 22 Aug 2026 |
 | **Samsung** Galaxy S24 FE (SM-S721B, EEA) | 15 / One UI 7.0 | ✅ but **`com.google.android.packageinstaller`** — Samsung's own installer is *not installed here* | ✅ `com.samsung.android.lool/…sm.battery.ui.BatteryActivity` (the **second** of the two guesses) | ✅ all 7 | ❌ **Samsung Internet not installed on the lab unit** — claim still unproven | 22 Aug 2026, Remote Test Lab |
@@ -25,6 +28,11 @@ have stopped being guesses.
 | **Huawei / Honor** | — | ❓ guessed | ❓ guessed | ❓ | ❓ claim unproven | **never** |
 | **Oppo / Realme / OnePlus** | — | ❓ guessed | ❓ guessed | ❓ | ❓ claim unproven | **never** |
 | **Vivo / iQOO** | — | ❓ guessed | ❓ guessed | ❓ | ❓ claim unproven | **never** |
+
+**Xiaomi now routes uninstalls through Google's installer too** — on all three of the owner's current
+phones, Android 12 to 16, the uninstall handler is `com.google.android.packageinstaller`, not the
+`com.miui.packageinstaller` the first row measured in August. The guard recognises both, so nothing
+breaks; it is the same lesson as Samsung's — an OEM installer cannot be assumed.
 
 **Samsung is now measured twice** — two models, two countries, two Android versions — and the two
 runs agree on every column they share. The uninstall-screen answer in particular is no longer a
@@ -64,6 +72,7 @@ in a real report. That is how Huawei, Oppo and Vivo get answered without anyone 
 | Emulator (stock, API 34) | `com.android.settings/Settings$AccessibilitySettingsActivity` | n/a — the generic wording |
 | **Samsung** Galaxy A36, One UI 8 | `com.android.settings/Settings$AccessibilitySettingsActivity` — **identical to stock** | ✅ **Settings ▸ Accessibility ▸ Installed apps**, photographed 23 Aug 2026 |
 | **Xiaomi** (owner's, HyperOS) | — | ✅ **Settings ▸ Accessibility ▸ Downloaded apps**, from the owner's own screenshot 23 Aug 2026 — the shipped path had an extra **Additional settings** step that HyperOS no longer has |
+| **Xiaomi** 25080RABDG / 24091RPADG / M2007J3SG (HyperOS, Android 12–16) | `com.android.settings/MiuiAccessibilitySettingsActivity` — Xiaomi's own class, on all three | ✅ (the owner's screenshot above) |
 | Everything else | — | **not yet measured** |
 
 ## How a row gets filled in
