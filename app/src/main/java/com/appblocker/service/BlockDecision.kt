@@ -117,6 +117,9 @@ internal data class BlockInputs(
     val isRealBrowser: Boolean,
     /** Quick Block is enforcing right now (Strict, or a session saying "block now", or not paused). */
     val quickEnforcing: Boolean,
+    /** Quick Block's own on/off **without** Strict — a session saying "block now", or not paused.
+     *  The Allowlist is outside Strict (invariant 96), so this is what turns it on and off. */
+    val allowlistEnforcing: Boolean = quickEnforcing,
     val rule: AppRule?,
     val allowlistMode: Boolean,
     /** Launcher/dialer/keyboard/system — never blocked in Allowlist mode, or the phone bricks.
@@ -199,11 +202,22 @@ internal fun decideBlock(i: BlockInputs): BlockReason? {
         )
     }
 
+    // ⚠️ Strict's blocklist holds in BOTH modes (invariant 96). The Allowlist is outside Strict now —
+    // switchable, editable and stoppable mid-session — so without this, switching to Allowlist and
+    // ticking a blocked app would be the way out of every Strict session.
+    if (i.strict && i.rule?.isBlocked == true) {
+        return BlockReason(
+            i.words.get(R.string.block_strict_title),
+            i.words.get(R.string.block_strict_message),
+            why = BlockWhy.STRICT,
+        )
+    }
+
     if (i.allowlistMode) {
         // Allowlist: block anything that isn't explicitly allowed. Essentials already returned
         // above, so they need no second check here — and isEssential() reads the current
         // keyboard from Settings, so asking twice per decision is worth avoiding.
-        if (i.quickEnforcing && i.rule?.isAllowed != true) {
+        if (i.allowlistEnforcing && i.rule?.isAllowed != true) {
             return BlockReason(
                 i.words.get(if (i.strict) R.string.block_strict_title else R.string.block_title),
                 i.words.get(R.string.block_allowlist_message),

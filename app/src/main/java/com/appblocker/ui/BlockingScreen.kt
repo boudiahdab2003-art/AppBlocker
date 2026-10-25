@@ -230,7 +230,9 @@ fun BlockingScreen(
                             TimerPomoRow(enabled = true, onTimer = { showTimer = true }, onPomo = { showPomo = true })
                         }
                         else -> {
-                            NeutralButton(Modifier.fillMaxWidth(), Icons.Filled.Stop, "Stop", enabled = !focusActive) {
+                            // In Allowlist mode Stop works during Strict too (invariant 96): Strict's
+                            // blocklist keeps blocking without Quick Block.
+                            NeutralButton(Modifier.fillMaxWidth(), Icons.Filled.Stop, "Stop", enabled = !focusActive || allowlist) {
                                 SettingsStore.setQuickBlockPaused(context, true); paused = true
                             }
                             Spacer(Modifier.padding(top = 14.dp))

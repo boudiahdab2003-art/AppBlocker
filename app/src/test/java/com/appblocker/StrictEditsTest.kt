@@ -256,14 +256,43 @@ class StrictEditsTest {
         assertEquals(setOf("a", "b"), blocked)
     }
 
+    /** Invariant 96: the Allowlist is outside Strict — his choice, 25 Oct 2026. */
     @Test
-    fun `in allowlist mode a session refuses to allow anything new`() {
+    fun `in allowlist mode a session lets you allow more apps`() {
         val (_, allowed) = StrictEdits.allowedSelections(
             currentBlocked = emptySet(), currentAllowed = setOf("a"),
             targetBlocked = emptySet(), targetAllowed = setOf("a", "b"),
             strict = true, allowlistMode = true,
         )
-        assertEquals(setOf("a"), allowed)
+        assertEquals(setOf("a", "b"), allowed)
+    }
+
+    /** …and that is only safe because the blocklist still cannot lose an app, in either mode. */
+    @Test
+    fun `in allowlist mode a session still cannot un-block an app`() {
+        val (blocked, _) = StrictEdits.allowedSelections(
+            currentBlocked = setOf("insta"), currentAllowed = emptySet(),
+            targetBlocked = emptySet(), targetAllowed = setOf("insta"),
+            strict = true, allowlistMode = true,
+        )
+        assertEquals(setOf("insta"), blocked)
+    }
+
+    @Test
+    fun `during Strict a blocked app's website stays blocked in allowlist mode`() {
+        assertTrue(
+            StrictEdits.liveSiteWords(instagramBlocked, allowlistMode = true, enforcing = true, strict = true)
+                .isNotEmpty(),
+        )
+    }
+
+    @Test
+    fun `a locked app's website is blocked whatever Quick Block is doing`() {
+        val pkg = instagramBlocked.first { it.isBlocked }.packageName
+        assertTrue(
+            StrictEdits.liveSiteWords(instagramBlocked, allowlistMode = true, enforcing = false, locked = setOf(pkg))
+                .isNotEmpty(),
+        )
     }
 
     @Test

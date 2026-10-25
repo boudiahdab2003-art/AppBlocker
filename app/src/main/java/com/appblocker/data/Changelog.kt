@@ -13,11 +13,12 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
-    VersionLog("1.179", "Oct 25, 2026", "Lock one app or website for days, without Strict Mode", listOf(
+    VersionLog("1.179", "Oct 25, 2026", "Locks, and Strict Mode no longer locks your study sessions", listOf(
         "**New: Locks, as you asked.** On the Blocking tab there is a new card called **Locks**. Pick one blocked app or one blocked word or website, choose how long (1 day up to a year, 50 days included), and it is locked.",
         "**A locked item works like Strict Mode, but only for that one thing.** Until the lock ends it cannot be removed, and a locked app stays blocked even when Quick Block is paused, between Pomodoro rounds, or in Allowlist mode. Everything else stays free to change, with no Strict session needed.",
         "**A lock can be made longer, never shorter.** That is what makes it a promise to yourself. Locked items show **Locked** in your lists, and the Locks screen says the exact day and time each one ends.",
-        "**Strict Mode is unchanged.** It is still there for when you want everything locked at once.",
+        "**Strict Mode no longer locks your Allowlist or your Usage limits, as you asked.** During a Strict session you can now switch Quick Block to Allowlist, choose which apps are allowed, start a study Timer or Pomodoro and stop it whenever you like. Usage limit schedules can be changed, switched off or deleted too.",
+        "**What Strict still holds:** every app on your blocklist, and its website, stays blocked for the whole session, in Allowlist mode too and even if you tick it as allowed. Stopping a study session only takes you back to Strict, never below it. Time schedules and the rest of Strict are unchanged.",
         "**You already have the other two things you asked about.** For a study session with only some apps allowed, open Quick Block, switch it to Allowlist, tick the apps you need, then start a Timer or Pomodoro. For a daily time limit on an app, make a new schedule on the Blocking tab and choose **Usage limit**.",
     )),
     VersionLog("1.178", "Oct 25, 2026", "Spotify is no longer checked for blocked words", listOf(

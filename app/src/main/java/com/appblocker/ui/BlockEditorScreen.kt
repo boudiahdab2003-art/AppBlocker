@@ -174,7 +174,8 @@ fun BlockEditorScreen(
     // Shared app-picker toggle handlers (used by the APPS page for both the categorized list and
     // the hypothetical-apps list). During Strict you can only *tighten*.
     fun toggleApp(pkg: String, on: Boolean) {
-        if (strictActive && (if (allowlist) on else !on)) return
+        // Strict refuses only an untick on the blocklist; the Allowlist is outside it (invariant 96).
+        if (strictActive && !allowlist && !on) return
         editedApps = true
         if (on) selected.add(pkg) else selected.remove(pkg)
     }
@@ -196,8 +197,10 @@ fun BlockEditorScreen(
                         // "Blocking" title + a tappable Blocklist/Allowlist chip (AppBlock-style).
                         BlockingModeHeader(
                             allowlist = allowlist,
-                            enabled = !strictActive, // can't switch modes to escape Strict
-                            onClick = { if (!strictActive) page = EditorPage.MODE },
+                            // Switchable during Strict: Strict's blocklist holds in both modes (invariant 96).
+                            enabled = true,
+                            // Open during Strict too: the Allowlist is outside Strict (invariant 96).
+                            onClick = { page = EditorPage.MODE },
                         )
                         Spacer(Modifier.padding(top = 4.dp))
                         Text(
@@ -329,15 +332,14 @@ fun BlockEditorScreen(
                             selected = selected,
                             expandedCats = expandedCats.toSet(),
                             query = query,
-                            rowEnabled = { checked -> if (allowlist) ed || checked else ed || !checked },
+                            rowEnabled = { checked -> if (allowlist) true else ed || !checked },
                             onToggleExpand = { cat ->
                                 expandedCats = if (cat.name in expandedCats) expandedCats - cat.name
                                 else expandedCats + cat.name
                             },
                             onToggle = { app, on -> toggleApp(app.packageName, on) },
                             onSelectAll = { catApps ->
-                                // Adding loosens in Allowlist mode → locked during Strict.
-                                if (strictActive && allowlist) return@categorizedAppItems
+                                // Free in Allowlist mode even during Strict (invariant 96).
                                 editedApps = true
                                 catApps.forEach { if (!selected.contains(it.packageName)) selected.add(it.packageName) }
                             },

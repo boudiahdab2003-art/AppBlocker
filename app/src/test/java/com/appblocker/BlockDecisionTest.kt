@@ -492,4 +492,32 @@ class BlockDecisionTest {
     fun `without a lock a paused Quick Block still lets the app through`() {
         assertNull(decideBlock(inputs(quickEnforcing = false, rule = rule())))
     }
+
+    // ---- invariant 96: the Allowlist is outside Strict ----------------------------------------
+
+    @Test
+    fun `during Strict a blocked app stays blocked in allowlist mode even when allowed`() {
+        val hit = decideBlock(
+            inputs(strict = true, allowlistMode = true, rule = rule(blocked = true, allowed = true)),
+        )
+        assertEquals(BlockWhy.STRICT, hit?.why)
+    }
+
+    @Test
+    fun `a stopped allowlist blocks nothing extra during Strict`() {
+        // Not on the blocklist, not allowed: only the allowlist would have blocked it.
+        assertNull(
+            decideBlock(
+                inputs(strict = true, allowlistMode = true, rule = null).copy(allowlistEnforcing = false),
+            ),
+        )
+    }
+
+    @Test
+    fun `a running allowlist blocks the apps not on it during Strict`() {
+        assertEquals(
+            BlockWhy.ALLOWLIST,
+            decideBlock(inputs(strict = true, allowlistMode = true, rule = null))?.why,
+        )
+    }
 }

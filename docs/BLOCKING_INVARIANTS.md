@@ -2103,6 +2103,21 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     **The shape to grep for: a new write path for blocked words or blocked apps that does not run
     `ItemLocks.keepLocked`.**
 
+96. **The Allowlist and Usage limits are outside Strict; Strict's blocklist is the guarantee.**
+    25 Oct 2026, his choice ("take allowlist out of strict mode and usage limit also"), after asking
+    to use an allowlist study session mid-Strict and stop it at will. Strict used to lock the mode
+    switch, refuse new allowed apps, disable Stop and force `quickEnforcing` — so an allowlist
+    started in Strict could not end before it. Now: `decideBlock` takes `allowlistEnforcing` (Quick
+    Block's own on/off, without Strict) for the Allowlist branch, and **before** that branch blocks
+    `strict && rule.isBlocked` in either mode — the line that keeps the mode switch from being an
+    exit; `allowedSelections` keeps the blocklist in both modes and commits the allowed list as
+    staged; `liveSiteWords` keeps blocked apps' websites in Allowlist mode during Strict (and a
+    locked app's always). The editor's mode switch, allowlist rows and Stop are open during Strict;
+    `USAGE_LIMIT` schedules can be switched off, edited and deleted. Time and launch-count schedules
+    stay Strict-locked.
+    **The shape to grep for: a branch in `decideBlock` that can return before the
+    `strict && isBlocked` check without blocking.**
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused

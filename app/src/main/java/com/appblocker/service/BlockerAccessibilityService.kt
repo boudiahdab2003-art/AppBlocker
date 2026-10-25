@@ -2070,6 +2070,9 @@ class BlockerAccessibilityService : AccessibilityService() {
                 // (no session) when not paused. Same gate in Blocklist and Allowlist mode.
                 quickEnforcing = strict ||
                     if (session.active) session.blockingNow else !SettingsStore.quickBlockPaused(this),
+                // The same without Strict: the Allowlist is outside it (invariant 96).
+                allowlistEnforcing =
+                    if (session.active) session.blockingNow else !SettingsStore.quickBlockPaused(this),
                 rule = ruleFor(pkg),
                 allowlistMode = allowlistMode,
                 isEssential = { isEssentialAllowed(pkg) },
@@ -2459,7 +2462,11 @@ class BlockerAccessibilityService : AccessibilityService() {
      *  [StrictEdits.liveSiteWords] because the Blocked-words screen needs the same answer — a word
      *  this list already covers is one Strict Mode can afford to let go. */
     private fun autoSocialKeywords(): List<String> =
-        StrictEdits.liveSiteWords(rules.values, allowlistMode, quickBlockActive()).map { it.word }
+        StrictEdits.liveSiteWords(
+            rules.values, allowlistMode, quickBlockActive(),
+            strict = strictRemaining() > 0L,
+            locked = ItemLocks.locked(this, ItemLocks.Kind.APP),
+        ).map { it.word }
 
     /**
      * Covers a blocked site the moment the address bar says we're on one — the fast half of

@@ -24,16 +24,21 @@ object StrictEdits {
      * exactly the shape that keeps producing bugs here.
      *
      * Empty in Allowlist mode (auto-blocking a blocked app's website is a Blocklist concept) and
-     * empty when nothing is enforcing, so a paused Quick Block relieves the web block as well.
+     * empty when nothing is enforcing, so a paused Quick Block relieves the web block as well —
+     * **except** (invariants 95, 96) during Strict, whose blocklist holds in Allowlist mode now that
+     * the mode can be switched mid-session, and for an app [locked] on its own, which is blocked
+     * whatever Quick Block is doing.
      */
     fun liveSiteWords(
         rules: Collection<AppRule>,
         allowlistMode: Boolean,
         enforcing: Boolean,
+        strict: Boolean = false,
+        locked: Set<String> = emptySet(),
     ): List<SiteWord> {
-        if (allowlistMode || !enforcing) return emptyList()
+        val normal = enforcing && (!allowlistMode || strict)
         return rules.asSequence()
-            .filter { it.isBlocked && it.mode != BlockMode.LIMIT }
+            .filter { it.isBlocked && (it.packageName in locked || (normal && it.mode != BlockMode.LIMIT)) }
             .flatMap { rule ->
                 (SOCIAL_DOMAINS[rule.packageName] ?: emptyList())
                     .asSequence()
@@ -133,7 +138,8 @@ object StrictEdits {
         allowlistMode: Boolean,
     ): Pair<Set<String>, Set<String>> {
         if (!strict) return targetBlocked to targetAllowed
-        return if (allowlistMode) targetBlocked to (targetAllowed intersect currentAllowed)
-        else (targetBlocked + currentBlocked) to targetAllowed
+        // The blocklist cannot lose an app mid-session in either mode; the allowed list is outside
+        // Strict (invariant 96) and is committed as staged. `allowlistMode` no longer changes it.
+        return (targetBlocked + currentBlocked) to targetAllowed
     }
 }

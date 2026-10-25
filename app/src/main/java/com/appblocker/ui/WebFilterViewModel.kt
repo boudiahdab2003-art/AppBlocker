@@ -93,6 +93,8 @@ class WebFilterViewModel(app: Application) : AndroidViewModel(app) {
                 QuickSession.state(ctx),
                 SettingsStore.quickBlockPaused(ctx),
             ),
+            strict = strictRemainingMs > 0L,
+            locked = ItemLocks.locked(ctx, ItemLocks.Kind.APP),
         )
     }
 

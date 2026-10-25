@@ -203,6 +203,9 @@ Telegram bot on first use) and ranked use-case plans live in **docs/SERVER.md**.
 - **Locks** (v1.179, invariant 95, `data/ItemLocks.kt`): one blocked app or word locked for N days,
   Strict for that item only — kept on every write, blocked through any Quick Block pause or Allowlist
   mode, lengthened never shortened. A new writer of blocked words/apps must run `ItemLocks.keepLocked`.
+- **The Allowlist and Usage limit schedules are outside Strict** (v1.179, invariant 96, his choice):
+  switchable, editable and stoppable mid-session. What Strict guarantees is its **blocklist** — those
+  apps and their websites stay blocked in both modes. Keep that check ahead of the Allowlist branch.
 - **Strict Mode locks *weakening* only.** Every control that makes blocking stronger stays usable
   during a session — arming the off-switch guard, ticking an app on, adding a word, switching on
   any Quick Block extra option. The pattern in the UI is `enabled = ed || !value` (`ed =

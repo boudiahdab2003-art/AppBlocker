@@ -173,7 +173,8 @@ fun ScheduleEditorScreen(
 
     // A NEW schedule can always be created (adding protection is allowed during Strict Mode);
     // an EXISTING one stays locked while Strict is active so it can't be weakened.
-    val editable = existing == null || !strictActive
+    // A Usage limit is outside Strict (invariant 96): editable and deletable mid-session.
+    val editable = existing == null || !strictActive || type == ScheduleType.USAGE_LIMIT
 
     Scaffold(
         containerColor = Color.Transparent,
@@ -237,7 +238,8 @@ fun ScheduleEditorScreen(
                     // schedule ON strengthens blocking, and Strict has always allowed that (it is
                     // exactly what the card in the list allows). Using `editable` here would have
                     // made this screen stricter than Strict.
-                    canChange = existing == null || !strictActive || !enabled,
+                    canChange = existing == null || !strictActive || !enabled ||
+                        type == ScheduleType.USAGE_LIMIT,
                     onChange = { on ->
                         enabled = on
                         // An existing schedule's switch takes effect at once, exactly as it does
