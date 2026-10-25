@@ -192,7 +192,7 @@ Telegram bot on first use) and ranked use-case plans live in **docs/SERVER.md**.
 
 ## Device quirks worth remembering
 
-- Owner's phone: HyperOS (Xiaomi 25080RABDG), Android 16 (SDK 36) since Oct 2026, gesture
+- Owner's phone: HyperOS (Xiaomi 25080RABDG), Android 16 (SDK 36) as its Oct 2026 reports show, gesture
   navigation, with Second Space (user 10). Also a 24091RPADG (Android 16) and an older M2007J3SG
   (Android 12) — see `docs/DEVICE_MATRIX.md`.
 - **The app is no longer written for that phone alone.** Per-brand setup advice (Samsung, Xiaomi,
