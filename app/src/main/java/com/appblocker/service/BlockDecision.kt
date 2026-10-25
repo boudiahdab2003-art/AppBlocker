@@ -118,7 +118,7 @@ internal data class BlockInputs(
     /** Quick Block is enforcing right now (Strict, or a session saying "block now", or not paused). */
     val quickEnforcing: Boolean,
     /** Quick Block's own on/off **without** Strict — a session saying "block now", or not paused.
-     *  The Allowlist is outside Strict (invariant 96), so this is what turns it on and off. */
+     *  The Allowlist is outside Strict (invariant 97), so this is what turns it on and off. */
     val allowlistEnforcing: Boolean = quickEnforcing,
     val rule: AppRule?,
     val allowlistMode: Boolean,
@@ -202,7 +202,7 @@ internal fun decideBlock(i: BlockInputs): BlockReason? {
         )
     }
 
-    // ⚠️ Strict's blocklist holds in BOTH modes (invariant 96). The Allowlist is outside Strict now —
+    // ⚠️ Strict's blocklist holds in BOTH modes (invariant 97). The Allowlist is outside Strict now —
     // switchable, editable and stoppable mid-session — so without this, switching to Allowlist and
     // ticking a blocked app would be the way out of every Strict session.
     if (i.strict && i.rule?.isBlocked == true) {

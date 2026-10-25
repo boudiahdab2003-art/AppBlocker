@@ -493,7 +493,7 @@ class BlockDecisionTest {
         assertNull(decideBlock(inputs(quickEnforcing = false, rule = rule())))
     }
 
-    // ---- invariant 96: the Allowlist is outside Strict ----------------------------------------
+    // ---- invariant 97: the Allowlist is outside Strict ----------------------------------------
 
     @Test
     fun `during Strict a blocked app stays blocked in allowlist mode even when allowed`() {

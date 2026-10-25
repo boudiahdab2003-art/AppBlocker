@@ -148,7 +148,7 @@ internal fun ScheduleCard(
 ) {
     // During Strict you may turn a schedule ON (strengthen) but not OFF; the card still opens
     // (the editor itself stays read-only for an existing schedule during Strict).
-    // A Usage limit is outside Strict (invariant 96, his choice): it can be switched off and deleted.
+    // A Usage limit is outside Strict (invariant 97, his choice): it can be switched off and deleted.
     val outsideStrict = schedule.type == ScheduleType.USAGE_LIMIT
     val toggleEnabled = !strictActive || !schedule.enabled || outsideStrict
     val canDelete = onDelete != null && (!strictActive || outsideStrict)

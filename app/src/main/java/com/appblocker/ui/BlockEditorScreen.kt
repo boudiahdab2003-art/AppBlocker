@@ -174,7 +174,7 @@ fun BlockEditorScreen(
     // Shared app-picker toggle handlers (used by the APPS page for both the categorized list and
     // the hypothetical-apps list). During Strict you can only *tighten*.
     fun toggleApp(pkg: String, on: Boolean) {
-        // Strict refuses only an untick on the blocklist; the Allowlist is outside it (invariant 96).
+        // Strict refuses only an untick on the blocklist; the Allowlist is outside it (invariant 97).
         if (strictActive && !allowlist && !on) return
         editedApps = true
         if (on) selected.add(pkg) else selected.remove(pkg)
@@ -197,9 +197,9 @@ fun BlockEditorScreen(
                         // "Blocking" title + a tappable Blocklist/Allowlist chip (AppBlock-style).
                         BlockingModeHeader(
                             allowlist = allowlist,
-                            // Switchable during Strict: Strict's blocklist holds in both modes (invariant 96).
+                            // Switchable during Strict: Strict's blocklist holds in both modes (invariant 97).
                             enabled = true,
-                            // Open during Strict too: the Allowlist is outside Strict (invariant 96).
+                            // Open during Strict too: the Allowlist is outside Strict (invariant 97).
                             onClick = { page = EditorPage.MODE },
                         )
                         Spacer(Modifier.padding(top = 4.dp))
@@ -339,7 +339,7 @@ fun BlockEditorScreen(
                             },
                             onToggle = { app, on -> toggleApp(app.packageName, on) },
                             onSelectAll = { catApps ->
-                                // Free in Allowlist mode even during Strict (invariant 96).
+                                // Free in Allowlist mode even during Strict (invariant 97).
                                 editedApps = true
                                 catApps.forEach { if (!selected.contains(it.packageName)) selected.add(it.packageName) }
                             },

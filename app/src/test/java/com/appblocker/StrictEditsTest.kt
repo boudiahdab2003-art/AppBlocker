@@ -256,7 +256,7 @@ class StrictEditsTest {
         assertEquals(setOf("a", "b"), blocked)
     }
 
-    /** Invariant 96: the Allowlist is outside Strict — his choice, 25 Oct 2026. */
+    /** Invariant 97: the Allowlist is outside Strict — his choice, 25 Oct 2026. */
     @Test
     fun `in allowlist mode a session lets you allow more apps`() {
         val (_, allowed) = StrictEdits.allowedSelections(

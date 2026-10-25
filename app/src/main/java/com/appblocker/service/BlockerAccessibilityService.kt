@@ -2070,7 +2070,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                 // (no session) when not paused. Same gate in Blocklist and Allowlist mode.
                 quickEnforcing = strict ||
                     if (session.active) session.blockingNow else !SettingsStore.quickBlockPaused(this),
-                // The same without Strict: the Allowlist is outside it (invariant 96).
+                // The same without Strict: the Allowlist is outside it (invariant 97).
                 allowlistEnforcing =
                     if (session.active) session.blockingNow else !SettingsStore.quickBlockPaused(this),
                 rule = ruleFor(pkg),

@@ -2082,7 +2082,7 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     choice: a psychology podcast about fetishes was being covered, and the Strict session refused
     Spotify on the skip list (invariant 87). Offered "wait for the session", "allow skips during Strict
     behind the typed gate" and "only Spotify, always", he chose the last. `WordSkip.ALWAYS`
-    (`com.spotify.music`, `com.spotify.lite`, and from the same day at his word `com.anthropic.claude`)
+    (`com.spotify.music`, `com.spotify.lite`, and from the same day `com.anthropic.claude`, invariant 96)
     is honoured by `skips()` with no list entry, so
     `allowed()`'s Strict rule is untouched for every other app. The danger hour still reads it
     (that hour reads everything); a browser can never be in it. The picker shows it ticked and
@@ -2104,7 +2104,14 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     **The shape to grep for: a new write path for blocked words or blocked apps that does not run
     `ItemLocks.keepLocked`.**
 
-96. **The Allowlist and Usage limits are outside Strict; Strict's blocklist is the guarantee.**
+96. **Claude is never read for words either — the second named exception.** 25 Oct 2026, his ask:
+    "make claude an exception for blocked words as its hard to program the app otherwise".
+    `com.anthropic.claude` joined `WordSkip.ALWAYS` on the same terms as Spotify (invariant 94):
+    no list entry needed, Strict rule untouched for every other app, the danger hour still reads it,
+    and a browser can never be in it — so claude.ai in a browser is still read. Blocked apps,
+    Shorts and the site layer are unaffected; only the word scan of the Claude app stops.
+
+97. **The Allowlist and Usage limits are outside Strict; Strict's blocklist is the guarantee.**
     25 Oct 2026, his choice ("take allowlist out of strict mode and usage limit also"), after asking
     to use an allowlist study session mid-Strict and stop it at will. Strict used to lock the mode
     switch, refuse new allowed apps, disable Stop and force `quickEnforcing` — so an allowlist

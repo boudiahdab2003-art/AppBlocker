@@ -173,7 +173,7 @@ fun ScheduleEditorScreen(
 
     // A NEW schedule can always be created (adding protection is allowed during Strict Mode);
     // an EXISTING one stays locked while Strict is active so it can't be weakened.
-    // A Usage limit is outside Strict (invariant 96): editable and deletable mid-session.
+    // A Usage limit is outside Strict (invariant 97): editable and deletable mid-session.
     val editable = existing == null || !strictActive || type == ScheduleType.USAGE_LIMIT
 
     Scaffold(

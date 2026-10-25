@@ -25,7 +25,7 @@ object StrictEdits {
      *
      * Empty in Allowlist mode (auto-blocking a blocked app's website is a Blocklist concept) and
      * empty when nothing is enforcing, so a paused Quick Block relieves the web block as well —
-     * **except** (invariants 95, 96) during Strict, whose blocklist holds in Allowlist mode now that
+     * **except** (invariants 95, 97) during Strict, whose blocklist holds in Allowlist mode now that
      * the mode can be switched mid-session, and for an app [locked] on its own, which is blocked
      * whatever Quick Block is doing.
      */
@@ -139,7 +139,7 @@ object StrictEdits {
     ): Pair<Set<String>, Set<String>> {
         if (!strict) return targetBlocked to targetAllowed
         // The blocklist cannot lose an app mid-session in either mode; the allowed list is outside
-        // Strict (invariant 96) and is committed as staged. `allowlistMode` no longer changes it.
+        // Strict (invariant 97) and is committed as staged. `allowlistMode` no longer changes it.
         return (targetBlocked + currentBlocked) to targetAllowed
     }
 }

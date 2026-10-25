@@ -27,15 +27,15 @@ object WordSkip {
      * Strict for every app, so this is a named exception rather than a hole in the Strict rule:
      * [allowed] still refuses additions mid-session.
      *
+     * **Claude joined it the same day** (invariant 96), his ask: "make claude an exception for
+     * blocked words as its hard to program the app otherwise" — building this app means typing
+     * the very words it blocks into a chat about them.
+     *
      * ⚠️ **The danger hour still reads them**, like everything else — that hour exists to read every
      * app, and he did not ask to change it. Browsers are never in here, and [skips] says no for a
      * browser anyway.
      */
-    val ALWAYS: Set<String> = setOf(
-        "com.spotify.music", "com.spotify.lite",
-        // Added at his word the same day: "I want Claude also like this".
-        "com.anthropic.claude",
-    )
+    val ALWAYS: Set<String> = setOf("com.spotify.music", "com.spotify.lite", "com.anthropic.claude")
 
     fun skips(pkg: String, skipList: Set<String>, isBrowser: Boolean, dangerZoneOn: Boolean): Boolean =
         !isBrowser && !dangerZoneOn && (pkg in skipList || pkg in ALWAYS)
