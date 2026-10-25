@@ -2082,7 +2082,8 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     choice: a psychology podcast about fetishes was being covered, and the Strict session refused
     Spotify on the skip list (invariant 87). Offered "wait for the session", "allow skips during Strict
     behind the typed gate" and "only Spotify, always", he chose the last. `WordSkip.ALWAYS`
-    (`com.spotify.music`, `com.spotify.lite`) is honoured by `skips()` with no list entry, so
+    (`com.spotify.music`, `com.spotify.lite`, and from the same day at his word `com.anthropic.claude`)
+    is honoured by `skips()` with no list entry, so
     `allowed()`'s Strict rule is untouched for every other app. The danger hour still reads it
     (that hour reads everything); a browser can never be in it. The picker shows it ticked and
     locked. Adding another package to `ALWAYS` is a weakening that outlives every session — only on

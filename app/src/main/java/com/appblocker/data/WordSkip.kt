@@ -31,7 +31,11 @@ object WordSkip {
      * app, and he did not ask to change it. Browsers are never in here, and [skips] says no for a
      * browser anyway.
      */
-    val ALWAYS: Set<String> = setOf("com.spotify.music", "com.spotify.lite")
+    val ALWAYS: Set<String> = setOf(
+        "com.spotify.music", "com.spotify.lite",
+        // Added at his word the same day: "I want Claude also like this".
+        "com.anthropic.claude",
+    )
 
     fun skips(pkg: String, skipList: Set<String>, isBrowser: Boolean, dangerZoneOn: Boolean): Boolean =
         !isBrowser && !dangerZoneOn && (pkg in skipList || pkg in ALWAYS)

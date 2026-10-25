@@ -85,6 +85,12 @@ class WordSkipTest {
     }
 
     @Test
+    fun `Claude is never read for words either`() {
+        assertTrue(WordSkip.skips(claude, emptySet(), isBrowser = false, dangerZoneOn = false))
+        assertFalse(WordSkip.skips(claude, emptySet(), isBrowser = false, dangerZoneOn = true))
+    }
+
+    @Test
     fun `the danger hour still reads Spotify`() {
         assertFalse(WordSkip.skips(spotify, emptySet(), isBrowser = false, dangerZoneOn = true))
     }
