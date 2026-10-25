@@ -5,7 +5,6 @@ import android.os.Process
 import android.os.SystemClock
 import com.appblocker.data.BootAudit
 import com.appblocker.data.BugReportQueue
-import com.appblocker.data.DeviceBoot
 import com.appblocker.data.OngoingReport
 import com.appblocker.data.OutageLog
 import com.appblocker.data.OwnSpace
@@ -15,7 +14,6 @@ import com.appblocker.data.ProcessExits
 import com.appblocker.data.SelfEnableLog
 import com.appblocker.data.SelfToggleLog
 import com.appblocker.data.ServiceHealth
-import com.appblocker.data.SessionClock
 import com.appblocker.data.SettingsStore
 import com.appblocker.data.SpaceReturn
 import com.appblocker.data.SwitchOffLog
@@ -432,7 +430,7 @@ object ProtectionWatchdog {
         // keeps blocking off, and that stoppage has to read `paused`, not `recovered` (invariant 78).
         endOpenOutage(
             context,
-            watcherBackState(SettingsStore.updatePauseState(context), strictRunning(context)),
+            watcherBackState(SettingsStore.updatePauseState(context)),
             ending,
         )
         // A bound watcher is proof the switch is ON, so a switched-off period ends here too — and one
@@ -476,19 +474,6 @@ object ProtectionWatchdog {
             followedOwnScreen = opened,
         )
     }
-
-    /**
-     * Whether a Strict session is running, answered without waiting for Room: the copy of the session
-     * the watcher keeps for its first seconds ([SettingsStore.strictSnapshot]), on the clock rule
-     * [com.appblocker.data.UpdatePause] decides the pause with. Unreadable counts as not running,
-     * which can only make a stoppage read `paused` — never claim a recovery that did not happen.
-     */
-    private fun strictRunning(context: Context): Boolean = runCatching {
-        val s = SettingsStore.strictSnapshot(context)
-        SessionClock.remaining(
-            s.realtimeStart, s.realtimeEnd, s.wallStart, s.wallEnd, s.bootCount, DeviceBoot.count(context),
-        ) > 0L
-    }.getOrDefault(false)
 
     /**
      * Android's own record of the first death since the watcher's last sign of life — read when an

@@ -1,30 +1,26 @@
 package com.appblocker.data
 
 import android.content.Context
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 
 /**
- * "Blocking pauses after an update": when a new version starts for the first time, ALL blocking is
- * switched off until the user taps Reactivate on the Blocking tab. One exception, enforced in the
- * service: the adult-content layer stays on (its off-switch is intentionally hard).
+ * **Blocking no longer pauses after an update** (invariant 92, his choice, 25 Oct 2026).
  *
- * **A running Strict session survives the update, and suppresses the pause entirely** (owner's
- * decision). Earlier versions did the opposite — an update ENDED the session — with the reasoning
- * that a fresh version is a clean slate, and that reinstalling the same APK could not be used as an
- * escape hatch because the pause only fires on a real version change. True as far as it went, but
- * it missed the case that matters here: releases are frequent, so *whenever an unreleased version
- * existed*, a Strict session could be ended in two taps from inside the app — Update, install,
- * session gone. Every other protective control is locked during Strict; this one was the way out.
+ * Until v1.177 every version change switched ALL blocking off except the adult layer until
+ * Reactivate was tapped on the Blocking tab — separately in each space — so that someone who had just
+ * installed a build would confirm it still worked. In practice it was blocking off with the watcher
+ * healthy and the switch reading ON: on 24 Oct 2026 Instagram went unblocked from after work until
+ * 2 am, his main phone had been silent since the v1.176 install, and two of his other phones were
+ * found sitting in the pause (`updatePaused true`). An update that really breaks the watcher is what
+ * [com.appblocker.service.ProtectionWatchdog] and the silent repair exist for; the pause only added
+ * a way for blocking to be off by design.
  *
- * The pause is therefore skipped rather than the session being cleared. That keeps blocking on
- * across the update, and it keeps every *report* of the pause honest by construction: nothing
- * downstream has to learn about Strict, because [SettingsStore.updatePaused] is never set while a
- * session is running. (The watchdog notification, the Blocking-tab banner and the Profile status
- * row all read that flag directly and would otherwise announce that blocking was off while Strict
- * was actively enforcing it.)
+ * So the pause never arms, and **any pause still standing is lifted** on every start — app open,
+ * service connect, boot — which is how phones paused by an older build come back on their own, in
+ * both spaces, with no tap. The flags themselves stay, and everything that reads them (the banner,
+ * `ProtectionState.PAUSED`, [PauseLog], the `STILL PAUSED` report) stays with them: inert while the
+ * flags are down, and the alarm if one ever survives. Cheaper than a second migration.
+ *
+ * Strict Mode has nothing to say here: removing a way for blocking to be off only makes it stronger.
  */
 object UpdatePause {
 
@@ -38,16 +34,11 @@ object UpdatePause {
     data class PauseState(val paused: Boolean, val pending: Boolean)
 
     /**
-     * Turning a pending intent into a decision. Pure, so the rule is testable.
-     *
-     * A pending pause arms unless a Strict session is running (the session keeps blocking on, so
-     * the pause is dropped rather than the session being cleared). Either way the intent is
-     * **consumed** — that is the half that used to be able to survive on its own.
+     * What a standing pause becomes: lifted, intent and all, in one value — or null when neither
+     * flag is up and there is nothing to write. Pure, so the rule is tested.
      */
-    internal fun resolve(state: PauseState, strictRunning: Boolean): PauseState = PauseState(
-        paused = state.paused || (state.pending && !strictRunning),
-        pending = false,
-    )
+    internal fun lifted(state: PauseState): PauseState? =
+        if (state.paused || state.pending) PauseState(paused = false, pending = false) else null
 
     /**
      * The Reactivate tap.
@@ -64,23 +55,15 @@ object UpdatePause {
     fun reactivate(context: Context) =
         SettingsStore.writeUpdatePause(context, reactivate())
 
-    /** Call at every app/service start: detects a version change and arms the pause.
-     *  The very first run just records the version — a fresh install has nothing to pause
-     *  (which also means the update INTO the first version carrying this feature is
-     *  invisible: the old version left no record to compare against). */
+    /** Call at every app/service start: notes a version change, and lifts any pause an older
+     *  build left standing. It no longer arms one (invariant 92). */
     fun checkVersionChange(context: Context) {
         val current = AppVersion.code(context)
         if (current < 0L) return
         val last = SettingsStore.lastSeenVersionCode(context)
         if (last != current) {
-            // An update the owner did not ask for must not switch his blocking off and then wait
-            // for a tap he has no reason to know is needed. The pause exists so that a person who
-            // just installed something confirms it still works; nobody is standing there after a
-            // silent auto-install, so blocking would simply be off — silently, for however long
-            // until he next opened the app. If the update really did break the watcher,
-            // ProtectionWatchdog notices and says so, which is the mechanism built for exactly
-            // that. See SilentInstaller.
-            val automatic = SettingsStore.autoInstalled(context)
+            // Still consumed, so a stale "this one installed itself" mark cannot outlive the install
+            // it describes. Nothing reads it to decide a pause any more (invariant 92).
             SettingsStore.setAutoInstalled(context, false)
             // Stamp the install for OutageLog. Installing our own APK IS Android killing this
             // process (invariant 21), and the owner installs releases several times a week —
@@ -92,59 +75,23 @@ object UpdatePause {
             // "already tried this one" note is torn up — whoever installed it. Leaving it would
             // make the next release look like the one that was already declined.
             SettingsStore.setAutoUpdateAttempt(context, null)
-            if (last != -1L && !automatic) {
-                // Durable intent, written BEFORE anything is attempted: prefs writes survive a
-                // broadcast receiver's process teardown, the coroutine below may not.
-                SettingsStore.setUpdatePausePending(context, true)
-            }
-            // Outside the branch above, and outside the `last != -1L` check with it: a version
-            // change means the downloaded APK has served its purpose whoever installed it. It is
-            // tens of megabytes, and an auto-install leaves one behind on every single release.
+            // A version change means the downloaded APK has served its purpose, whoever installed
+            // it. It is tens of megabytes, and an auto-install leaves one behind on every release.
             if (last != -1L) Updater.discardDownload(context)
-            // Recorded LAST, deliberately. Recording it first meant that a process killed between
-            // the two writes — a real risk here, since this also runs from a broadcast receiver —
-            // left the version already updated and the pause never armed, with no second chance:
-            // the next start sees last == current and concludes nothing changed. Writing it last
-            // makes the whole thing re-runnable, and re-running it is harmless.
+            // Recorded LAST, so a process killed part-way re-runs the whole thing on its next start;
+            // re-running it is harmless.
             SettingsStore.setLastSeenVersionCode(context, current)
         }
-        resolvePendingPause(context)
+        liftStandingPause(context)
     }
 
     /**
-     * Turns a pending pause into a real one — unless a Strict session is running, in which case the
-     * session keeps blocking on and the pause is dropped.
-     *
-     * Runs on EVERY call (app open, service reconnect, install broadcast), so a decision whose
-     * process died before it landed is retried until it does. Arming the pause asynchronously is
-     * safe in a way that clearing a Strict session never was: the pause switches blocking OFF, so
-     * being a few milliseconds late is harmless, while being wrong is not.
-     *
-     * ⚠️ **The decision and its consumption are one write.** They used to be two `apply()` calls
-     * with [strictSessionRunning]'s Room open between them, in a broadcast receiver's process —
-     * killable at exactly that point. Surviving half-applied left the intent armed after the pause
-     * had been lifted, and this function runs on every reconnect, so blocking went off again on
-     * its own. See [SettingsStore.writeUpdatePause].
+     * Lifts a pause an older build armed, intent and all, in one write ([SettingsStore.writeUpdatePause],
+     * invariant 32). Runs on every start, so it is retried until it lands, and it costs one prefs
+     * read when there is nothing to do.
      */
-    private fun resolvePendingPause(context: Context) {
-        if (!SettingsStore.updatePausePending(context)) return
-        val app = context.applicationContext
-        CoroutineScope(Dispatchers.IO).launch {
-            val strict = strictSessionRunning(app)
-            // Re-read rather than reusing the value the early return above tested: the tap that
-            // lifts a pause can land while the database read above is in flight.
-            SettingsStore.writeUpdatePause(app, resolve(SettingsStore.updatePauseState(app), strict))
-        }
-    }
-
-    /** Reads the Strict row and asks [SessionClock] — the same clock-change-proof rule the watcher
-     *  enforces with, rather than a second opinion about what "running" means. */
-    private suspend fun strictSessionRunning(context: Context): Boolean {
-        val state = BlockerDatabase.get(context).focusDao().get().first() ?: return false
-        return SessionClock.remaining(
-            state.realtimeStartMillis, state.realtimeEndMillis,
-            state.startTimeMillis, state.endTimeMillis,
-            state.bootCount, DeviceBoot.count(context),
-        ) > 0L
+    private fun liftStandingPause(context: Context) {
+        val lift = lifted(SettingsStore.updatePauseState(context)) ?: return
+        SettingsStore.writeUpdatePause(context, lift)
     }
 }

@@ -122,6 +122,28 @@ class CodeShapeTest {
         )
     }
 
+    /**
+     * **Invariant 92: blocking does not pause after an update.** His choice on 25 Oct 2026, after an
+     * evening of unblocked Instagram that the pause most likely caused. The flags survive only so a
+     * pause an older build left can be lifted; nothing may raise one again.
+     */
+    @Test
+    fun `nothing arms the update pause`() {
+        val offenders = sourceTree()
+            .filter { f ->
+                val t = f.readText()
+                t.contains("setUpdatePausePending(context, true)") ||
+                    Regex("""PauseState\(\s*paused\s*=\s*true""").containsMatchIn(t) ||
+                    Regex("""PauseState\(\s*true\s*,""").containsMatchIn(t)
+            }
+            .map { it.name }
+        assertEquals(
+            "Something arms the after-update pause again. He asked for it to be gone (invariant 92); " +
+                "bring it back only on his word.",
+            emptyList<String>(), offenders,
+        )
+    }
+
     // ---- invariant 91 ------------------------------------------------------------------------
 
     /**

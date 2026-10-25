@@ -679,21 +679,17 @@ class ProtectionStateTest {
 
     /**
      * **Invariant 78.** Report #131 said blocking had come back above a table reading `protection
-     * PAUSED`: a new version's first connect arms the update pause a moment before it closes the
-     * stoppage. The pause is decided off the main thread, so a pending one counts — unless a Strict
-     * session is running, which the pause never interrupts. An armed pause stays a pause either way.
+     * PAUSED`. An armed pause is still a pause. Since v1.177 (invariant 92) a pending intent is lifted
+     * rather than decided, so it no longer counts.
      */
     @Test fun theWatcherBackIsOnlyARecoveryWhenNoUpdatePauseHoldsBlockingOff() {
         val none = UpdatePause.PauseState(paused = false, pending = false)
         val pending = UpdatePause.PauseState(paused = false, pending = true)
         val armed = UpdatePause.PauseState(paused = true, pending = false)
-        assertEquals(ProtectionState.OK, watcherBackState(none, strictRunning = false))
-        assertEquals(ProtectionState.OK, watcherBackState(none, strictRunning = true))
-        assertEquals(ProtectionState.PAUSED, watcherBackState(pending, strictRunning = false))
-        assertEquals(ProtectionState.OK, watcherBackState(pending, strictRunning = true))
-        assertEquals(ProtectionState.PAUSED, watcherBackState(armed, strictRunning = false))
-        assertEquals(ProtectionState.PAUSED, watcherBackState(armed, strictRunning = true))
-        assertEquals("paused", outageEndedBy(watcherBackState(pending, strictRunning = false)))
-        assertEquals("recovered", outageEndedBy(watcherBackState(none, strictRunning = false)))
+        assertEquals(ProtectionState.OK, watcherBackState(none))
+        assertEquals(ProtectionState.OK, watcherBackState(pending))
+        assertEquals(ProtectionState.PAUSED, watcherBackState(armed))
+        assertEquals("paused", outageEndedBy(watcherBackState(armed)))
+        assertEquals("recovered", outageEndedBy(watcherBackState(none)))
     }
 }

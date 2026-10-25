@@ -294,14 +294,9 @@ internal fun outageEndedBy(state: ProtectionState): String = when (state) {
  * ⚠️ **The watcher coming back is not blocking coming back while an update pause holds.** A new
  * version's first connect arms the pause a moment before it closes the stoppage, and nothing is
  * blocked until Reactivate is tapped. On 15 Sep 2026 report #131 said "Blocking stopped and has now
- * come back" above a table reading `protection PAUSED`. The pause is decided off the main thread, so
- * a pending one counts, unless a Strict session is running, which the pause never interrupts.
- * [UpdatePause.resolve] is that decision, asked here rather than copied.
+ * come back" above a table reading `protection PAUSED`. Since v1.177 the pause never arms and a
+ * pending intent is lifted rather than decided (invariant 92), so only a pause actually standing —
+ * one an older build left — counts.
  */
-internal fun watcherBackState(
-    pause: UpdatePause.PauseState,
-    strictRunning: Boolean,
-): ProtectionState = when {
-    UpdatePause.resolve(pause, strictRunning).paused -> ProtectionState.PAUSED
-    else -> ProtectionState.OK
-}
+internal fun watcherBackState(pause: UpdatePause.PauseState): ProtectionState =
+    if (pause.paused) ProtectionState.PAUSED else ProtectionState.OK

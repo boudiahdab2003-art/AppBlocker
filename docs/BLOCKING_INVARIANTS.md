@@ -2047,6 +2047,25 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     **The shape to grep for: a state where blocking is off that only a person looking at the phone
     can see. If the app can tell it is not protecting him, the inbox must hear while it is true.**
 
+    ⚠️ The pause half went inert the same day: invariant 92 removed the pause. `PauseLog` and
+    `STILL PAUSED` stay as the alarm for a flag that survives the lift; the stoppage half is live.
+
+92. **Blocking does not pause after an update.** 25 Oct 2026, his choice ("I was thinking about
+    removing this stop after update"), the morning after invariant 91's evening. Every version change
+    used to arm `UpdatePause`: all blocking off except the adult layer until Reactivate, per space,
+    skipped only for a silent auto-install and during Strict. Its purpose was a person confirming a
+    fresh install works; its effect was blocking off by design with the switch ON — two of his
+    other phones were sitting in it (`updatePaused true`) when he asked. An update that does break
+    the watcher is what the watchdog and the silent repair are for.
+
+    `checkVersionChange` no longer raises `pending`; on every start it **lifts** a standing pause
+    (`UpdatePause.lifted`, one `writeUpdatePause`, invariant 32), so phones paused by an older build
+    come back by themselves in both spaces. `resolve` and its Strict read are gone, and
+    `watcherBackState` counts only a pause actually standing. The readers — the banner,
+    `ProtectionState.PAUSED`, `PauseLog`, `STILL PAUSED` — are kept on purpose: inert while the
+    flags are down, and the alarm if one survives. `CodeShapeTest` fails if anything arms it again.
+    Strict Mode has no say: removing a way for blocking to be off only makes it stronger.
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused

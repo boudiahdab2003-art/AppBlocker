@@ -85,11 +85,10 @@ it will not be green there — the difference being that here it is free.
 A block test on a freshly flashed device fails for reasons that have nothing to do with blocking.
 `tools/rtl.sh seed` does these in this order because **any other order silently disarms the app**:
 
-1. **The after-update pause.** A *re-install* sets `update_paused=true` and **all blocking stops**
-   until someone taps "Reactivate blocking" — by design (`UpdatePause`). A *fresh* install does
-   not, because the pause only arms when `lastSeenVersionCode != -1`. `pm clear` restores exactly
-   that state, so it is the first thing done and the reason a mid-session re-install must be
-   followed by another `pm clear`.
+1. **The after-update pause — gone from v1.177** (invariant 92). Before it, a *re-install* set
+   `update_paused=true` and **all blocking stopped** until someone tapped "Reactivate blocking".
+   From v1.177 the pause never arms and a standing one is lifted on start, so this trap only applies
+   when testing an older build; `pm clear` first still does no harm and is kept.
 2. **`pm clear` prunes the accessibility setting.** The framework removes our component from
    `enabled_accessibility_services` a moment *after* the clear returns, so switching the service
    on before that lands is undone with no error. It is switched on at the **end**, never the start.

@@ -93,11 +93,13 @@ reports once read; that inbox had never been emptied.
 
 On the owner's PC `gh` works directly: `gh issue list -R boudiahdab2003-art/appblocker-reports`.
 
-From v1.177 two things arrive **while** blocking is off, not after (invariant 91): a
-**`STILL STOPPED for N min`** issue (a stoppage the repair has not ended, 30 min + 10 min of use) and a
-**`STILL PAUSED after an update`** issue (the after-update pause nobody reactivated — each space
-pauses on its own). The stoppage list gains **`PAUSED` lines** (`data/PauseLog.kt`), never in the
-outage totals. A silent phone used to be able to mean either; now each one files while it lasts.
+From v1.177 a **`STILL STOPPED for N min`** issue arrives **while** a stoppage lasts (the repair has
+not ended it, 30 min + 10 min of use — invariant 91), not only after. **The after-update pause is
+gone** from v1.177 (invariant 92, his choice): updates no longer switch blocking off until
+Reactivate, and a pause left by an older build lifts itself on start. So a **`STILL PAUSED`** issue
+or a **`PAUSED`** line (`data/PauseLog.kt`) should not appear on 1.177+ (one line at the first start, closing a pause an older build left, is the lift working); if more do, a flag
+survived the lift — that is a bug, not his forgetting to tap. Do not bring the pause back without
+his word.
 
 From v1.163 the stoppage list also carries **`SWITCHED-OFF` lines** (`data/SwitchOffLog.kt`,
 invariant 70): the switch itself read OFF, which the app used to file as his choice and time not

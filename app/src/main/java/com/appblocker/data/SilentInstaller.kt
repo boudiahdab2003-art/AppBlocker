@@ -36,13 +36,12 @@ import java.io.File
  *
  * ## The trap this file has to avoid
  *
- * Every version change arms [UpdatePause], which switches **all blocking off** until the owner taps
- * Reactivate. That is right for an update he just asked for and standing in front of; it is
- * dangerous for one that installs by itself, because blocking would be off silently until he next
- * opened the app. So a silent install marks itself first ([SettingsStore.setAutoInstalled]) and
- * `UpdatePause` skips the pause for it. Blocking simply continues on the new version — and if the
- * update did break the watcher, `ProtectionWatchdog` is the thing that notices and says so, which
- * is its whole job.
+ * Until v1.177 every version change armed [UpdatePause], which switched **all blocking off** until
+ * the owner tapped Reactivate, and a silent install marked itself first
+ * ([SettingsStore.setAutoInstalled]) so the pause would be skipped. The pause is gone now
+ * (invariant 92) — no install arms it — so the mark no longer changes anything; it is still written
+ * and cleared, harmlessly. If an update does break the watcher, `ProtectionWatchdog` is the thing
+ * that notices and says so, which is its whole job.
  */
 object SilentInstaller {
 
@@ -60,15 +59,12 @@ object SilentInstaller {
      */
     fun install(context: Context, apk: File): Boolean {
         if (!possible()) return false
-        // Marked BEFORE the commit, not after: this process is killed the moment the replacement
-        // lands, so anything written afterwards would never be written at all. The flag is what
-        // stops the new version pausing blocking on the owner's behalf — see the class KDoc, and
-        // SettingsStore.setAutoInstalled on why it is a commit(). A mark that cannot be written is
-        // an install that must not happen: the new version would pause blocking behind his back.
+        // Marked BEFORE the commit, because this process is killed the moment the replacement lands.
+        // Since v1.177 nothing decides anything on it (invariant 92); kept so an install record
+        // still exists, and a failed write still refuses the install rather than guess.
         if (runCatching { SettingsStore.setAutoInstalled(context, true) }.isFailure) return false
         val committed = commit(context, listOf("appblocker" to apk), PURPOSE_UPDATE)
-        // The mark must not outlive a failed attempt, or the NEXT update — a manual one he taps
-        // through himself — would skip the pause on the strength of this one.
+        // The mark must not outlive a failed attempt.
         if (!committed) runCatching { SettingsStore.setAutoInstalled(context, false) }
         return committed
     }
