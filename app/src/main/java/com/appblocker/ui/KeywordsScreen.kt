@@ -74,7 +74,9 @@ fun KeywordsScreen(
         if (skipped.isNotEmpty()) InstalledAppsRepository.ensureLoaded(context)
     }
     val installed by InstalledAppsRepository.apps.collectAsState()
-    val skippedNames = installed.filter { it.packageName in skipped }.map { it.label }.sorted()
+    val skippedNames = installed
+        .filter { it.packageName in skipped || it.packageName in WordSkip.ALWAYS }
+        .map { it.label }.sorted()
     var adultPack by remember { mutableStateOf(SettingsStore.adultWordsPack(context)) }
     var showDisableGate by remember { mutableStateOf(false) }
     val ed = !strictActive // words can always be added; removal is locked during Strict Mode

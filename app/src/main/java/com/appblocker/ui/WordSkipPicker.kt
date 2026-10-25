@@ -38,6 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.appblocker.R
 import com.appblocker.data.InstalledAppsRepository
+import com.appblocker.data.WordSkip
 import com.appblocker.service.findBrowserPackages
 
 /**
@@ -101,7 +102,12 @@ internal fun WordSkipPicker(
     val apps = remember(installed, browsers) {
         installed
             .filter { it.packageName != context.packageName && it.packageName !in browsers }
-            .sortedWith(compareBy({ it.packageName !in skipped }, { it.label.lowercase() }))
+            .sortedWith(
+                compareBy(
+                    { it.packageName !in skipped && it.packageName !in WordSkip.ALWAYS },
+                    { it.label.lowercase() },
+                ),
+            )
     }
     val ed = !strictActive
 
@@ -122,12 +128,15 @@ internal fun WordSkipPicker(
                     )
                 }
                 items(apps, key = { it.packageName }) { app ->
-                    val checked = app.packageName in skipped
+                    // Spotify is always left out (invariant 94): shown ticked and locked, never
+                    // written to the list, so the screen says what the watcher does.
+                    val always = app.packageName in WordSkip.ALWAYS
+                    val checked = always || app.packageName in skipped
                     AppCheckRow(
                         item = AppItem(app.packageName, app.label, app.icon, isBlocked = false,
                             category = app.category),
                         checked = checked,
-                        enabled = ed || checked,
+                        enabled = !always && (ed || checked),
                         onToggle = { on ->
                             onChange(if (on) skipped + app.packageName else skipped - app.packageName)
                         },

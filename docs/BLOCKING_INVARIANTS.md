@@ -2078,6 +2078,16 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     `reportOutage` flushes, and `checkAndNotify` calls `flushIfPending` before the away guard
     (sending is not judging), so every background check sends what is waiting, under the same cap.
 
+94. **Spotify is never read for words — a named exception, not a hole in Strict.** 25 Oct 2026, his
+    choice: a psychology podcast about fetishes was being covered, and the Strict session refused
+    Spotify on the skip list (invariant 87). Offered "wait for the session", "allow skips during Strict
+    behind the typed gate" and "only Spotify, always", he chose the last. `WordSkip.ALWAYS`
+    (`com.spotify.music`, `com.spotify.lite`) is honoured by `skips()` with no list entry, so
+    `allowed()`'s Strict rule is untouched for every other app. The danger hour still reads it
+    (that hour reads everything); a browser can never be in it. The picker shows it ticked and
+    locked. Adding another package to `ALWAYS` is a weakening that outlives every session — only on
+    his word.
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused

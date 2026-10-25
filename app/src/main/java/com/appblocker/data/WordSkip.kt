@@ -20,8 +20,21 @@ package com.appblocker.data
  */
 object WordSkip {
 
+    /**
+     * **Apps never read for words, list or no list, Strict or not** (invariant 94). His choice on
+     * 25 Oct 2026: a psychology podcast about fetishes on Spotify kept being covered, and a Strict
+     * session refused Spotify on his own list. He chose "only Spotify, always" over loosening
+     * Strict for every app, so this is a named exception rather than a hole in the Strict rule:
+     * [allowed] still refuses additions mid-session.
+     *
+     * ⚠️ **The danger hour still reads them**, like everything else — that hour exists to read every
+     * app, and he did not ask to change it. Browsers are never in here, and [skips] says no for a
+     * browser anyway.
+     */
+    val ALWAYS: Set<String> = setOf("com.spotify.music", "com.spotify.lite")
+
     fun skips(pkg: String, skipList: Set<String>, isBrowser: Boolean, dangerZoneOn: Boolean): Boolean =
-        !isBrowser && !dangerZoneOn && pkg in skipList
+        !isBrowser && !dangerZoneOn && (pkg in skipList || pkg in ALWAYS)
 
     /**
      * What may actually be stored. Skipping an app is a weakening, so during a Strict session no app

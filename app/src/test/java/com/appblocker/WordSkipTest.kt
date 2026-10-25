@@ -65,4 +65,34 @@ class WordSkipTest {
     fun `during Strict a swap is only the removal half`() {
         assertEquals(setOf(claude), WordSkip.allowed(list, setOf(claude, "com.google.android.youtube"), strict = true))
     }
+
+    // ---- invariant 94: Spotify, always ------------------------------------------------------
+
+    private val spotify = "com.spotify.music"
+
+    @Test
+    fun `Spotify is never read for words, with no list at all`() {
+        assertTrue(WordSkip.skips(spotify, emptySet(), isBrowser = false, dangerZoneOn = false))
+        assertTrue(WordSkip.skips("com.spotify.lite", emptySet(), isBrowser = false, dangerZoneOn = false))
+    }
+
+    /** A Strict session refuses additions to the list, and Spotify needs none — that is the point. */
+    @Test
+    fun `Spotify needs no list entry, so Strict does not stand in its way`() {
+        val duringStrict = WordSkip.allowed(emptySet(), setOf(spotify), strict = true)
+        assertEquals(emptySet<String>(), duringStrict)
+        assertTrue(WordSkip.skips(spotify, duringStrict, isBrowser = false, dangerZoneOn = false))
+    }
+
+    @Test
+    fun `the danger hour still reads Spotify`() {
+        assertFalse(WordSkip.skips(spotify, emptySet(), isBrowser = false, dangerZoneOn = true))
+    }
+
+    @Test
+    fun `the exception never reaches a browser or any other app`() {
+        assertFalse(WordSkip.skips(spotify, emptySet(), isBrowser = true, dangerZoneOn = false))
+        assertFalse(WordSkip.skips("com.instagram.android", emptySet(), isBrowser = false, dangerZoneOn = false))
+        assertTrue(WordSkip.ALWAYS.none { it == chrome })
+    }
 }

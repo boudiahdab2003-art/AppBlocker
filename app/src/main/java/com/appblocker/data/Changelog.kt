@@ -13,6 +13,11 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.178", "Oct 25, 2026", "Spotify is no longer checked for blocked words", listOf(
+        "**Spotify is left out of the word check, always, as you chose.** You were listening to a psychology podcast about fetishes and the word check kept covering it. Strict Mode would not let you add Spotify to \"Skip these apps\", because leaving an app out loosens blocking.",
+        "**You chose Spotify alone, permanently, rather than a way around Strict.** So Strict still refuses new apps on that list during a session, exactly as before. Spotify just does not need to be on it any more. On the Skip these apps screen it now shows ticked and greyed out.",
+        "**What still applies to Spotify:** during a danger hour every app is read again, Spotify too. Your browsers, blocked websites and the adult-site check are unchanged everywhere.",
+    )),
     VersionLog("1.177", "Oct 25, 2026", "No more pause after an update, and a report the moment blocking is off", listOf(
         "**Blocking no longer pauses after an update, as you chose.** Until now every update switched blocking off, except the adult filter, until you tapped Reactivate, and it did this separately in your main space and in Second Space. That is most likely why Instagram was not blocked on Saturday from after work until 2 am. Now an update simply carries on blocking.",
         "**A pause that is already on lifts itself.** When this version starts, any phone still paused by an older version, in either space, starts blocking again on its own. You do not need to tap anything.",
