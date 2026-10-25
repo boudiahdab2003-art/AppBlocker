@@ -55,7 +55,7 @@ class BlockedWordRowTest {
             CompositionLocalProvider(LocalDensity provides Density(base.density, fontScale)) {
                 AppBlockerTheme(darkTheme = true) {
                     Box(Modifier.width(328.dp)) {
-                        BlockedWordRow(word, covering, strictActive) { removed++ }
+                        BlockedWordRow(word, covering, strictActive, onRemove = { removed++ })
                     }
                 }
             }
