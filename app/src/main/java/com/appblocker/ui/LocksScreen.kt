@@ -89,7 +89,7 @@ fun LocksScreen(
                 }
                 if (locked.isNotEmpty()) {
                     item { LocksHeader(stringResource(R.string.locks_now)) }
-                    items(locked.sortedBy { it.second }, key = { "locked-${it.first.kind}-${it.first.key}" }) { (t, ms) ->
+                    items(locked.sortedBy { it.second }, key = { "locked:" + it.first.kind + ":" + it.first.key }) { (t, ms) ->
                         LockRow(
                             label = t.label,
                             detail = stringResource(R.string.locks_until, untilText(ms)),
