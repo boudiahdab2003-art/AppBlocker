@@ -525,6 +525,19 @@ object UsageTracker {
         return (walk.union().sumOf { it[1] - it[0] } / 60_000L).toInt()
     }
 
+    /**
+     * Foreground minutes across [start]..[end] spent in [packages] only — merged, so two of them
+     * overlapping on a switch count once. **The cost of a stoppage in the one unit that matters**:
+     * "146 minutes of use" says the phone was on; this says how much of it was in an app he had
+     * blocked (invariant 93). Same caveats as [totalMinutesInRange]: it can read low, never high.
+     */
+    fun minutesInAppsInRange(context: Context, start: Long, end: Long, packages: Set<String>): Int {
+        if (packages.isEmpty()) return 0
+        val walk = walkForeground(context, start, end) ?: return 0
+        val inBlocked = walk.sessions.filter { it.pkg in packages }.map { longArrayOf(it.from, it.to) }
+        return (mergeIntervals(inBlocked).sumOf { it[1] - it[0] } / 60_000L).toInt()
+    }
+
     // ---- History (multi-day) ----
 
     /** Total foreground minutes for each of the last [days] days (last index = today).

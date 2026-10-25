@@ -459,6 +459,12 @@ object BugReportSender {
         field("localTime") {
             java.text.SimpleDateFormat("HH:mm", java.util.Locale.US).format(java.util.Date())
         }
+        // ⚠️ And the DAY (invariant 93). `localTime` alone, beside a queued report that went out six
+        // days later and stoppage lines reading `at=Thu`, left "which Thursday?" to be worked out
+        // from build numbers — and got it wrong first. The issue's own date is when it ARRIVED.
+        field("localDate") {
+            java.text.SimpleDateFormat("EEE yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+        }
         // Only when the coach has actually failed — absent means it has never failed on this
         // install, which is different from "we didn't look".
         AiCoach.lastError(ctx)?.let { (error, _) -> field("coachError") { error.name } }
@@ -657,6 +663,13 @@ object BugReportSender {
                         // means something completely different depending on which arm produced it.
                         "outageDetectedBy" to episode.detectedBy,
                         "outageCount" to "${OutageLog.totals(context).count}",
+                        // Minutes in apps he had blocked while blocking was down (invariant 93).
+                        "outageBlockedMin" to blockedAppMinutes(
+                            context,
+                            episode.startedAt,
+                            if (episode.spanMs >= 0L) episode.startedAt + episode.spanMs
+                            else System.currentTimeMillis(),
+                        ),
                     ),
                     recentBlocks = BlockLog.recent(context),
                     recentOutages = StoppageHistory.lines(context),
@@ -664,6 +677,30 @@ object BugReportSender {
                 ),
             )
         }
+        // Now (invariant 93): a report that waits for the app to be opened can wait six days.
+        flush(context)
+    }
+
+    /**
+     * Minutes spent in apps on his block list between two instants, or `?` when that cannot be told
+     * — never a zero standing in for "unknown". A count only: which app it was never leaves the phone.
+     */
+    private fun blockedAppMinutes(context: Context, from: Long, to: Long): String {
+        if (from <= 0L || to <= from) return "?"
+        if (!runCatching { hasUsageAccess(context) }.getOrDefault(false)) return "?"
+        return runCatching {
+            UsageTracker.minutesInAppsInRange(context, from, to, SettingsStore.blockedSnapshot(context))
+        }.map { "$it" }.getOrDefault("?")
+    }
+
+    /**
+     * Sends whatever is waiting, if anything is (invariant 93). Called from every background check,
+     * so a report no longer waits for the app to be opened — in the space behind, above all, where
+     * nobody opens it: a Second Space report once arrived six days after it was written. Costs one
+     * prefs read when the queue is empty, and [flush] keeps the daily cap.
+     */
+    fun flushIfPending(context: Context) {
+        if (runCatching { BugReportQueue.pending(context).isNotEmpty() }.getOrDefault(false)) flush(context)
     }
 
     /**
@@ -691,6 +728,7 @@ object BugReportSender {
                         "ongoingAt" to at,
                         "ongoingMin" to minutesOrUnknown(openMs),
                         "ongoingUsedMin" to "$usedMin",
+                        "ongoingBlockedMin" to blockedAppMinutes(context, startedAt, System.currentTimeMillis()),
                     ),
                     recentBlocks = BlockLog.recent(context),
                     recentOutages = StoppageHistory.lines(context),

@@ -161,10 +161,28 @@ data class BugReport(
      * is this?", and an issue list where every row starts "Report:" is a list you have to open
      * one by one to read.
      */
+    /**
+     * Which space wrote this, for the title — empty when the report does not say (an old queued one).
+     * Both of his spaces report as the same handset, so without it a Second Space stoppage and a
+     * main-space one are told apart only by `installId`, and on 25 Oct 2026 they were mixed up
+     * (invariant 93).
+     */
+    private val spaceTag: String
+        get() = when (val s = context["space"]) {
+            null, "" -> ""
+            "0" -> " · main space"
+            "10" -> " · Second Space"
+            else -> " · space $s"
+        }
+
+    /** ", N min in blocked apps" when a minutes-in-blocked-apps figure is known, else empty. */
+    private fun blockedPart(key: String): String =
+        context[key]?.toIntOrNull()?.let { ", $it min in blocked apps" }.orEmpty()
+
     fun title(): String = when {
         // The verdict goes in the title because most profiles are healthy and the issue list has
         // to make the one that isn't findable without opening twenty that are.
-        isProfile -> "[$appVersion] $device — " +
+        isProfile -> "[$appVersion$spaceTag] $device — " +
             // ⚠️ **"profile OK" is about this phone's SETUP, and it used to be the whole
             // title while the report's own first section led with a red cross about blocking.**
             // Report #114 was titled `profile OK` above "The watcher was re-checked and still
@@ -179,24 +197,26 @@ data class BugReport(
         // the pattern across them, and a list where every row reads "outage" would have to be
         // opened issue by issue to see the very thing being measured.
         // Says the answer in the list, so a healthy week never needs opening.
-        isWeekly -> "[$appVersion] Week of ${context["weekOf"] ?: "?"} — " +
+        isWeekly -> "[$appVersion$spaceTag] Week of ${context["weekOf"] ?: "?"} — " +
             (worstProblem() ?: "all healthy")
         // Says what is happening NOW, in words that cannot be read as an episode that is over.
-        isOngoing -> "[$appVersion] " + when (context["ongoingKind"]) {
+        isOngoing -> "[$appVersion$spaceTag] " + when (context["ongoingKind"]) {
             OngoingReport.Kind.PAUSED -> "STILL PAUSED after an update for ${context["ongoingMin"] ?: "?"} min" +
-                " — ${context["ongoingUsedMin"] ?: "?"} min of use, blocking off"
+                " — ${context["ongoingUsedMin"] ?: "?"} min of use${blockedPart("ongoingBlockedMin")}, blocking off"
             else -> "STILL STOPPED for ${context["ongoingMin"] ?: "?"} min" +
-                " — ${context["ongoingUsedMin"] ?: "?"} min of use, the repair has not brought it back"
+                " — ${context["ongoingUsedMin"] ?: "?"} min of use${blockedPart("ongoingBlockedMin")}" +
+                ", the repair has not brought it back"
         }
-        isOutage -> "[$appVersion] STOPPED for ${context["outageMin"] ?: "?"} min" +
+        isOutage -> "[$appVersion$spaceTag] STOPPED for ${context["outageMin"] ?: "?"} min" +
             " — after ${context["outagePreceded"] ?: "?"}" +
-            if (context["outageDeaf"] == "true") ", still running" else ", process died"
+            (if (context["outageDeaf"] == "true") ", still running" else ", process died") +
+            blockedPart("outageBlockedMin")
         // His own words when there are any — nothing summarises a complaint better than the
         // complaint. When there are none, the title has to be earned rather than left blank: an
         // issue list of bare `[1.146]` rows would have to be opened one by one, which is exactly
         // the failure the profile and outage titles above were written to avoid.
-        note != null -> "[$appVersion] " + noteTitle()
-        else -> "[$appVersion] $errorClass in $where"
+        note != null -> "[$appVersion$spaceTag] " + noteTitle()
+        else -> "[$appVersion$spaceTag] $errorClass in $where"
     }
 
     /**
@@ -247,7 +267,7 @@ data class BugReport(
      * sections are always present — an absent section and an empty one look identical in an issue
      * and mean opposite things, which has already cost one round trip.
      */
-    fun body(): String = whatLooksWrong() + when {
+    fun body(): String = writtenWhen() + whatLooksWrong() + when {
         isProfile -> profileBody()
         isOutage -> outageBody()
         isOngoing -> ongoingBody()
@@ -307,6 +327,17 @@ data class BugReport(
         appendLine("Nothing here needs a reply. It is filed so that a week with **no** summary is")
         appendLine("a signal rather than a silence — which is the failure this whole shape exists")
         appendLine("to make visible. The verdict is in the title; the detail is below.")
+    }
+
+    /**
+     * When the phone wrote this, by its own clock — the issue's date is when it ARRIVED, and a queued
+     * report has arrived six days late (invariant 93). Nothing when an old report does not carry it.
+     */
+    private fun writtenWhen(): String {
+        val date = context["localDate"] ?: return ""
+        return "_Written on the phone on **$date at ${context["localTime"] ?: "?"}** (phone time)" +
+            spaceTag.removePrefix(" · ").let { if (it.isEmpty()) "" else ", in the $it" } +
+            ". The issue's own date is when it arrived._\n\n"
     }
 
     /**
@@ -971,6 +1002,13 @@ data class BugReport(
             // it there?", and the issue's own timestamp is when the report was SENT — which for a
             // queued report can be hours later.
             "localTime",
+            // The phone's own day, `Thu 2026-10-22` (invariant 93): with `localTime` it says when
+            // the report was WRITTEN, which for a queued one can be days before it was sent.
+            "localDate",
+            // Minutes in apps on his block list during a stoppage — finished or still going on
+            // (invariant 93). A count only; which app it was is never sent.
+            "outageBlockedMin",
+            "ongoingBlockedMin",
             // Whether the phone is exempt from battery optimisation. The app asks for this
             // explicitly because OEM battery managers are the usual cause of a dead watcher.
             "batteryFree",

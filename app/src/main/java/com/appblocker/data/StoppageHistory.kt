@@ -55,13 +55,17 @@ object StoppageHistory {
     )
 
     /**
-     * `Sun 21:40`, or `?` when the stamp was never recorded — **the one format every line in the
-     * list uses**, so lines of different kinds read side by side. Never a date-with-year: the day of
-     * the week and the hour are the pattern, and the rest is noise in a fixed-width line. Local time
-     * on purpose: the phone's own evening is the thing being asked about.
+     * `Thu 15 Oct 18:41`, or `?` when the stamp was never recorded — **the one format every line in
+     * the list uses**, so lines of different kinds read side by side. Local time on purpose: the
+     * phone's own evening is the thing being asked about.
+     *
+     * ⚠️ **The day of the month is in it now** (invariant 93). `Thu 18:41` alone was ambiguous across
+     * a list that spans more than a week, and a queued report sent days later made it worse: on
+     * 25 Oct 2026 a 20-hour Second Space stoppage was first read as that week's Thursday when it was
+     * the one before. Still no year: the list never reaches back that far, and the width is the point.
      */
     internal fun label(at: Long): String =
         if (at <= 0L) "?" else runCatching {
-            java.text.SimpleDateFormat("EEE HH:mm", java.util.Locale.US).format(java.util.Date(at))
+            java.text.SimpleDateFormat("EEE dd MMM HH:mm", java.util.Locale.US).format(java.util.Date(at))
         }.getOrDefault("?")
 }

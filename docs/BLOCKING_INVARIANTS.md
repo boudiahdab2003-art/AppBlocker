@@ -2066,6 +2066,18 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     flags are down, and the alarm if one survives. `CodeShapeTest` fails if anything arms it again.
     Strict Mode has no say: removing a way for blocking to be off only makes it stronger.
 
+93. **A report must say what it cost, where, and when — and go out without waiting to be opened.**
+    25 Oct 2026, his ask ("make the report even more accurate"), from what reading reports
+    #272–#281 had needed: (a) `used=` counts any phone use, not use of what he blocked — so
+    `outageBlockedMin` / `ongoingBlockedMin` (`UsageTracker.minutesInAppsInRange` over
+    `blockedSnapshot`, `?` without usage access, a count only, never a package); (b) both spaces
+    report as one handset and were mixed up — the title now carries `· main space` / `· Second Space`
+    from the `space` field; (c) `at=Thu 18:41` was read as the wrong Thursday — `StoppageHistory.label`
+    is `Thu 15 Oct 18:41`, and `localDate` with `localTime` opens every body as "written on the
+    phone"; (d) the queue flushed only on app open, and a Second Space report arrived six days late —
+    `reportOutage` flushes, and `checkAndNotify` calls `flushIfPending` before the away guard
+    (sending is not judging), so every background check sends what is waiting, under the same cap.
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused

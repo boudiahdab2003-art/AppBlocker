@@ -169,6 +169,10 @@ object ProtectionWatchdog {
         // can notice a boot our own receiver never heard. Lazy by necessity: a missed boot only
         // becomes knowable when something finally does run.
         BootAudit.noteRun(context)
+        // Waiting reports go out from here, not only on app open (invariant 93) — and before the
+        // away guard on purpose: sending is not judging, and the space behind is the one whose
+        // reports used to wait the longest.
+        BugReportSender.flushIfPending(context)
         // ⚠️ **Our own off-and-on first** (invariant 82). While the silent repair is between its two
         // writes, the switch reads OFF because we made it so — judged now, that is a switch-off
         // filed as his and alerted about. And a repair whose process died between the writes left

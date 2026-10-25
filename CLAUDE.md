@@ -101,6 +101,11 @@ or a **`PAUSED`** line (`data/PauseLog.kt`) should not appear on 1.177+ (one lin
 survived the lift — that is a bug, not his forgetting to tap. Do not bring the pause back without
 his word.
 
+From v1.177 (invariant 93) titles say **`· main space` / `· Second Space`**, bodies open with when the
+phone *wrote* the report (the issue date is when it arrived), stoppage lines read `Thu 15 Oct 18:41`,
+and outage/ongoing reports carry **`…BlockedMin`** — minutes in apps on his block list during the gap,
+the real cost. Reports now go out from the background checks, not only on app open.
+
 From v1.163 the stoppage list also carries **`SWITCHED-OFF` lines** (`data/SwitchOffLog.kt`,
 invariant 70): the switch itself read OFF, which the app used to file as his choice and time not
 at all. They are never in the outage totals. Read `how=` first — `settings-open` looks like his
