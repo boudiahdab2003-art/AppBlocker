@@ -8,6 +8,7 @@ import com.appblocker.data.BlockedKeyword
 import com.appblocker.data.BlockerDatabase
 import com.appblocker.data.DeviceBoot
 import com.appblocker.data.FocusState
+import com.appblocker.data.ItemLocks
 import com.appblocker.data.QuickSession
 import com.appblocker.data.SettingsStore
 import com.appblocker.data.SiteWord
@@ -73,8 +74,10 @@ class WebFilterViewModel(app: Application) : AndroidViewModel(app) {
             val deletable = StrictEdits.allowedDeletions(
                 current, target, strict = remaining > 0L, siteWords = siteWords,
             )
+            // A word he locked on its own stays until its lock ends (invariant 95), Strict or not.
+            val locked = ItemLocks.locked(getApplication(), ItemLocks.Kind.WORD)
             (target - current).forEach { dao.insert(BlockedKeyword(it)) }
-            deletable.forEach { dao.delete(BlockedKeyword(it)) }
+            (deletable - locked).forEach { dao.delete(BlockedKeyword(it)) }
         }
     }
 

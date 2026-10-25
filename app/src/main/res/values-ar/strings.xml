@@ -1049,4 +1049,36 @@
     <string name="profile_netdns_title">فلتر العائلة</string>
     <string name="profile_netdns_subtitle_on">يعمل — يحظر المواقع الإباحية لكل التطبيقات</string>
     <string name="profile_netdns_subtitle_off">لم يُضبط بعد — أقوى حظر يمكنك إضافته</string>
+    <!-- Locks: Strict Mode for one thing at a time (invariant 95) -->
+    <string name="block_item_locked_title">مقفل</string>
+    <string name="block_item_locked_message">لقد قفلت هذا التطبيق. سيبقى محظورًا حتى ينتهي القفل.</string>
+    <string name="locks_title">الأقفال</string>
+    <string name="locks_card_desc">اقفل تطبيقًا أو موقعًا واحدًا لعدة أيام، واترك كل شيء آخر حرًا</string>
+    <string name="locks_intro">اقفل تطبيقًا أو موقعًا محظورًا واحدًا لعدد الأيام الذي تختاره. حتى ذلك الحين لا يمكن إزالته، حتى مع إيقاف الوضع الصارم، ويبقى التطبيق المقفل محظورًا حتى عند إيقاف الحظر السريع مؤقتًا. كل شيء آخر يبقى قابلًا للتغيير.</string>
+    <string name="locks_now">مقفل الآن</string>
+    <string name="locks_until">حتى %1$s</string>
+    <string name="locks_extend">مدّد القفل</string>
+    <string name="locks_lock">اقفل</string>
+    <string name="locks_apps">التطبيقات المحظورة</string>
+    <string name="locks_apps_none">لا توجد تطبيقات محظورة غير مقفلة. احظر تطبيقًا أولًا ثم اقفله هنا.</string>
+    <string name="locks_words">الكلمات والمواقع المحظورة</string>
+    <string name="locks_words_none">لا توجد كلمات محظورة غير مقفلة. أضف كلمة في الكلمات المحظورة أولًا.</string>
+    <string name="locks_dialog_title">اقفل %1$s</string>
+    <string name="locks_dialog_warning">لا يمكن التراجع عن هذا مبكرًا. يمكنك إطالة القفل لاحقًا، ولا يمكنك تقصيره أبدًا.</string>
+    <plurals name="locks_days">
+        <item quantity="zero">%1$s يوم</item>
+        <item quantity="one">يوم واحد</item>
+        <item quantity="two">يومان</item>
+        <item quantity="few">%1$s أيام</item>
+        <item quantity="many">%1$s يومًا</item>
+        <item quantity="other">%1$s يوم</item>
+    </plurals>
+    <plurals name="locks_confirm">
+        <item quantity="zero">اقفل لمدة %1$s يوم</item>
+        <item quantity="one">اقفل لمدة يوم واحد</item>
+        <item quantity="two">اقفل لمدة يومين</item>
+        <item quantity="few">اقفل لمدة %1$s أيام</item>
+        <item quantity="many">اقفل لمدة %1$s يومًا</item>
+        <item quantity="other">اقفل لمدة %1$s يوم</item>
+    </plurals>
 </resources>

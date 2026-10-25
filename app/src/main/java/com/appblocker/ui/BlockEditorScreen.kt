@@ -75,6 +75,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.appblocker.data.ItemLocks
 import com.appblocker.data.SettingsStore
 import com.appblocker.data.StrictEdits
 import com.appblocker.service.AccessibilityUtil
@@ -141,6 +142,10 @@ fun BlockEditorScreen(
     var ytShorts by remember { mutableStateOf(SettingsStore.blockYoutubeShorts(context)) }
 
     val ed = !strictActive // false locks "weakening" edits during Strict Mode
+    // Locked on their own on the Locks screen (invariant 95). The writes keep them regardless; this
+    // is so the rows say so instead of seeming to untick and coming back.
+    val lockedApps = remember { ItemLocks.locked(context, ItemLocks.Kind.APP) }
+    val lockedWords = remember { ItemLocks.locked(context, ItemLocks.Kind.WORD) }
     val preBlockApps = remember(apps, query) {
         val shown = if (query.isBlank()) apps
             else apps.filter { it.label.contains(query.trim(), ignoreCase = true) }
@@ -340,8 +345,14 @@ fun BlockEditorScreen(
                                 // Clearing loosens in Blocklist mode → locked during Strict.
                                 if (strictActive && !allowlist) return@categorizedAppItems
                                 editedApps = true
-                                catApps.forEach { selected.remove(it.packageName) }
+                                // A locked app stays ticked in Blocklist mode (invariant 95).
+                                catApps.forEach {
+                                    if (allowlist || it.packageName !in lockedApps) selected.remove(it.packageName)
+                                }
                             },
+                            // Blocklist only: in Allowlist mode a tick means "allowed", and a locked
+                            // app is blocked whatever that list says.
+                            locked = { app -> !allowlist && app.packageName in lockedApps },
                             extraUnder = { app ->
                                 // Nested "Shorts" sub-row under YouTube (blocks only the Shorts feed).
                                 // Blocklist-only — in Allowlist an allowed app is fully allowed.
@@ -427,6 +438,7 @@ fun BlockEditorScreen(
                     }
                     items(keywords, key = { it }) { word ->
                         BlockedWordRow(
+                            locked = word in lockedWords,
                             word = word,
                             covering = remember(word, siteWords) {
                                 StrictEdits.coveringSiteWord(word, siteWords)

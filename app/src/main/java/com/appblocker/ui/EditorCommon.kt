@@ -217,6 +217,8 @@ fun LazyListScope.categorizedAppItems(
     onSelectAll: (List<AppItem>) -> Unit,
     onClearAll: (List<AppItem>) -> Unit,
     extraUnder: (AppItem) -> (@Composable () -> Unit)? = { null },
+    /** Locked on its own (invariant 95): a ticked row that cannot be unticked. */
+    locked: (AppItem) -> Boolean = { false },
 ) {
     val q = query.trim()
     if (q.isNotEmpty()) {
@@ -224,7 +226,7 @@ fun LazyListScope.categorizedAppItems(
         items(shown, key = { it.packageName }) { app ->
             val checked = selected.contains(app.packageName)
             Column {
-                AppCheckRow(app, checked = checked, enabled = rowEnabled(checked)) { onToggle(app, it) }
+                AppCheckRow(app, checked = checked, enabled = rowEnabled(checked) && !(checked && locked(app))) { onToggle(app, it) }
                 extraUnder(app)?.invoke()
             }
         }
@@ -255,7 +257,7 @@ fun LazyListScope.categorizedAppItems(
             items(catApps, key = { it.packageName }) { app ->
                 val checked = selected.contains(app.packageName)
                 Column {
-                    AppCheckRow(app, checked = checked, enabled = rowEnabled(checked)) { onToggle(app, it) }
+                    AppCheckRow(app, checked = checked, enabled = rowEnabled(checked) && !(checked && locked(app))) { onToggle(app, it) }
                     extraUnder(app)?.invoke()
                 }
             }

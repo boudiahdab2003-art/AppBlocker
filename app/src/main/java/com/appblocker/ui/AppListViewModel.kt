@@ -11,6 +11,7 @@ import com.appblocker.data.BlockMode
 import com.appblocker.data.BlockerDatabase
 import com.appblocker.data.DeviceBoot
 import com.appblocker.data.InstalledAppsRepository
+import com.appblocker.data.ItemLocks
 import com.appblocker.data.POPULAR_APPS
 import com.appblocker.data.SettingsStore
 import com.appblocker.data.StrictEdits
@@ -125,13 +126,19 @@ class AppListViewModel(app: Application) : AndroidViewModel(app) {
             val remaining = StrictEdits.strictRemaining(
                 focusDao.get().first(), DeviceBoot.count(getApplication()),
             )
-            val (safeBlocked, safeAllowed) = StrictEdits.allowedSelections(
+            val (strictBlocked, safeAllowed) = StrictEdits.allowedSelections(
                 currentBlocked = live.filter { it.isBlocked }.mapTo(mutableSetOf()) { it.packageName },
                 currentAllowed = live.filter { it.isAllowed }.mapTo(mutableSetOf()) { it.packageName },
                 targetBlocked = blocked,
                 targetAllowed = allowed,
                 strict = remaining > 0L,
                 allowlistMode = SettingsStore.quickBlockAllowlist(getApplication()),
+            )
+            // An app he locked on its own stays blocked until its lock ends (invariant 95).
+            val safeBlocked = ItemLocks.keepLocked(
+                current = live.filter { it.isBlocked }.mapTo(mutableSetOf()) { it.packageName },
+                target = strictBlocked,
+                locked = ItemLocks.locked(getApplication(), ItemLocks.Kind.APP),
             )
             val changed = live.mapNotNull { a ->
                 val shouldBlock = a.packageName in safeBlocked

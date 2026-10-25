@@ -135,6 +135,9 @@ internal data class BlockInputs(
     val hourMinuteLabel: (Int) -> String,
     /** The cover's wording, in the app's language. See [Words]. */
     val words: Words,
+    /** He locked this app on its own ([com.appblocker.data.ItemLocks], invariant 95): blocked
+     *  whatever Quick Block is doing, in either mode, until the lock ends. */
+    val itemLocked: Boolean = false,
 )
 
 /**
@@ -182,6 +185,17 @@ internal fun decideBlock(i: BlockInputs): BlockReason? {
             if (w != null) i.words.plural(R.plurals.block_locked_word, mins.toInt(), w, mins.toString())
             else i.words.plural(R.plurals.block_locked_generic, mins.toInt(), mins.toString()),
             why = BlockWhy.LOCKOUT,
+        )
+    }
+
+    // An app locked on its own (invariant 95). After the essentials and the lockout, before every
+    // mode: a lock that Quick Block's pause, a Pomodoro break or Allowlist mode could lift would be
+    // a pause with extra steps.
+    if (i.itemLocked) {
+        return BlockReason(
+            i.words.get(R.string.block_item_locked_title),
+            i.words.get(R.string.block_item_locked_message),
+            why = BlockWhy.STRICT,
         )
     }
 

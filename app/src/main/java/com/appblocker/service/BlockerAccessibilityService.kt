@@ -45,6 +45,7 @@ import com.appblocker.data.DeviceBoot
 import com.appblocker.data.FocusState
 import com.appblocker.data.GuardedDeadline
 import com.appblocker.data.InstalledAppsRepository
+import com.appblocker.data.ItemLocks
 import com.appblocker.data.LaunchCounter
 import com.appblocker.data.NewAppWatcher
 import com.appblocker.data.OffSwitchGuard
@@ -2072,6 +2073,8 @@ class BlockerAccessibilityService : AccessibilityService() {
                 rule = ruleFor(pkg),
                 allowlistMode = allowlistMode,
                 isEssential = { isEssentialAllowed(pkg) },
+                // Read per decision: a prefs-backed list already parsed in this process.
+                itemLocked = pkg in ItemLocks.locked(this, ItemLocks.Kind.APP),
                 schedules = activeSchedules(),
                 // "Unsupported" now means "we have never managed to read this one", not "it isn't
                 // Chrome". KNOWN_READABLE_BROWSERS seeds the answer with the toolbars we know how

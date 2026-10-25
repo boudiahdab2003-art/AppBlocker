@@ -465,4 +465,31 @@ class BlockDecisionTest {
         assertTrue("the pre-split code must stay readable", BlockWhy.GUARD !in guards)
     }
 
+
+    // ---- invariant 95: an app locked on its own ------------------------------------------------
+
+    @Test
+    fun `a locked app is blocked while Quick Block is paused`() {
+        val hit = decideBlock(inputs(quickEnforcing = false, rule = rule()).copy(itemLocked = true))
+        assertEquals(BlockWhy.STRICT, hit?.why)
+        assertEquals("Locked", hit?.title)
+    }
+
+    @Test
+    fun `a locked app is blocked in Allowlist mode even when it is allowed`() {
+        val hit = decideBlock(
+            inputs(allowlistMode = true, rule = rule(blocked = false, allowed = true)).copy(itemLocked = true),
+        )
+        assertEquals(BlockWhy.STRICT, hit?.why)
+    }
+
+    @Test
+    fun `the essentials still win over a lock in Allowlist mode`() {
+        assertNull(decideBlock(inputs(allowlistMode = true, isEssential = true).copy(itemLocked = true)))
+    }
+
+    @Test
+    fun `without a lock a paused Quick Block still lets the app through`() {
+        assertNull(decideBlock(inputs(quickEnforcing = false, rule = rule())))
+    }
 }

@@ -70,6 +70,7 @@ private val TABS = listOf(
 private sealed interface Overlay {
     data object QuickBlock : Overlay
     data object Keywords : Overlay
+    data object Locks : Overlay
     data class EditTemplate(val template: Template) : Overlay
     data object Permissions : Overlay
     data object Onboarding : Overlay
@@ -170,6 +171,8 @@ fun AppRoot(
                 )
             is Overlay.Keywords ->
                 KeywordsScreen(strictActive = strictActive, onBack = { overlay = null })
+            is Overlay.Locks ->
+                LocksScreen(onBack = { overlay = null })
             is Overlay.EditTemplate ->
                 TemplateEditorScreen(template = o.template, strictActive = strictActive,
                     onBack = { overlay = null })
@@ -248,6 +251,7 @@ fun AppRoot(
                 updateVm = updateVm,
                 onEditQuickBlock = { overlay = Overlay.QuickBlock },
                 onOpenKeywords = { overlay = Overlay.Keywords },
+                onOpenLocks = { overlay = Overlay.Locks },
                 onEditTemplate = { overlay = Overlay.EditTemplate(it) },
                 onNewSchedule = { overlay = Overlay.NewSchedule(it) },
                 onEditSchedule = { overlay = Overlay.EditSchedule(it) },
@@ -426,6 +430,7 @@ private fun MainScaffold(
     updateVm: UpdateViewModel,
     onEditQuickBlock: () -> Unit,
     onOpenKeywords: () -> Unit,
+    onOpenLocks: () -> Unit,
     onEditTemplate: (Template) -> Unit,
     onNewSchedule: (ScheduleType) -> Unit,
     onEditSchedule: (Schedule) -> Unit,
@@ -497,6 +502,7 @@ private fun MainScaffold(
                 0 -> BlockingScreen(
                     onEditQuickBlock = onEditQuickBlock,
                     onOpenKeywords = onOpenKeywords,
+                    onOpenLocks = onOpenLocks,
                     onEditTemplate = onEditTemplate,
                     onNewSchedule = onNewSchedule,
                     onEditSchedule = onEditSchedule,

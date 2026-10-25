@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.appblocker.data.DeviceBoot
 import com.appblocker.data.InstalledAppsRepository
+import com.appblocker.data.ItemLocks
 import com.appblocker.data.OffSwitchGuard
 import com.appblocker.data.SettingsStore
 import com.appblocker.data.StrictEdits
@@ -64,6 +65,8 @@ fun KeywordsScreen(
     // be removed during Strict Mode — see StrictEdits and BlockedWordRow.
     val siteWords by webVm.liveSiteWords.collectAsState()
     var newWord by remember { mutableStateOf("") }
+    // Words locked on their own (invariant 95), re-read whenever the list changes.
+    val lockedWords = remember(saved) { ItemLocks.locked(context, ItemLocks.Kind.WORD) }
     var everywhere by remember { mutableStateOf(SettingsStore.keywordsEverywhere(context)) }
     // The apps "every app" leaves out (invariant 87) and their names for the row under the switch.
     var skipped by remember { mutableStateOf(SettingsStore.wordSkipApps(context)) }
@@ -173,6 +176,7 @@ fun KeywordsScreen(
                 } else {
                     items(saved, key = { it }) { word ->
                         BlockedWordRow(
+                            locked = word in lockedWords,
                             word = word,
                             covering = remember(word, siteWords) {
                                 StrictEdits.coveringSiteWord(word, siteWords)

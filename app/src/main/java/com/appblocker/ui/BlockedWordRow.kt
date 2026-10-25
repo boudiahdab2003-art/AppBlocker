@@ -42,6 +42,8 @@ fun BlockedWordRow(
     covering: SiteWord?,
     strictActive: Boolean,
     onRemove: () -> Unit,
+    /** Locked on its own on the Locks screen (invariant 95): it cannot be removed until then. */
+    locked: Boolean = false,
 ) {
     var confirming by remember(word) { mutableStateOf(false) }
     val needsExplaining = strictActive && covering != null
@@ -59,6 +61,13 @@ fun BlockedWordRow(
             // Shown whether or not Strict is running: outside a session it is the same true fact,
             // and it is the one that explains why this word is doing nothing your app rule wasn't
             // already doing (the reason the nine template words had to be purged in v1.85).
+            if (locked) {
+                Text(
+                    stringResource(R.string.block_item_locked_title),
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
             if (covering != null) {
                 Text(
                     "${covering.appLabel} is blocked, so its website is too",
@@ -68,7 +77,7 @@ fun BlockedWordRow(
             }
         }
         IconButton(
-            enabled = !strictActive || covering != null,
+            enabled = !locked && (!strictActive || covering != null),
             onClick = { if (needsExplaining) confirming = true else onRemove() },
         ) {
             Icon(

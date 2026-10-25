@@ -982,4 +982,28 @@ Never sent: your blocked words, the sites you visit, which apps you block, or an
     <string name="profile_netdns_title">Family filter</string>
     <string name="profile_netdns_subtitle_on">On — blocking adult sites for every app</string>
     <string name="profile_netdns_subtitle_off">Not set up — the strongest block you can add</string>
+    <!-- Locks: Strict Mode for one thing at a time (invariant 95) -->
+    <string name="block_item_locked_title">Locked</string>
+    <string name="block_item_locked_message">You locked this app. It stays blocked until the lock ends.</string>
+    <string name="locks_title">Locks</string>
+    <string name="locks_card_desc">Lock one app or website for days, and keep everything else free</string>
+    <string name="locks_intro">Lock a single blocked app or website for as many days as you choose. Until then it cannot be removed, even with Strict Mode off, and a locked app stays blocked even when Quick Block is paused. Everything else stays free to change.</string>
+    <string name="locks_now">Locked now</string>
+    <string name="locks_until">Until %1$s</string>
+    <string name="locks_extend">Make longer</string>
+    <string name="locks_lock">Lock</string>
+    <string name="locks_apps">Blocked apps</string>
+    <string name="locks_apps_none">No unlocked blocked apps. Block an app first, then lock it here.</string>
+    <string name="locks_words">Blocked words and websites</string>
+    <string name="locks_words_none">No unlocked blocked words. Add one under Blocked words first.</string>
+    <string name="locks_dialog_title">Lock %1$s</string>
+    <string name="locks_dialog_warning">This cannot be undone early. You can make a lock longer later, never shorter.</string>
+    <plurals name="locks_days">
+        <item quantity="one">%1$s day</item>
+        <item quantity="other">%1$s days</item>
+    </plurals>
+    <plurals name="locks_confirm">
+        <item quantity="one">Lock for %1$s day</item>
+        <item quantity="other">Lock for %1$s days</item>
+    </plurals>
 </resources>

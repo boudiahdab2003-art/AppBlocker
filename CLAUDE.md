@@ -200,6 +200,9 @@ Telegram bot on first use) and ranked use-case plans live in **docs/SERVER.md**.
   guard's OEM package lists live in `service/GuardPackages.kt`. Both are unit-tested. Before
   hardcoding anything about a phone, check whether it belongs in one of those two files — and
   read invariant 15 in `docs/BLOCKING_INVARIANTS.md` first.
+- **Locks** (v1.179, invariant 95, `data/ItemLocks.kt`): one blocked app or word locked for N days,
+  Strict for that item only — kept on every write, blocked through any Quick Block pause or Allowlist
+  mode, lengthened never shortened. A new writer of blocked words/apps must run `ItemLocks.keepLocked`.
 - **Strict Mode locks *weakening* only.** Every control that makes blocking stronger stays usable
   during a session — arming the off-switch guard, ticking an app on, adding a word, switching on
   any Quick Block extra option. The pattern in the UI is `enabled = ed || !value` (`ed =

@@ -2088,6 +2088,21 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     locked. Adding another package to `ALWAYS` is a weakening that outlives every session — only on
     his word.
 
+95. **A lock on one item is Strict Mode for that item alone.** 25 Oct 2026, his ask: "this website,
+    just this website, blocked 50 days strict mode, but I am able to make other changes more
+    flexible." `data/ItemLocks.kt` holds one lock per blocked app (package) or blocked word, with a
+    `SessionClock` deadline (the same clock rules as Strict, and the same known post-restart gap).
+    Three rules, each where the data changes: **the writes keep a locked item** —
+    `WebFilterViewModel.setKeywords` and `AppListViewModel.commitQuickBlock` run `ItemLocks.keepLocked`
+    after the Strict rule, Strict or not; **a locked app blocks whatever Quick Block is doing** —
+    `decideBlock` checks `itemLocked` after the essentials and the lockout, before Allowlist and
+    `quickEnforcing` (a lock a pause could lift is a pause with extra steps); **a lock lengthens,
+    never shortens** (`withLock` keeps the later deadline). The Locks screen only ever adds or
+    lengthens, so nothing on it is disabled during Strict. The rows elsewhere show "Locked" and
+    refuse removal so a staged untick cannot seem to work and then come back.
+    **The shape to grep for: a new write path for blocked words or blocked apps that does not run
+    `ItemLocks.keepLocked`.**
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused
