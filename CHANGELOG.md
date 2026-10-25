@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.177
+- Blocking no longer pauses after an update, and a pause left by an older version lifts itself. If blocking stops and the silent repair cannot bring it back, a report is sent while it is still down. Reports now say which space they came from, the real date, and how many minutes were spent in blocked apps, and they are sent straight away instead of waiting for the app to be opened.
+
 ## v1.176
 - Your browsers stay open when you use your university's VPN: AppBlocker no longer closes them when the family DNS filter is off. All other blocking is unchanged.
 
