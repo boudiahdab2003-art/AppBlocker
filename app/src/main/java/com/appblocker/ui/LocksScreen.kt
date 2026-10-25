@@ -136,9 +136,9 @@ fun LocksScreen(
     }
 }
 
-/** "Mon 14 Dec 2026, 18:41" — the moment a lock with [remainingMs] left ends. */
+/** The moment a lock with [remainingMs] left ends, in the phone's own date format and language. */
 private fun untilText(remainingMs: Long): String =
-    java.text.SimpleDateFormat("EEE d MMM yyyy, HH:mm", java.util.Locale.getDefault())
+    java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.FULL, java.text.DateFormat.SHORT)
         .format(java.util.Date(System.currentTimeMillis() + remainingMs))
 
 @Composable
