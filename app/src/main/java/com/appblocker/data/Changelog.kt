@@ -18,7 +18,7 @@ val changelog: List<VersionLog> = listOf(
         "**A locked item works like Strict Mode, but only for that one thing.** Until the lock ends it cannot be removed, and a locked app stays blocked even when Quick Block is paused, between Pomodoro rounds, or in Allowlist mode. Everything else stays free to change, with no Strict session needed.",
         "**A lock can be made longer, never shorter.** That is what makes it a promise to yourself. Locked items show **Locked** in your lists, and the Locks screen says the exact day and time each one ends.",
         "**Strict Mode is unchanged.** It is still there for when you want everything locked at once.",
-        "**You already have the other two things you asked about.** For a study session with only some apps allowed, open Quick Block, switch it to Allowlist, tick the apps you need, then start a Timer or Pomodoro. For a daily time limit, set it on the app in your block settings.",
+        "**You already have the other two things you asked about.** For a study session with only some apps allowed, open Quick Block, switch it to Allowlist, tick the apps you need, then start a Timer or Pomodoro. For a daily time limit on an app, make a new schedule on the Blocking tab and choose **Usage limit**.",
     )),
     VersionLog("1.178", "Oct 25, 2026", "Spotify is no longer checked for blocked words", listOf(
         "**Spotify is left out of the word check, always, as you chose.** You were listening to a psychology podcast about fetishes and the word check kept covering it. Strict Mode would not let you add Spotify to \"Skip these apps\", because leaving an app out loosens blocking.",
