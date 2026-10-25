@@ -101,7 +101,12 @@ internal fun WordSkipPicker(
     // list rather than per tick, so a row does not jump away from under his finger.
     val apps = remember(installed, browsers) {
         installed
-            .filter { it.packageName != context.packageName && it.packageName !in browsers }
+            // A named exception is shown even if it opens its own links and so reads as a browser
+            // to the loose test (invariants 94, 96): it is skipped either way, and should say so.
+            .filter {
+                it.packageName != context.packageName &&
+                    (it.packageName !in browsers || it.packageName in WordSkip.ALWAYS)
+            }
             .sortedWith(
                 compareBy(
                     { it.packageName !in skipped && it.packageName !in WordSkip.ALWAYS },

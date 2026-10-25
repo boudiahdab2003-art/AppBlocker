@@ -1541,6 +1541,12 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (updatePauseActive()) {
             return pkg in browserPackages && (adultPackOn || SettingsStore.blockAdult(this))
         }
+        // ⚠️ **A named exception wins over the LOOSE browser set** (invariants 94, 96). That set is
+        // every app that opens an https link, and an app that opens its own (claude.ai) can land in
+        // it — where the line below would read it for words before WordSkip was ever asked, and the
+        // exception he was promised would silently do nothing. Never over a REAL browser, and never
+        // in the danger hour.
+        if (pkg in WordSkip.ALWAYS && !isRealBrowserPkg(pkg) && dangerZoneRemaining() <= 0L) return false
         if (pkg in browserPackages) return true
         // While the danger zone is armed, every app is scanned whether or not "check every app"
         // is on the rest of the time. Browsers are already shut outright for that hour, so this

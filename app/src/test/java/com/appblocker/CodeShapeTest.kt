@@ -144,6 +144,27 @@ class CodeShapeTest {
         )
     }
 
+    // ---- invariants 94 and 96 ----------------------------------------------------------------
+
+    /**
+     * **Spotify and Claude must be left out before the loose browser test can claim them.** That
+     * test counts every app that opens an https link, and an app that opens its own (claude.ai) can
+     * be in it; `shouldScanPkg` returned true for it before `WordSkip` was ever asked.
+     */
+    @Test
+    fun `a named word-check exception is decided before the loose browser test`() {
+        val text = source("service/BlockerAccessibilityService.kt").readText()
+        val gate = text.substringAfter("private fun shouldScanPkg(", "").substringBefore("\n    }")
+        val exception = gate.indexOf("WordSkip.ALWAYS")
+        val browser = gate.indexOf("if (pkg in browserPackages) return true")
+        assertTrue("shouldScanPkg is gone or reshaped; this check is reading nothing", browser > 0)
+        assertTrue(
+            "shouldScanPkg must leave WordSkip.ALWAYS out before `pkg in browserPackages` returns " +
+                "true, or an app that opens its own links is read for words despite the exception.",
+            exception in 0 until browser,
+        )
+    }
+
     // ---- invariant 91 ------------------------------------------------------------------------
 
     /**

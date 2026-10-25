@@ -17,6 +17,7 @@ val changelog: List<VersionLog> = listOf(
         "**Strict Mode no longer locks your Allowlist or your Usage limits, as you asked.** During a Strict session you can now switch Quick Block to Allowlist, choose which apps are allowed, start a study Timer or Pomodoro and stop it whenever you like. Usage limit schedules can be changed, switched off or deleted too.",
         "**What Strict still holds:** every app on your blocklist, and its website, stays blocked for the whole session, in Allowlist mode too and even if you tick it as allowed. Stopping a study session only takes you back to Strict, never below it. Time schedules and the rest of Strict are unchanged.",
         "**Locked apps keep their websites blocked too**, whatever Quick Block is doing.",
+        "**The Claude and Spotify exceptions now hold in one more case.** If your phone counts an app as a browser only because it opens its own links (claude.ai, for example), it used to be checked for words anyway, before the exception was even looked at. Now the exception comes first. Real browsers are still always checked.",
     )),
     VersionLog("1.179", "Oct 25, 2026", "Locks, and Strict Mode no longer locks your study sessions", listOf(
         "**New: Locks, as you asked.** On the Blocking tab there is a new card called **Locks**. Pick one blocked app or one blocked word or website, choose how long (1 day up to a year, 50 days included), and it is locked.",
