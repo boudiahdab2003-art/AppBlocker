@@ -2020,6 +2020,33 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     **The shape to grep for: a report that files the expected outcome as news. When a fix works,
     its success belongs in the summary, not the inbox.**
 
+91. **Unprotected time must be able to report itself while it lasts.** 25 Oct 2026. He used Instagram
+    unblocked from after work until 2 am on 24 Oct, and his main phone had filed nothing since the
+    v1.176 install at 18:47 on 22 Oct. Two paths produced that silence by construction:
+
+    - **The after-update pause was handled by a notification and nothing else.** `checkAndNotify`'s
+      `PAUSED` branch was one `notifyPaused` call (four-hour throttle, in the shade of the space that
+      owns it): no episode, no stoppage line, no total, no report, and `HealthFacts` printed it as a
+      neutral dot however long it stood. Each space pauses on its own, so a Reactivate tapped in one
+      leaves the other paused. And the profile report filed at the update read `updatePaused=false`,
+      because it runs in the same launch before `resolvePendingPause` lands.
+    - **Every stoppage report was filed by `OutageLog.end`**, i.e. when blocking came back. One the
+      silent repair could not end (`selfToggle …/2` noRebind on his phone) said nothing while it lasted.
+    - And queued reports are only flushed on app open, so a filed report waits for the very act the
+      failure makes unlikely.
+
+    Now `PauseLog` times the pause (begin in the `PAUSED` state, closed by the first check in any
+    other state; start from `SettingsStore.updatePausedAt`, written inside `writeUpdatePause`, else
+    the version change), its lines merge into `StoppageHistory`, and its totals go in every report.
+    `OngoingReport.due` files one `STILL STOPPED` / `STILL PAUSED` issue per episode (keyed
+    `ongoing:<kind>:<start>`) once a stoppage has lasted 30 min with 10 min of use, or a pause 15 min
+    with 15 min of use, and `reportOngoing` flushes at once. `CodeShapeTest` holds the `PAUSED`
+    branch to both. Also from the same reading: `quietFact` no longer calls a quiet spell a failure
+    when `ServiceHealth.lastAwayAt` shows this space was behind another during it (invariant 79).
+
+    **The shape to grep for: a state where blocking is off that only a person looking at the phone
+    can see. If the app can tell it is not protecting him, the inbox must hear while it is true.**
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused

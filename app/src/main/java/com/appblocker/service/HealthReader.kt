@@ -6,7 +6,9 @@ import com.appblocker.data.BlockLatency
 import com.appblocker.data.BootAudit
 import com.appblocker.data.BugReportQueue
 import com.appblocker.data.HealthFacts
+import com.appblocker.data.OngoingReport
 import com.appblocker.data.OutageLog
+import com.appblocker.data.PauseLog
 import com.appblocker.data.ProtectionPulse
 import com.appblocker.data.ReportConsent
 import com.appblocker.data.SelfEnableLog
@@ -56,6 +58,9 @@ object HealthReader {
             .getOrDefault(OutageLog.Totals(0, 0L, 0L))
         val offTotals = runCatching { SwitchOffLog.totals(ctx) }.getOrDefault(SwitchOffLog.Totals())
         val offLast = runCatching { SwitchOffLog.last(ctx) }.getOrNull()
+        val pauseTotals = runCatching { PauseLog.totals(ctx) }.getOrDefault(PauseLog.Totals())
+        val pauseOpenMs = safe(-1L) { PauseLog.openForMs(ctx) }
+        val lastEventAt = safe(0L) { ServiceHealth.lastEventAt(ctx) }
         val toggle = runCatching { SelfToggleLog.counts(ctx) }.getOrDefault(SelfToggleLog.Counts())
         val enable = runCatching { SelfEnableLog.counts(ctx) }.getOrDefault(SelfEnableLog.Counts())
         // UNKNOWN (-1) means the scheduler has never been seen to run at all, which is not the
@@ -72,6 +77,12 @@ object HealthReader {
             updatePaused = safe(false) { SettingsStore.updatePaused(ctx) },
             updatePausePending = safe(false) { SettingsStore.updatePausePending(ctx) },
             updatePausePendingMs = since(now) { SettingsStore.updatePausePendingAt(ctx) },
+            pauseOpenMs = pauseOpenMs,
+            pauseOpenUsedMin = usedSincePause(ctx, now, pauseOpenMs),
+            pauseCount = pauseTotals.count,
+            pauseTotalMs = pauseTotals.totalMs,
+            pauseUsedMin = pauseTotals.usedMin,
+            awayDuringQuiet = lastEventAt > 0L && safe(0L) { ServiceHealth.lastAwayAt(ctx) } > lastEventAt,
             foundDead = safe(0) { ServiceHealth.foundDeadCount(ctx) },
             outageOpen = safe(false) { OutageLog.isOpen(ctx) },
             outageCount = totals.count,
@@ -162,6 +173,18 @@ object HealthReader {
         return runCatching {
             UsageTracker.totalMinutesInRange(ctx, now - workerSilentMs, now)
         }.getOrNull()
+    }
+
+    /**
+     * Foreground minutes since the open pause began, or null. Walked only once the pause has stood
+     * long enough to be judged, for the reason [usedSinceWorker] gives.
+     */
+    private fun usedSincePause(ctx: Context, now: Long, pauseOpenMs: Long): Int? {
+        if (pauseOpenMs < OngoingReport.PAUSED_AFTER_MS) return null
+        if (!safe(false) { hasUsageAccess(ctx) }) return null
+        val from = safe(0L) { PauseLog.openStartedAt(ctx) }
+        if (from <= 0L) return null
+        return runCatching { UsageTracker.totalMinutesInRange(ctx, from, now) }.getOrNull()
     }
 
     private inline fun <T> safe(fallback: T, read: () -> T): T =

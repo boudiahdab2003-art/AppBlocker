@@ -19,6 +19,7 @@ object ServiceHealth {
     private const val KEY_LAST_ALIVE = "health_last_alive_at"
     private const val KEY_FOUND_DEAD = "health_found_dead_count"
     private const val KEY_AWAY_CHECKS = "health_away_check_count"
+    private const val KEY_LAST_AWAY_AT = "health_last_away_at"
     private const val KEY_REVIVES = "health_revive_count"
     private const val KEY_REVIVE_FAILS = "health_revive_fail_count"
     private const val KEY_PROBE_FAILS = "health_probe_fail_streak"
@@ -137,10 +138,19 @@ object ServiceHealth {
      */
     fun recordAwayCheck(context: Context) {
         val p = prefs(context)
-        p.edit().putInt(KEY_AWAY_CHECKS, p.getInt(KEY_AWAY_CHECKS, 0) + 1).apply()
+        p.edit()
+            .putInt(KEY_AWAY_CHECKS, p.getInt(KEY_AWAY_CHECKS, 0) + 1)
+            // An instant, never an interval (invariant 9): compared against the last event, it says
+            // whether a quiet spell had this space behind another for some of it — see
+            // HealthFacts.quietFact.
+            .putLong(KEY_LAST_AWAY_AT, System.currentTimeMillis())
+            .apply()
     }
 
     fun awayCheckCount(context: Context): Int = prefs(context).getInt(KEY_AWAY_CHECKS, 0)
+
+    /** Wall clock of the last check that found this space behind another, or 0. */
+    fun lastAwayAt(context: Context): Long = prefs(context).getLong(KEY_LAST_AWAY_AT, 0L)
 
     /**
      * Counts the heartbeat's re-post of `serviceInfo` — **the only self-repair this app has**, and

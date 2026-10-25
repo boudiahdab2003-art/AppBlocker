@@ -114,6 +114,9 @@ data class BugReport(
         // are: two outages are two outages even when they look identical, and the rate is the
         // measurement being taken. The start stamp is what makes them distinguishable at all.
         isOutage -> "outage:${context["outageAt"].orEmpty()}"
+        // One per episode and kind: the mid-episode report is filed once, however many checks
+        // see the same stoppage or pause still going on (invariant 91).
+        isOngoing -> OngoingReport.key(context["ongoingKind"].orEmpty(), context["ongoingAt"].orEmpty())
         // One per calendar week, which is the whole contract: the summary is filed on the first
         // app open of a new week and must not arrive again on the second.
         isWeekly -> "weekly:${context["weekOf"].orEmpty()}"
@@ -137,6 +140,10 @@ data class BugReport(
      * with no migration and no nullable flag to get wrong.
      */
     val isProfile: Boolean get() = where == PROFILE_WHERE && errorClass == null && note == null
+
+    /** A report written DURING a stoppage or an after-update pause — see [OngoingReport]. Detected
+     *  from [where] like the others, so the queue's stored format is unchanged. */
+    val isOngoing: Boolean get() = where == ONGOING_WHERE && errorClass == null && note == null
 
     /** A report about an outage that has ended — see [OutageLog]. Detected the same way, and for
      *  the same reason, as [isProfile]: no new field, so the queue's stored format is unchanged. */
@@ -174,6 +181,13 @@ data class BugReport(
         // Says the answer in the list, so a healthy week never needs opening.
         isWeekly -> "[$appVersion] Week of ${context["weekOf"] ?: "?"} — " +
             (worstProblem() ?: "all healthy")
+        // Says what is happening NOW, in words that cannot be read as an episode that is over.
+        isOngoing -> "[$appVersion] " + when (context["ongoingKind"]) {
+            OngoingReport.Kind.PAUSED -> "STILL PAUSED after an update for ${context["ongoingMin"] ?: "?"} min" +
+                " — ${context["ongoingUsedMin"] ?: "?"} min of use, blocking off"
+            else -> "STILL STOPPED for ${context["ongoingMin"] ?: "?"} min" +
+                " — ${context["ongoingUsedMin"] ?: "?"} min of use, the repair has not brought it back"
+        }
         isOutage -> "[$appVersion] STOPPED for ${context["outageMin"] ?: "?"} min" +
             " — after ${context["outagePreceded"] ?: "?"}" +
             if (context["outageDeaf"] == "true") ", still running" else ", process died"
@@ -236,6 +250,7 @@ data class BugReport(
     fun body(): String = whatLooksWrong() + when {
         isProfile -> profileBody()
         isOutage -> outageBody()
+        isOngoing -> ongoingBody()
         isWeekly -> weeklyBody()
         else -> faultBody()
     } + selfKnowledge() + outageHistory()
@@ -421,6 +436,14 @@ data class BugReport(
             appendLine("the watcher was bound within two minutes (invariant 84) — not him, not the phone.")
             appendLine()
         }
+        if (recentOutages.any { "  PAUSED  " in it }) {
+            appendLine("`PAUSED` lines are blocking switched off by the after-update pause, waiting for")
+            appendLine("Reactivate (invariant 91): the watcher running, the switch ON, nothing broken —")
+            appendLine("and only the adult filter on. Not in any outage total. `used=` is the phone use")
+            appendLine("that went unblocked; `backBy=reactivated` is the tap, **stopped** means the")
+            appendLine("watcher died while paused and the stoppage line beside it takes over.")
+            appendLine()
+        }
         if (recentOutages.any { "  EXITED  " in it }) {
             appendLine("`EXITED` lines are not stoppages: they are **Android's own record of why")
             appendLine("AppBlocker's process ended**, read when this report was written. `reason=` is")
@@ -449,6 +472,43 @@ data class BugReport(
      * owner feels and the discriminator is what can be acted on. The recent-blocks section stays —
      * unlike a profile, the entries either side of the gap are exactly what a reader wants.
      */
+    /**
+     * A report filed while blocking is still not working (invariant 91). Short on purpose: the
+     * finding is the title, and the sections every report carries follow it.
+     */
+    private fun ongoingBody(): String = buildString {
+        if (context["ongoingKind"] == OngoingReport.Kind.PAUSED) {
+            appendLine("**Blocking is paused after an update, and nobody has tapped Reactivate.** The")
+            appendLine("watcher is running and the switch reads ON, so nothing looks wrong on the")
+            appendLine("phone — but only the adult filter is on. Each space pauses on its own; the")
+            appendLine("pause in the space he is not looking at is the one that stays.")
+        } else {
+            appendLine("**Blocking is stopped RIGHT NOW, and the phone is being used.** The silent")
+            appendLine("repair has not brought it back. This report is written mid-stoppage; the")
+            appendLine("ordinary `STOPPED` report still follows when it ends.")
+        }
+        appendLine()
+        appendLine("| | |")
+        appendLine("|---|---|")
+        appendLine("| Device | $device |")
+        appendLine("| Android | SDK $androidSdk |")
+        appendLine("| Version | $appVersion ($flavor) |")
+        context.toSortedMap().forEach { (k, v) -> appendLine("| $k | `$v` |") }
+        appendLine()
+        appendLine("`ongoingMin` is how long it has lasted so far; `ongoingUsedMin` how much of that")
+        appendLine("the phone was in use. Filed once per episode.")
+        appendLine()
+        appendLine("### Last blocks")
+        appendLine()
+        appendLine("```")
+        if (recentBlocks.isEmpty()) {
+            appendLine("(none recorded)")
+        } else {
+            recentBlocks.forEach { appendLine(it) }
+        }
+        appendLine("```")
+    }
+
     private fun outageBody(): String = buildString {
         // The first sentence is the one that gets read, so it follows how the stoppage ended. Report
         // #131 opened "has now come back" above a table reading `protection PAUSED` (invariant 78).
@@ -959,6 +1019,19 @@ data class BugReport(
             // How many outages this install has finished, so one report carries the rate as well
             // as the episode.
             "outageCount",
+            // --- A stoppage or pause still going on (see [OngoingReport], invariant 91) ---
+            // `stopped` or `paused`, one of our own two literals.
+            "ongoingKind",
+            // When the episode began, in whole seconds. **[dedupeKey] reads this** — load-bearing
+            // like `outageAt`: it is what files the mid-episode report once per episode.
+            "ongoingAt",
+            // How long it has lasted so far, and how many of those minutes the phone was in use.
+            "ongoingMin",
+            "ongoingUsedMin",
+            // Lifetime totals of the after-update pause (PauseLog): count, minutes, minutes of use.
+            "pauseCount",
+            "pauseTotalMin",
+            "pauseUsedMin",
         )
 
         /**
@@ -990,6 +1063,10 @@ data class BugReport(
          * to report itself.
          */
         const val OUTAGE_WHERE = "outage"
+
+        /** The [where] tag for a report filed while blocking is still not working — see
+         *  [OngoingReport]. A fifth shape because the other four are all written after the fact. */
+        const val ONGOING_WHERE = "ongoing"
 
         /** The [where] tag for a report the owner typed and sent himself — see [fromNote]. */
         const val OWNER_WHERE = "owner"
@@ -1219,6 +1296,31 @@ data class BugReport(
             healthFacts: List<String> = emptyList(),
         ) = BugReport(
             where = OUTAGE_WHERE,
+            errorClass = null,
+            frames = emptyList(),
+            note = null,
+            appVersion = appVersion,
+            flavor = flavor,
+            androidSdk = androidSdk,
+            device = device,
+            context = sanitizeContext(context),
+            recentBlocks = recentBlocks,
+            recentOutages = recentOutages,
+            healthFacts = healthFacts,
+        )
+
+        /** A stoppage or pause still going on — see [OngoingReport]. */
+        fun fromOngoing(
+            appVersion: String,
+            flavor: String,
+            androidSdk: Int,
+            device: String,
+            context: Map<String, String>,
+            recentBlocks: List<String>,
+            recentOutages: List<String> = emptyList(),
+            healthFacts: List<String> = emptyList(),
+        ) = BugReport(
+            where = ONGOING_WHERE,
             errorClass = null,
             frames = emptyList(),
             note = null,

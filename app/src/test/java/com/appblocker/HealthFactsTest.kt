@@ -1054,4 +1054,35 @@ class HealthFactsTest {
         assertTrue(HealthFacts.verdicts(paused).any { it.title.contains("paused after an update") })
         assertTrue(problems(paused).toString(), problems(paused).isEmpty())
     }
+
+    /**
+     * Invariant 91: a pause that has STOOD is blocking off. A phone paused for two days through hours
+     * of Instagram printed a neutral dot and nothing in "what looks wrong".
+     */
+    @Test
+    fun `a pause that has stood for hours of use is a problem`() {
+        val stood = healthy.copy(updatePaused = true, pauseOpenMs = 10_800_000L, pauseOpenUsedMin = 150)
+        assertTrue(problems(stood).toString(), problems(stood).any { "150 minutes of use" in it })
+        // Minutes old is an install in progress, not a fault.
+        val fresh = healthy.copy(updatePaused = true, pauseOpenMs = 120_000L)
+        assertTrue(problems(fresh).toString(), problems(fresh).isEmpty())
+    }
+
+    /** 22 Oct 2026: fourteen quiet hours with the space behind another were printed as a failure. */
+    @Test
+    fun `quiet while this space was behind another is not a fault`() {
+        val away = healthy.copy(sinceLastEventMs = 50_000_000L, usedMinutes = 146, awayDuringQuiet = true)
+        assertTrue(problems(away).toString(), problems(away).none { "seen nothing" in it })
+        assertTrue(HealthFacts.verdicts(away).any { "behind another" in it.title })
+        // The same quiet in front is still the early warning it was.
+        val front = away.copy(awayDuringQuiet = false)
+        assertTrue(problems(front).any { "seen nothing" in it })
+    }
+
+    @Test
+    fun `finished pauses are counted apart and are not a fault`() {
+        val r = healthy.copy(pauseCount = 2, pauseTotalMs = 7_200_000L, pauseUsedMin = 40)
+        assertTrue(HealthFacts.verdicts(r).any { "paused after an update 2 time" in it.title })
+        assertTrue(problems(r).isEmpty())
+    }
 }

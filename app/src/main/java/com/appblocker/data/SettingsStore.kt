@@ -234,6 +234,15 @@ object SettingsStore {
             .remove("strict_clear_pending") // retired; an update no longer ends a Strict session
             .apply()
 
+    private const val KEY_UPDATE_PAUSED_AT = "update_paused_at"
+
+    /**
+     * When the standing update pause began, or 0 — none is standing, or it was raised by a build
+     * that did not stamp it (then [PauseLog] falls back to the version change that armed it).
+     */
+    fun updatePausedAt(context: Context): Long =
+        prefs(context).getLong(KEY_UPDATE_PAUSED_AT, 0L)
+
     /** When [setUpdatePausePending] last raised the flag, or 0 if it is not raised. */
     fun updatePausePendingAt(context: Context): Long =
         prefs(context).getLong(KEY_UPDATE_PAUSE_PENDING_AT, 0L)
@@ -261,8 +270,21 @@ object SettingsStore {
      * process that is about to be killed, and it runs once per install.
      */
     fun writeUpdatePause(context: Context, state: UpdatePause.PauseState) {
-        prefs(context).edit()
+        val p = prefs(context)
+        val wasPaused = p.getBoolean(KEY_UPDATE_PAUSED, false)
+        p.edit()
             .putBoolean(KEY_UPDATE_PAUSED, state.paused)
+            // When the pause began, for PauseLog (invariant 91). Stamped on the write that raises
+            // it, kept while it stands, and torn up with it — the same transaction as the flag, so
+            // a stamp can never describe a pause that is not there.
+            .putLong(
+                KEY_UPDATE_PAUSED_AT,
+                when {
+                    !state.paused -> 0L
+                    wasPaused -> p.getLong(KEY_UPDATE_PAUSED_AT, 0L)
+                    else -> System.currentTimeMillis()
+                },
+            )
             .putBoolean(KEY_UPDATE_PAUSE_PENDING, state.pending)
             // Moves with the flag it describes, in the same transaction, for the same reason the
             // two flags do: a stamp left behind by a cleared `pending` would age into a fault

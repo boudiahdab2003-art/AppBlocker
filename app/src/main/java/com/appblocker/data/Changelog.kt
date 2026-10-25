@@ -13,6 +13,15 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.177", "Oct 25, 2026", "When blocking is off while you use your phone, you hear about it straight away", listOf(
+        "**On Saturday you used Instagram from after work until 2 am and nothing stopped it, and no report reached me.** I went looking for why. There are two ways blocking can be off without anything telling anyone, and AppBlocker now reports both.",
+        "**The first is the pause after an update.** Every time AppBlocker updates, it pauses blocking until you tap Reactivate, and it does this separately in your main space and in Second Space. Until now that pause was never recorded and never reported: the blocker was running, its switch read ON, and only a notification said anything. If you tapped Reactivate in one space, the other could stay paused for days.",
+        "**The second is a stoppage the silent repair cannot fix.** Reports about a stoppage were only sent once blocking came back, so a stoppage still going on sent nothing at all.",
+        "**Now both are sent while they are happening.** If blocking has been paused for a quarter of an hour of phone use, or stopped for half an hour with ten minutes of use, a report goes out at once, without waiting for you to open the app. Each one is sent once, so a long evening is one report and not dozens.",
+        "**Pauses now show in your reports too.** They have their own line in the stoppage list and their own total, and a pause that has gone on for hours is marked as a problem instead of a grey dot.",
+        "**One false alarm is gone.** A report once said the blocker had \"seen nothing for 14 hours\" while you were actually in Second Space, where the other copy was blocking. That is now shown as what it is, not as a failure.",
+        "**After installing this update, open AppBlocker in both spaces and tap Reactivate in each.**",
+    )),
     VersionLog("1.176", "Oct 22, 2026", "Your browsers stay open when you use your university's VPN", listOf(
         "**AppBlocker no longer closes your browsers when the family DNS filter is off, as you asked.** Your university asked you to use a VPN. A VPN sends your phone's lookups through its own server, so while it is connected your phone reads as \"family filter off\". Before this version, that closed every browser after a minute, for as long as the VPN stayed on.",
         "**The rest of blocking is unchanged.** Blocked apps, blocked websites, blocked words, the adult-site check, Shorts and the danger hour all work exactly as before, with the VPN on or off.",

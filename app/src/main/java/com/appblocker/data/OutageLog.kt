@@ -757,6 +757,13 @@ object OutageLog {
     fun isOpen(context: Context): Boolean =
         runCatching { prefs(context).contains(KEY_OPEN_STARTED) }.getOrDefault(false)
 
+    /** Wall clock the open stoppage began (the watcher's last sign of life), or 0 when none is open.
+     *  [OngoingReport] keys and times its mid-stoppage report on it (invariant 91). */
+    fun openStartedAt(context: Context): Long = runCatching {
+        val p = prefs(context)
+        if (p.contains(KEY_OPEN_STARTED)) p.getLong(KEY_OPEN_STARTED, 0L) else 0L
+    }.getOrDefault(0L)
+
     /** Every finished episode, newest first — decoded, so [StoppageHistory] can order them by time
      *  alongside the switched-off periods. */
     internal fun recentEpisodes(context: Context): List<Episode> = runCatching {

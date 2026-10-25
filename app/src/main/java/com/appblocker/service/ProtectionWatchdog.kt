@@ -4,10 +4,13 @@ import android.content.Context
 import android.os.Process
 import android.os.SystemClock
 import com.appblocker.data.BootAudit
+import com.appblocker.data.BugReportQueue
 import com.appblocker.data.DeviceBoot
+import com.appblocker.data.OngoingReport
 import com.appblocker.data.OutageLog
 import com.appblocker.data.OwnSpace
 import com.appblocker.data.OwnUi
+import com.appblocker.data.PauseLog
 import com.appblocker.data.ProcessExits
 import com.appblocker.data.SelfEnableLog
 import com.appblocker.data.SelfToggleLog
@@ -268,6 +271,16 @@ object ProtectionWatchdog {
             }
             endSwitchOff(context, offEnding)
         }
+        // ⚠️ **The pause used to be answered with a notification and nothing else** (invariant 91).
+        // On 24 Oct 2026 he used Instagram unblocked from after work until 2 am, and two days of
+        // silence from his main phone was all there was to read: no line, no total, no report. Timed
+        // now, apart from the outages, like the switch-off — and, when this same check has just
+        // closed an outage, never from before now, because those minutes are already counted.
+        if (state == ProtectionState.PAUSED) {
+            PauseLog.begin(context, notBefore = if (outageWasOpen) System.currentTimeMillis() else 0L)
+        } else {
+            endPause(context, state)
+        }
         when (state) {
             ProtectionState.OK -> {
                 SettingsStore.clearProtectionOffSince(context)
@@ -308,6 +321,15 @@ object ProtectionWatchdog {
                         killedBy = { whoClosedIt(context) },
                     )
                 }
+                // Still down after the repair has had its chance, with the phone in use: say so now
+                // rather than when it ends, which is the moment nobody needs telling (invariant 91).
+                val outageAt = OutageLog.openStartedAt(context)
+                maybeReportOngoing(
+                    context,
+                    OngoingReport.Kind.STOPPED,
+                    outageAt,
+                    if (outageAt > 0L) System.currentTimeMillis() - outageAt else -1L,
+                )
                 // ⭐ **Do not wait for him** (invariant 82). His phone never restarts a killed watcher,
                 // and switching the entry off and on is what brings it back — proven on it on
                 // 22 Sep 2026 — so a killed watcher is answered by doing that, silently. It declines
@@ -329,8 +351,56 @@ object ProtectionWatchdog {
             // Off after an update, pending reactivation. Worth an alert precisely because it is
             // self-inflicted and easy to forget: the app was doing nothing at all, and saying it
             // was fine, until the user happened to open the Blocking tab.
-            ProtectionState.PAUSED -> ProtectionNotifier.notifyPaused(context, force)
+            ProtectionState.PAUSED -> {
+                ProtectionNotifier.notifyPaused(context, force)
+                // A notification in a shade he may not be looking at — the other space's, often —
+                // is not enough on its own. Once the pause has cost real use, the inbox hears too.
+                maybeReportOngoing(
+                    context,
+                    OngoingReport.Kind.PAUSED,
+                    PauseLog.openStartedAt(context),
+                    PauseLog.openForMs(context),
+                )
+            }
         }
+    }
+
+    /**
+     * Files the mid-episode report once the episode is old enough AND has cost enough use
+     * ([OngoingReport.due]). Cheap until then: the time half and the queue's own memory are both
+     * asked before the usage stream is walked, because this runs on every check of a long episode.
+     */
+    private fun maybeReportOngoing(context: Context, kind: String, startedAt: Long, openMs: Long) {
+        if (startedAt <= 0L || !OngoingReport.oldEnough(kind, openMs)) return
+        if (BugReportQueue.alreadyHave(context, OngoingReport.key(kind, "${startedAt / 1000}"))) return
+        if (!hasUsageAccess(context)) return
+        val used = runCatching {
+            UsageTracker.totalMinutesInRange(context, startedAt, System.currentTimeMillis())
+        }.getOrNull()
+        if (used != null && OngoingReport.due(kind, openMs, used)) {
+            BugReportSender.reportOngoing(context, kind, startedAt, openMs, used)
+        }
+    }
+
+    /** Closes an open pause; which way blocking left it is the ending. */
+    private fun endPause(context: Context, state: ProtectionState) {
+        PauseLog.end(
+            context,
+            endedBy = when (state) {
+                ProtectionState.OK -> PauseLog.EndedBy.REACTIVATED
+                ProtectionState.STALLED -> PauseLog.EndedBy.STOPPED
+                ProtectionState.OFF -> PauseLog.EndedBy.SWITCHED_OFF
+                else -> PauseLog.EndedBy.UNKNOWN
+            },
+            usedMinutes = { from, to ->
+                if (hasUsageAccess(context)) {
+                    runCatching { UsageTracker.totalMinutesInRange(context, from, to) }
+                        .getOrDefault(OutageLog.UNKNOWN_USE)
+                } else {
+                    OutageLog.UNKNOWN_USE
+                }
+            },
+        )
     }
 
     /**

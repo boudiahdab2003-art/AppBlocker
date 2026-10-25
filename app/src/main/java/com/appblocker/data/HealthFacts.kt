@@ -95,6 +95,18 @@ object HealthFacts {
          * would have made every caller that omits the argument silently healthy.
          */
         val updatePausePendingMs: Long = -1L,
+        /** How long the open after-update pause has stood ([PauseLog.openForMs]), or -1 when none is
+         *  open. A pause minutes old is an install; one that has stood for hours is blocking off. */
+        val pauseOpenMs: Long = -1L,
+        /** Minutes of use since the open pause began, or null when it cannot be told / none is open. */
+        val pauseOpenUsedMin: Int? = null,
+        /** Finished pauses — see [PauseLog.totals]. */
+        val pauseCount: Int = 0,
+        val pauseTotalMs: Long = 0L,
+        val pauseUsedMin: Int = 0,
+        /** This space was found behind another space at some point after the watcher's last event —
+         *  the quiet is then, at least partly, Android unbinding it on purpose (invariant 79). */
+        val awayDuringQuiet: Boolean = false,
         val foundDead: Int,
         val outageOpen: Boolean,
         val outageCount: Int,
@@ -302,22 +314,34 @@ object HealthFacts {
         // already had the fault.
         val pauseStuck = r.updatePausePending &&
             (r.updatePausePendingMs < 0L || r.updatePausePendingMs > PAUSE_RESOLVE_GRACE_MS)
+        // ⚠️ A pause that has STOOD is blocking off, not a deliberate moment (invariant 91). This was
+        // a neutral dot however long it lasted, so a report from a phone paused for two days, with
+        // Instagram used for hours, put nothing about it in "what looks wrong".
+        val pauseLong = r.updatePaused && r.pauseOpenMs >= OngoingReport.PAUSED_AFTER_MS
         if (r.updatePaused || pauseStuck) {
             add(
                 Fact(
-                    if (r.updatePaused) "Blocking is paused after an update" else
-                        "An update pause is half-cleared",
+                    when {
+                        pauseLong && r.pauseOpenUsedMin != null ->
+                            "Blocking has been paused after an update for " +
+                                "${minutesText(r.pauseOpenMs)}, through ${r.pauseOpenUsedMin} minutes of use"
+                        pauseLong -> "Blocking has been paused after an update for ${minutesText(r.pauseOpenMs)}"
+                        r.updatePaused -> "Blocking is paused after an update"
+                        else -> "An update pause is half-cleared"
+                    },
                     if (r.updatePaused) {
-                        "Deliberate: it waits for Reactivate to be tapped after the app updates " +
-                            "itself. Nothing is being blocked until then."
+                        "It waits for Reactivate to be tapped after the app updates. Nothing but " +
+                            "the adult filter is blocked until then, and the switch still reads ON. " +
+                            "Each space pauses on its own: open AppBlocker in this one."
                     } else {
                         "The pause was lifted but its second note was not torn up. Blocking can " +
                             "switch itself back off next time the watcher reconnects."
                     },
-                    good = if (r.updatePaused) null else false,
+                    good = if (r.updatePaused && !pauseLong) null else false,
                 ),
             )
         }
+        pauseTotalsFact(r)?.let { add(it) }
         // ⚠️ A long lag here is NORMAL and must not read as a fault. Android delivers
         // BOOT_COMPLETED only after the first unlock on a file-based-encryption phone, so a
         // restart at night is heard in the morning — and nothing is lost, because a locked phone
@@ -416,6 +440,17 @@ object HealthFacts {
         val used = r.usedMinutes ?: return null
         if (r.sinceLastEventMs < QUIET_MIN_MS) return null
         val quiet = agoText(r.sinceLastEventMs)
+        // ⚠️ Behind another space, the quiet is Android unbinding this copy on purpose (invariant 79)
+        // — and on 22 Oct 2026 it was read as fourteen hours of failure, red cross and all.
+        if (r.awayDuringQuiet) {
+            return Fact(
+                "The blocker has seen nothing for $quiet, but this space was behind another one",
+                "Android only lets the space on screen use its blocker, so while you were in the " +
+                    "other space this copy was switched off on purpose. The other copy blocks there. " +
+                    "A real stoppage after you came back is caught and counted on its own.",
+                good = null,
+            )
+        }
         return if (used >= QUIET_WITH_USE_MIN) {
             Fact(
                 "The blocker has seen nothing for $quiet, through $used minutes of use",
@@ -547,6 +582,20 @@ object HealthFacts {
             },
             // A count that is climbing is the measurement, not an alarm on its own — it is how we
             // find out whether a fix worked. The alarm is `outageOpen`, above.
+            good = null,
+        )
+    }
+
+    /** Finished after-update pauses, and what they cost (invariant 91). */
+    private fun pauseTotalsFact(r: Reading): Fact? {
+        if (r.pauseCount <= 0) return null
+        val used = if (r.pauseUsedMin <= 0) " None of it was while you were using the phone."
+        else " ${r.pauseUsedMin} minute(s) of phone use happened with blocking paused."
+        return Fact(
+            "Blocking was paused after an update ${r.pauseCount} time(s)",
+            "Paused for ${minutesText(r.pauseTotalMs)} in total, from each update until " +
+                "Reactivate was tapped.$used These are not in the stoppage figures: nothing broke, " +
+                "blocking was waiting for you.",
             good = null,
         )
     }

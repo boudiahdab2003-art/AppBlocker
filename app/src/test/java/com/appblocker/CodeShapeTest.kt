@@ -122,6 +122,32 @@ class CodeShapeTest {
         )
     }
 
+    // ---- invariant 91 ------------------------------------------------------------------------
+
+    /**
+     * **The after-update pause is never again answered by a notification alone.**
+     *
+     * `ProtectionState.PAUSED -> ProtectionNotifier.notifyPaused(context, force)` was the whole of
+     * it: no episode, no line, no report. On 24 Oct 2026 he used Instagram unblocked from after work
+     * until 2 am, and the only trace was two days of silence. The watchdog's PAUSED branch must time
+     * the pause and be able to file it while it lasts.
+     */
+    @Test
+    fun `the watchdog times the pause and reports it while it lasts`() {
+        val text = source("service/ProtectionWatchdog.kt").readText()
+        val branch = text.substringAfter("ProtectionState.PAUSED -> {", missingDelimiterValue = "")
+            .substringBefore("\n            }")
+        assertTrue(
+            "The PAUSED branch of checkAndNotify must file the pause while it lasts " +
+                "(maybeReportOngoing with OngoingReport.Kind.PAUSED), not only notify. Invariant 91.",
+            "OngoingReport.Kind.PAUSED" in branch,
+        )
+        assertTrue(
+            "checkAndNotify must open a PauseLog episode whenever the state is PAUSED. Invariant 91.",
+            Regex("""state == ProtectionState.PAUSED\)\s*\{\s*PauseLog.begin""").containsMatchIn(text),
+        )
+    }
+
     // ---- invariants 9 and 26 -----------------------------------------------------------------
 
     /**

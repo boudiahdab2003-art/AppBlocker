@@ -21,7 +21,9 @@ import com.appblocker.data.DeviceBoot
 import com.appblocker.data.FilterState
 import com.appblocker.data.NetworkFilter
 import com.appblocker.data.HealthFacts
+import com.appblocker.data.OngoingReport
 import com.appblocker.data.OutageLog
+import com.appblocker.data.PauseLog
 import com.appblocker.data.PinStore
 import com.appblocker.data.QuickSession
 import com.appblocker.data.SettingsStore
@@ -471,6 +473,11 @@ object BugReportSender {
         // "is the service on" but "was there anything for it to block". A report showing
         // blockedApps 0 next to a complaint about Instagram answers itself.
         field("updatePaused") { SettingsStore.updatePaused(ctx).toString() }
+        // How much the after-update pause has cost on this install (PauseLog, invariant 91) —
+        // the one way blocking is off that no other figure in a report counts.
+        field("pauseCount") { PauseLog.totals(ctx).count.toString() }
+        field("pauseTotalMin") { (PauseLog.totals(ctx).totalMs / 60_000).toString() }
+        field("pauseUsedMin") { PauseLog.totals(ctx).usedMin.toString() }
         field("ruleCount") { SettingsStore.blockedSnapshot(ctx).size.toString() }
         field("lockouts") { SettingsStore.keywordLockouts(ctx).size.toString() }
         field("browsersRead") { SettingsStore.readableBrowsers(ctx).size.toString() }
@@ -657,6 +664,42 @@ object BugReportSender {
                 ),
             )
         }
+    }
+
+    /**
+     * **A stoppage or pause still going on, while the phone is in use** (invariant 91). Filed once
+     * per episode: the key is checked before anything expensive is built, the way
+     * [reportDeviceProfile] does, because the watchdog asks on every check.
+     *
+     * @param startedAt the open episode's start, wall clock — what makes it one episode.
+     */
+    fun reportOngoing(context: Context, kind: String, startedAt: Long, openMs: Long, usedMin: Int) {
+        if (!automatic(context)) return
+        val at = "${startedAt / 1000}"
+        if (BugReportQueue.alreadyHave(context, OngoingReport.key(kind, at))) return
+        val watch = watchReading(context)
+        runCatching {
+            BugReportQueue.enqueue(
+                context,
+                BugReport.fromOngoing(
+                    appVersion = BuildConfig.VERSION_NAME,
+                    flavor = BuildConfig.FLAVOR,
+                    androidSdk = Build.VERSION.SDK_INT,
+                    device = describeDevice(),
+                    context = appContext(context, watch) + mapOf(
+                        "ongoingKind" to kind,
+                        "ongoingAt" to at,
+                        "ongoingMin" to minutesOrUnknown(openMs),
+                        "ongoingUsedMin" to "$usedMin",
+                    ),
+                    recentBlocks = BlockLog.recent(context),
+                    recentOutages = StoppageHistory.lines(context),
+                    healthFacts = healthLines(context, watch),
+                ),
+            )
+        }
+        // Now, not on the next app open: the app not being opened is the situation this is for.
+        flush(context)
     }
 
     /** Whole minutes, or `?` for the values [OutageLog] marks unmeasurable with -1. */

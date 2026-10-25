@@ -11,8 +11,8 @@ import android.content.Context
  * separate section would put the answer to that question in two places, and the pattern would
  * only be visible to someone who merged them by hand.
  *
- * The totals stay apart ([OutageLog.totals], [SwitchOffLog.totals]); only the lines are merged,
- * and each line names its own kind.
+ * The totals stay apart ([OutageLog.totals], [SwitchOffLog.totals], [PauseLog.totals]); only the
+ * lines are merged, and each line names its own kind.
  *
  * **Android's own record of each death rides in the same order** ([ProcessExits], invariant 72), as
  * `EXITED` lines read when the report is built. A death beside the stoppage it began is the one
@@ -31,9 +31,15 @@ object StoppageHistory {
         switchOffs: List<SwitchOffLog.Episode>,
         exits: List<ProcessExits.Exit> = emptyList(),
         max: Int = MAX_LINES,
+        /** After-update pauses ([PauseLog], invariant 91) — blocking off with nothing broken. */
+        pauses: List<PauseLog.Episode> = emptyList(),
     ): List<String> {
         val stoppages =
-            (outages.map { it.startedAt to it.render() } + switchOffs.map { it.startedAt to it.render() })
+            (
+                outages.map { it.startedAt to it.render() } +
+                    switchOffs.map { it.startedAt to it.render() } +
+                    pauses.map { it.startedAt to it.render() }
+                )
                 .sortedByDescending { it.first }
                 .take(max)
         return (stoppages + exits.map { it.at to it.render() })
@@ -45,6 +51,7 @@ object StoppageHistory {
         OutageLog.recentEpisodes(context),
         SwitchOffLog.recentEpisodes(context),
         ProcessExits.read(context).orEmpty(),
+        pauses = PauseLog.recentEpisodes(context),
     )
 
     /**
