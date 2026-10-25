@@ -128,7 +128,7 @@ internal fun WordSkipPicker(
                     )
                 }
                 items(apps, key = { it.packageName }) { app ->
-                    // Spotify is always left out (invariant 94): shown ticked and locked, never
+                    // Spotify and Claude are always left out (invariants 94, 96): shown ticked and locked, never
                     // written to the list, so the screen says what the watcher does.
                     val always = app.packageName in WordSkip.ALWAYS
                     val checked = always || app.packageName in skipped

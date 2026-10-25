@@ -95,4 +95,16 @@ class WordSkipTest {
         assertFalse(WordSkip.skips("com.instagram.android", emptySet(), isBrowser = false, dangerZoneOn = false))
         assertTrue(WordSkip.ALWAYS.none { it == chrome })
     }
+
+    // ---- invariant 96: Claude, always -------------------------------------------------------
+
+    @Test
+    fun `Claude is never read for words, with no list at all`() {
+        assertTrue(WordSkip.skips(claude, emptySet(), isBrowser = false, dangerZoneOn = false))
+    }
+
+    @Test
+    fun `the danger hour still reads Claude`() {
+        assertFalse(WordSkip.skips(claude, emptySet(), isBrowser = false, dangerZoneOn = true))
+    }
 }

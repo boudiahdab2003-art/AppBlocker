@@ -2103,6 +2103,13 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     **The shape to grep for: a new write path for blocked words or blocked apps that does not run
     `ItemLocks.keepLocked`.**
 
+96. **Claude is never read for words either — the second named exception.** 25 Oct 2026, his ask:
+    "make claude an exception for blocked words as its hard to program the app otherwise".
+    `com.anthropic.claude` joined `WordSkip.ALWAYS` on the same terms as Spotify (invariant 94):
+    no list entry needed, Strict rule untouched for every other app, the danger hour still reads it,
+    and a browser can never be in it — so claude.ai in a browser is still read. Blocked apps,
+    Shorts and the site layer are unaffected; only the word scan of the Claude app stops.
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused
