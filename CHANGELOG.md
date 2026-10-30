@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.181
+- Mi Video is now blocked like a browser: it opens web pages inside it but never said it was one, so its pages went unchecked.
+
 ## v1.180
 - Strict Mode no longer locks your Allowlist or Usage limits: start and stop a study session any time, while every app on your blocklist and its website stays blocked. The Claude and Spotify word-check exceptions now also work when your phone counts the app as a browser.
 
