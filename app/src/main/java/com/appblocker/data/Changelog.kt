@@ -13,6 +13,11 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.181", "Oct 30, 2026", "Mi Video is blocked like a browser", listOf(
+        "**Mi Video is blocked now, as you asked.** It can open web pages inside it, but it never tells the phone it is a browser, so AppBlocker did not treat it as one and its pages went unchecked.",
+        "**It is now on AppBlocker's list of browsers, and blocked outright** by \"Block browsers it can't read\", which is on in both your spaces. Unlike other browsers, it can never earn its way out by AppBlocker reading an address in it once.",
+        "**It also closes like your other browsers** during a danger hour and when the family DNS filter is off.",
+    )),
     VersionLog("1.180", "Oct 25, 2026", "Strict Mode no longer locks your study sessions", listOf(
         "**Strict Mode no longer locks your Allowlist or your Usage limits, as you asked.** During a Strict session you can now switch Quick Block to Allowlist, choose which apps are allowed, start a study Timer or Pomodoro and stop it whenever you like. Usage limit schedules can be changed, switched off or deleted too.",
         "**What Strict still holds:** every app on your blocklist, and its website, stays blocked for the whole session, in Allowlist mode too and even if you tick it as allowed. Stopping a study session only takes you back to Strict, never below it. Time schedules and the rest of Strict are unchanged.",

@@ -5,6 +5,7 @@ import com.appblocker.service.KNOWN_BROWSERS
 import com.appblocker.service.KNOWN_READABLE_BROWSERS
 import com.appblocker.service.WebContentFilter
 import com.appblocker.service.isOmniboxId
+import com.appblocker.service.isUnsupportedBrowser
 import com.appblocker.service.isStartPageId
 import com.appblocker.service.looksLikeHost
 import com.appblocker.service.looseAddress
@@ -426,6 +427,27 @@ class WebContentFilterTest {
         for (pkg in KNOWN_READABLE_BROWSERS) {
             assertTrue("$pkg is claimed readable but is not in KNOWN_BROWSERS", pkg in KNOWN_BROWSERS)
         }
+    }
+
+    /**
+     * **Mi Video hides a browser, and stays blocked outright (invariant 98).** The owner found its
+     * web pages unfiltered: it was in no list, so nothing treated it as a browser. It must be found
+     * as one, never be seeded readable, and stay unsupported even once this phone has learned an
+     * address from it — the learned list is exactly what would otherwise let it out.
+     */
+    @Test fun miVideoIsBlockedOutrightEvenAfterAnAddressIsRead() {
+        for (pkg in listOf("com.miui.videoplayer", "com.miui.video")) {
+            assertTrue("$pkg must be found as a browser", pkg in KNOWN_BROWSERS)
+            assertFalse("$pkg must not be seeded readable", pkg in KNOWN_READABLE_BROWSERS)
+            assertTrue(isUnsupportedBrowser(pkg, isRealBrowser = true, learnedReadable = emptySet()))
+            assertTrue("a learned address must not promote $pkg",
+                isUnsupportedBrowser(pkg, isRealBrowser = true, learnedReadable = setOf(pkg)))
+        }
+        // The rule it bypasses still holds for everything else.
+        assertFalse(isUnsupportedBrowser("com.android.chrome", isRealBrowser = true, learnedReadable = emptySet()))
+        assertFalse(isUnsupportedBrowser("org.example.browser", isRealBrowser = true, learnedReadable = setOf("org.example.browser")))
+        assertTrue(isUnsupportedBrowser("org.example.browser", isRealBrowser = true, learnedReadable = emptySet()))
+        assertFalse(isUnsupportedBrowser("com.miui.videoplayer", isRealBrowser = false, learnedReadable = emptySet()))
     }
 
     // ---- whole-word matching: the v1.70 false-positive class ----------------------------

@@ -2126,6 +2126,16 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     **The shape to grep for: a branch in `decideBlock` that can return before the
     `strict && isBlocked` check without blocking.**
 
+98. **Mi Video is a browser, and one that is never readable.** 30 Oct 2026, his words: "the mi video
+    is also a browser and the app couldnt detect it so block it by default". Xiaomi's Mi Video
+    (`com.miui.videoplayer`, China `com.miui.video`) opens web pages from inside, but declares no
+    `CATEGORY_APP_BROWSER`, is not the default browser and was in no list, so every web layer passed
+    it by. It is now in `KNOWN_BROWSERS` (a real browser: scanned, danger hour, DNS-off shutdown) and
+    in `NEVER_READABLE_BROWSERS`, which `isUnsupportedBrowser` checks **before** the readable seed and
+    the learned `readableBrowsers` — so with "block unsupported browsers" on (his phone, both spaces)
+    it is blocked outright and one address read inside it cannot promote it out. Pinned by
+    `WebContentFilterTest.miVideoIsBlockedOutrightEvenAfterAnAddressIsRead`.
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused

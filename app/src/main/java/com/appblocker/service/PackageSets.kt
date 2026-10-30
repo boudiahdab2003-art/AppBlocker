@@ -174,7 +174,32 @@ internal val KNOWN_BROWSERS = listOf(
     "com.heytap.browser", "com.nearme.browser", "com.coloros.browser", // Oppo/Realme/OnePlus
     "com.vivo.browser", // Vivo
     "com.sec.android.app.sbrowser.beta", // Samsung Internet Beta (stable is above)
+    // Apps with a browser inside them that never say so — see [NEVER_READABLE_BROWSERS].
+    "com.miui.videoplayer", "com.miui.video", // Xiaomi Mi Video (global / China)
 )
+
+/**
+ * Apps that hide a web browser inside something else, and are blocked outright by "block
+ * unsupported browsers" whatever this phone has learned about them (invariant 98).
+ *
+ * **Mi Video is a browser the app could not see.** Its online tab opens web pages, and the owner
+ * found that on his phone in Oct 2026: it declares no browser category, is never the default,
+ * and was named nowhere, so it sat outside every web layer — not scanned, not blanket-blocked.
+ * Naming it in [KNOWN_BROWSERS] is what makes it a browser here; naming it in this set is what
+ * keeps it blocked, because the learned [com.appblocker.data.SettingsStore.readableBrowsers]
+ * can promote any scanned package once one address is read, and one address read in a video
+ * app is not proof that its pages are filtered. Blocked outright was his choice ("block it by
+ * default"), so a later tidy-up must not move these into [KNOWN_READABLE_BROWSERS].
+ */
+internal val NEVER_READABLE_BROWSERS = setOf("com.miui.videoplayer", "com.miui.video")
+
+/**
+ * Whether the "block unsupported browsers" switch covers [pkg]: a real browser that has never been
+ * shown to be readable — or one of [NEVER_READABLE_BROWSERS], which never counts as readable.
+ */
+internal fun isUnsupportedBrowser(pkg: String, isRealBrowser: Boolean, learnedReadable: Set<String>): Boolean =
+    isRealBrowser && (pkg in NEVER_READABLE_BROWSERS ||
+        (pkg !in KNOWN_READABLE_BROWSERS && pkg !in learnedReadable))
 
 /**
  * System packages that must stay usable in Allowlist mode or the phone bricks: the core

@@ -2089,10 +2089,11 @@ class BlockerAccessibilityService : AccessibilityService() {
                 // Chrome". KNOWN_READABLE_BROWSERS seeds the answer with the toolbars we know how
                 // to read — needed because a blanket-blocked browser is never scanned, so without
                 // a seed a filterable browser could never demonstrate that it is one — and every
-                // other browser earns it by being read once. Unknown still counts as unsupported.
-                isUnsupportedBrowser = isRealBrowserPkg(pkg) &&
-                    pkg !in KNOWN_READABLE_BROWSERS &&
-                    pkg !in SettingsStore.readableBrowsers(this),
+                // other browser earns it by being read once. Unknown still counts as unsupported,
+                // and NEVER_READABLE_BROWSERS (Mi Video, invariant 98) never earns it.
+                isUnsupportedBrowser = isUnsupportedBrowser(
+                    pkg, isRealBrowserPkg(pkg), SettingsStore.readableBrowsers(this),
+                ),
                 unsupportedBrowserBlockingActive = {
                     SettingsStore.blockUnsupportedBrowsers(this) &&
                         (activeKeywords().isNotEmpty() || adultPackOn || SettingsStore.blockAdult(this))
