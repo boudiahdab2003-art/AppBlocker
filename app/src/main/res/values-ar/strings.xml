@@ -351,6 +351,9 @@
 
     <string name="profile_appearance_title">المظهر</string>
     <string name="profile_appearance_subtitle">السمة: %1$s.</string>
+    <string name="profile_grayscale_title">شاشة بالأبيض والأسود</string>
+    <string name="profile_grayscale_subtitle">يجعل الهاتف كله رماديًا فتفقد التطبيقات جاذبيتها. لا يقفله الوضع الصارم.</string>
+    <string name="profile_grayscale_manual">يحتاج AppBlocker إلى إذن الكمبيوتر لهذا (نفس إذن الإصلاح الصامت). أو فعّله بنفسك: الإعدادات ◂ إمكانية الوصول ◂ تصحيح الألوان ◂ تدرّج الرمادي.</string>
     <string name="theme_light">فاتح</string>
     <string name="theme_dark">داكن</string>
     <string name="theme_system">حسب النظام</string>

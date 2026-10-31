@@ -13,6 +13,11 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.183", "Oct 31, 2026", "Black & white screen", listOf(
+        "**New: a black & white screen, as you asked.** In Profile ▸ Appearance there is a new switch, **Black & white screen**. It turns the whole phone grey, so feeds, thumbnails and red badges lose most of their pull.",
+        "**It is not part of Strict Mode, as you chose.** You can switch it on and off at any time, during a Strict session too.",
+        "**It uses the same computer permission as the silent repair,** which your phone already has. Your main space and Second Space each have their own switch. If the permission is ever lost, the switch tells you how to turn grey on by hand in Settings.",
+    )),
     VersionLog("1.182", "Oct 31, 2026", "Gemini's temporary chat is blocked", listOf(
         "**Gemini's temporary chat is blocked now, always, as you asked.** There is nothing to switch on, and it stays blocked when Quick Block is paused. The rest of Gemini keeps working.",
         "**How it works:** the moment a temporary chat opens, before anything can be typed, AppBlocker covers it. Tap Got it and it steps back to an ordinary Gemini chat. On gemini.google.com in Chrome it is covered the same way.",

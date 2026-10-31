@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Contrast
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Create
@@ -103,6 +104,7 @@ import com.appblocker.data.NetworkFilter
 import com.appblocker.data.SettingsStore
 import com.appblocker.service.AccessibilityUtil
 import com.appblocker.service.BugReportSender
+import com.appblocker.service.Grayscale
 import com.appblocker.service.ProtectionState
 import com.appblocker.service.ProtectionWatchdog
 import com.appblocker.ui.theme.AppCard
@@ -202,6 +204,8 @@ fun ProfileScreen(
     val currentBlockTheme = remember(resumeTick) { BlockThemes.current(context) }
     val currentBlockLayout = remember(resumeTick) { BlockLayouts.current(context) }
     val themeController = LocalThemeController.current
+    // Re-read on resume: it can be switched in Android's own Settings too.
+    var grayOn by remember(resumeTick) { mutableStateOf(Grayscale.isOn(context)) }
     val locked = strictActive
 
     // The off-switch guard, and the slow way out of it. Same shape as the adult pack's
@@ -551,6 +555,26 @@ fun ProfileScreen(
                 chevron = true,
                 enabled = true, // cosmetic — allowed even during Strict
                 onClick = { showTheme = true },
+            )
+            Divider()
+            ProfileRow(
+                icon = Icons.Filled.Contrast,
+                title = stringResource(R.string.profile_grayscale_title),
+                subtitle = stringResource(R.string.profile_grayscale_subtitle),
+                badge = grayOn,
+                // Outside Strict Mode in both directions, at the owner's request: it is a comfort
+                // setting, not a protection, so switching it off is not a weakening Strict guards.
+                enabled = true,
+                onClick = {
+                    val want = !grayOn
+                    if (Grayscale.set(context, want)) {
+                        grayOn = Grayscale.isOn(context)
+                    } else {
+                        Toast.makeText(
+                            context, R.string.profile_grayscale_manual, Toast.LENGTH_LONG,
+                        ).show()
+                    }
+                },
             )
             Divider()
             ProfileRow(

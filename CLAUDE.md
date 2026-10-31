@@ -206,6 +206,10 @@ Telegram bot on first use) and ranked use-case plans live in **docs/SERVER.md**.
 - **The Allowlist and Usage limit schedules are outside Strict** (v1.180, invariant 97, his choice):
   switchable, editable and stoppable mid-session. What Strict guarantees is its **blocklist** — those
   apps and their websites stay blocked in both modes. Keep that check ahead of the Allowlist branch.
+- **Black & white screen** (v1.183, `service/Grayscale.kt`, Profile ▸ Appearance): Android's own
+  Color correction ▸ Grayscale, written with the same `WRITE_SECURE_SETTINGS` grant as `SelfToggle`.
+  **Outside Strict Mode in both directions, his choice** — a comfort setting, not a protection; do
+  not lock, guard or re-apply it without his word. Per Android user, so each space has its own.
 - **Strict Mode locks *weakening* only.** Every control that makes blocking stronger stays usable
   during a session — arming the off-switch guard, ticking an app on, adding a word, switching on
   any Quick Block extra option. The pattern in the UI is `enabled = ed || !value` (`ed =

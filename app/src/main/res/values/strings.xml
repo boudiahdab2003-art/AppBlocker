@@ -294,6 +294,9 @@ Never sent: your blocked words, the sites you visit, which apps you block, or an
 
     <string name="profile_appearance_title">Appearance</string>
     <string name="profile_appearance_subtitle">Theme: %1$s.</string>
+    <string name="profile_grayscale_title">Black &amp; white screen</string>
+    <string name="profile_grayscale_subtitle">Turns the whole phone grey, so apps lose their pull. Not locked by Strict Mode.</string>
+    <string name="profile_grayscale_manual">AppBlocker needs the computer permission for this (the same one as the silent repair). Or switch it on yourself: Settings ▸ Accessibility ▸ Color correction ▸ Grayscale.</string>
     <string name="theme_light">Light</string>
     <string name="theme_dark">Dark</string>
     <string name="theme_system">System default</string>
