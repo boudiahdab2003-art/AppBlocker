@@ -567,6 +567,11 @@
     <string name="strict_add_more_time">أضِف مزيدًا من الوقت</string>
     <string name="strict_add_the_time">أضِف الوقت</string>
     <string name="strict_add_confirm_title">أتضيف %1$s؟</string>
+    <string name="strict_relapse_button">انتكست</string>
+    <string name="strict_relapse_hint">يضيف يومًا واحدًا من الوضع الصارم. لا لوم، فقط يوم إضافي.</string>
+    <string name="strict_relapse_title">إضافة يوم واحد من الوضع الصارم؟</string>
+    <string name="strict_relapse_body">ستبقى حظوراتك مقفلة 24 ساعة إضافية. إن لم يكن الوضع الصارم يعمل، تبدأ الآن جلسة مدتها يوم واحد.\n\nلا يمكنك التراجع عن هذا أو تقصيره.</string>
+    <string name="strict_relapse_confirm">أضف يومًا</string>
     <string name="strict_add_confirm_body">ستبقى قوائم حظرك مُقفلة حتى %1$s.</string>
     <string name="strict_locks_summary">يقفل %1$s.</string>
     <string name="strict_adult_filter">فلتر البالغين</string>

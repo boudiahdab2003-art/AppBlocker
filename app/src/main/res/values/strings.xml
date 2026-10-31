@@ -506,6 +506,11 @@ Never sent: your blocked words, the sites you visit, which apps you block, or an
     <string name="strict_add_more_time">Add more time</string>
     <string name="strict_add_the_time">Add the time</string>
     <string name="strict_add_confirm_title">Add %1$s?</string>
+    <string name="strict_relapse_button">I relapsed</string>
+    <string name="strict_relapse_hint">Adds one day of Strict Mode. No shame, just one more day.</string>
+    <string name="strict_relapse_title">Add one day of Strict Mode?</string>
+    <string name="strict_relapse_body">Your blocks will stay locked for 24 more hours. If Strict Mode is not running, a one-day session starts now.\n\nYou can\'t undo this or cut it short.</string>
+    <string name="strict_relapse_confirm">Add one day</string>
     <string name="strict_add_confirm_body">Your blocks will stay locked until %1$s.</string>
     <string name="strict_locks_summary">Locks %1$s.</string>
     <string name="strict_adult_filter">adult filter</string>

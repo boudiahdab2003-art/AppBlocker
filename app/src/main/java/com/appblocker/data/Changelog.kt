@@ -13,10 +13,12 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
-    VersionLog("1.183", "Oct 31, 2026", "Black & white screen", listOf(
+    VersionLog("1.183", "Oct 31, 2026", "Black & white screen, and an \"I relapsed\" button", listOf(
         "**New: a black & white screen, as you asked.** In Profile ▸ Appearance there is a new switch, **Black & white screen**. It turns the whole phone grey, so feeds, thumbnails and red badges lose most of their pull.",
         "**It is not part of Strict Mode, as you chose.** You can switch it on and off at any time, during a Strict session too.",
         "**It uses the same computer permission as the silent repair,** which your phone already has. Your main space and Second Space each have their own switch. If the permission is ever lost, the switch tells you how to turn grey on by hand in Settings.",
+        "**New: an \"I relapsed\" button, as you asked.** It is at the bottom of the Strict Mode screen. One tap, then a confirm, adds one day of Strict Mode. If a session is running it gets 24 hours longer; if not, a one-day session starts.",
+        "**Like every Strict extension, it cannot be undone.** Your Recovery counter is not touched by it; that still has its own relapse button.",
     )),
     VersionLog("1.182", "Oct 31, 2026", "Gemini's temporary chat is blocked", listOf(
         "**Gemini's temporary chat is blocked now, always, as you asked.** There is nothing to switch on, and it stays blocked when Quick Block is paused. The rest of Gemini keeps working.",

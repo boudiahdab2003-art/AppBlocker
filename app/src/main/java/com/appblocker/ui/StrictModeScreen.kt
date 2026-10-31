@@ -133,6 +133,57 @@ fun StrictModeScreen(
                 },
             )
         }
+
+        Spacer(Modifier.height(32.dp))
+        RelapseButton(onConfirm = {
+            // Only a fresh session needs the uninstall guard asked for; a running one already did.
+            if (!active) ensureDeviceAdmin(context)
+            vm.relapse()
+        })
+    }
+}
+
+/**
+ * **"I relapsed"** — one tap, one more day of Strict Mode (on top of a running session, or a new
+ * one). Asked for by the owner. Behind a confirm because, like every Strict extension, it cannot be
+ * undone; there is no other friction, because it only ever makes blocking stronger.
+ */
+@Composable
+private fun RelapseButton(onConfirm: () -> Unit) {
+    var confirm by remember { mutableStateOf(false) }
+    Box(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+            .border(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.6f), RoundedCornerShape(16.dp))
+            .clickable { confirm = true }
+            .padding(vertical = 16.dp, horizontal = 16.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(stringResource(R.string.strict_relapse_button),
+                style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
+            Spacer(Modifier.height(4.dp))
+            Text(stringResource(R.string.strict_relapse_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+        }
+    }
+    if (confirm) {
+        AlertDialog(
+            onDismissRequest = { confirm = false },
+            confirmButton = {
+                TextButton(onClick = { confirm = false; onConfirm() }) {
+                    Text(stringResource(R.string.strict_relapse_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirm = false }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            },
+            title = { Text(stringResource(R.string.strict_relapse_title)) },
+            text = { Text(stringResource(R.string.strict_relapse_body)) },
+        )
     }
 }
 

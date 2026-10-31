@@ -14,6 +14,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -89,6 +90,26 @@ class FocusViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * **"I relapsed"** — one more day of Strict Mode, at the owner's request. A running session is
+     * lengthened by 24 hours; with none running, a 24-hour session starts.
+     *
+     * Reads the row once rather than trusting [isActive]: a session that ran out a moment ago but
+     * has not been zeroed yet must start afresh, not be extended — [FocusDao.extend] would add the
+     * day onto a deadline already in the past and hand back less than a day.
+     */
+    fun relapse() {
+        viewModelScope.launch {
+            val state = dao.get().first()
+            val remaining = if (state == null) 0L else SessionClock.remaining(
+                state.realtimeStartMillis, state.realtimeEndMillis,
+                state.startTimeMillis, state.endTimeMillis,
+                state.bootCount, DeviceBoot.count(getApplication()),
+            )
+            if (remaining > 0L) extend(RELAPSE_MINUTES) else start(RELAPSE_MINUTES)
+        }
+    }
+
     /** Start an un-stoppable Strict Mode session. There is intentionally no "stop". */
     fun start(minutes: Int) {
         StatsStore.addStrictMinutes(getApplication(), minutes)
@@ -108,5 +129,10 @@ class FocusViewModel(app: Application) : AndroidViewModel(app) {
                 )
             )
         }
+    }
+
+    companion object {
+        /** What one tap of "I relapsed" adds: one day. */
+        const val RELAPSE_MINUTES = 24 * 60
     }
 }
