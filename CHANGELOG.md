@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.183
+- New: a Black & white screen switch in Profile > Appearance that turns the whole phone grey. It is not locked by Strict Mode. New: an "I relapsed" button on the Strict Mode screen that adds one day of Strict Mode (or starts a one-day session if none is running).
+
 ## v1.182
 - Gemini's temporary chat is now blocked, always. Nothing to switch on, and it stays blocked when Quick Block is paused. The rest of Gemini keeps working.
 
