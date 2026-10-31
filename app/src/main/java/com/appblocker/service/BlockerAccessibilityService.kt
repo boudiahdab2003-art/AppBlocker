@@ -1677,12 +1677,10 @@ class BlockerAccessibilityService : AccessibilityService() {
     }
 
     /** Debounced Gemini temporary-chat check (invariant 99) — [scheduleShortsScan]'s shape. Only
-     *  runs while it is switched on, Quick Block is active and Gemini is in front (the website is
-     *  the web scan's job), so other apps' events cost a comparison. */
+     *  runs while Gemini is in front (the website is the web scan's job), so other apps' events
+     *  cost a comparison. **Always on**: no switch, and not paused with Quick Block — his word. */
     private fun scheduleGeminiTempScan() {
-        if (!SettingsStore.blockGeminiTempChat(this) || !quickBlockActive() ||
-            lastForegroundPkg !in GeminiTempChat.PACKAGES
-        ) {
+        if (lastForegroundPkg !in GeminiTempChat.PACKAGES) {
             // Leaving Gemini: a scan already running must not cover whatever came next, and the
             // cover itself comes down — derived from what is up, so never someone else's cover.
             geminiScanJob?.cancel()
@@ -2812,10 +2810,8 @@ class BlockerAccessibilityService : AccessibilityService() {
             BrowserAddress.Blank -> false
             BrowserAddress.Unreadable -> true
         }
-        if (isBrowser && onGemini && urlHit == null &&
-            SettingsStore.blockGeminiTempChat(applicationContext) && quickBlockActive() &&
-            GeminiTempChat.isStartScreenText(text)
-        ) {
+        // Always, like the app's: no switch and no Quick Block condition.
+        if (isBrowser && onGemini && urlHit == null && GeminiTempChat.isStartScreenText(text)) {
             lastWebText = text
             withContext(Dispatchers.Main) {
                 if (lastForegroundPkg == pkg && stillOnScreen(pkg)) {
@@ -3108,9 +3104,10 @@ class BlockerAccessibilityService : AccessibilityService() {
     }
 
     /**
-     * Covers Gemini's temporary-chat start screen (when the toggle is on) and leaves the rest of
-     * Gemini usable — invariant 99, [scanShorts]'s shape. The start screen is the only place a
-     * temporary chat can be recognised (see [GeminiTempChat]), so this blocks the entrance.
+     * Covers Gemini's temporary-chat start screen and leaves the rest of Gemini usable — invariant
+     * 99, [scanShorts]'s shape. The start screen is the only place a temporary chat can be
+     * recognised (see [GeminiTempChat]), so this blocks the entrance. **Always**: unlike Shorts it
+     * has no switch and does not wait for Quick Block — see [GeminiTempChat].
      */
     private suspend fun scanGeminiTempChat() {
         // The Google app itself is blocked: its own cover is up and owns the screen.
@@ -3118,9 +3115,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         // The exit is stepping BACK right now; a cover mid-walk would blind every reading.
         if (geminiExitJob?.isActive == true) return
         val front = lastForegroundPkg
-        if (!SettingsStore.blockGeminiTempChat(applicationContext) || !quickBlockActive() ||
-            front !in GeminiTempChat.PACKAGES
-        ) {
+        if (front !in GeminiTempChat.PACKAGES) {
             if (geminiCovering) withContext(Dispatchers.Main) { overlay.remove() }
             return
         }

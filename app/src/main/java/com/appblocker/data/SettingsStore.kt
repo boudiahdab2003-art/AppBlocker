@@ -11,7 +11,6 @@ object SettingsStore {
     private const val KEY_BLOCK_PURCHASES = "block_purchases"
     private const val KEY_BLOCK_UNSUPPORTED = "block_unsupported_browsers"
     private const val KEY_BLOCK_YT_SHORTS = "block_youtube_shorts"
-    private const val KEY_BLOCK_GEMINI_TEMP = "block_gemini_temporary_chat"
 
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -154,13 +153,6 @@ object SettingsStore {
 
     fun setBlockYoutubeShorts(context: Context, value: Boolean) =
         prefs(context).edit().putBoolean(KEY_BLOCK_YT_SHORTS, value).apply()
-
-    /** Block only Gemini's temporary chat (the rest of Gemini still works) — invariant 99. */
-    fun blockGeminiTempChat(context: Context): Boolean =
-        prefs(context).getBoolean(KEY_BLOCK_GEMINI_TEMP, false)
-
-    fun setBlockGeminiTempChat(context: Context, value: Boolean) =
-        prefs(context).edit().putBoolean(KEY_BLOCK_GEMINI_TEMP, value).apply()
 
     /**
      * The name the person using this phone chose, or **""** if they have not given one.

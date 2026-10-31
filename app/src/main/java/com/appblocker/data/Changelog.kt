@@ -13,10 +13,10 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
-    VersionLog("1.182", "Oct 31, 2026", "Gemini's temporary chat can be blocked", listOf(
-        "**New: block Gemini's temporary chat, as you asked.** Under Gemini in your block list there is now a **Temporary chat** switch, like the Shorts one under YouTube. The rest of Gemini keeps working.",
+    VersionLog("1.182", "Oct 31, 2026", "Gemini's temporary chat is blocked", listOf(
+        "**Gemini's temporary chat is blocked now, always, as you asked.** There is nothing to switch on, and it stays blocked when Quick Block is paused. The rest of Gemini keeps working.",
         "**How it works:** the moment a temporary chat opens, before anything can be typed, AppBlocker covers it. Tap Got it and it steps back to an ordinary Gemini chat. On gemini.google.com in Chrome it is covered the same way.",
-        "**One limit, honestly:** once a message is sent, Gemini shows nothing that tells a temporary chat from an ordinary one. So it is blocked at the door, while AppBlocker is running. Strict Mode keeps the switch on.",
+        "**One limit, honestly:** once a message is sent, Gemini shows nothing that tells a temporary chat from an ordinary one. So it is blocked at the door, while AppBlocker is running.",
     )),
     VersionLog("1.181", "Oct 30, 2026", "Mi Video is blocked like a browser", listOf(
         "**Mi Video is blocked now, as you asked.** It can open web pages inside it, but it never tells the phone it is a browser, so AppBlocker did not treat it as one and its pages went unchecked.",

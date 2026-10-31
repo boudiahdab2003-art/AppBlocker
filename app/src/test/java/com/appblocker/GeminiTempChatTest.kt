@@ -7,6 +7,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
 /**
  * Gemini's temporary chat, blocked on its own — invariant 99, his ask of 31 Oct 2026.
@@ -89,6 +90,37 @@ class GeminiTempChatTest {
             GeminiTempChat.Step.DONE,
             GeminiTempChat.next(TempChatView.UNREADABLE, 1, GeminiTempChat.GIVE_UP_MS),
         )
+    }
+
+    // ---- always ------------------------------------------------------------------------------
+
+    /**
+     * ⚠️ **His word, 31 Oct 2026: "make it blocked always".** No switch, and no waiting for Quick
+     * Block. Every Gemini path in the watcher — the scheduler, the scan and the website branch — is
+     * read here, and none of them may ask for a setting or for Quick Block. Reintroducing either
+     * condition is how "always" would quietly become "when Quick Block is on".
+     */
+    @Test fun itIsBlockedAlways() {
+        val text = listOf(File("src/main/java/com/appblocker/service/BlockerAccessibilityService.kt"),
+            File("app/src/main/java/com/appblocker/service/BlockerAccessibilityService.kt"))
+            .first { it.exists() }.readText()
+        fun body(start: String): String {
+            val from = text.indexOf(start)
+            assertTrue("cannot find $start", from >= 0)
+            return text.substring(from, text.indexOf("\n    private ", from + start.length))
+        }
+        val web = text.substring(text.indexOf("val onGemini = when (address)"))
+            .substringBefore("// Browsers get the full filter")
+        val paths = mapOf(
+            "scheduleGeminiTempScan" to body("private fun scheduleGeminiTempScan()"),
+            "scanGeminiTempChat" to body("private suspend fun scanGeminiTempChat()"),
+            "the website branch" to web,
+        )
+        for ((name, code) in paths) {
+            for (gate in listOf("quickBlockActive()", "SettingsStore.")) {
+                assertFalse("$name asks $gate — Gemini's temporary chat is blocked always", gate in code)
+            }
+        }
     }
 
     // ---- the cover's place in CoverGate --------------------------------------------------------

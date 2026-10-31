@@ -2151,8 +2151,9 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     presses nothing). HOME would leave the mode open and lock him out of all of Gemini on the next
     open. The cover key is exempt from dismiss suppression (its walk takes it down first, like
     Shorts). gemini.google.com in a browser: the same sentence, as a page cover, beside the browser
-    Shorts branch. Toggle `block_gemini_temporary_chat` (default off), a sub-row under Gemini in the
-    editor, Strict-locked on. Pinned by `GeminiTempChatTest`. ⚠️ A temporary chat started while the
+    Shorts branch. **Always on — no switch, not paused with Quick Block** (his "make it blocked
+    always"; a first build with an editor switch was cancelled before release). Pinned by
+    `GeminiTempChatTest`, including `itIsBlockedAlways`, which reads the watcher. ⚠️ A temporary chat started while the
     watcher was down cannot be recognised afterwards — a limit of Gemini's screen, not a bug.
 
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in

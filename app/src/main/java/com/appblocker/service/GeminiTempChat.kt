@@ -21,7 +21,14 @@ internal enum class TempChatView {
 /**
  * Gemini's **temporary chat** — the mode whose chats "don't appear in recent chats" — blocked on
  * its own while the rest of Gemini keeps working. His ask, 31 Oct 2026: *"can we block gemini
- * anonymous"*, then "Temporary chat only" from the options. Invariant 99.
+ * anonymous"*, then "Temporary chat only" from the options, then *"make it blocked always"*.
+ * Invariant 99.
+ *
+ * ⚠️ **Always means always.** There is no switch for it and it does not wait for Quick Block — a
+ * paused Quick Block, a Strict session or none, it is blocked. The first build had a switch under
+ * Gemini in the editor (default off) and only blocked while Quick Block was enforcing; he asked for
+ * it gone before that build was released. `GeminiTempChatTest.itIsBlockedAlways` reads the watcher
+ * and fails if either condition comes back.
  *
  * ## What it is recognised by, measured on his phone (31 Oct 2026, HyperOS, Second Space)
  *
