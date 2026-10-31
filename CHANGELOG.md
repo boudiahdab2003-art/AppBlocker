@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.182
+- Gemini's temporary chat is now blocked, always. Nothing to switch on, and it stays blocked when Quick Block is paused. The rest of Gemini keeps working.
+
 ## v1.181
 - Mi Video is now blocked like a browser: it opens web pages inside it but never said it was one, so its pages went unchecked.
 
