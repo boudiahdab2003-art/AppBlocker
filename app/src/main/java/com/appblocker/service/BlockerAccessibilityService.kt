@@ -570,6 +570,21 @@ class BlockerAccessibilityService : AccessibilityService() {
      */
     @Volatile private var shortsExitJob: Job? = null
 
+    // Gemini's temporary chat (invariant 99): when on, cover its start screen but leave the rest
+    // of Gemini usable. The same shape as the Shorts scan above, for the same reasons.
+    @Volatile private var geminiScanJob: Job? = null
+    /** Whether the cover up is the Gemini temporary-chat one. Derived, like [shortsCovering]. */
+    private val geminiCovering: Boolean
+        get() = overlay.isShowing && overlay.counterKey == GeminiTempChat.KEY
+    private val geminiScanRunnable = Runnable {
+        guarded(applicationContext, "geminiScan") {
+            geminiScanJob?.cancel()
+            geminiScanJob = scope.launch { scanGeminiTempChat() }
+        }
+    }
+    /** The walk that steps BACK out of the temporary chat after "Got it" — see [GeminiTempChat.next]. */
+    @Volatile private var geminiExitJob: Job? = null
+
     /**
      * Proof that the watcher is still alive **when nothing is happening on screen**.
      *
@@ -1332,6 +1347,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                         scheduleUrlScan()
                         scheduleWebScan()
                         scheduleShortsScan()
+                        scheduleGeminiTempScan()
                     }
                     // Fast path: a NEW app's content events usually beat its window-state event,
                     // so acting here covers a blocked app sooner (less visible flash). Confirm
@@ -1362,6 +1378,8 @@ class BlockerAccessibilityService : AccessibilityService() {
     private fun contentChangedElsewhere(pkg: String?, className: String?) {
         if (pkg != null) handleSettingsGuard(pkg, className)
         scheduleShortsScan()
+        // The same clean-up half: a Gemini cover comes down once Gemini is not in front.
+        scheduleGeminiTempScan()
     }
 
     /** Everything that runs when the foreground app changes: launch counting, location
@@ -1527,6 +1545,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         scheduleUrlScan()
         scheduleWebScan()
         scheduleShortsScan()
+        scheduleGeminiTempScan()
     }
 
     /** Whether [pkg]'s on-screen text should be scanned for blocked words. Browsers always
@@ -1655,6 +1674,23 @@ class BlockerAccessibilityService : AccessibilityService() {
         }
         handler.removeCallbacks(shortsScanRunnable)
         handler.postDelayed(shortsScanRunnable, 250)
+    }
+
+    /** Debounced Gemini temporary-chat check (invariant 99) — [scheduleShortsScan]'s shape. Only
+     *  runs while it is switched on, Quick Block is active and Gemini is in front (the website is
+     *  the web scan's job), so other apps' events cost a comparison. */
+    private fun scheduleGeminiTempScan() {
+        if (!SettingsStore.blockGeminiTempChat(this) || !quickBlockActive() ||
+            lastForegroundPkg !in GeminiTempChat.PACKAGES
+        ) {
+            // Leaving Gemini: a scan already running must not cover whatever came next, and the
+            // cover itself comes down — derived from what is up, so never someone else's cover.
+            geminiScanJob?.cancel()
+            if (geminiCovering) overlay.remove()
+            return
+        }
+        handler.removeCallbacks(geminiScanRunnable)
+        handler.postDelayed(geminiScanRunnable, 250)
     }
 
     // --- App blocking (unchanged behaviour) ---
@@ -2321,6 +2357,10 @@ class BlockerAccessibilityService : AccessibilityService() {
         // a phone that has just been locked. Every scan job is cancelled in both this method and
         // onDestroy, and CodeShapeTest fails the build if a new one is not.
         shortsExitJob?.cancel()
+        // Gemini's temporary-chat scan and exit, by the same rule (invariant 99).
+        handler.removeCallbacks(geminiScanRunnable)
+        geminiScanJob?.cancel()
+        geminiExitJob?.cancel()
         webScanQueuedAt = 0L
         // Stop trying to send a screened-off phone Home, and release the attempt dedup: the
         // next unlock starts clean, so a fresh open of the app is a fresh attempt.
@@ -2763,6 +2803,30 @@ class BlockerAccessibilityService : AccessibilityService() {
             return
         }
 
+        // Gemini's temporary chat on gemini.google.com (invariant 99) — the start screen's sentence
+        // on a Gemini page, or anywhere when the address cannot be read. A page cover like any
+        // other: "Got it" steps BACK, and a second one leaves. Same place in the order as Shorts,
+        // and for the same reason: its own title, not whatever site rule might also match.
+        val onGemini = when (address) {
+            is BrowserAddress.At -> GeminiTempChat.isGeminiHost(address.url)
+            BrowserAddress.Blank -> false
+            BrowserAddress.Unreadable -> true
+        }
+        if (isBrowser && onGemini && urlHit == null &&
+            SettingsStore.blockGeminiTempChat(applicationContext) && quickBlockActive() &&
+            GeminiTempChat.isStartScreenText(text)
+        ) {
+            lastWebText = text
+            withContext(Dispatchers.Main) {
+                if (lastForegroundPkg == pkg && stillOnScreen(pkg)) {
+                    showBlockScreen(title = words.get(R.string.block_gemini_temp_title),
+                        message = words.get(R.string.block_gemini_temp_message), packageName = null,
+                        counterKey = CoverGate.WEB_KEY, offenceKey = pkg, why = BlockWhy.GEMINI_TEMP)
+                } else lastWebText = null
+            }
+            return
+        }
+
         // Browsers get the full filter (user words + adult word pack + blocked apps' domains +
         // adult site list); user + social keywords match the omnibox URL when one was read (page
         // text otherwise), while the adult layers always match the page text. Other apps match
@@ -2977,6 +3041,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                             scheduleWebScan()
                         }
                         scheduleShortsScan()
+                        scheduleGeminiTempScan()
                     }
                 }
             }
@@ -3039,6 +3104,43 @@ class BlockerAccessibilityService : AccessibilityService() {
             }
         } else if (onShorts == false && shortsCovering) {
             withContext(Dispatchers.Main) { overlay.remove() }
+        }
+    }
+
+    /**
+     * Covers Gemini's temporary-chat start screen (when the toggle is on) and leaves the rest of
+     * Gemini usable — invariant 99, [scanShorts]'s shape. The start screen is the only place a
+     * temporary chat can be recognised (see [GeminiTempChat]), so this blocks the entrance.
+     */
+    private suspend fun scanGeminiTempChat() {
+        // The Google app itself is blocked: its own cover is up and owns the screen.
+        if (overlay.isShowing && overlay.isAppBlock) return
+        // The exit is stepping BACK right now; a cover mid-walk would blind every reading.
+        if (geminiExitJob?.isActive == true) return
+        val front = lastForegroundPkg
+        if (!SettingsStore.blockGeminiTempChat(applicationContext) || !quickBlockActive() ||
+            front !in GeminiTempChat.PACKAGES
+        ) {
+            if (geminiCovering) withContext(Dispatchers.Main) { overlay.remove() }
+            return
+        }
+        // Three-way, as with Shorts: UNREADABLE changes nothing, and in particular never takes a
+        // cover down — our own cover in front is exactly when the tree cannot be read.
+        when (readGeminiTempChat()) {
+            TempChatView.OPEN -> if (!geminiCovering) withContext(Dispatchers.Main) {
+                // Re-confirmed on Main, as scanShorts does: he can have left while this ran.
+                if (front != null && lastForegroundPkg == front && stillOnScreen(front)) {
+                    showBlockScreen(
+                        title = words.get(R.string.block_gemini_temp_title),
+                        message = words.get(R.string.block_gemini_temp_message),
+                        packageName = null,
+                        counterKey = GeminiTempChat.KEY, why = BlockWhy.GEMINI_TEMP,
+                    )
+                }
+            }
+            TempChatView.CLOSED, TempChatView.GONE ->
+                if (geminiCovering) withContext(Dispatchers.Main) { overlay.remove() }
+            TempChatView.UNREADABLE -> Unit
         }
     }
 
@@ -3191,6 +3293,7 @@ class BlockerAccessibilityService : AccessibilityService() {
             // as "word" would send the next reader looking for a keyword that never
             // existed. Invariant 17: an instrument must mean one thing.
             counterKey == CoverGate.SHORTS_KEY || why == BlockWhy.SHORTS -> "shorts"
+            counterKey == GeminiTempChat.KEY || why == BlockWhy.GEMINI_TEMP -> "gemini"
             packageName != null -> "app"
             else -> "word"
         }
@@ -3318,6 +3421,8 @@ class BlockerAccessibilityService : AccessibilityService() {
         // makes a playing video float away (see CoverGate.exitFor).
         when (CoverGate.exitFor(dismissedKey)) {
             CoverGate.Exit.BACK_THEN_HOME -> startShortsExit()
+
+            CoverGate.Exit.BACK_OUT_OF_MODE -> startGeminiTempExit()
 
             CoverGate.Exit.BACK -> if (
                 !CoverGate.backExitFailed(
@@ -3450,6 +3555,55 @@ class BlockerAccessibilityService : AccessibilityService() {
                         return@launch
                     }
                     ShortsExit.Step.WAIT -> Unit
+                }
+            }
+        }
+    }
+
+    /**
+     * "Got it" on the Gemini temporary-chat cover: step BACK until an ordinary chat is in front —
+     * invariant 99, [GeminiTempChat.next]. On his phone the first BACK closes the keyboard and the
+     * second leaves temporary mode, so he stays in Gemini, which is all he asked to keep.
+     *
+     * The cover comes down first, as the Shorts exit's does and for the same reason: the start
+     * screen cannot be read with our window in front of it. That is safe because the key is exempt
+     * from dismiss suppression — a walk that does not get out leaves the scan to re-cover it.
+     */
+    private fun startGeminiTempExit() {
+        val gemini = dismissedPkg
+        performGlobalAction(GLOBAL_ACTION_BACK)
+        dismissedViaBack = true
+        overlay.remove()
+        val startedAt = stopwatchNow()
+        geminiExitJob?.cancel()
+        geminiExitJob = scope.launch {
+            var backsSent = 1
+            while (true) {
+                delay(GeminiTempChat.POLL_MS)
+                val view = readGeminiTempChat()
+                val step = GeminiTempChat.next(view, backsSent, stopwatchNow() - startedAt)
+                if (DEBUG) Log.d(TAG, "geminiExit: view=$view backs=$backsSent step=$step")
+                when (step) {
+                    GeminiTempChat.Step.BACK -> {
+                        backsSent++
+                        withContext(Dispatchers.Main) { performGlobalAction(GLOBAL_ACTION_BACK) }
+                    }
+                    GeminiTempChat.Step.HOME -> {
+                        withContext(Dispatchers.Main) {
+                            // Every BACK spent and still in the mode: leave Gemini through the
+                            // ordinary exit watcher, which needs the long grace a trip Home gets.
+                            dismissedViaBack = false
+                            startExit(gemini)
+                        }
+                        return@launch
+                    }
+                    GeminiTempChat.Step.DONE -> {
+                        // The scan owns the screen again: if the start screen is somehow still
+                        // there, it is covered on this, not on Gemini's next event.
+                        withContext(Dispatchers.Main) { scheduleGeminiTempScan() }
+                        return@launch
+                    }
+                    GeminiTempChat.Step.WAIT -> Unit
                 }
             }
         }

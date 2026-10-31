@@ -86,6 +86,8 @@
     <string name="block_shorts_title">Shorts blocked</string>
     <string name="block_shorts_message">YouTube Shorts is blocked.</string>
     <string name="block_shorts_web_message">YouTube Shorts is blocked. The rest of YouTube still works.</string>
+    <string name="block_gemini_temp_title">Temporary chat blocked</string>
+    <string name="block_gemini_temp_message">Gemini\'s temporary chat is blocked. The rest of Gemini still works.</string>
 
     <!-- What the web filter caught. -->
     <string name="block_word_title">Blocked word</string>
@@ -914,6 +916,8 @@ Never sent: your blocked words, the sites you visit, which apps you block, or an
     <string name="editor_mode_title">Blocking mode</string>
     <string name="editor_mode_body">Choose the variant that works best for you.</string>
     <string name="editor_shorts">Shorts</string>
+    <string name="editor_gemini_temp">Temporary chat</string>
+    <string name="insights_gemini_temp">Gemini temporary chat</string>
     <string name="shorts_pip_title">Stop a Short floating over your screen</string>
     <string name="shorts_pip_body">YouTube can keep a Short playing in a small window on top of everything else. One tap turns that off for good.</string>
     <string name="shorts_pip_button">Open the setting</string>

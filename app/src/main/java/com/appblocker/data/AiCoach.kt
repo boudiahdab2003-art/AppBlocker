@@ -733,6 +733,7 @@ object AiCoach {
                 if (attempts.isEmpty()) "" else " (" + attempts.take(4).joinToString {
                     val name = when (it.key) {
                         "web" -> "websites"; "shorts" -> "YouTube Shorts"
+                        "gemini-temp" -> "Gemini temporary chat"
                         "strict_guard" -> "settings during Strict"
                         else -> label(it.key)
                     }
@@ -775,6 +776,7 @@ object AiCoach {
                 })
             if (session.active) appendLine("Focus session running now: ${session.label}")
             if (SettingsStore.blockYoutubeShorts(ctx)) appendLine("YouTube Shorts blocking: on")
+            if (SettingsStore.blockGeminiTempChat(ctx)) appendLine("Gemini temporary chat blocking: on")
             appendLine("Web filter: adult content ${onOff(SettingsStore.blockAdult(ctx))}, " +
                 "purchases ${onOff(SettingsStore.blockPurchases(ctx))}")
             runCatching {

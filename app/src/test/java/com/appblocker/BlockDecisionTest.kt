@@ -443,7 +443,7 @@ class BlockDecisionTest {
             BlockWhy.SCHED_TIME, BlockWhy.SCHED_USAGE, BlockWhy.SCHED_LAUNCH, BlockWhy.SCHED_WIFI,
             BlockWhy.SCHED_LOCATION, BlockWhy.BROWSER, BlockWhy.UNKNOWN,
             BlockWhy.WORD, BlockWhy.SITE, BlockWhy.ADULT, BlockWhy.SHORTS, BlockWhy.PURCHASE,
-            BlockWhy.GUARD, BlockWhy.GUARD_SERVICE, BlockWhy.GUARD_UNINSTALL,
+            BlockWhy.GEMINI_TEMP, BlockWhy.GUARD, BlockWhy.GUARD_SERVICE, BlockWhy.GUARD_UNINSTALL,
             BlockWhy.GUARD_ADMIN, BlockWhy.GUARD_APPINFO,
         )
         for (c in codes) {

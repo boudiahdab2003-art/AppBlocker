@@ -7,6 +7,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.appblocker.R
 import com.appblocker.data.AiCoach
 import com.appblocker.data.AppCategories
 import com.appblocker.data.Goal
@@ -17,6 +18,7 @@ import com.appblocker.data.AttemptCounter
 import com.appblocker.data.InstalledApp
 import com.appblocker.data.InstalledAppsRepository
 import com.appblocker.data.LaunchCounter
+import com.appblocker.service.GeminiTempChat
 import com.appblocker.data.MoodStore
 import com.appblocker.data.NotificationCounter
 import com.appblocker.data.StatsStore
@@ -185,6 +187,10 @@ class InsightsViewModel(app: Application) : AndroidViewModel(app) {
             val frac = if (maxAttempts > 0) a.total.toFloat() / maxAttempts else null
             if (a.key == "web") {
                 StatRow("Websites", null, "${a.today}× today · ${a.total}× total", fraction = frac)
+            } else if (a.key == GeminiTempChat.KEY) {
+                // A synthetic key, like "web": there is no package to take a label from.
+                StatRow(ctx.getString(R.string.insights_gemini_temp), null, "${a.today}× today · ${a.total}× total",
+                    fraction = frac)
             } else {
                 StatRow(label(installed, a.key), icon(installed, a.key),
                     "${a.today}× today · ${a.total}× total", dotColor(a.key), pkg = a.key,

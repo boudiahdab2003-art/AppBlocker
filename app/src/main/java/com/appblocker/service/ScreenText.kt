@@ -122,6 +122,41 @@ internal fun AccessibilityService.readPlayerView(): PlayerView {
 }
 
 /**
+ * Whether Gemini's temporary-chat start screen is in front — see [GeminiTempChat] for what it is
+ * recognised by and why. Same discipline as [readPlayerView]: an unreadable tree, or our own cover
+ * in front of it, is [TempChatView.UNREADABLE] and never a "no".
+ *
+ * Only text **inside the start screen's container** counts. The sentence is matched on node text,
+ * never a content description (the "New temporary chat" button is in every ordinary chat), and a
+ * reply that happens to discuss temporary chats sits in the conversation list, not the zero state.
+ */
+internal fun AccessibilityService.readGeminiTempChat(): TempChatView {
+    val root = rootInActiveWindow ?: return TempChatView.UNREADABLE
+    val active = root.packageName?.toString()
+    if (active == packageName) return TempChatView.UNREADABLE
+    if (active !in GeminiTempChat.PACKAGES) return TempChatView.GONE
+    // Breadth-first, carrying "inside the zero state" down from the container that says so.
+    val queue = ArrayDeque<Pair<AccessibilityNodeInfo, Boolean>>()
+    queue.add(root to false)
+    var visited = 0
+    while (queue.isNotEmpty() && visited < MAX_NODES) {
+        val (node, parentInside) = queue.removeFirst()
+        visited++
+        val inside = parentInside ||
+            node.viewIdResourceName?.contains(GeminiTempChat.ZERO_STATE_ID) == true
+        if (inside) {
+            val text = node.text?.toString()
+            if (text != null && GeminiTempChat.isStartScreenText(text)) return TempChatView.OPEN
+        }
+        for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it to inside) }
+    }
+    // Readable and not found: an ordinary chat. As with the player, a walk that stopped at
+    // MAX_NODES still read the screen — and the start screen is a small tree (about sixty nodes
+    // on his phone), so one that large is a conversation, which is never the start screen.
+    return TempChatView.CLOSED
+}
+
+/**
  * The omnibox, but only once it has **settled into an address the user actually went to** —
  * null while they are still typing into it.
  *

@@ -2136,6 +2136,25 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     it is blocked outright and one address read inside it cannot promote it out. Pinned by
     `WebContentFilterTest.miVideoIsBlockedOutrightEvenAfterAnAddressIsRead`.
 
+99. **Gemini's temporary chat is blocked at its start screen, and only there.** 31 Oct 2026, his ask
+    "can we block gemini anonymous", then "Temporary chat only" from the options. Measured on his
+    phone over USB the same day (Second Space): the Gemini app (`com.google.android.apps.bard`) is a
+    shell, the chat runs in the Google app (`googlequicksearchbox`, robin `MainActivity`); **the
+    "New temporary chat" button is in every ordinary chat** (content description), so matching
+    "temporary chat" anywhere would block all of Gemini; the temporary chat opens on a start screen
+    whose body reads "Temporary chats don't appear in recent chats …" inside the zero-state
+    container; and **once a message is sent nothing on screen says "temporary"** (toolbar "New chat"
+    / "More options", menu Help / Feedback). So `readGeminiTempChat` matches that sentence as node
+    TEXT inside a `zero_state` view id and nowhere else, and the block is at the entrance. Back from
+    the start screen: keyboard, then an ordinary chat — so "Got it" is `Exit.BACK_OUT_OF_MODE`
+    (`GeminiTempChat.next`: BACK while it reads OPEN, up to 3, then HOME; an unreadable reading
+    presses nothing). HOME would leave the mode open and lock him out of all of Gemini on the next
+    open. The cover key is exempt from dismiss suppression (its walk takes it down first, like
+    Shorts). gemini.google.com in a browser: the same sentence, as a page cover, beside the browser
+    Shorts branch. Toggle `block_gemini_temporary_chat` (default off), a sub-row under Gemini in the
+    editor, Strict-locked on. Pinned by `GeminiTempChatTest`. ⚠️ A temporary chat started while the
+    watcher was down cannot be recognised afterwards — a limit of Gemini's screen, not a bug.
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused

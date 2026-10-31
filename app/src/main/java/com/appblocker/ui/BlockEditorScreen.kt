@@ -140,6 +140,7 @@ fun BlockEditorScreen(
     var purchases by remember { mutableStateOf(SettingsStore.blockPurchases(context)) }
     var unsupported by remember { mutableStateOf(SettingsStore.blockUnsupportedBrowsers(context)) }
     var ytShorts by remember { mutableStateOf(SettingsStore.blockYoutubeShorts(context)) }
+    var geminiTemp by remember { mutableStateOf(SettingsStore.blockGeminiTempChat(context)) }
 
     val ed = !strictActive // false locks "weakening" edits during Strict Mode
     // Locked on their own on the Locks screen (invariant 95). The writes keep them regardless; this
@@ -168,6 +169,7 @@ fun BlockEditorScreen(
         SettingsStore.setBlockPurchases(context, purchases)
         SettingsStore.setBlockUnsupportedBrowsers(context, unsupported)
         SettingsStore.setBlockYoutubeShorts(context, ytShorts)
+        SettingsStore.setBlockGeminiTempChat(context, geminiTemp)
         onBack()
     }
 
@@ -360,14 +362,29 @@ fun BlockEditorScreen(
                                 // Blocklist-only — in Allowlist an allowed app is fully allowed.
                                 if (!allowlist && app.packageName == "com.google.android.youtube") {
                                     {
-                                        ShortsSubRow(icon = app.icon, checked = ytShorts, enabled = ed || !ytShorts) { on ->
-                                            if (strictActive && !on) return@ShortsSubRow
+                                        FeatureSubRow(
+                                            icon = app.icon, label = stringResource(R.string.editor_shorts),
+                                            checked = ytShorts, enabled = ed || !ytShorts,
+                                        ) { on ->
+                                            if (strictActive && !on) return@FeatureSubRow
                                             ytShorts = on
                                         }
                                         // Only once Shorts blocking is actually on: before that
                                         // there is nothing to explain, and this is the screen the
                                         // "less talk" pass is trying to keep quiet.
                                         if (ytShorts) ShortsPipNote()
+                                    }
+                                } else if (!allowlist && app.packageName == GEMINI_PKG) {
+                                    // Nested "Temporary chat" sub-row under Gemini (invariant 99):
+                                    // blocks only the temporary chat; the rest of Gemini works.
+                                    {
+                                        FeatureSubRow(
+                                            icon = app.icon, label = stringResource(R.string.editor_gemini_temp),
+                                            checked = geminiTemp, enabled = ed || !geminiTemp,
+                                        ) { on ->
+                                            if (strictActive && !on) return@FeatureSubRow
+                                            geminiTemp = on
+                                        }
                                     }
                                 } else null
                             },
@@ -675,10 +692,15 @@ internal fun ToggleRow(
     }
 }
 
-/** Indented "Shorts" child row shown directly under YouTube — blocks only the Shorts feed. */
+/** The Gemini app's own package — the row its "Temporary chat" sub-row hangs under. */
+private const val GEMINI_PKG = "com.google.android.apps.bard"
+
+/** Indented child row under one app that blocks one part of it — "Shorts" under YouTube,
+ *  "Temporary chat" under Gemini. */
 @Composable
-private fun ShortsSubRow(
+private fun FeatureSubRow(
     icon: Bitmap?,
+    label: String,
     checked: Boolean,
     enabled: Boolean,
     onToggle: (Boolean) -> Unit,
@@ -702,7 +724,7 @@ private fun ShortsSubRow(
             }
         }
         Spacer(Modifier.width(12.dp))
-        Text(stringResource(R.string.editor_shorts), style = MaterialTheme.typography.bodyLarge,
+        Text(label, style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onBackground)
         Spacer(Modifier.width(8.dp))
         Box(

@@ -46,7 +46,7 @@ object BlockLog {
      * where a package name is the nearest variable to hand, and anything unrecognised here is
      * recorded as "other" rather than passed through.
      */
-    val KINDS = setOf("app", "guard", "shorts", "purchase", "word", "other")
+    val KINDS = setOf("app", "guard", "shorts", "gemini", "purchase", "word", "other")
 
     /**
      * What the window on screen was, at the moment the cover went up.

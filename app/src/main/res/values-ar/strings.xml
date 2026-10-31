@@ -106,6 +106,8 @@
     <string name="block_shorts_title">Shorts محظور</string>
     <string name="block_shorts_message">مقاطع YouTube Shorts محظورة.</string>
     <string name="block_shorts_web_message">مقاطع YouTube Shorts محظورة. أما بقية YouTube فتعمل كالمعتاد.</string>
+    <string name="block_gemini_temp_title">الدردشة المؤقتة محظورة</string>
+    <string name="block_gemini_temp_message">الدردشة المؤقتة في Gemini محظورة. أما بقية Gemini فتعمل كالمعتاد.</string>
 
     <string name="block_word_title">كلمة محظورة</string>
     <string name="block_word_message">«%1$s» ضمن قائمتك المحظورة.</string>
@@ -981,6 +983,8 @@
     <string name="editor_mode_title">نمط الحظر</string>
     <string name="editor_mode_body">اختر النمط الذي يناسبك أكثر.</string>
     <string name="editor_shorts">Shorts</string>
+    <string name="editor_gemini_temp">الدردشة المؤقتة</string>
+    <string name="insights_gemini_temp">الدردشة المؤقتة في Gemini</string>
     <string name="shorts_pip_title">أوقف ظهور الريل فوق شاشتك</string>
     <string name="shorts_pip_body">يمكن ليوتيوب مواصلة تشغيل الريل في نافذة صغيرة فوق كل شيء. ضغطة واحدة توقف ذلك نهائيًا.</string>
     <string name="shorts_pip_button">افتح الإعداد</string>

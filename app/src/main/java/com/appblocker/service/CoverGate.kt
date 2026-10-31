@@ -55,6 +55,14 @@ internal object CoverGate {
          * could not be confirmed never presses HOME.
          */
         BACK_THEN_HOME,
+
+        /**
+         * Step BACK out of a mode inside the app until it is gone, staying in the app — the Gemini
+         * temporary-chat exit (invariant 99). Its own value for the same reason as
+         * [BACK_THEN_HOME]: each BACK is conditional on a reading that the last one did not work,
+         * and HOME is only the last resort. See [GeminiTempChat.next].
+         */
+        BACK_OUT_OF_MODE,
     }
 
     /**
@@ -89,12 +97,19 @@ internal object CoverGate {
      * only backgrounds YouTube, leaving the reel on its back stack, so re-opening resumed onto
      * the same Short. One action, both halves of his complaint.
      *
+     * **Gemini's temporary chat is a fourth scope**: a *mode* inside an app he is otherwise free to
+     * use, entered from a button in every ordinary chat. HOME would leave the mode open, so the next
+     * time Gemini came forward it would land on the same start screen and cover again — locking him
+     * out of all of Gemini, which he did not ask for. BACK twice (keyboard, then the mode) lands on
+     * an ordinary chat, measured on his phone.
+     *
      * Null is HOME. It is the answer that always works, and an unkeyed cover has nothing to say
      * about what it was over.
      */
     fun exitFor(counterKey: String?): Exit = when (counterKey) {
         WEB_KEY -> Exit.BACK
         SHORTS_KEY -> Exit.BACK_THEN_HOME
+        GeminiTempChat.KEY -> Exit.BACK_OUT_OF_MODE
         else -> Exit.HOME
     }
 
@@ -157,7 +172,9 @@ internal object CoverGate {
         /** See [inGrace]. */
         viaBack: Boolean,
     ): Boolean {
-        if (counterKey == SHORTS_KEY) return false
+        // The Gemini temporary-chat cover comes down at the start of its walk too, for the same
+        // reason: the mode can only be read while nothing of ours is in front of it.
+        if (counterKey == SHORTS_KEY || counterKey == GeminiTempChat.KEY) return false
         if (dismissedKey == null) return false
         if (counterKey != dismissedKey && counterKey != dismissedPkg) return false
         return inGrace(dismissedPkg, currentPkg, sinceDismissMs, viaBack)
