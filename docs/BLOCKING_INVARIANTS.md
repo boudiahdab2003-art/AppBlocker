@@ -2156,6 +2156,20 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     `GeminiTempChatTest`, including `itIsBlockedAlways`, which reads the watcher. ⚠️ A temporary chat started while the
     watcher was down cannot be recognised afterwards — a limit of Gemini's screen, not a bug.
 
+100. **Gemini's instructions page is covered, always.** 2 Nov 2026, his words: "i want to give
+    instructions to google gemini but when i relapse i enter and change it … can you help block the
+    instructions screen", then "Always" from the options (offered: always / only in Strict / while
+    Quick Block is on). Measured on his phone over USB the same day (main space): the Gemini app has
+    no native screen for it — Profile ▸ Personal context opens `gemini.google.com/saved-info` in a
+    **Chrome Custom Tab** (`CustomTabActivity`, toolbar = page title + bare host). So it is the
+    browser branch of the page scan, right after the temporary-chat branch: `GeminiInstructions`
+    matches the `/saved-info` path when the address is readable, or the text "Your instructions for
+    Gemini" together with "Personal context" (or the older "Saved info") — the heading alone could be
+    typed into a chat. Page cover (`CoverGate.WEB_KEY`), why `gemini-instr`; "Got it" = BACK, which
+    closes the Custom Tab. The whole page is covered, the Memory switch included (one page; the
+    instructions' own switch sits on it). **No switch, not paused with Quick Block** — pinned by
+    `GeminiInstructionsTest.itIsBlockedAlways`, which reads the watcher.
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused

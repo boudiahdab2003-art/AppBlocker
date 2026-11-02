@@ -2823,6 +2823,24 @@ class BlockerAccessibilityService : AccessibilityService() {
             return
         }
 
+        // Gemini's instructions page (invariant 100) — gemini.google.com/saved-info, which is also
+        // where the Gemini app's Profile ▸ Personal context goes (a Chrome Custom Tab). Always,
+        // like the temporary chat: no switch, no Quick Block condition. A page cover: "Got it"
+        // steps BACK, which closes the Custom Tab.
+        if (isBrowser && onGemini && urlHit == null && GeminiInstructions.isInstructionsPage(
+                (address as? BrowserAddress.At)?.url, text)
+        ) {
+            lastWebText = text
+            withContext(Dispatchers.Main) {
+                if (lastForegroundPkg == pkg && stillOnScreen(pkg)) {
+                    showBlockScreen(title = words.get(R.string.block_gemini_instructions_title),
+                        message = words.get(R.string.block_gemini_instructions_message), packageName = null,
+                        counterKey = CoverGate.WEB_KEY, offenceKey = pkg, why = BlockWhy.GEMINI_INSTRUCTIONS)
+                } else lastWebText = null
+            }
+            return
+        }
+
         // Browsers get the full filter (user words + adult word pack + blocked apps' domains +
         // adult site list); user + social keywords match the omnibox URL when one was read (page
         // text otherwise), while the adult layers always match the page text. Other apps match

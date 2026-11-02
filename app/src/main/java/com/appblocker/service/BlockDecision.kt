@@ -52,6 +52,7 @@ internal object BlockWhy {
     const val ADULT = "adult"              // one of the built-in adult layers, not the user's word
     const val SHORTS = "shorts"            // Shorts, in the app or on the web
     const val GEMINI_TEMP = "gemini-temp"  // Gemini's temporary chat, in the app or on the web
+    const val GEMINI_INSTRUCTIONS = "gemini-instr" // Gemini's instructions page (saved-info)
     /** The off-switch guard, split by **which** off-switch — four screens, four failure modes.
      *
      *  One `guard` code could not answer report #7 (*"i dont know why it blocked"*): the

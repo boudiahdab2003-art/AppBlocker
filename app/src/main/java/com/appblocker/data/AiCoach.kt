@@ -777,6 +777,7 @@ object AiCoach {
             if (session.active) appendLine("Focus session running now: ${session.label}")
             if (SettingsStore.blockYoutubeShorts(ctx)) appendLine("YouTube Shorts blocking: on")
             appendLine("Gemini temporary chat: always blocked")
+            appendLine("Gemini instructions page: always blocked")
             appendLine("Web filter: adult content ${onOff(SettingsStore.blockAdult(ctx))}, " +
                 "purchases ${onOff(SettingsStore.blockPurchases(ctx))}")
             runCatching {

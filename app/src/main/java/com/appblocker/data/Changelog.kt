@@ -13,6 +13,11 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.184", "Nov 2, 2026", "Your Gemini instructions are locked", listOf(
+        "**Your instructions for Gemini are locked now, always, as you asked.** The page where they are added, changed or deleted (Personal context) is covered, so what you wrote on a good day stays as you wrote it.",
+        "**It works the way in from the Gemini app** (Profile ▸ Personal context) **and on gemini.google.com in Chrome.** Tap Got it and it closes the page. The rest of Gemini keeps working.",
+        "**There is nothing to switch on, and it stays locked when Quick Block is paused.** The Memory switch is on the same page, so it is locked too.",
+    )),
     VersionLog("1.183", "Oct 31, 2026", "Black & white screen, and an \"I relapsed\" button", listOf(
         "**New: a black & white screen, as you asked.** In Profile ▸ Appearance there is a new switch, **Black & white screen**. It turns the whole phone grey, so feeds, thumbnails and red badges lose most of their pull.",
         "**It is not part of Strict Mode, as you chose.** You can switch it on and off at any time, during a Strict session too.",
