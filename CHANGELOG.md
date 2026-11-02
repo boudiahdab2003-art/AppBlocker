@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.185
+- Google's news feed (Discover, one swipe right of the home screen) is blocked, always. Also in this update: your Gemini instructions page is locked (1.184).
+
 ## v1.184
 - Your instructions for Gemini are locked: the Personal context page (Gemini app and gemini.google.com) is covered, always.
 
