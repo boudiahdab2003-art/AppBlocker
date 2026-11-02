@@ -110,6 +110,8 @@
     <string name="block_gemini_temp_message">الدردشة المؤقتة في Gemini محظورة. أما بقية Gemini فتعمل كالمعتاد.</string>
     <string name="block_gemini_instructions_title">تعليمات Gemini مقفلة</string>
     <string name="block_gemini_instructions_message">تعليماتك لـ Gemini مقفلة، لتبقى كما كتبتها. أما بقية Gemini فتعمل كالمعتاد.</string>
+    <string name="block_discover_title">موجز أخبار Google محظور</string>
+    <string name="block_discover_message">موجز الأخبار محظور. أما بحث Google وGemini فيعملان كالمعتاد.</string>
 
     <string name="block_word_title">كلمة محظورة</string>
     <string name="block_word_message">«%1$s» ضمن قائمتك المحظورة.</string>

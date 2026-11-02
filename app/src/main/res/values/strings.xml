@@ -90,6 +90,8 @@
     <string name="block_gemini_temp_message">Gemini\'s temporary chat is blocked. The rest of Gemini still works.</string>
     <string name="block_gemini_instructions_title">Gemini instructions locked</string>
     <string name="block_gemini_instructions_message">Your instructions for Gemini are locked, so they stay as you wrote them. The rest of Gemini still works.</string>
+    <string name="block_discover_title">Google news feed blocked</string>
+    <string name="block_discover_message">The news feed is blocked. Google search and Gemini still work.</string>
 
     <!-- What the web filter caught. -->
     <string name="block_word_title">Blocked word</string>

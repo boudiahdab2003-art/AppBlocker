@@ -157,6 +157,26 @@ internal fun AccessibilityService.readGeminiTempChat(): TempChatView {
 }
 
 /**
+ * Whether Google's news feed is on screen — see [DiscoverFeed]. True only for its list, found in
+ * the active window and **visible to the user**; an unreadable tree or our own cover in front is
+ * false, because the answer bounces HOME and "can't tell" must never do that.
+ */
+internal fun AccessibilityService.discoverFeedVisible(): Boolean {
+    val root = rootInActiveWindow ?: return false
+    if (root.packageName?.toString() == packageName) return false
+    val queue = ArrayDeque<AccessibilityNodeInfo>()
+    queue.add(root)
+    var visited = 0
+    while (queue.isNotEmpty() && visited < MAX_NODES) {
+        val node = queue.removeFirst()
+        visited++
+        if (DiscoverFeed.isFeedList(node.viewIdResourceName) && node.isVisibleToUser) return true
+        for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+    }
+    return false
+}
+
+/**
  * The omnibox, but only once it has **settled into an address the user actually went to** —
  * null while they are still typing into it.
  *

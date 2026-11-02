@@ -13,6 +13,11 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.185", "Nov 2, 2026", "Google's news feed is blocked", listOf(
+        "**Google's news feed is blocked now, always, as you asked.** That is the feed one swipe right of your home screen (Google calls it Discover). The moment it opens, AppBlocker covers it and takes you back to the home screen.",
+        "**The same feed inside the Google app is blocked too,** because it is the same news. Google search, the search bar on your home screen and Gemini keep working.",
+        "**There is nothing to switch on, and it stays blocked when Quick Block is paused.**",
+    )),
     VersionLog("1.184", "Nov 2, 2026", "Your Gemini instructions are locked", listOf(
         "**Your instructions for Gemini are locked now, always, as you asked.** The page where they are added, changed or deleted (Personal context) is covered, so what you wrote on a good day stays as you wrote it.",
         "**It works the way in from the Gemini app** (Profile ▸ Personal context) **and on gemini.google.com in Chrome.** Tap Got it and it closes the page. The rest of Gemini keeps working.",

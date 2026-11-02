@@ -734,6 +734,7 @@ object AiCoach {
                     val name = when (it.key) {
                         "web" -> "websites"; "shorts" -> "YouTube Shorts"
                         "gemini-temp" -> "Gemini temporary chat"
+                        "discover" -> "Google news feed"
                         "strict_guard" -> "settings during Strict"
                         else -> label(it.key)
                     }
@@ -778,6 +779,7 @@ object AiCoach {
             if (SettingsStore.blockYoutubeShorts(ctx)) appendLine("YouTube Shorts blocking: on")
             appendLine("Gemini temporary chat: always blocked")
             appendLine("Gemini instructions page: always blocked")
+            appendLine("Google news feed (Discover): always blocked")
             appendLine("Web filter: adult content ${onOff(SettingsStore.blockAdult(ctx))}, " +
                 "purchases ${onOff(SettingsStore.blockPurchases(ctx))}")
             runCatching {

@@ -2170,6 +2170,20 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
     instructions' own switch sits on it). **No switch, not paused with Quick Block** — pinned by
     `GeminiInstructionsTest.itIsBlockedAlways`, which reads the watcher.
 
+101. **Google's news feed (Discover) is bounced HOME, always.** 2 Nov 2026, his words: "it would be
+    great also if you can block google news", "Always", then he showed the feed one swipe right of
+    the home screen. The Google News app is not installed in either space. Measured over USB: the
+    feed is a launcher-hosted window (`GoogleDiscoverWindow`, owner `com.miui.home`) whose nodes are
+    the Google app's, list id `googleapp_discover_recycler_view`; opening it sends a window-state
+    event from `googlequicksearchbox` (class `FrameLayout`); **HOME from it lands on the home
+    screen**; and the home screen itself carries only the search widget's ids, never the list.
+    So `scheduleDiscoverScan(eventPkg)` runs on the Google app's events (front or not — the
+    launcher hosts it) and `scanDiscoverFeed` acts only on a list that `isVisibleToUser`: cover
+    (`discover`), HOME at once, the settings guard's safety net, one bounce per 1.5 s
+    (`DiscoverFeed.shouldBounce`). The Google app's own home feed is the same list and is covered
+    too; search, Lens and Gemini do not draw it. No switch, no Quick Block condition — pinned by
+    `DiscoverFeedTest.itIsBlockedAlwaysAndOnlyWhenSeen`.
+
 ⚠️ **Invariants 39-43 are not transcribed here.** They live as KDoc on their own checks in
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused

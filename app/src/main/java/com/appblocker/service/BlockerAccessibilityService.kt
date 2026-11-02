@@ -585,6 +585,17 @@ class BlockerAccessibilityService : AccessibilityService() {
     /** The walk that steps BACK out of the temporary chat after "Got it" — see [GeminiTempChat.next]. */
     @Volatile private var geminiExitJob: Job? = null
 
+    // Google's news feed (invariant 101): cover + HOME whenever its list is on screen. Always.
+    @Volatile private var discoverScanJob: Job? = null
+    /** Monotonic stamp of the last feed bounce — see [DiscoverFeed.shouldBounce]. */
+    @Volatile private var lastDiscoverBounceAt = -DiscoverFeed.BOUNCE_GAP_MS
+    private val discoverScanRunnable = Runnable {
+        guarded(applicationContext, "discoverScan") {
+            discoverScanJob?.cancel()
+            discoverScanJob = scope.launch { scanDiscoverFeed() }
+        }
+    }
+
     /**
      * Proof that the watcher is still alive **when nothing is happening on screen**.
      *
@@ -1348,6 +1359,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                         scheduleWebScan()
                         scheduleShortsScan()
                         scheduleGeminiTempScan()
+                        scheduleDiscoverScan(pkg)
                     }
                     // Fast path: a NEW app's content events usually beat its window-state event,
                     // so acting here covers a blocked app sooner (less visible flash). Confirm
@@ -1380,6 +1392,9 @@ class BlockerAccessibilityService : AccessibilityService() {
         scheduleShortsScan()
         // The same clean-up half: a Gemini cover comes down once Gemini is not in front.
         scheduleGeminiTempScan()
+        // The news feed is drawn in the launcher's window, so its events can arrive from "not
+        // the app in front" — invariant 101.
+        scheduleDiscoverScan(pkg)
     }
 
     /** Everything that runs when the foreground app changes: launch counting, location
@@ -1546,6 +1561,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         scheduleWebScan()
         scheduleShortsScan()
         scheduleGeminiTempScan()
+        scheduleDiscoverScan(pkg)
     }
 
     /** Whether [pkg]'s on-screen text should be scanned for blocked words. Browsers always
@@ -1689,6 +1705,45 @@ class BlockerAccessibilityService : AccessibilityService() {
         }
         handler.removeCallbacks(geminiScanRunnable)
         handler.postDelayed(geminiScanRunnable, 250)
+    }
+
+    /** Debounced news-feed check (invariant 101). Runs on the Google app's own events, or while it
+     *  is in front, so every other app's events cost two comparisons. **Always on**: no switch,
+     *  and not paused with Quick Block — his word. */
+    private fun scheduleDiscoverScan(eventPkg: String?) {
+        if (eventPkg != DiscoverFeed.PACKAGE && lastForegroundPkg != DiscoverFeed.PACKAGE) return
+        handler.removeCallbacks(discoverScanRunnable)
+        handler.postDelayed(discoverScanRunnable, 250)
+    }
+
+    /**
+     * Covers Google's news feed and goes HOME — invariant 101, [DiscoverFeed]. The settings guard's
+     * move: HOME was measured to land on the home screen from the feed, and a null-package cover
+     * gets the same safety net so it can never be left standing over the home screen.
+     */
+    private suspend fun scanDiscoverFeed() {
+        // The Google app itself is blocked: its own cover is up and owns the screen.
+        if (overlay.isShowing && overlay.isAppBlock) return
+        if (!discoverFeedVisible()) return
+        withContext(Dispatchers.Main) {
+            val now = stopwatchNow()
+            if (!DiscoverFeed.shouldBounce(listVisible = true, sinceLastBounceMs = now - lastDiscoverBounceAt)) {
+                return@withContext
+            }
+            lastDiscoverBounceAt = now
+            showBlockScreen(
+                title = words.get(R.string.block_discover_title),
+                message = words.get(R.string.block_discover_message),
+                packageName = null,
+                counterKey = DiscoverFeed.KEY, why = BlockWhy.DISCOVER,
+            )
+            performGlobalAction(GLOBAL_ACTION_HOME)
+            handler.postDelayed({
+                guarded(applicationContext, "discoverSafetyNet") {
+                    if (!overlay.isAppBlock && !exiting()) overlay.remove()
+                }
+            }, DiscoverFeed.BOUNCE_GAP_MS)
+        }
     }
 
     // --- App blocking (unchanged behaviour) ---
@@ -2359,6 +2414,9 @@ class BlockerAccessibilityService : AccessibilityService() {
         handler.removeCallbacks(geminiScanRunnable)
         geminiScanJob?.cancel()
         geminiExitJob?.cancel()
+        // Google's news-feed scan, by the same rule (invariant 101).
+        handler.removeCallbacks(discoverScanRunnable)
+        discoverScanJob?.cancel()
         webScanQueuedAt = 0L
         // Stop trying to send a screened-off phone Home, and release the attempt dedup: the
         // next unlock starts clean, so a fresh open of the app is a fresh attempt.
@@ -3056,6 +3114,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                         }
                         scheduleShortsScan()
                         scheduleGeminiTempScan()
+                        scheduleDiscoverScan(null)
                     }
                 }
             }
