@@ -13,6 +13,11 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.186", "Nov 7, 2026", "Ultra battery saver is blocked", listOf(
+        "**Ultra battery saver is blocked now, always, as you asked.** Switching it on shuts AppBlocker down, so its ways in are closed.",
+        "**Its tile is gone from your control panel,** and if it is added back, AppBlocker takes it out again. **In Battery ▸ Current mode,** the list closes as soon as it opens. Normal Battery saver keeps its own tile.",
+        "**Low-battery hibernation switches on by itself and no app can stop it.** Your family DNS filter keeps working through it, and keep Chrome off Ultra's app list. After hibernation, open AppBlocker once.",
+    )),
     VersionLog("1.185", "Nov 2, 2026", "Google's news feed is blocked", listOf(
         "**Google's news feed is blocked now, always, as you asked.** That is the feed one swipe right of your home screen (Google calls it Discover). The moment it opens, AppBlocker covers it and takes you back to the home screen.",
         "**The same feed inside the Google app is blocked too,** because it is the same news. Google search, the search bar on your home screen and Gemini keep working.",

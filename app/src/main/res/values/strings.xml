@@ -92,6 +92,8 @@
     <string name="block_gemini_instructions_message">Your instructions for Gemini are locked, so they stay as you wrote them. The rest of Gemini still works.</string>
     <string name="block_discover_title">Google news feed blocked</string>
     <string name="block_discover_message">The news feed is blocked. Google search and Gemini still work.</string>
+    <string name="block_ultra_saver_title">Ultra battery saver blocked</string>
+    <string name="block_ultra_saver_message">Ultra battery saver shuts AppBlocker down, so it stays off. Normal Battery saver still works.</string>
 
     <!-- What the web filter caught. -->
     <string name="block_word_title">Blocked word</string>

@@ -2188,6 +2188,20 @@ Break one of these and blocking misbehaves. They are not all enforced by tests.
 `CodeShapeTest` / `SilenceLogTest` and are enforced there; this list stopped being updated at 37
 during the 2 Sep sweep. Read the test file for those numbers before assuming a gap means an unused
 number.
+102. **Xiaomi's Ultra battery saver: its ways in are closed, always.** 7 Nov 2026, his report: "when i
+    turn the phone to ultra battery saving or the phone enter hibernation mode … the blocking turn
+    off so i abused it and relapsed"; his choice "Block it always". Measured on his phone over USB:
+    switching Ultra on runs `SuperPowerClean.cleanAllMemory`, which force-stops AppBlocker ~1.5 s
+    after the tap (`LockScreenClean`) **even with AppBlocker on Ultra's app list**; the force stop
+    drops the Accessibility switch and nothing restarts a force-stopped app (5 Nov: off two days).
+    So only the way IN can be closed. (a) The control-panel tile goes straight into Ultra with one
+    tap: it is removed from `sysui_qs_tiles` (WRITE_SECURE_SETTINGS) at bind and by a
+    `ContentObserver` on every change (`power_supersave_tile_enabled=0` did not hide it — measured).
+    (b) Battery ▸ Current mode is a popup in `com.miui.securitycenter` whose Ultra row
+    (`android:id/title` "Ultra battery saver") switches Ultra on with no confirm: a visible row →
+    HOME + cover + safety net, 60 ms debounce. No switch, not Quick-Block gated
+    (`UltraSaverTest.itIsBlockedAlwaysAndTheTileStaysOut`). ⚠️ Automatic low-battery hibernation
+    cannot be stopped or survived; the Private DNS filter (a phone setting) is what filters then.
 
 
 ## Device quirks these invariants exist for

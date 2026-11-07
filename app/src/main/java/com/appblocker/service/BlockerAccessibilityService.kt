@@ -596,6 +596,23 @@ class BlockerAccessibilityService : AccessibilityService() {
         }
     }
 
+    // Xiaomi's Ultra battery saver (invariant 102): its ways in are closed. Always.
+    @Volatile private var ultraScanJob: Job? = null
+    /** Monotonic stamp of the last close of the Current-mode list — see [UltraSaver.shouldClose]. */
+    @Volatile private var lastUltraCloseAt = -UltraSaver.CLOSE_GAP_MS
+    private val ultraScanRunnable = Runnable {
+        guarded(applicationContext, "ultraScan") {
+            ultraScanJob?.cancel()
+            ultraScanJob = scope.launch { scanUltraRow() }
+        }
+    }
+    /** Takes the Ultra tile out again whenever the control panel's tile list changes. */
+    private val ultraTileObserver = object : android.database.ContentObserver(Handler(Looper.getMainLooper())) {
+        override fun onChange(selfChange: Boolean) {
+            guarded(applicationContext, "ultraTile") { UltraSaver.removeTile(applicationContext) }
+        }
+    }
+
     /**
      * Proof that the watcher is still alive **when nothing is happening on screen**.
      *
@@ -1130,6 +1147,14 @@ class BlockerAccessibilityService : AccessibilityService() {
         // the pause arms even if the app itself isn't opened.
         UpdatePause.checkVersionChange(this)
         refreshPackageSets()
+        // Ultra battery saver's control-panel tile (invariant 102): out now, and out again
+        // whenever the tile list changes. One string read when there is nothing to do.
+        runCatching {
+            contentResolver.registerContentObserver(
+                android.provider.Settings.Secure.getUriFor(UltraSaver.TILES_SETTING), false, ultraTileObserver,
+            )
+            UltraSaver.removeTile(applicationContext)
+        }
         keywordsEverywhere = SettingsStore.keywordsEverywhere(this)
         wordSkipApps = SettingsStore.wordSkipApps(this)
         adultPackOn = SettingsStore.adultWordsPack(this)
@@ -1360,6 +1385,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                         scheduleShortsScan()
                         scheduleGeminiTempScan()
                         scheduleDiscoverScan(pkg)
+                        scheduleUltraScan(pkg)
                     }
                     // Fast path: a NEW app's content events usually beat its window-state event,
                     // so acting here covers a blocked app sooner (less visible flash). Confirm
@@ -1395,6 +1421,8 @@ class BlockerAccessibilityService : AccessibilityService() {
         // The news feed is drawn in the launcher's window, so its events can arrive from "not
         // the app in front" — invariant 101.
         scheduleDiscoverScan(pkg)
+        // Xiaomi's Current-mode list is a popup: its events arrive from the battery app.
+        scheduleUltraScan(pkg)
     }
 
     /** Everything that runs when the foreground app changes: launch counting, location
@@ -1562,6 +1590,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         scheduleShortsScan()
         scheduleGeminiTempScan()
         scheduleDiscoverScan(pkg)
+        scheduleUltraScan(pkg)
     }
 
     /** Whether [pkg]'s on-screen text should be scanned for blocked words. Browsers always
@@ -1743,6 +1772,44 @@ class BlockerAccessibilityService : AccessibilityService() {
                     if (!overlay.isAppBlock && !exiting()) overlay.remove()
                 }
             }, DiscoverFeed.BOUNCE_GAP_MS)
+        }
+    }
+
+    /** Quick Ultra-saver check (invariant 102): only on the battery app's own events or while it
+     *  is in front. Short delay on purpose: the list's Ultra row switches Ultra on with one tap
+     *  and no confirm, so the list must close before a finger gets there. **Always on.** */
+    private fun scheduleUltraScan(eventPkg: String?) {
+        if (eventPkg != UltraSaver.PACKAGE && lastForegroundPkg != UltraSaver.PACKAGE) return
+        handler.removeCallbacks(ultraScanRunnable)
+        handler.postDelayed(ultraScanRunnable, 60)
+    }
+
+    /**
+     * Closes Xiaomi's Current-mode list when it shows the Ultra battery saver row (invariant 102,
+     * [UltraSaver]). HOME first (it closes the popup and the Battery page under it, whatever has
+     * focus), then the cover, with the settings guard's safety net taking the cover down.
+     */
+    private suspend fun scanUltraRow() {
+        if (overlay.isShowing && overlay.isAppBlock) return
+        if (!ultraRowVisible()) return
+        withContext(Dispatchers.Main) {
+            val now = stopwatchNow()
+            if (!UltraSaver.shouldClose(rowVisible = true, sinceLastCloseMs = now - lastUltraCloseAt)) {
+                return@withContext
+            }
+            lastUltraCloseAt = now
+            performGlobalAction(GLOBAL_ACTION_HOME)
+            showBlockScreen(
+                title = words.get(R.string.block_ultra_saver_title),
+                message = words.get(R.string.block_ultra_saver_message),
+                packageName = null,
+                counterKey = UltraSaver.KEY, why = BlockWhy.ULTRA_SAVER,
+            )
+            handler.postDelayed({
+                guarded(applicationContext, "ultraSafetyNet") {
+                    if (!overlay.isAppBlock && !exiting()) overlay.remove()
+                }
+            }, UltraSaver.CLOSE_GAP_MS)
         }
     }
 
@@ -2417,6 +2484,8 @@ class BlockerAccessibilityService : AccessibilityService() {
         // Google's news-feed scan, by the same rule (invariant 101).
         handler.removeCallbacks(discoverScanRunnable)
         discoverScanJob?.cancel()
+        handler.removeCallbacks(ultraScanRunnable)
+        ultraScanJob?.cancel()
         webScanQueuedAt = 0L
         // Stop trying to send a screened-off phone Home, and release the attempt dedup: the
         // next unlock starts clean, so a fresh open of the app is a fresh attempt.
@@ -3115,6 +3184,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                         scheduleShortsScan()
                         scheduleGeminiTempScan()
                         scheduleDiscoverScan(null)
+                        scheduleUltraScan(null)
                     }
                 }
             }
@@ -3773,6 +3843,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         // Cleared FIRST: everything below can throw, and a watcher that has begun tearing itself
         // down is not running whether or not the rest of this method completes.
         connected = false
+        runCatching { contentResolver.unregisterContentObserver(ultraTileObserver) }
         // An orderly unbind — a space switch, or the switch turned off — is nothing dying, so the
         // dead-man alarm has nothing to report; the ordinary checks own what happens next. A killed
         // process never reaches this line, which is exactly why its alarm is the one that goes off.
