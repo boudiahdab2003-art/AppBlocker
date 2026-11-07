@@ -606,12 +606,6 @@ class BlockerAccessibilityService : AccessibilityService() {
             ultraScanJob = scope.launch { scanUltraRow() }
         }
     }
-    /** Takes the Ultra tile out again whenever the control panel's tile list changes. */
-    private val ultraTileObserver = object : android.database.ContentObserver(Handler(Looper.getMainLooper())) {
-        override fun onChange(selfChange: Boolean) {
-            guarded(applicationContext, "ultraTile") { UltraSaver.removeTile(applicationContext) }
-        }
-    }
 
     /**
      * Proof that the watcher is still alive **when nothing is happening on screen**.
@@ -1147,14 +1141,6 @@ class BlockerAccessibilityService : AccessibilityService() {
         // the pause arms even if the app itself isn't opened.
         UpdatePause.checkVersionChange(this)
         refreshPackageSets()
-        // Ultra battery saver's control-panel tile (invariant 102): out now, and out again
-        // whenever the tile list changes. One string read when there is nothing to do.
-        runCatching {
-            contentResolver.registerContentObserver(
-                android.provider.Settings.Secure.getUriFor(UltraSaver.TILES_SETTING), false, ultraTileObserver,
-            )
-            UltraSaver.removeTile(applicationContext)
-        }
         keywordsEverywhere = SettingsStore.keywordsEverywhere(this)
         wordSkipApps = SettingsStore.wordSkipApps(this)
         adultPackOn = SettingsStore.adultWordsPack(this)
@@ -1779,9 +1765,16 @@ class BlockerAccessibilityService : AccessibilityService() {
      *  is in front. Short delay on purpose: the list's Ultra row switches Ultra on with one tap
      *  and no confirm, so the list must close before a finger gets there. **Always on.** */
     private fun scheduleUltraScan(eventPkg: String?) {
-        if (eventPkg != UltraSaver.PACKAGE && lastForegroundPkg != UltraSaver.PACKAGE) return
+        // The control panel's Edit screen (SystemUI) is the second way in: there the Ultra tile
+        // can be dragged back. A slower debounce there, because SystemUI talks all day long and
+        // adding a tile is a drag, never a single tap.
+        val delay = when {
+            eventPkg == UltraSaver.PACKAGE || lastForegroundPkg == UltraSaver.PACKAGE -> 60L
+            eventPkg == UltraSaver.SYSTEMUI -> 250L
+            else -> return
+        }
         handler.removeCallbacks(ultraScanRunnable)
-        handler.postDelayed(ultraScanRunnable, 60)
+        handler.postDelayed(ultraScanRunnable, delay)
     }
 
     /**
@@ -1791,17 +1784,22 @@ class BlockerAccessibilityService : AccessibilityService() {
      */
     private suspend fun scanUltraRow() {
         if (overlay.isShowing && overlay.isAppBlock) return
-        if (!ultraRowVisible()) return
+        val modeList = ultraRowVisible()
+        val tileEditor = !modeList && tileEditorVisible()
+        if (!modeList && !tileEditor) return
         withContext(Dispatchers.Main) {
             val now = stopwatchNow()
             if (!UltraSaver.shouldClose(rowVisible = true, sinceLastCloseMs = now - lastUltraCloseAt)) {
                 return@withContext
             }
             lastUltraCloseAt = now
+            if (tileEditor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                performGlobalAction(GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE)
+            }
             performGlobalAction(GLOBAL_ACTION_HOME)
             showBlockScreen(
-                title = words.get(R.string.block_ultra_saver_title),
-                message = words.get(R.string.block_ultra_saver_message),
+                title = words.get(if (tileEditor) R.string.block_tile_edit_title else R.string.block_ultra_saver_title),
+                message = words.get(if (tileEditor) R.string.block_tile_edit_message else R.string.block_ultra_saver_message),
                 packageName = null,
                 counterKey = UltraSaver.KEY, why = BlockWhy.ULTRA_SAVER,
             )
@@ -3843,7 +3841,6 @@ class BlockerAccessibilityService : AccessibilityService() {
         // Cleared FIRST: everything below can throw, and a watcher that has begun tearing itself
         // down is not running whether or not the rest of this method completes.
         connected = false
-        runCatching { contentResolver.unregisterContentObserver(ultraTileObserver) }
         // An orderly unbind — a space switch, or the switch turned off — is nothing dying, so the
         // dead-man alarm has nothing to report; the ordinary checks own what happens next. A killed
         // process never reaches this line, which is exactly why its alarm is the one that goes off.

@@ -197,6 +197,25 @@ internal fun AccessibilityService.ultraRowVisible(): Boolean {
 }
 
 /**
+ * Whether the control panel's **Edit screen** is open — see [UltraSaver.isTileEditMark]. True only
+ * for a visible Add/Remove mark in SystemUI's focused window; anything unreadable is false.
+ */
+internal fun AccessibilityService.tileEditorVisible(): Boolean {
+    val root = rootInActiveWindow ?: return false
+    if (root.packageName?.toString() != UltraSaver.SYSTEMUI) return false
+    val queue = ArrayDeque<AccessibilityNodeInfo>()
+    queue.add(root)
+    var visited = 0
+    while (queue.isNotEmpty() && visited < MAX_NODES) {
+        val node = queue.removeFirst()
+        visited++
+        if (UltraSaver.isTileEditMark(node.viewIdResourceName, node.contentDescription) && node.isVisibleToUser) return true
+        for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+    }
+    return false
+}
+
+/**
  * The omnibox, but only once it has **settled into an address the user actually went to** —
  * null while they are still typing into it.
  *

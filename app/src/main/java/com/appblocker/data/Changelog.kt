@@ -13,6 +13,10 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.187", "Nov 7, 2026", "Control panel editing is locked", listOf(
+        "**Editing the control panel is locked now, always, as you chose.** The Ultra battery saver tile is out of your control panel, and this keeps it out: the Edit screen closes as soon as it opens. The control panel itself works as before.",
+        "**Battery \u25b8 Current mode stays blocked,** as in 1.186. In Battery \u25b8 Additional features, keep \"Clear cache when device is locked\" on Never.",
+    )),
     VersionLog("1.186", "Nov 7, 2026", "Ultra battery saver is blocked", listOf(
         "**Ultra battery saver is blocked now, always, as you asked.** Switching it on shuts AppBlocker down, so its ways in are closed.",
         "**Its tile is gone from your control panel,** and if it is added back, AppBlocker takes it out again. **In Battery ▸ Current mode,** the list closes as soon as it opens. Normal Battery saver keeps its own tile.",

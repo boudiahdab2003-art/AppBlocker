@@ -3,40 +3,15 @@ package com.appblocker
 import com.appblocker.service.UltraSaver
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
 /**
  * Xiaomi's Ultra battery saver, its ways in closed always — invariant 102, his report of 7 Nov 2026
- * (he relapsed through it). Texts, ids and the tile list were read off his phone that day over USB.
+ * (he relapsed through it). Texts and ids were read off his phone that day over USB.
  */
 class UltraSaverTest {
-
-    /** His real `sysui_qs_tiles`, 7 Nov 2026, main space. */
-    private val hisTiles = "wifi,cell,bt,airplane,mute,flashlight,screenshot,batterysaver,rotation,settings," +
-        "custom(com.google.android.gms/.nearby.sharing.SharingTileService),scanner,wallet," +
-        "custom(com.miui.securitycenter/com.miui.powercenter.powersaver.PerformanceModeTileService)," +
-        "custom(com.miui.screenrecorder/.service.QuickService),nfc," +
-        "custom(com.miui.securitycenter/com.miui.superpower.notification.SuperPowerTileService),gps,edit"
-
-    @Test fun theUltraTileIsTakenOutAndNothingElse() {
-        val after = UltraSaver.withoutUltraTile(hisTiles)!!
-        assertFalse(after.contains("SuperPowerTileService"))
-        // Every other tile stays, in order — Battery saver and the performance-mode tile included.
-        assertEquals(hisTiles.split(',').filter { "SuperPowerTileService" !in it }, after.split(','))
-        assertTrue(after.contains("batterysaver"))
-        assertTrue(after.contains("PerformanceModeTileService"))
-    }
-
-    /** No tile to remove = no write, so the setting observer cannot loop on our own write. */
-    @Test fun nothingToDoMeansNoWrite() {
-        assertNull(UltraSaver.withoutUltraTile(UltraSaver.withoutUltraTile(hisTiles)))
-        assertNull(UltraSaver.withoutUltraTile(null))
-        assertNull(UltraSaver.withoutUltraTile(""))
-        assertEquals("wifi", UltraSaver.withoutUltraTile("${UltraSaver.TILE},wifi"))
-    }
 
     @Test fun theUltraRowIsRecognisedAndTheOtherModesAreNot() {
         assertTrue(UltraSaver.isUltraRow("Ultra battery saver", "android:id/title"))
@@ -49,22 +24,37 @@ class UltraSaverTest {
         assertFalse(UltraSaver.isUltraRow(null, "android:id/title"))
     }
 
+    /** The Edit screen's marks, read on his phone; the normal panel's nodes must never match. */
+    @Test fun theEditScreenIsRecognisedAndTheNormalPanelIsNot() {
+        assertTrue(UltraSaver.isTileEditMark("miui.systemui.plugin:id/mark", "Add"))
+        assertTrue(UltraSaver.isTileEditMark("miui.systemui.plugin:id/mark", "Remove"))
+        for ((id, desc) in listOf(
+            "miui.systemui.plugin:id/tile_label" to "Add",
+            "miui.systemui.plugin:id/qs_tile" to null,
+            null to "Remove",
+            "miui.systemui.plugin:id/mark" to null,
+            "miui.systemui.plugin:id/mark" to "Storage",
+            "miui.systemui.plugin:id/main_panel" to "Control center",
+        )) assertFalse("$id / $desc read as the Edit screen", UltraSaver.isTileEditMark(id, desc))
+    }
+
     @Test fun oneOpeningIsOneClose() {
         assertTrue(UltraSaver.shouldClose(rowVisible = true, sinceLastCloseMs = UltraSaver.CLOSE_GAP_MS))
         assertFalse(UltraSaver.shouldClose(rowVisible = true, sinceLastCloseMs = 200))
         assertFalse(UltraSaver.shouldClose(rowVisible = false, sinceLastCloseMs = 60_000))
     }
 
-    @Test fun itWatchesTheBatteryApp() {
+    @Test fun itWatchesTheBatteryAppAndTheControlPanel() {
         assertEquals("com.miui.securitycenter", UltraSaver.PACKAGE)
-        assertEquals("sysui_qs_tiles", UltraSaver.TILES_SETTING)
+        assertEquals("com.android.systemui", UltraSaver.SYSTEMUI)
     }
 
     /**
-     * ⚠️ **His choice, 7 Nov 2026: "Block it always".** No setting, no Quick Block gate; the list
-     * closes only on a VISIBLE row; the tile is removed at bind AND on every change of the list.
+     * ⚠️ **His choices, 7 Nov 2026: "Block it always" and "Lock the Edit screen".** No setting, no
+     * Quick Block gate; both closes only on a VISIBLE node. ⚠️ And never the 1.186 tile-list
+     * rewrite again: apps cannot read `sysui_qs_tiles` (measured — the tile put back stayed).
      */
-    @Test fun itIsBlockedAlwaysAndTheTileStaysOut() {
+    @Test fun itIsBlockedAlwaysAndOnlyWhenSeen() {
         val dir = listOf(File("src/main/java/com/appblocker/service"), File("app/src/main/java/com/appblocker/service"))
             .first { it.exists() }
         val text = File(dir, "BlockerAccessibilityService.kt").readText()
@@ -80,18 +70,18 @@ class UltraSaverTest {
                 assertFalse("$name asks $gate — Ultra battery saver is blocked always", gate in code)
             }
         }
+        assertTrue(schedule.contains("UltraSaver.SYSTEMUI"))
         assertTrue(scan.contains("ultraRowVisible()"))
+        assertTrue(scan.contains("tileEditorVisible()"))
         assertTrue(scan.contains("performGlobalAction(GLOBAL_ACTION_HOME)"))
         assertTrue("the cover needs its safety net", scan.contains("overlay.remove()"))
         assertTrue(Regex("scheduleUltraScan\\(").findAll(text).count() >= 4)
-        // The tile: removed at bind, and the observer re-removes it on every change.
-        assertTrue(text.contains("registerContentObserver("))
-        assertTrue(text.contains("UltraSaver.TILES_SETTING"))
-        assertTrue(Regex("UltraSaver\\.removeTile\\(").findAll(text).count() >= 2)
-        assertTrue(text.contains("unregisterContentObserver(ultraTileObserver)"))
+        assertFalse("apps cannot read sysui_qs_tiles", "sysui_qs_tiles" in text)
 
         val reader = File(dir, "ScreenText.kt").readText()
-            .substringAfter("fun AccessibilityService.ultraRowVisible()").substringBefore("\n}")
-        assertTrue("a hidden row must not count", reader.contains("isVisibleToUser"))
+        for (fn in listOf("ultraRowVisible()", "tileEditorVisible()")) {
+            val code = reader.substringAfter("fun AccessibilityService.$fn").substringBefore("\n}")
+            assertTrue("$fn: a hidden node must not count", code.contains("isVisibleToUser"))
+        }
     }
 }

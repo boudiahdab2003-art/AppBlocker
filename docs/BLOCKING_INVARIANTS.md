@@ -2202,6 +2202,10 @@ number.
     HOME + cover + safety net, 60 ms debounce. No switch, not Quick-Block gated
     (`UltraSaverTest.itIsBlockedAlwaysAndTheTileStaysOut`). ⚠️ Automatic low-battery hibernation
     cannot be stopped or survived; the Private DNS filter (a phone setting) is what filters then.
+    ⚠️ **1.187 correction:** 1.186's tile-list rewrite did NOT work on his phone (the tile put back
+    stayed): from Android 12 apps cannot read hidden settings like `sysui_qs_tiles`. The tile was
+    removed by hand over USB; 1.187 locks the control panel's **Edit screen** instead (his choice):
+    a visible `…:id/mark` with description Add/Remove in SystemUI → dismiss shade + HOME + cover.
 
 
 ## Device quirks these invariants exist for

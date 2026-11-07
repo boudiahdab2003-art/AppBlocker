@@ -114,6 +114,8 @@
     <string name="block_discover_message">موجز الأخبار محظور. أما بحث Google وGemini فيعملان كالمعتاد.</string>
     <string name="block_ultra_saver_title">موفّر البطارية الفائق محظور</string>
     <string name="block_ultra_saver_message">موفّر البطارية الفائق يوقف AppBlocker، لذلك يبقى مغلقًا.</string>
+    <string name="block_tile_edit_title">تعديل لوحة التحكم مقفل</string>
+    <string name="block_tile_edit_message">تعديل لوحة التحكم مقفل. أما لوحة التحكم نفسها فتعمل كالمعتاد.</string>
 
     <string name="block_word_title">كلمة محظورة</string>
     <string name="block_word_message">«%1$s» ضمن قائمتك المحظورة.</string>
