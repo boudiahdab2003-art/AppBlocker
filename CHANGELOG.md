@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.186
+- Ultra battery saver is blocked: its control-panel tile is removed and the Current mode list closes, because switching it on shuts AppBlocker down.
+
 ## v1.185
 - Google's news feed (Discover, one swipe right of the home screen) is blocked, always. Also in this update: your Gemini instructions page is locked (1.184).
 
