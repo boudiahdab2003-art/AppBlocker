@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.187
+- Control panel editing is locked so the Ultra battery saver tile stays out.
+
 ## v1.186
 - Ultra battery saver is blocked: its control-panel tile is removed and the Current mode list closes, because switching it on shuts AppBlocker down.
 
