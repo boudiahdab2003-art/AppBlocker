@@ -470,6 +470,9 @@ class BlockerAccessibilityService : AccessibilityService() {
     // Keeps browserPackages fresh when apps are installed/removed after the service starts.
     private var packageChangeReceiver: BroadcastReceiver? = null
     private var unlockReceiver: BroadcastReceiver? = null
+    // Invariant 104: the low-battery lock's own receiver and its last reading.
+    private var batteryReceiver: BroadcastReceiver? = null
+    @Volatile private var batteryReading: LowBatteryLock.Reading? = null
 
     // Debounced web scan: collapse the page-load event burst into one scan that runs
     // after events stop, so the *settled* page (when its text finally exists) is scanned.
@@ -923,6 +926,7 @@ class BlockerAccessibilityService : AccessibilityService() {
      *  a block cover is up. */
     private fun recheckMatters(pkg: String): Boolean =
         overlay.isShowing ||
+            LowBatteryLock.isLocked(batteryReading) ||
             keywordLockoutRemaining(pkg) > 0L ||
             ruleFor(pkg)?.isBlocked == true ||
             // Allowlist mode: any non-allowed app can flip (e.g. a Pomodoro break ending), so
@@ -1222,6 +1226,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         }.also { sp.registerOnSharedPreferenceChangeListener(it) }
         registerPackageChangeReceiver()
         registerUnlockReceiver()
+        registerBatteryReceiver()
         purgeTemplateWordsOnce()
         val db = BlockerDatabase.get(applicationContext)
         combine(
@@ -1814,7 +1819,10 @@ class BlockerAccessibilityService : AccessibilityService() {
     // --- App blocking (unchanged behaviour) ---
 
     private fun handleAppBlock(pkg: String, start: BlockLatency.Start? = null) {
-        val reason = blockReason(pkg)
+        // Invariant 104: at 5 % or less, unplugged, nothing but calls and messages opens — asked
+        // FIRST, before any rule, because it is not a rule: it is what keeps Xiaomi's hibernation
+        // (which force-stops us at 1 %) from ever being reached while the phone is in use.
+        val reason = lowBatteryReason(pkg) ?: blockReason(pkg)
         if (reason == null) {
             // "No reason" is only an answer once we have been told the rules. Before Room's first
             // emission it means "we do not know yet", and taking a live cover down on it is how a
@@ -1868,7 +1876,10 @@ class BlockerAccessibilityService : AccessibilityService() {
         lastBlockAt = now
         showBlockScreen(
             title = reason.title, message = reason.message, packageName = pkg,
-            counterKey = pkg, why = reason.why, start = start,
+            // The low-battery lock is not a block of THIS app: its own key, so it never counts as
+            // an attempt on the app (invariant 104).
+            counterKey = if (reason.why == BlockWhy.LOW_BATTERY) LowBatteryLock.KEY else pkg,
+            why = reason.why, start = start,
         )
     }
 
@@ -2425,6 +2436,48 @@ class BlockerAccessibilityService : AccessibilityService() {
         }
         ContextCompat.registerReceiver(this, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
         packageChangeReceiver = receiver
+    }
+
+    /**
+     * The low-battery lock's reason for [pkg], or null — invariant 104, [LowBatteryLock]. The reading
+     * is the receiver's last one, falling back to the sticky broadcast so the very first decision
+     * after a bind already knows the level.
+     */
+    private fun lowBatteryReason(pkg: String): BlockReason? {
+        val r = batteryReading ?: LowBatteryLock.read(this).also { batteryReading = it }
+        if (!LowBatteryLock.isLocked(r)) return null
+        if (LowBatteryLock.allowed(pkg, isEssentialAllowed(pkg), LowBatteryLock.smsPackage(this))) return null
+        return BlockReason(
+            title = words.get(R.string.block_lowbattery_title),
+            message = words.get(R.string.block_lowbattery_message, r?.percent ?: LowBatteryLock.LOCK_AT_PERCENT),
+            why = BlockWhy.LOW_BATTERY,
+        )
+    }
+
+    /**
+     * Follows the battery (invariant 104). Crossing INTO the lock covers whatever is open right now —
+     * no window event comes when the level drops under an app already in front. Leaving it (plugged
+     * in) re-decides the app in front, which takes the cover down if nothing else blocks it.
+     * onReceive runs on the main thread, as the overlay needs.
+     */
+    private fun registerBatteryReceiver() {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                guarded(applicationContext, "battery") {
+                    val was = LowBatteryLock.isLocked(batteryReading)
+                    batteryReading = LowBatteryLock.fromIntent(intent)
+                    val now = LowBatteryLock.isLocked(batteryReading)
+                    if (was == now) return@guarded
+                    val pkg = lastForegroundPkg ?: return@guarded
+                    if (isLauncherPkg(pkg)) return@guarded
+                    handleAppBlock(pkg)
+                }
+            }
+        }
+        ContextCompat.registerReceiver(
+            this, receiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+        batteryReceiver = receiver
     }
 
     /** Counts phone unlocks (for Insights "pickups"), and — on screen-off — clears transient
@@ -3898,6 +3951,8 @@ class BlockerAccessibilityService : AccessibilityService() {
         packageChangeReceiver = null
         unlockReceiver?.let { runCatching { unregisterReceiver(it) } }
         unlockReceiver = null
+        batteryReceiver?.let { runCatching { unregisterReceiver(it) } }
+        batteryReceiver = null
         overlay.remove()
         // Cancels every scan/exit job in one go — they are all launched on this scope, so there is
         // nothing to enumerate here and nothing that can be forgotten when a new one is added.

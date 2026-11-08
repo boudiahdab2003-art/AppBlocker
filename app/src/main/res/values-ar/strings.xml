@@ -112,6 +112,8 @@
     <string name="block_gemini_instructions_message">تعليماتك لـ Gemini مقفلة، لتبقى كما كتبتها. أما بقية Gemini فتعمل كالمعتاد.</string>
     <string name="block_discover_title">موجز أخبار Google محظور</string>
     <string name="block_discover_message">موجز الأخبار محظور. أما بحث Google وGemini فيعملان كالمعتاد.</string>
+    <string name="block_lowbattery_title">اشحن هاتفك</string>
+    <string name="block_lowbattery_message">بطاريتك عند %1$d%%. تحت 5%%، تعمل المكالمات والرسائل فقط حتى توصل الشاحن. عند 1%% سيُوقف هاتفك AppBlocker.</string>
     <string name="block_ultra_saver_title">موفّر البطارية الفائق محظور</string>
     <string name="block_ultra_saver_message">موفّر البطارية الفائق يوقف AppBlocker، لذلك يبقى مغلقًا.</string>
     <string name="block_tile_edit_title">تعديل لوحة التحكم مقفل</string>

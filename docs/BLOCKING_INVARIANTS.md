@@ -2223,6 +2223,21 @@ number.
     NOT given the lost time back: his choice "Leave it as it is". `OffNoticeTest` (6 tests; dropping
     `reportSwitchOff` from `endSwitchOff` turns it red).
 
+104. **At 5 % battery or less and not charging, only calls and messages open — always, no switch.**
+    8 Nov 2026, his push "we need to prevent hibernation mode in every possible way" and his pick
+    "Low-battery lock". Read from his phone's own `com.miui.securitycenter` APK (jadx via REA):
+    hibernation = Xiaomi's "Extreme endurance mode" (`f7.u.f0`): battery 2 %→1 % while discharging
+    starts a 30-second countdown (`T0`) whose dialog (`M0`) has NO cancel — only charging or a higher
+    level stops it (`extreme_cancel`); it then force-stops apps (`LockScreenClean`) and our
+    Accessibility entry. Its switch `preference_key_extreme_mode_button` is hidden on his phone
+    (`t.z()`), its pref `pc_extreme_state_value` private (shell denied). After charging, Xiaomi quits
+    it at 2 % and nothing restarts us. So `LowBatteryLock`: `handleAppBlock` asks
+    `lowBatteryReason` BEFORE any rule; allowed = essentials (home, system UI, settings, keyboard,
+    dialer, us) + `CALL_SURFACES` + the default SMS app; own cover key `low-battery` (never an
+    attempt on the app); a runtime `ACTION_BATTERY_CHANGED` receiver covers the app in front the
+    moment the level crosses in and re-decides it when the charger goes in; `recheckMatters` stays
+    true while locked. Unknown level never locks. `LowBatteryLockTest` (6).
+
 ## Device quirks these invariants exist for
 
 - Gesture-nav Home on HyperOS often emits **no accessibility event at all**, so the foreground

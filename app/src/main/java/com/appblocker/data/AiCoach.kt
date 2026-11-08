@@ -782,6 +782,7 @@ object AiCoach {
             appendLine("Gemini instructions page: always blocked")
             appendLine("Google news feed (Discover): always blocked")
             appendLine("Ultra battery saver: always blocked (mode list closed, control panel editing locked)")
+            appendLine("Low battery (5% or less, not charging): every app closed except calls and messages")
             appendLine("Web filter: adult content ${onOff(SettingsStore.blockAdult(ctx))}, " +
                 "purchases ${onOff(SettingsStore.blockPurchases(ctx))}")
             runCatching {

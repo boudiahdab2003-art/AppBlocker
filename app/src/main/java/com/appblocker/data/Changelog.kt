@@ -13,6 +13,11 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.189", "Nov 8, 2026", "Low battery locks the phone until you charge", listOf(
+        "**At 5% battery or less, every app closes except calls and messages, until you plug in your charger.** Always on, as you chose.",
+        "**Why:** at 1% your phone goes into hibernation by itself, with no way to say no, and that switches AppBlocker off. Plugging in before 1% stops the hibernation from starting, and while the lock is up you cannot use the phone down to 1%.",
+        "**The moment the charger is in, everything opens again.**",
+    )),
     VersionLog("1.188", "Nov 8, 2026", "You are told when AppBlocker was off", listOf(
         "**When your battery runs empty, your phone shuts AppBlocker down, and it stays off after you charge.** No app can switch itself back on after that. On Saturday it stayed off for 27 hours.",
         "**Now, the moment it is back, you get a notification saying how long it was off** and how long you used your phone in that time. Short stops of a few minutes stay silent, as before.",

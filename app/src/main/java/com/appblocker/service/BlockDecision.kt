@@ -55,6 +55,7 @@ internal object BlockWhy {
     const val GEMINI_INSTRUCTIONS = "gemini-instr" // Gemini's instructions page (saved-info)
     const val DISCOVER = "discover"        // Google's news feed (Discover), beside the home screen
     const val ULTRA_SAVER = "ultra-saver"  // Xiaomi's Ultra battery saver: it force-stops us
+    const val LOW_BATTERY = "low-battery"  // 5 % or less, unplugged: only calls and messages (invariant 104)
     /** The off-switch guard, split by **which** off-switch — four screens, four failure modes.
      *
      *  One `guard` code could not answer report #7 (*"i dont know why it blocked"*): the
