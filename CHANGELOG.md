@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.189
+- Low battery locks the phone until you charge
+
 ## v1.188
 - You are told when AppBlocker was off for a long time
 
