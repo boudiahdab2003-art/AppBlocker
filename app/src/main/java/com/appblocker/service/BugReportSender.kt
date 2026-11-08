@@ -21,6 +21,7 @@ import com.appblocker.data.DeviceBoot
 import com.appblocker.data.FilterState
 import com.appblocker.data.NetworkFilter
 import com.appblocker.data.HealthFacts
+import com.appblocker.data.OffNotice
 import com.appblocker.data.OngoingReport
 import com.appblocker.data.OutageLog
 import com.appblocker.data.PauseLog
@@ -34,6 +35,7 @@ import com.appblocker.data.SelfEnableLog
 import com.appblocker.data.SelfToggleLog
 import com.appblocker.data.SpaceReturn
 import com.appblocker.data.StoppageHistory
+import com.appblocker.data.SwitchOffLog
 import com.appblocker.ui.hasUsageAccess
 import com.appblocker.ui.isIgnoringBattery
 import kotlinx.coroutines.CoroutineScope
@@ -678,6 +680,41 @@ object BugReportSender {
             )
         }
         // Now (invariant 93): a report that waits for the app to be opened can wait six days.
+        flush(context)
+    }
+
+    /**
+     * **A long switch-off, filed the moment it ends** (invariant 103). Until 8 Nov 2026 a switched-off
+     * period had no report of its own: its line rode only in the weekly summary, so a 27-hour gap
+     * reached the tracker days later — and the tracker, reading nothing, said 0. Same shape and the
+     * same send-now as [reportOutage]; keyed `off<start>` so it can never collide with an outage's key.
+     */
+    fun reportSwitchOff(context: Context, episode: SwitchOffLog.Episode) {
+        if (!automatic(context)) return
+        val watch = watchReading(context)
+        val end = if (episode.spanMs >= 0L) episode.startedAt + episode.spanMs else System.currentTimeMillis()
+        runCatching {
+            BugReportQueue.enqueue(
+                context,
+                BugReport.fromOutage(
+                    appVersion = BuildConfig.VERSION_NAME,
+                    flavor = BuildConfig.FLAVOR,
+                    androidSdk = Build.VERSION.SDK_INT,
+                    device = describeDevice(),
+                    context = appContext(context, watch) + mapOf(
+                        "outageAt" to "off${episode.startedAt / 1000}",
+                        "offMin" to minutesOrUnknown(OffNotice.shownMs(episode.durationMs, episode.spanMs)),
+                        "offHow" to episode.how,
+                        "offKilledBy" to episode.killedBy,
+                        "offEnded" to episode.endedBy,
+                        "offBlockedMin" to blockedAppMinutes(context, episode.startedAt, end),
+                    ),
+                    recentBlocks = BlockLog.recent(context),
+                    recentOutages = StoppageHistory.lines(context),
+                    healthFacts = healthLines(context, watch),
+                ),
+            )
+        }
         flush(context)
     }
 

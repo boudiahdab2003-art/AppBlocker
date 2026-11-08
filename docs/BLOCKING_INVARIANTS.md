@@ -2208,6 +2208,21 @@ number.
     a visible `…:id/mark` with description Add/Remove in SystemUI → dismiss shade + HOME + cover.
 
 
+103. **A long gap in blocking is told to him on the phone the moment it ends.** 8 Nov 2026, his
+    words: "today i used youtube the whole day and it should have been blocked" and, asked what he
+    wanted, "detect it in report and show me notification at least" (no outside messenger: he said
+    "Neither" to Telegram / email / ntfy). Measured over USB: 7 Nov 16:52 battery 1 %, 16:53
+    `LockScreenClean` force stop, 16:55 phone off; after charging AppBlocker stayed off until 8 Nov
+    20:11 (27 h) — a force-stopped app runs nothing and the force stop removes its Accessibility entry,
+    so the app cannot prevent this. What it does instead (`OffNotice`): when a switch-off
+    (`SwitchOffLog.end`) or a stoppage that ends with blocking back (`OutageLog.end`, state OK) lasted
+    30 min or more by its wall-clock span, `ProtectionNotifier.notifyWasOff` posts "AppBlocker was off
+    for …" once, and a switch-off files `BugReportSender.reportSwitchOff` NOW (key `off<start>`) —
+    until then only the weekly summary carried its line, and the tracker read 0. Shorter gaps stay
+    silent (the silent repair's 2–3 min kills are invisible by his choice). Strict Mode's countdown is
+    NOT given the lost time back: his choice "Leave it as it is". `OffNoticeTest` (6 tests; dropping
+    `reportSwitchOff` from `endSwitchOff` turns it red).
+
 ## Device quirks these invariants exist for
 
 - Gesture-nav Home on HyperOS often emits **no accessibility event at all**, so the foreground

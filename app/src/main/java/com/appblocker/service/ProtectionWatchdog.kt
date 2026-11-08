@@ -5,6 +5,7 @@ import android.os.Process
 import android.os.SystemClock
 import com.appblocker.data.BootAudit
 import com.appblocker.data.BugReportQueue
+import com.appblocker.data.OffNotice
 import com.appblocker.data.OngoingReport
 import com.appblocker.data.OutageLog
 import com.appblocker.data.OwnSpace
@@ -538,6 +539,13 @@ object ProtectionWatchdog {
                 )
             }
             BugReportSender.reportOutage(context, it, outageEndedBy(state))
+            // Invariant 103: a long stoppage is told to him the moment blocking is back. Only when
+            // it IS back — one that ended in a switch-off or a pause goes on, and is told at its end.
+            if (state == ProtectionState.OK && OffNotice.worthTelling(it.durationMs, it.spanMs)) {
+                ProtectionNotifier.notifyWasOff(
+                    context, it.startedAt, OffNotice.shownMs(it.durationMs, it.spanMs), it.usedDuringMin,
+                )
+            }
         }
     }
 
@@ -557,6 +565,17 @@ object ProtectionWatchdog {
                     OutageLog.UNKNOWN_USE
                 }
             },
-        )
+        )?.let {
+            // ⚠️ Invariant 103 (8 Nov 2026): a battery run empty force-stopped AppBlocker and took
+            // its Accessibility entry with it; it stayed off 27 h and nothing told him. A long
+            // switch-off is now told on the phone the moment it ends, and its report goes NOW, not
+            // with the weekly summary — which until then was the only report carrying its line.
+            if (OffNotice.worthTelling(it.durationMs, it.spanMs)) {
+                ProtectionNotifier.notifyWasOff(
+                    context, it.startedAt, OffNotice.shownMs(it.durationMs, it.spanMs), it.usedDuringMin,
+                )
+                BugReportSender.reportSwitchOff(context, it)
+            }
+        }
     }
 }

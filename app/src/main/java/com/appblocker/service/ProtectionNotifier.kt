@@ -14,7 +14,9 @@ import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
 import com.appblocker.MainActivity
 import com.appblocker.R
+import com.appblocker.data.OffNotice
 import com.appblocker.data.SettingsStore
+import com.appblocker.data.StoppageHistory
 import java.util.concurrent.TimeUnit
 import com.appblocker.data.Words
 
@@ -48,6 +50,7 @@ object ProtectionNotifier {
     // Its own id so the "stalled" alert can't silently replace (or be replaced by) the "off" one.
     private const val NOTIF_ID_STALLED = 1002
     private const val NOTIF_ID_PAUSED = 1003
+    private const val NOTIF_ID_WAS_OFF = 1004
 
     // Once shown, don't nag again until this much time has passed while still disabled.
     private val MIN_RENOTIFY_MS = TimeUnit.HOURS.toMillis(4)
@@ -145,6 +148,47 @@ object ProtectionNotifier {
         // Stamp the cooldown only after actually posting, so a failed post never suppresses a
         // later real one.
         SettingsStore.setProtectionLastNotifiedAt(context, now)
+    }
+
+    /**
+     * **"AppBlocker was off for 27 h"** — posted once, when blocking is back after a long gap
+     * (invariant 103, see [com.appblocker.data.OffNotice]). Dismissible, not ongoing: it reports
+     * something that is over, so there is nothing to fix and nothing to keep up.
+     *
+     * @param startedAt the last sign of life before the gap, wall clock.
+     * @param usedMin minutes he used the phone in the gap, or negative when unknown (then not said).
+     */
+    @SuppressLint("MissingPermission") // guarded by the areNotificationsEnabled() check below.
+    fun notifyWasOff(context: Context, startedAt: Long, lengthMs: Long, usedMin: Int) {
+        runCatching {
+            val manager = NotificationManagerCompat.from(context)
+            if (!manager.areNotificationsEnabled()) return
+            // The watchdog can run in a process no screen has opened yet (a force-stopped app
+            // started again by its Accessibility binding), where MainActivity never made the channel.
+            createChannel(context)
+            val w = Words.of(context)
+            val title = w.get(R.string.notif_was_off_title, OffNotice.length(lengthMs))
+            val text = w.get(R.string.notif_was_off_text, StoppageHistory.label(startedAt)) +
+                if (usedMin > 0) " " + w.get(R.string.notif_was_off_used, OffNotice.length(usedMin * 60_000L)) else ""
+            val open = PendingIntent.getActivity(
+                context, NOTIF_ID_WAS_OFF,
+                Intent(context, MainActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle(title)
+                .setContentText(text)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+                .setColor(ACCENT_COLOR)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_STATUS)
+                .setAutoCancel(true)
+                .setContentIntent(open)
+                .build()
+            manager.notify(NOTIF_ID_WAS_OFF, notification)
+        }
     }
 
     /**

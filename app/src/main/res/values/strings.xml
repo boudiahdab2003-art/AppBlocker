@@ -465,6 +465,9 @@ Never sent: your blocked words, the sites you visit, which apps you block, or an
 
     <string name="notif_off_title">Protection is off</string>
     <string name="notif_off_collapsed">Tap to turn blocking back on</string>
+    <string name="notif_was_off_title">AppBlocker was off for %1$s</string>
+    <string name="notif_was_off_text">Nothing was blocked from %1$s until it came back just now. It is working again.</string>
+    <string name="notif_was_off_used">You used your phone for %1$s in that time.</string>
     <string name="notif_off_headline">PROTECTION OFF</string>
     <string name="notif_off_subtitle">Blocking has stopped</string>
     <string name="notif_off_action">Turn on</string>

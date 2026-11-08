@@ -526,6 +526,9 @@
 
     <string name="notif_off_title">الحماية متوقّفة</string>
     <string name="notif_off_collapsed">اضغط لإعادة تشغيل الحظر</string>
+    <string name="notif_was_off_title">كان AppBlocker متوقّفًا لمدة %1$s</string>
+    <string name="notif_was_off_text">لم يُحظر أي شيء منذ %1$s حتى عاد للتو. إنه يعمل الآن من جديد.</string>
+    <string name="notif_was_off_used">استخدمت هاتفك لمدة %1$s خلال ذلك الوقت.</string>
     <string name="notif_off_headline">الحماية متوقّفة</string>
     <string name="notif_off_subtitle">الحظر توقّف</string>
     <string name="notif_off_action">شغّل</string>
