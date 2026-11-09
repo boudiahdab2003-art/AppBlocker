@@ -80,6 +80,7 @@ object NewAppWatcher {
                     launchable = true,
                     isProtector = isProtectiveApp(context, it),
                     isBrowser = it in browsers,
+                    isSafe = SafeApps.isSafe(it),
                 )
             }.toSet()
         } else emptySet()

@@ -14,7 +14,28 @@ class NewAppRulesTest {
         launchable: Boolean = true,
         isProtector: Boolean = false,
         isBrowser: Boolean = false,
-    ) = NewAppRules.shouldAutoBlock(addNewApps, allowlistMode, launchable, isProtector, isBrowser)
+        isSafe: Boolean = false,
+    ) = NewAppRules.shouldAutoBlock(addNewApps, allowlistMode, launchable, isProtector, isBrowser, isSafe)
+
+    @Test
+    fun `an app on the safe list is not auto-blocked, and a browser never counts as safe`() {
+        assertFalse(decide(isSafe = true))
+        assertTrue(decide(isSafe = true, isBrowser = true))
+        assertTrue(com.appblocker.data.SafeApps.isSafe("com.google.android.apps.translate"))
+        assertTrue(com.appblocker.data.SafeApps.isSafe("com.softissimo.reverso.context"))
+        assertFalse(com.appblocker.data.SafeApps.isSafe("com.android.chrome"))
+        assertFalse(com.appblocker.data.SafeApps.isSafe("com.instagram.android"))
+    }
+
+    /** An editable safe list would be an unblock button: the list is code, and only code. */
+    @Test
+    fun `nothing in the app can add to the safe list`() {
+        val src = listOf("src/main/java/com/appblocker", "app/src/main/java/com/appblocker")
+            .map(java.io.File::new).first { it.exists() }
+        val writers = src.walkTopDown().filter { it.extension == "kt" && it.name != "SafeApps.kt" }
+            .filter { "SafeApps.PACKAGES" in it.readText() }.map { it.name }.toList()
+        assertTrue("SafeApps.PACKAGES is read outside its own file: $writers", writers.isEmpty())
+    }
 
     @Test
     fun `an ordinary new app is auto-blocked when the setting is on`() {

@@ -156,6 +156,32 @@ internal object BlockScreenRenderer {
      * [BlockOverlay] (a short line goes huge, a long one stays readable), so the factor is applied
      * there instead. Scaling it here as well would apply the factor twice.
      */
+    /** The quote never shrinks below this, however crowded the screen. */
+    const val QUOTE_MIN_SP = 15f
+
+    /**
+     * One step of fitting the quote to the screen: if the pieces are taller than the space above
+     * "Got it", the quote goes down 8 % and this answers true — call again after the next layout.
+     *
+     * His report, 9 Nov 2026: "if the font size is large the quotes sometime look weird or do not
+     * fit correctly". The quote's size is three numbers multiplied — its length tier, the layout's
+     * scale and his own Smaller/Larger choice — and the phone's font size multiplies that again,
+     * with nothing asking whether the result fits. The scroller kept "Got it" on screen, so what
+     * overflowed was the quote itself, cut off at the fold. Now it gives way until it fits.
+     */
+    fun shrinkQuoteOnce(root: View): Boolean {
+        val scroll = root.findViewById<ViewGroup>(R.id.overlay_scroll) ?: return false
+        val quote = root.findViewById<TextView>(R.id.overlay_quote) ?: return false
+        // A quote switched off in Pieces has nothing to give; its group is what is hidden.
+        if (quote.visibility != View.VISIBLE || (quote.parent as? View)?.visibility != View.VISIBLE) return false
+        val content = scroll.getChildAt(0) ?: return false
+        if (scroll.height <= 0 || content.height <= scroll.height) return false
+        val sp = quote.textSize / root.resources.displayMetrics.scaledDensity
+        if (sp <= QUOTE_MIN_SP) return false
+        quote.setTextSize(TypedValue.COMPLEX_UNIT_SP, (sp * 0.92f).coerceAtLeast(QUOTE_MIN_SP))
+        return true
+    }
+
     private fun scaleText(root: View, factor: Float) {
         when (root) {
             is TextView -> {

@@ -70,6 +70,10 @@ internal class BlockOverlay(private val context: Context) {
      * choices themselves are still *read* on every show — a look picked between two blocks has
      * to appear on the next one; reading is cheap, painting is not.
      */
+    /** How many more times the pre-draw fit may shrink the quote for the cover now up. Refilled on
+     *  every show; a budget rather than a loop so a layout that can never fit cannot spin. */
+    private var fitBudget = 0
+
     private var styledView: View? = null
     private var styledThemeId: String? = null
     private var styledArrangement: BlockArrangement.Arrangement? = null
@@ -182,6 +186,19 @@ internal class BlockOverlay(private val context: Context) {
             params.windowAnimations = R.style.BlockCoverWindow
             windowManager.addView(it, params)
             view = it
+            // Fits the quote before it is drawn: a frame that would overflow is skipped, the
+            // quote steps down, and the next layout is judged again. Registered on every attach,
+            // not once at inflation: a listener lives in the window's observer, and the window is
+            // new each time this reused view goes up.
+            val root = it
+            it.viewTreeObserver.addOnPreDrawListener {
+                if (fitBudget > 0 && BlockScreenRenderer.shrinkQuoteOnce(root)) {
+                    fitBudget--
+                    false
+                } else {
+                    true
+                }
+            }
             playEntrance(it)
         }
         // Re-applied whenever it could have changed, not just on inflate: the view is cached and
@@ -235,6 +252,9 @@ internal class BlockOverlay(private val context: Context) {
                 )
             }
         }
+        // The sizes above are multiplied together and by the phone's font size; whether the result
+        // fits is only known once it is measured. See BlockScreenRenderer.shrinkQuoteOnce.
+        fitBudget = MAX_FIT_STEPS
         val iconView = v.findViewById<ImageView>(R.id.overlay_icon)
         // Our own mark must be the launcher icon the user actually picked (icon switcher),
         // not the hardcoded default that stops matching the moment they change it.
@@ -328,6 +348,12 @@ internal class BlockOverlay(private val context: Context) {
         LayoutInflater.from(context).inflate(BlockLayouts.current(context).layoutRes, null).also {
             heldLayoutRes = BlockLayouts.current(context).layoutRes
             it.findViewById<Button>(R.id.overlay_close)?.setOnClickListener { onClose() }
+            // Lines of even length instead of one long line and an orphaned word.
+            it.findViewById<TextView>(R.id.overlay_quote)?.apply {
+                breakStrategy = android.text.Layout.BREAK_STRATEGY_BALANCED
+                hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+            }
+
             // Clip the app icon to a circle — the icon-art PNGs are full-bleed squares,
             // and this matches how the icon picker (and most launchers) present icons.
             it.findViewById<ImageView>(R.id.overlay_icon)?.apply {
@@ -349,6 +375,9 @@ internal class BlockOverlay(private val context: Context) {
         const val MINUTES_PER_DODGE = 3
 
         const val ENTRANCE_RISE_DP = 14f
+
+        /** 0.92^24 is about a seventh: enough to bring any quote down to its floor. */
+        const val MAX_FIT_STEPS = 24
     }
 }
 

@@ -917,7 +917,7 @@ Never sent: your blocked words, the sites you visit, which apps you block, or an
     <string name="editor_porn_title">Porn sites blocking</string>
     <string name="editor_porn_desc">Detects and blocks adult sites in your browsers.</string>
     <string name="editor_newapps_title">Add newly installed apps</string>
-    <string name="editor_newapps_desc">Newly installed apps are automatically blocked.</string>
+    <string name="editor_newapps_desc">Newly installed apps are automatically blocked. A short built-in list of safe tools, like translators and calculators, is left alone.</string>
     <string name="editor_purchases_title">In-app purchases blocking</string>
     <string name="editor_purchases_desc">Blocks the Google Play purchase prompt in games and apps.</string>
     <string name="editor_browsers_title">Block unsupported browsers</string>

@@ -2285,6 +2285,22 @@ number.
 
     **The shape to grep for: a new cover-then-HOME notice that does not pass `minVisibleMs`.**
 
+107. **The safe list for new apps is code, and only code.** 9 Nov 2026, his ask: "some apps are
+    really safe like reverso or google translate so why dont you create a free list". `SafeApps`
+    is a fixed set of package names (translators, dictionaries, sign-in code apps, document
+    editors, a calculator, DB Navigator, DHL) that `NewAppRules.shouldAutoBlock` skips — after the
+    browser check, so a browser is never safe. Only the automatic path: blocking one by hand works,
+    and Allowlist mode ignores the list. ⚠️ **Never make it editable on the phone**: an editable
+    safe list is an unblock button (add the app, then install it). `NewAppRulesTest` fails if
+    anything outside `SafeApps.kt` touches `PACKAGES`. Adding a package is a weakening that
+    outlives every session — on his word, and only for an app with no open content (no feed, no web
+    search, no built-in browser, no strangers). Package names were written from memory, not read
+    off a device; a wrong one matches nothing.
+
+    Same day: the quote fits itself (`BlockScreenRenderer.shrinkQuoteOnce`, driven by a pre-draw
+    listener `BlockOverlay` adds on every attach, 24 steps at most, floor 15 sp) and breaks into
+    balanced lines. `BlockScreenMatrixTest.anOversizedQuoteShrinksUntilThePiecesFit`.
+
 ## Device quirks these invariants exist for
 
 - Gesture-nav Home on HyperOS often emits **no accessibility event at all**, so the foreground

@@ -43,6 +43,7 @@ class PackageInstallReceiver : BroadcastReceiver() {
                 launchable = pm.getLaunchIntentForPackage(pkg) != null,
                 isProtector = isProtectiveApp(context, pkg),
                 isBrowser = pkg in findRealBrowserPackages(context),
+                isSafe = com.appblocker.data.SafeApps.isSafe(pkg),
             )
         ) return
 

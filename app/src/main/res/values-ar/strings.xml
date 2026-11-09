@@ -984,7 +984,7 @@
     <string name="editor_porn_title">حظر المواقع الإباحية</string>
     <string name="editor_porn_desc">يكتشف مواقع البالغين في متصفحاتك ويحظرها.</string>
     <string name="editor_newapps_title">أضِف التطبيقات المثبَّتة حديثًا</string>
-    <string name="editor_newapps_desc">تُحظر التطبيقات المثبَّتة حديثًا تلقائيًا.</string>
+    <string name="editor_newapps_desc">تُحظر التطبيقات المثبّتة حديثًا تلقائيًا. وتُستثنى قائمة قصيرة مدمجة من الأدوات الآمنة، كالمترجمات والآلات الحاسبة.</string>
     <string name="editor_purchases_title">حظر عمليات الشراء داخل التطبيقات</string>
     <string name="editor_purchases_desc">يحظر نافذة الشراء من Google Play في الألعاب والتطبيقات.</string>
     <string name="editor_browsers_title">احظر المتصفحات غير المدعومة</string>

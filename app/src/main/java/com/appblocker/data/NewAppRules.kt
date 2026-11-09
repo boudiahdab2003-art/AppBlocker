@@ -29,11 +29,14 @@ internal object NewAppRules {
         launchable: Boolean,
         isProtector: Boolean,
         isBrowser: Boolean,
+        /** On the built-in [SafeApps] list — a translator, a calculator. Never a browser's way out. */
+        isSafe: Boolean = false,
     ): Boolean {
         // Allowlist mode has nothing to add to: a new app is already blocked by not being on the
         // list. Non-launchable packages are background components, never something the user opens.
         if (!addNewApps || allowlistMode || !launchable) return false
         if (isBrowser) return true
+        if (isSafe) return false
         return !isProtector
     }
 }

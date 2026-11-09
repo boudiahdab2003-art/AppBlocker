@@ -155,6 +155,41 @@ class BlockScreenMatrixTest {
         )
     }
 
+    /**
+     * **A quote far too large for the screen gives way until the pieces fit** — his report of
+     * 9 Nov 2026, "if the font size is large the quotes sometime look weird or do not fit
+     * correctly". The cover does this one step per frame; here the same step is driven by hand,
+     * with a measure and layout between steps, on the short screen with the longest quote.
+     */
+    @Test
+    fun anOversizedQuoteShrinksUntilThePiecesFit() {
+        val (w, h) = 1080 to 1600
+        for (layout in BlockLayouts.OPTIONS) {
+            val root = render(layout, w, h)
+            val quote = root.findViewById<TextView>(R.id.overlay_quote) ?: continue
+            InstrumentationRegistry.getInstrumentation().runOnMainSync {
+                quote.setTextSize(TypedValue.COMPLEX_UNIT_SP, 90f)
+                var steps = 0
+                do {
+                    root.measure(
+                        View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY),
+                    )
+                    root.layout(0, 0, w, h)
+                } while (BlockScreenRenderer.shrinkQuoteOnce(root) && ++steps < 60)
+            }
+            val scroll = root.findViewById<ViewGroup>(R.id.overlay_scroll)
+            val content = scroll.getChildAt(0)
+            val sp = quote.textSize / context.resources.displayMetrics.scaledDensity
+            org.junit.Assert.assertTrue(
+                "${layout.id}: the pieces are ${content.height}px in a ${scroll.height}px space " +
+                    "with the quote still at ${sp}sp",
+                content.height <= scroll.height || sp <= BlockScreenRenderer.QUOTE_MIN_SP + 0.01f,
+            )
+            org.junit.Assert.assertTrue("${layout.id}: the quote was never shrunk from 90sp", sp < 90f)
+        }
+    }
+
     /** Where a child's bottom edge sits inside [root], which is what "on screen" actually means. */
     private fun bottomWithin(root: View, child: View): Int {
         var y = 0
