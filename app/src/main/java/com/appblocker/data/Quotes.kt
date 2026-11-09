@@ -17,6 +17,9 @@ data class Quote(val text: String, val author: String)
  */
 object Quotes {
 
+    /** The quotes not yet shown in this round, as indices; refilled and reshuffled when empty. */
+    private val deck = ArrayDeque<Int>()
+    private var deckSize = -1
     private var lastIndex = -1
 
     /**
@@ -35,14 +38,31 @@ object Quotes {
         return texts.zip(authors) { t, a -> Quote(t, a) }
     }
 
-    /** A random quote, never the same one twice in a row. */
+    /**
+     * The next quote: every line is shown once before any comes round again, and a new round never
+     * opens with the line the last one closed on. Plain random picks repeated the same few lines
+     * within a day while others went unseen for weeks.
+     */
+    @Synchronized
     fun random(context: Context): Quote {
         val all = all(context)
         if (all.isEmpty()) return Quote("", "")
-        var i = all.indices.random()
-        if (i == lastIndex && all.size > 1) i = (i + 1) % all.size
-        lastIndex = i
+        val i = draw(all.size)
         return all[i]
+    }
+
+    /** One draw from a deck of [size] — pure apart from the deck itself, so it can be tested. */
+    @Synchronized
+    internal fun draw(size: Int): Int {
+        if (size <= 0) return -1
+        // A language switch changes nothing about the count, but a new build can: start over.
+        if (deck.isEmpty() || deckSize != size) {
+            deck.clear()
+            deck.addAll((0 until size).shuffled())
+            deckSize = size
+            if (size > 1 && deck.first() == lastIndex) deck.addLast(deck.removeFirst())
+        }
+        return deck.removeFirst().also { lastIndex = it }
     }
 
     /**
