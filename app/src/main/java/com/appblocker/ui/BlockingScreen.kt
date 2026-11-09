@@ -147,6 +147,13 @@ fun BlockingScreen(
                 SetupBanner(essentialMissing, onOpenPermissions)
                 Spacer(Modifier.padding(top = 16.dp))
             }
+            // Only once setup is done (the setup banner speaks first), and only while it is off:
+            // the switch that lets Android restart a force-stopped AppBlocker (invariant 105).
+            val notifPerm = perms.firstOrNull { it.key == "notifications" }
+            if (essentialMissing == 0 && notifPerm != null && !notifPerm.granted) {
+                NotifAccessBanner(notifPerm.onFix)
+                Spacer(Modifier.padding(top = 16.dp))
+            }
             // After an app update, blocking waits here for the user's go.
             var updatePausedUi by remember { mutableStateOf(SettingsStore.updatePaused(context)) }
             LaunchedEffect(perms, settingsChanged) { updatePausedUi = SettingsStore.updatePaused(context) }

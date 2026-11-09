@@ -91,6 +91,11 @@ From v1.175 a stoppage the repair ended in under 10 min is **not filed as its ow
 totals and every weekly report's stoppage list, so read the weekly for the routine ones. Close
 reports once read; that inbox had never been emptied.
 
+**Read `notifAccess` next to every long `SWITCHED-OFF`** (invariant 105, 9 Nov 2026): the notification
+listener is the only thing Android restarts after a force stop, and every gap of hours on his phones
+happened with it `false`. It is a per-space switch he has to turn on by hand; from v1.190 the app
+warns while it is off. A long gap with `notifAccess true` would be new and worth a USB look.
+
 On the owner's PC `gh` works directly: `gh issue list -R boudiahdab2003-art/appblocker-reports`.
 
 From v1.177 a **`STILL STOPPED for N min`** issue arrives **while** a stoppage lasts (the repair has

@@ -403,7 +403,7 @@ Never sent: your blocked words, the sites you visit, which apps you block, or an
     <string name="perm_usage_label">Usage access</string>
     <string name="perm_usage_desc">Needed for daily limits and Insights.</string>
     <string name="perm_notifications_label">Notification access</string>
-    <string name="perm_notifications_desc">Optional. Lets AppBlocker count your daily notifications for Insights.</string>
+    <string name="perm_notifications_desc">Lets Android restart AppBlocker after your phone shuts it down. Without it, AppBlocker stays off until you open it. Also counts notifications for Insights; their content is never read.</string>
     <string name="perm_battery_label">Disable battery optimization</string>
     <string name="perm_battery_desc">Keeps the blocker running so it can\'t be killed in the background.</string>
     <string name="perm_location_label">Location</string>
@@ -571,6 +571,8 @@ Never sent: your blocked words, the sites you visit, which apps you block, or an
         <item quantity="one">%1$s required step left — tap to fix</item>
         <item quantity="other">%1$s required steps left — tap to fix</item>
     </plurals>
+    <string name="banner_notif_title">Turn on Notification access</string>
+    <string name="banner_notif_body">If your phone shuts AppBlocker down, this is what starts it again. Without it, blocking stays off until you open the app — tap to fix</string>
     <string name="banner_stopped_title">Blocking has stopped</string>
     <string name="banner_stopped_body">Your phone shut it down — tap to switch it back on</string>
     <string name="banner_update_title">Update available — v%1$s</string>

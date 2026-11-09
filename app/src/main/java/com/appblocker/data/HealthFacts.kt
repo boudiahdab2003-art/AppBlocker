@@ -368,13 +368,29 @@ object HealthFacts {
                 ),
             )
         }
+        // ⚠️ The number is the CURRENT run of "too early to tell" answers, not a lifetime count: the
+        // watchdog zeroes it at its next real verdict. One is the ordinary shape of a report written
+        // by a process seconds old — every profile report filed right after an update carried
+        // "still missing: 1 times" as its headline fault (#282, #283, #291, #294, #300, #303, #305),
+        // which buried the lines that were real. A fault only once the wait has been repeated.
         if (r.bindDeferrals > 0) {
+            val repeated = r.bindDeferrals > 1
             add(
                 Fact(
-                    "The watcher was re-checked and still missing: ${r.bindDeferrals} times",
-                    "Each one means the phone had not brought the blocker back within the grace " +
-                        "period — it is being killed faster than the re-check can wait for it.",
-                    good = false,
+                    if (repeated) {
+                        "The watcher was re-checked and still missing: ${r.bindDeferrals} times"
+                    } else {
+                        "The watcher was still connecting when this was written"
+                    },
+                    if (repeated) {
+                        "Each one means the phone had not brought the blocker back within the grace " +
+                            "period — it is being killed faster than the re-check can wait for it."
+                    } else {
+                        "One check ran before Android had connected the watcher and is waiting to " +
+                            "look again. That is normal in the first seconds after a start or an " +
+                            "update; it becomes a fault only if the next look finds the same."
+                    },
+                    good = if (repeated) false else null,
                 ),
             )
         }
@@ -732,8 +748,14 @@ object HealthFacts {
     }
 
     /**
-     * Notification access, named only when it is off. A choice, not a fault — but the one that
-     * decides whether anything can start AppBlocker again after the phone shuts it down.
+     * Notification access, named only when it is off — and **a fault when it is** (invariant 105).
+     *
+     * ⚠️ It was "a choice, not a fault" until 9 Nov 2026, and the app's own setup screen called it
+     * "Optional … for Insights". His reports say otherwise: every one of his long switch-offs — 35 h
+     * on 23 Oct, 27 h on 7–8 Nov, 15 h 43 min in Second Space — happened with `notifAccess false`,
+     * and they are all the same shape: the phone force-stopped AppBlocker and nothing of it could
+     * run until he opened it. The listener is the one component Android binds again by itself after
+     * a force stop (invariant 76). With it off, a force stop lasts until he notices.
      */
     private fun notificationAccessFact(r: Reading): Fact? =
         if (r.notifAccess != false) {
@@ -741,10 +763,12 @@ object HealthFacts {
         } else {
             Fact(
                 "Notification access is off",
-                "Besides counting notifications, it is what lets Android start AppBlocker again " +
-                    "after the phone has shut it down. On a test phone AppBlocker came back within a " +
-                    "second with it on, and not at all with it off.",
-                good = null,
+                "It is the one thing that lets Android start AppBlocker again after the phone has " +
+                    "shut it down completely (a force stop: an empty battery, a battery mode, a " +
+                    "cleaner). With it off, AppBlocker stays off until it is opened by hand — every " +
+                    "long gap on this phone happened that way. Switch it on in Settings ▸ " +
+                    "Notification access, in each space.",
+                good = false,
             )
         }
 

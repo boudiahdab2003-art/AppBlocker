@@ -13,6 +13,12 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.190", "Nov 9, 2026", "The switch that brings AppBlocker back", listOf(
+        "**I read the latest reports from your phones, and one switch stands behind your longest gaps.** The 35 hours in October, the 27 hours last weekend and the 15 hours in Second Space were all the same thing: your phone shut AppBlocker down completely, and nothing started it again until you opened it. In every report from those weeks, **Notification access** was off.",
+        "**That switch is what lets Android start AppBlocker again by itself.** The app used to call it \"Optional, for Insights\". That was wrong, and it is corrected: the Blocking tab now shows a warning while it is off, and your reports mark it in red.",
+        "**What you need to do, once in each space:** open AppBlocker, tap the warning, and switch AppBlocker on in the list. It is on in your main space since Sunday. It is still off in Second Space and on your other phone. AppBlocker never reads what your notifications say.",
+        "**Your reports are also more honest.** Seven reports in a row opened with a red line saying the watcher was missing. It was not: each was written in the first second after an update. That line is red now only when it is real.",
+    )),
     VersionLog("1.189", "Nov 8, 2026", "Low battery locks the phone until you charge", listOf(
         "**At 5% battery or less, every app closes except calls and messages, until you plug in your charger.** Always on, as you chose.",
         "**Why:** at 1% your phone goes into hibernation by itself, with no way to say no, and that switches AppBlocker off. Plugging in before 1% stops the hibernation from starting, and while the lock is up you cannot use the phone down to 1%.",

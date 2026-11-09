@@ -427,13 +427,32 @@ class HealthFactsTest {
         assertTrue(HealthFacts.verdicts(healthy.copy(reportingOn = false, autoReports = false)).none { "Automatic reports" in it.title })
     }
 
-    /** Invariant 76: named when off, silent when on or unreadable, and never a fault. */
+    /**
+     * Invariants 76 and 105: a fault when off, silent when on or unreadable. It was "never a fault"
+     * until every long switch-off in his reports turned out to have happened with it off.
+     */
     @Test
-    fun `notification access that is off is named, and on or unknown says nothing`() {
-        assertTrue(HealthFacts.verdicts(healthy.copy(notifAccess = false)).any { it.title == "Notification access is off" })
+    fun `notification access that is off is a fault, and on or unknown says nothing`() {
+        val off = HealthFacts.verdicts(healthy.copy(notifAccess = false)).first { it.title == "Notification access is off" }
+        assertEquals(false, off.good)
+        assertTrue(problems(healthy.copy(notifAccess = false)).any { "Notification access" in it.toString() })
         assertTrue(HealthFacts.verdicts(healthy.copy(notifAccess = true)).none { "Notification access" in it.title })
         assertTrue(HealthFacts.verdicts(healthy).none { "Notification access" in it.title })
-        assertTrue(problems(healthy.copy(notifAccess = false)).isEmpty())
+        assertTrue(problems(healthy.copy(notifAccess = null)).isEmpty())
+    }
+
+    /**
+     * The deferral count is the current run, not a lifetime total: one is a report written by a
+     * process seconds old, and it headed seven profile reports in a row as a fault.
+     */
+    @Test
+    fun `one pending re-check is not a fault, a repeated one is`() {
+        val one = HealthFacts.verdicts(healthy.copy(bindDeferrals = 1))
+        assertTrue(one.any { it.title == "The watcher was still connecting when this was written" && it.good == null })
+        assertTrue(problems(healthy.copy(bindDeferrals = 1)).toString(), problems(healthy.copy(bindDeferrals = 1)).isEmpty())
+        val two = HealthFacts.verdicts(healthy.copy(bindDeferrals = 2))
+        assertTrue(two.any { it.title == "The watcher was re-checked and still missing: 2 times" && it.good == false })
+        assertTrue(HealthFacts.verdicts(healthy).none { "watcher was" in it.title })
     }
 
     @Test

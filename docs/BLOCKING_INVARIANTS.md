@@ -2238,6 +2238,31 @@ number.
     moment the level crosses in and re-decides it when the charger goes in; `recheckMatters` stays
     true while locked. Unknown level never locks. `LowBatteryLockTest` (6).
 
+105. **Notification access is part of protection, not an option.** 9 Nov 2026, from reading reports
+    #282–#305 after his ask "make it as reliable as possible". Every long `SWITCHED-OFF` on his
+    phones (35 h 18 min on 23 Oct, 27 h on 7–8 Nov, 15 h 43 min in Second Space on 15 Oct) is a force
+    stop (`LockScreenClean`, App info) after which nothing of ours ran until he opened the app, and
+    the reports read for this (#297, #300–#303, 2–7 Nov) all say `notifAccess false`; no report from
+    the October days themselves was checked (main space reads `true` from
+    #305, 9 Nov). The listener is the one component Android binds again after a force stop
+    (invariant 76), and its reconnect re-arms the scheduler and runs the check that lets
+    `SelfEnable` write the switch back. ⚠️ Inferred, not measured: on 8 Nov, with it on, five force
+    stops read `off=0–5min backBy=switched-back-on`, but nothing recorded what started the process
+    — the first `LockScreenClean` with the access on is the proof. Until this day the setup screen
+    said "Optional. Lets AppBlocker count your daily notifications for Insights" and `HealthFacts`
+    filed it as a neutral dot, "a choice, not a fault". Now: the fact is `good = false`; the
+    Blocking tab shows `NotifAccessBanner` once setup's essentials are done; the description says
+    what it is for. It is **not** `essential = true` (onboarding does not demand it) and the guard
+    does not protect its page — switching it off stops nothing by itself.
+    `HealthFactsTest` pins the fault.
+
+    **The shape to grep for: a recovery path the app depends on, described to the user as optional.**
+
+    Same day, an instrument: `bindDeferrals` is the CURRENT run of "too early to tell" answers, and
+    `HealthFacts` printed any value above 0 as a fault — so every profile report written in the
+    first second after an update (#282, #283, #291, #294, #300, #303, #305) was headed "still
+    missing: 1 times". A fault now only from 2.
+
 ## Device quirks these invariants exist for
 
 - Gesture-nav Home on HyperOS often emits **no accessibility event at all**, so the foreground
