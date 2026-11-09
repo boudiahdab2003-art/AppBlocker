@@ -2301,6 +2301,17 @@ number.
     listener `BlockOverlay` adds on every attach, 24 steps at most, floor 15 sp) and breaks into
     balanced lines. `BlockScreenMatrixTest.anOversizedQuoteShrinksUntilThePiecesFit`.
 
+108. **A name, an insult or a meme is not a pack word** — the pack's third rule. 9 Nov 2026, his
+    words: "some of them are just everywhere", then "ones in arabic that could be names in english
+    like alex", Arabic swear words, English slang and memes. `الكس` is how Arabic writes Alex.
+    Dropped: `الكس`, `البزاز`/`بزاز`, `زبر` (Quran 18:96), bare `beeg`/`motherless`/`joi` (now
+    addresses or phrases). **Moved to `danger_words.txt`, not deleted**: bare `كس`, `زب`, `زبي`,
+    `fap`, `fapping`, `gooning`, `jizz`, `dildo(s)`, `gangbang(s)`, `big dick`, `rimming` — silent
+    on an ordinary day, blocking in the danger hour. Their explicit phrases stay in the pack and
+    `adult_keywords.txt` still catches them typed into an address bar. The cuckold/BNWO family is
+    untouched ("Leave it complete", same day). `WebContentFilterTest.namesInsultsAndMemesAreNotPackWords`.
+    ⚠️ Not changed, though the same argument reaches it: `سكسي`/`سكسية` ("sexy"). He did not name it.
+
 ## Device quirks these invariants exist for
 
 - Gesture-nav Home on HyperOS often emits **no accessibility event at all**, so the foreground

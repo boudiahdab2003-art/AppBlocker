@@ -735,6 +735,38 @@ class WebContentFilterTest {
      * address, and the phrases people type when they are actually looking for the content are
      * still pack words. Only the bare mention stopped firing.
      */
+    /**
+     * The pack's third rule (9 Nov 2026): a name, an everyday insult or a meme is not evidence.
+     * His words: "some of them are just everywhere … ones in arabic that could be names in english
+     * like alex". The insults and memes moved to the danger hour's list rather than vanishing.
+     */
+    @Test fun namesInsultsAndMemesAreNotPackWords() {
+        fun read(name: String) = File("src/main/assets/$name").readLines()
+            .map { it.substringBefore('#').trim() }.filter { it.isNotEmpty() }
+        val pack = read("adult_words_pack.txt")
+        val danger = read("danger_words.txt")
+        for (gone in listOf("الكس", "البزاز", "زبر", "beeg", "motherless", "joi")) {
+            assertFalse("$gone is a name or an ordinary word and must stay out of the pack", gone in pack)
+        }
+        for (moved in listOf("كس", "زب", "زبي", "fap", "gooning", "jizz", "dildo", "gangbang", "big dick")) {
+            assertFalse("$moved is in every chat; it belongs to the danger hour only", moved in pack)
+            assertTrue("$moved must still block during the danger hour", moved in danger)
+        }
+        // The explicit side is still doing the work, all day.
+        for (kept in listOf("لحس كس", "مص زب", "gangbang porn", "big dick porn", "beeg.com", "سكس", "blowjob")) {
+            assertTrue("$kept must stay in the pack", kept in pack)
+        }
+        // A page that names Alex in Arabic is not a blocked page.
+        val f = filter(pack = pack.map { WebContentFilter.normalizeArabic(it) }, danger = danger)
+        assertNull(
+            f.check(
+                "الكس فيرغسون مدرب كبير", BrowserAddress.Unreadable,
+                userKeywords = emptyList(), siteKeywords = emptyList(),
+                adultPack = true, blockAdult = true,
+            ),
+        )
+    }
+
     @Test fun bareBrandNamesAreNotPackWords() {
         val entries = File("src/main/assets/adult_words_pack.txt").readLines()
             .map { it.substringBefore('#').trim() }.filter { it.isNotEmpty() }

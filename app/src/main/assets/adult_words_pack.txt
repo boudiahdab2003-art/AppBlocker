@@ -22,6 +22,19 @@
 # itself: the site and brand names, and the compounds nobody writes unless
 # they are looking for it ("free porn", "porn video", "افلام اباحية").
 
+# THIRD RULE, 9 Nov 2026, his words: "some of them are just everywhere" — and, asked which,
+# "ones in arabic that could be names in english like alex", Arabic swear words, and English
+# slang and memes. A word that is somebody's NAME, an everyday INSULT or a MEME is not evidence
+# of anything: it fires in chats with friends and in comment sections all day.
+#   - names and scripture, dropped outright: "الكس" (how Arabic writes Alex), "البزاز"/"بزاز"
+#     (a family name), "زبر" (Quran 18:96, iron blocks), and the bare site names "beeg" and
+#     "motherless", which are now their addresses.
+#   - insults and memes, MOVED to danger_words.txt, so they still block in the hour after the
+#     phone has seen what is going on: bare "كس", "زب", "زبي", and "fap", "fapping", "gooning",
+#     "jizz", "dildo(s)", "gangbang(s)", "big dick", "rimming". Their explicit phrases stay here
+#     ("لحس كس", "مص زب", "gangbang porn", "big dick porn" …), and a typed search for them is
+#     still caught by adult_keywords.txt, which reads the address bar rather than the page.
+# The cuckold/BNWO family is untouched, by his answer the same day: "Leave it complete".
 # --- porn sites & brands ---
 pornhub
 xvideos
@@ -60,9 +73,9 @@ hentaihaven
 fakku
 hanime
 javhd
-motherless
+motherless.com
 efukt
-beeg
+beeg.com
 tnaflix
 porntrex
 eporner
@@ -170,7 +183,6 @@ blowjobs
 handjob
 hand job
 rimjob
-rimming
 footjob
 titjob
 titfuck
@@ -185,8 +197,8 @@ creampie
 creampies
 bukkake
 gokkun
-gangbang
-gangbangs
+gangbang porn
+gangbang video
 anal porn
 anal creampie
 first anal
@@ -201,7 +213,7 @@ eat pussy
 # --- anatomy & vulgar ---
 big cock
 monster cock
-big dick
+big dick porn
 big tits
 huge tits
 big boobs
@@ -214,11 +226,10 @@ nude photos
 nude selfie
 
 # --- solo & arousal ---
-fap
-fapping
-gooning
+fap material
+gooning porn
+goon cave
 edging porn
-jizz
 precum
 phone sex
 sex chat
@@ -315,7 +326,8 @@ tentacle hentai
 breeding kink
 chastity cage
 gloryhole
-joi
+joi porn
+jerk off instruction
 sissy porn
 sissy hypno
 futanari
@@ -331,8 +343,6 @@ lolicon
 loli hentai
 shotacon
 jailbait
-dildo
-dildos
 sex toy
 sex toys
 buttplug
@@ -372,21 +382,17 @@ onahole
 ينيك
 تتناك
 نياكة
-كس
-الكس
+نيك كس
 كسها
 كسي
 كسك
-زب
+زب كبير
+زب اسود
 الزب
-زبي
 زبك
 زبه
-زبر
 ازبار
 طبون
-بزاز
-البزاز
 شيميل
 
 # phrases (no word in them is blocked standalone)
