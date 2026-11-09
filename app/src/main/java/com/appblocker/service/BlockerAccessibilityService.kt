@@ -1756,6 +1756,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                 message = words.get(R.string.block_discover_message),
                 packageName = null,
                 counterKey = DiscoverFeed.KEY, why = BlockWhy.DISCOVER,
+                minVisibleMs = CoverHold.NOTICE_MS,
             )
             performGlobalAction(GLOBAL_ACTION_HOME)
             handler.postDelayed({
@@ -1807,6 +1808,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                 message = words.get(if (tileEditor) R.string.block_tile_edit_message else R.string.block_ultra_saver_message),
                 packageName = null,
                 counterKey = UltraSaver.KEY, why = BlockWhy.ULTRA_SAVER,
+                minVisibleMs = CoverHold.NOTICE_MS,
             )
             handler.postDelayed({
                 guarded(applicationContext, "ultraSafetyNet") {
@@ -2028,6 +2030,7 @@ class BlockerAccessibilityService : AccessibilityService() {
             packageName = null,
             counterKey = "strict_guard",
             why = why,
+            minVisibleMs = CoverHold.NOTICE_MS,
         )
         performGlobalAction(GLOBAL_ACTION_HOME)
         // Safety net: a null-package cover has no owner to auto-remove it, so if HOME is slow or
@@ -2543,7 +2546,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         if (exiting()) finishExit(left = true)
         if (overlay.isShowing) {
             lastBlockedPkg = null
-            overlay.remove()
+            overlay.remove(now = true)
         }
         lastForegroundPkg = null
         lastWebText = null
@@ -3451,6 +3454,8 @@ class BlockerAccessibilityService : AccessibilityService() {
          *  meaningful start to measure from (the re-check tick, the guard, a purchase sheet).
          *  See [BlockLatency]: the interval is recorded only when there is a real one. */
         start: BlockLatency.Start? = null,
+        /** For a notice (cover, HOME, gone): its time on screen — see [CoverHold]. */
+        minVisibleMs: Long = 0L,
     ) {
         // One cover = one recorded entry. The page/app behind a cover keeps emitting events
         // (feeds churn, activities transition), and each used to re-record an "attempt" and
@@ -3527,6 +3532,7 @@ class BlockerAccessibilityService : AccessibilityService() {
             onClose = ::onCoverDismissed,
             iconLoader = ::loadIcon,
             freshBlock = fresh,
+            minVisibleMs = minVisibleMs,
         )
         if (!drawn) {
             startActivity(
@@ -3639,7 +3645,7 @@ class BlockerAccessibilityService : AccessibilityService() {
                 lastBackExitPkg = dismissedPkg
                 lastBackExitAt = stopwatchNow()
                 dismissedViaBack = true
-                overlay.remove()
+                overlay.remove(now = true)
                 performGlobalAction(GLOBAL_ACTION_BACK)
                 // **A blocked word locks the whole app, and nothing was raising that lock's cover.**
                 // The lockout is recorded the instant the word is caught, but the "Locked" screen it
@@ -3699,7 +3705,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         // the short one, not the eight seconds priced for a swallowed HOME. CoverGate.inGrace asks
         // for the move that was actually made, not the key it was made for.
         dismissedViaBack = true
-        overlay.remove()
+        overlay.remove(now = true)
         val startedAt = stopwatchNow()
         shortsExitJob?.cancel()
         shortsExitJob = scope.launch {
@@ -3766,7 +3772,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         val gemini = dismissedPkg
         performGlobalAction(GLOBAL_ACTION_BACK)
         dismissedViaBack = true
-        overlay.remove()
+        overlay.remove(now = true)
         val startedAt = stopwatchNow()
         geminiExitJob?.cancel()
         geminiExitJob = scope.launch {
@@ -3806,7 +3812,7 @@ class BlockerAccessibilityService : AccessibilityService() {
      *  watch for, the cover just goes down as before. */
     private fun startExit(pkg: String?) {
         if (pkg == null) {
-            overlay.remove()
+            overlay.remove(now = true)
             performGlobalAction(GLOBAL_ACTION_HOME)
             return
         }
@@ -3857,7 +3863,7 @@ class BlockerAccessibilityService : AccessibilityService() {
             bookGraceRecheck(stopwatchNow() - dismissedAt)
         }
         lastBlockedPkg = null
-        overlay.remove()
+        overlay.remove(now = true)
     }
 
     /** Whether the exit watcher is currently holding a cover up. */
@@ -3953,7 +3959,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         unlockReceiver = null
         batteryReceiver?.let { runCatching { unregisterReceiver(it) } }
         batteryReceiver = null
-        overlay.remove()
+        overlay.remove(now = true)
         // Cancels every scan/exit job in one go — they are all launched on this scope, so there is
         // nothing to enumerate here and nothing that can be forgotten when a new one is added.
         // Screen-off is the case that has to name them individually, and CodeShapeTest checks it.

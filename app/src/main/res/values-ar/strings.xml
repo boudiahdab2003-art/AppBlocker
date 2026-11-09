@@ -641,7 +641,8 @@
         <item quantity="other">بقيت %1$s خطوة مطلوبة — اضغط للإصلاح</item>
     </plurals>
     <string name="banner_notif_title">فعّل الوصول إلى الإشعارات</string>
-    <string name="banner_notif_body">إذا أوقف هاتفك AppBlocker فهذا ما يعيد تشغيله. بدونه يبقى الحظر متوقفًا حتى تفتح التطبيق — اضغط للإصلاح</string>
+    <string name="banner_notif_body">إذا أوقف هاتفك AppBlocker فهذا ما يعيد تشغيله. بدونه يبقى الحظر متوقفًا حتى تفتح التطبيق.</string>
+    <string name="banner_notif_action">فعّله</string>
     <string name="banner_stopped_title">الحظر توقّف</string>
     <string name="banner_stopped_body">هاتفك أغلقه — اضغط لإعادة تشغيله</string>
     <string name="banner_update_title">يتوفّر تحديث — الإصدار %1$s</string>

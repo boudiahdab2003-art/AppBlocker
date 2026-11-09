@@ -1,9 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Close button: the app's blue→violet accent gradient. -->
-<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-    <gradient
-        android:angle="0"
-        android:startColor="#2E7BFF"
-        android:endColor="#7C5CFF" />
-    <corners android:radius="28dp" />
-</shape>
+<!-- Close button: the app's blue→violet accent gradient, with a press ripple so a tap is felt.
+     BlockScreenRenderer tints this for the themes without a gradient button; a tint on the
+     ripple reaches the shape inside it. -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="#40FFFFFF">
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="0"
+                android:startColor="#2E7BFF"
+                android:endColor="#7C5CFF" />
+            <corners android:radius="28dp" />
+        </shape>
+    </item>
+</ripple>

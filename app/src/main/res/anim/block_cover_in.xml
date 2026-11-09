@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The block cover arriving: a short fade, so it reads as the screen changing rather than a
+     flash. Short on purpose — the window takes touches from its first frame whatever the alpha. -->
+<alpha xmlns:android="http://schemas.android.com/apk/res/android"
+    android:duration="120"
+    android:fromAlpha="0.0"
+    android:toAlpha="1.0"
+    android:interpolator="@android:interpolator/decelerate_quad" />

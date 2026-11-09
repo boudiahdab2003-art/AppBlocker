@@ -572,7 +572,8 @@ Never sent: your blocked words, the sites you visit, which apps you block, or an
         <item quantity="other">%1$s required steps left — tap to fix</item>
     </plurals>
     <string name="banner_notif_title">Turn on Notification access</string>
-    <string name="banner_notif_body">If your phone shuts AppBlocker down, this is what starts it again. Without it, blocking stays off until you open the app — tap to fix</string>
+    <string name="banner_notif_body">If your phone shuts AppBlocker down, this is what starts it again. Without it, blocking stays off until you open the app.</string>
+    <string name="banner_notif_action">Turn it on</string>
     <string name="banner_stopped_title">Blocking has stopped</string>
     <string name="banner_stopped_body">Your phone shut it down — tap to switch it back on</string>
     <string name="banner_update_title">Update available — v%1$s</string>

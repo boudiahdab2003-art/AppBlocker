@@ -6,4 +6,9 @@
     <style name="Theme.AppBlocker" parent="@android:style/Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@color/window_bg</item>
     </style>
+    <!-- The block cover's window: faded in and out (BlockOverlay). -->
+    <style name="BlockCoverWindow">
+        <item name="android:windowEnterAnimation">@anim/block_cover_in</item>
+        <item name="android:windowExitAnimation">@anim/block_cover_out</item>
+    </style>
 </resources>

@@ -2263,6 +2263,28 @@ number.
     first second after an update (#282, #283, #291, #294, #300, #303, #305) was headed "still
     missing: 1 times". A fault now only from 2.
 
+106. **A notice cover gets its moment, and no cover is cut.** 9 Nov 2026, his words: "it blocks a
+    real thing like the google discovery or the edit of notifications panel but then it flash in an
+    unprofessional way". Not a decision bug — the six earlier guesses at "flashing" were, and this
+    one is not a seventh: the guard, the news feed and the Ultra saver all show a cover, press HOME,
+    and the launcher's window event (`handleAppBlock` → `overlay.remove()`) took it down a fraction
+    of a second later, with no animation on the window either way. Two changes, both inside
+    `BlockOverlay`, neither touching when a cover is raised:
+    - **`CoverHold`**: those three pass `minVisibleMs = CoverHold.NOTICE_MS` (900 ms). `remove()`
+      inside the hold books the removal for its end; `remove(now = true)` skips it and is what
+      "Got it", screen-off and `onDestroy` call. `isShowing`, `counterKey` and `ownerPkg` stay set
+      until the real removal, so there is still one source of truth. The longest a notice can
+      stand is unchanged: each already had a 1.5 s safety net, which lands after the hold.
+      A new `show()` cancels a booked removal — it belonged to the cover being replaced.
+    - **The window fades** (`R.style.BlockCoverWindow`: 120 ms in, 220 ms out) and the content
+      column rises in. The backdrop is not delayed and the window takes touches from its first
+      frame, so nothing is reachable for longer than before.
+    `CoverHoldTest` pins the rule, the three call sites, and that "Got it" never waits.
+    ⚠️ Not measured on a phone: whether HyperOS honours `windowAnimations` on an overlay window.
+    If it does not, the hold still removes the flash's shortness, only not its hard edges.
+
+    **The shape to grep for: a new cover-then-HOME notice that does not pass `minVisibleMs`.**
+
 ## Device quirks these invariants exist for
 
 - Gesture-nav Home on HyperOS often emits **no accessibility event at all**, so the foreground

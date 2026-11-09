@@ -13,10 +13,12 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
-    VersionLog("1.190", "Nov 9, 2026", "The switch that brings AppBlocker back", listOf(
+    VersionLog("1.190", "Nov 9, 2026", "No more flashing, and the switch that brings AppBlocker back", listOf(
+        "**The block screen no longer flashes.** When AppBlocker closed the news feed, the control panel's Edit screen or its own off-switch page, the block screen appeared and was cut away a fraction of a second later, too fast to read. It now stays for about a second so you can see what was blocked, and it fades in and out instead of being cut.",
+        "**Every block screen is smoother.** It fades in, the words rise into place, the Got it button responds to your touch, and the app icon has a fine ring. Nothing is covered later than before: the screen blocks touches from its first instant.",
         "**I read the latest reports from your phones, and one switch stands behind your longest gaps.** The 35 hours in October, the 27 hours last weekend and the 15 hours in Second Space were all the same thing: your phone shut AppBlocker down completely, and nothing started it again until you opened it. In every report from those weeks, **Notification access** was off.",
-        "**That switch is what lets Android start AppBlocker again by itself.** The app used to call it \"Optional, for Insights\". That was wrong, and it is corrected: the Blocking tab now shows a warning while it is off, and your reports mark it in red.",
-        "**What you need to do, once in each space:** open AppBlocker, tap the warning, and switch AppBlocker on in the list. It is on in your main space since Sunday. It is still off in Second Space and on your other phone. AppBlocker never reads what your notifications say.",
+        "**That switch is what lets Android start AppBlocker again by itself.** The app used to call it \"Optional, for Insights\". That was wrong, and it is corrected: the Blocking tab now shows a card with a **Turn it on** button while it is off, and your reports mark it in red.",
+        "**What you need to do, once in each space:** open AppBlocker, tap **Turn it on**, and switch AppBlocker on in the list. It is on in your main space since Sunday. It is still off in Second Space and on your other phone. AppBlocker never reads what your notifications say.",
         "**Your reports are also more honest.** Seven reports in a row opened with a red line saying the watcher was missing. It was not: each was written in the first second after an update. That line is red now only when it is real.",
     )),
     VersionLog("1.189", "Nov 8, 2026", "Low battery locks the phone until you charge", listOf(

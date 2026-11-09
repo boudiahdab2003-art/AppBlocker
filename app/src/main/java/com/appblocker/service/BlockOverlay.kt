@@ -9,12 +9,15 @@ import android.graphics.Shader
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
 import android.view.ViewOutlineProvider
 import android.view.WindowManager
+import android.view.animation.DecelerateInterpolator
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.TextView
@@ -77,6 +80,15 @@ internal class BlockOverlay(private val context: Context) {
     private var markedView: View? = null
     private var heldMarkRes = 0
 
+    /**
+     * Until when (uptime) the visible cover is owed its time on screen, or 0. See [CoverHold].
+     * Main thread only, like all window work here.
+     */
+    private var holdUntil = 0L
+
+    /** The removal a hold postponed. One at most; every show and every real removal cancels it. */
+    private val heldRemoval = Runnable { remove(now = true) }
+
     /** True while a cover is attached. */
     val isShowing: Boolean get() = view != null
 
@@ -131,7 +143,13 @@ internal class BlockOverlay(private val context: Context) {
         onClose: () -> Unit,
         iconLoader: (String) -> Bitmap?,
         freshBlock: Boolean = true,
+        /** How long this cover must stay up once shown — see [CoverHold]. 0 for every ordinary
+         *  block, which stays until something takes it down. */
+        minVisibleMs: Long = 0L,
     ): Boolean = try {
+        // A removal still waiting belongs to the cover this one replaces.
+        handler.removeCallbacks(heldRemoval)
+        holdUntil = if (minVisibleMs > 0L) SystemClock.uptimeMillis() + minVisibleMs else 0L
         this.counterKey = counterKey
         this.isAppBlock = isAppBlock
         this.ownerPkg = ownerPkg
@@ -159,8 +177,12 @@ internal class BlockOverlay(private val context: Context) {
                     WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
                 PixelFormat.TRANSLUCENT,
             )
+            // Faded in and out by the window manager itself. A cover that is cut in and cut out
+            // again a moment later is a flash, whatever the reason it went up for.
+            params.windowAnimations = R.style.BlockCoverWindow
             windowManager.addView(it, params)
             view = it
+            playEntrance(it)
         }
         // Re-applied whenever it could have changed, not just on inflate: the view is cached and
         // reused across blocks (and survives in preInflated), so a theme picked between two blocks
@@ -241,9 +263,25 @@ internal class BlockOverlay(private val context: Context) {
         false
     }
 
-    /** Detaches the cover (keeping the view for reuse). Safe to call when nothing is up. */
-    fun remove() {
+    /**
+     * Detaches the cover (keeping the view for reuse). Safe to call when nothing is up.
+     *
+     * A cover still inside its [CoverHold] is taken down when the hold ends instead — unless
+     * [now], which is for a person's own tap and for the service going away.
+     */
+    fun remove(now: Boolean = false) {
+        if (view != null) {
+            val wait = CoverHold.waitMs(holdUntil, SystemClock.uptimeMillis(), now)
+            if (wait > 0L) {
+                handler.removeCallbacks(heldRemoval)
+                handler.postDelayed(heldRemoval, wait)
+                return
+            }
+        }
+        handler.removeCallbacks(heldRemoval)
+        holdUntil = 0L
         view?.let {
+            settle(it)
             runCatching { windowManager.removeView(it) }
             preInflated = it
         }
@@ -256,6 +294,35 @@ internal class BlockOverlay(private val context: Context) {
         isAppBlock = false
     }
 
+    /** The layout's content column — the root's one child; the backdrop is the root itself. */
+    private fun contentOf(root: View): View? = (root as? ViewGroup)?.getChildAt(0)
+
+    /**
+     * The words rise into place over the backdrop. The backdrop itself is not moved or delayed:
+     * what is being covered is covered from the first frame.
+     */
+    private fun playEntrance(root: View) {
+        val content = contentOf(root) ?: return
+        content.animate().cancel()
+        content.alpha = 0f
+        content.translationY = ENTRANCE_RISE_DP * root.resources.displayMetrics.density
+        content.animate()
+            .alpha(1f)
+            .translationY(0f)
+            .setStartDelay(40L)
+            .setDuration(260L)
+            .setInterpolator(DecelerateInterpolator(1.6f))
+            .start()
+    }
+
+    /** Ends the entrance where it was going, so a reused view never starts half-faded. */
+    private fun settle(root: View) {
+        val content = contentOf(root) ?: return
+        content.animate().cancel()
+        content.alpha = 1f
+        content.translationY = 0f
+    }
+
     /** Inflates the cover and wires its Close button (not yet attached). */
     private fun newView(onClose: () -> Unit): View =
         LayoutInflater.from(context).inflate(BlockLayouts.current(context).layoutRes, null).also {
@@ -265,6 +332,7 @@ internal class BlockOverlay(private val context: Context) {
             // and this matches how the icon picker (and most launchers) present icons.
             it.findViewById<ImageView>(R.id.overlay_icon)?.apply {
                 clipToOutline = true
+                foreground = context.getDrawable(R.drawable.overlay_icon_ring)
                 outlineProvider = object : ViewOutlineProvider() {
                     override fun getOutline(view: View, outline: Outline) {
                         outline.setOval(0, 0, view.width, view.height)
@@ -279,5 +347,31 @@ internal class BlockOverlay(private val context: Context) {
         // Average minutes of scrolling one dodged open would have cost — powers the
         // "minutes reclaimed today" masthead on the cover.
         const val MINUTES_PER_DODGE = 3
+
+        const val ENTRANCE_RISE_DP = 14f
     }
+}
+
+/**
+ * **A notice gets its moment on screen.**
+ *
+ * Some covers are not a wall but a notice: the off-switch guard, Google's news feed, the Ultra
+ * battery saver's ways in. They go up, the phone is sent HOME, and the launcher's own window event
+ * took the cover down again a fraction of a second later — too short to read, and cut rather than
+ * faded. His words, 9 Nov 2026: "it blocks a real thing … but then it flash in an unprofessional
+ * way". So a notice stays [NOTICE_MS] before anything but a tap may remove it, and the window
+ * fades. The longest it can stand is unchanged: each of those covers already had a safety net at
+ * 1.5 s, which is past the hold and therefore still removes at once.
+ */
+internal object CoverHold {
+
+    /** Long enough to read a title; shorter than every notice's own safety net. */
+    const val NOTICE_MS = 900L
+
+    /**
+     * How long a removal asked for at [nowMs] must wait; 0 means remove now. Never longer than
+     * [NOTICE_MS], whatever the clocks say: a hold may delay a removal, never prevent one.
+     */
+    fun waitMs(holdUntilMs: Long, nowMs: Long, force: Boolean): Long =
+        if (force || holdUntilMs <= 0L) 0L else (holdUntilMs - nowMs).coerceIn(0L, NOTICE_MS)
 }

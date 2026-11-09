@@ -1,6 +1,7 @@
 package com.appblocker.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.GetApp
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
@@ -24,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -63,27 +66,38 @@ internal fun SetupBanner(missing: Int, onClick: () -> Unit) {
  * Not folded into [SetupBanner]: that one counts steps without which nothing blocks at all, and
  * this is a different promise — blocking works today, and the first force stop (an empty battery,
  * a battery mode, a cleaner) ends it until the app is opened by hand. Every long gap in his
- * reports had this switch off. Amber like setup: nothing is unprotected right now.
+ * reports had this switch off. A card of its own with the action on it, in the app's own colours
+ * rather than the amber of an error: nothing is unprotected right now, and one tap fixes it.
  */
 @Composable
 internal fun NotifAccessBanner(onClick: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
-            .background(Color(0xFF3A2A12)).clickable(onClick = onClick).padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    val shape = RoundedCornerShape(20.dp)
+    Column(
+        Modifier.fillMaxWidth().clip(shape)
+            .background(Brush.linearGradient(listOf(Color(0xFF1B2547), Color(0xFF2A1F4D))))
+            .border(1.dp, Color.White.copy(alpha = 0.08f), shape)
+            .clickable(onClick = onClick).padding(16.dp),
     ) {
-        Icon(Icons.Filled.Warning, contentDescription = null, tint = Color(0xFFFFB020),
-            modifier = Modifier.size(26.dp))
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(stringResource(R.string.banner_notif_title),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-            Text(stringResource(R.string.banner_notif_body),
-                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(44.dp).clip(CircleShape).background(AppGradients.accent),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Filled.Notifications, contentDescription = null, tint = Color.White,
+                    modifier = Modifier.size(24.dp))
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.banner_notif_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold, color = Color.White)
+                Text(stringResource(R.string.banner_notif_body),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.78f))
+            }
         }
-        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.padding(top = 14.dp))
+        GradientButton(text = stringResource(R.string.banner_notif_action), onClick = onClick)
     }
 }
 
