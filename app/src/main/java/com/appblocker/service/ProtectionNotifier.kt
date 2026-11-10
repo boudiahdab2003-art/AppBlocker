@@ -43,6 +43,14 @@ object ProtectionNotifier {
      */
     private const val CHANNEL_ID_STALLED = "protection_stalled"
 
+    /**
+     * The keep-alive warning's own channel (invariant 109): Notification access or Autostart is off,
+     * so the next time the phone shuts AppBlocker down nothing will start it again. Its own id for
+     * the reason [CHANNEL_ID_STALLED] has one — a new id is the only way to be sure it is HIGH — and
+     * so he can never quieten it by quietening the routine ones.
+     */
+    private const val CHANNEL_ID_KEEPALIVE = "keepalive_off"
+
     /** How long before the standing alert floats again while blocking is still dead. Short on
      *  purpose: this is the one state where being annoying is the correct behaviour. */
     internal val REFLOAT_MS = TimeUnit.MINUTES.toMillis(5)
@@ -51,6 +59,17 @@ object ProtectionNotifier {
     private const val NOTIF_ID_STALLED = 1002
     private const val NOTIF_ID_PAUSED = 1003
     private const val NOTIF_ID_WAS_OFF = 1004
+    private const val NOTIF_ID_KEEPALIVE = 1005
+
+    /** How long before the keep-alive warning floats again while a switch is still off. His pick on
+     *  10 Nov 2026: "stays + floats every hour". Not the stalled alert's five minutes: blocking IS
+     *  running while this is up, and the cost is a risk, not a loss. */
+    internal val KEEPALIVE_REFLOAT_MS = TimeUnit.HOURS.toMillis(1)
+
+    /** When the keep-alive warning last floated, monotonically, and for which switches. A different
+     *  set (Autostart now off too) floats at once. In memory for the reason [lastStalledFloatRt] is. */
+    @Volatile private var lastKeepAliveFloatRt = 0L
+    @Volatile private var keepAliveShown: String? = null
 
     // Once shown, don't nag again until this much time has passed while still disabled.
     private val MIN_RENOTIFY_MS = TimeUnit.HOURS.toMillis(4)
@@ -105,9 +124,20 @@ object ProtectionNotifier {
             lightColor = ACCENT_COLOR
             enableVibration(true)
         }
+        val keepAlive = NotificationChannel(
+            CHANNEL_ID_KEEPALIVE,
+            w.get(R.string.channel_keepalive_name),
+            NotificationManager.IMPORTANCE_HIGH,
+        ).apply {
+            description = w.get(R.string.channel_keepalive_desc)
+            enableLights(true)
+            lightColor = ACCENT_COLOR
+            enableVibration(true)
+        }
         context.getSystemService(NotificationManager::class.java).apply {
             createNotificationChannel(channel)
             createNotificationChannel(stalled)
+            createNotificationChannel(keepAlive)
         }
     }
 
@@ -264,10 +294,86 @@ object ProtectionNotifier {
      * A clock that has gone backwards answers *float* rather than *stay quiet*: every uncertainty
      * here resolves towards him seeing it.
      */
-    internal fun shouldRefloat(lastAtRt: Long, nowRt: Long, force: Boolean): Boolean {
+    internal fun shouldRefloat(
+        lastAtRt: Long,
+        nowRt: Long,
+        force: Boolean,
+        everyMs: Long = REFLOAT_MS,
+    ): Boolean {
         if (force || lastAtRt <= 0L) return true
         val since = nowRt - lastAtRt
-        return since < 0L || since >= REFLOAT_MS
+        return since < 0L || since >= everyMs
+    }
+
+    /**
+     * **"Notification access / Autostart is off"** — the warning he asked for on 10 Nov 2026
+     * (invariant 109). Ongoing, on its own HIGH channel, floating again every
+     * [KEEPALIVE_REFLOAT_MS] — or at once when the set of switches that are off changes — until
+     * [cancelKeepAliveOff]. Most calls only re-check the clock: the banner bitmap is built when it
+     * is actually going to float.
+     *
+     * The tap goes straight to the switch that is off (both off: the permissions screen, which has
+     * both), and he lands on the permissions screen when he comes back, where the row now reads on.
+     */
+    @SuppressLint("MissingPermission") // guarded by the areNotificationsEnabled() check below.
+    fun notifyKeepAliveOff(context: Context, notifOff: Boolean, autostartOff: Boolean) {
+        if (!notifOff && !autostartOff) return
+        val manager = NotificationManagerCompat.from(context)
+        if (!manager.areNotificationsEnabled()) return
+        val which = keepAliveKey(notifOff, autostartOff)
+        val now = SystemClock.elapsedRealtime()
+        if (which == keepAliveShown &&
+            !shouldRefloat(lastKeepAliveFloatRt, now, force = false, everyMs = KEEPALIVE_REFLOAT_MS)
+        ) return
+        lastKeepAliveFloatRt = now
+        keepAliveShown = which
+        // The channel is otherwise made only when the app's screen opens; a warning posted to a
+        // channel that does not exist yet is dropped without a word.
+        createChannel(context)
+
+        val w = Words.of(context)
+        val title = when {
+            notifOff && autostartOff -> w.get(R.string.notif_keepalive_title_both)
+            notifOff -> w.get(R.string.notif_keepalive_title_notif)
+            else -> w.get(R.string.notif_keepalive_title_autostart)
+        }
+        val notification = build(
+            context,
+            title = title,
+            collapsed = w.get(R.string.notif_keepalive_collapsed),
+            bannerHeadline = w.get(R.string.notif_keepalive_headline),
+            bannerSubtitle = title,
+            action = w.get(R.string.banner_notif_action),
+            requestCode = NOTIF_ID_KEEPALIVE,
+            openPermissions = true,
+            fixSwitch = when {
+                notifOff && autostartOff -> null
+                notifOff -> MainActivity.FIX_NOTIF_ACCESS
+                else -> MainActivity.FIX_AUTOSTART
+            },
+            ongoing = true,
+            channelId = CHANNEL_ID_KEEPALIVE,
+            alertEveryTime = true,
+        )
+        // Cancel, then post: the same reason as notifyStalled — an update to a showing notification
+        // does not float.
+        manager.cancel(NOTIF_ID_KEEPALIVE)
+        manager.notify(NOTIF_ID_KEEPALIVE, notification)
+    }
+
+    internal fun keepAliveKey(notifOff: Boolean, autostartOff: Boolean): String =
+        "notif=$notifOff,autostart=$autostartOff"
+
+    /** Both switches on again: take the warning down, and let the next one float at once. */
+    fun cancelKeepAliveOff(context: Context) {
+        if (keepAliveShown == null && lastKeepAliveFloatRt == 0L) {
+            // Nothing posted by this process — but a previous process may have left it up.
+            runCatching { NotificationManagerCompat.from(context).cancel(NOTIF_ID_KEEPALIVE) }
+            return
+        }
+        lastKeepAliveFloatRt = 0L
+        keepAliveShown = null
+        runCatching { NotificationManagerCompat.from(context).cancel(NOTIF_ID_KEEPALIVE) }
     }
 
     /**
@@ -350,6 +456,9 @@ object ProtectionNotifier {
         /** Land on the repair screen, which explains the failure and opens the one switch that
          *  fixes it. Wins over [openPermissions] when both are set. */
         openRepair: Boolean = false,
+        /** Open this switch's own Settings page on the way in — [MainActivity.FIX_NOTIF_ACCESS] or
+         *  [MainActivity.FIX_AUTOSTART] — for the keep-alive warning (invariant 109). */
+        fixSwitch: String? = null,
         /** Post as an ongoing notification the user cannot swipe away, and don't clear it on tap.
          *  Only for a state that is still true after the tap and that they must not lose track of;
          *  [cancel] is what ends it. */
@@ -364,6 +473,7 @@ object ProtectionNotifier {
         val fixIntent = Intent(context, MainActivity::class.java).apply {
             if (openRepair) putExtra(MainActivity.EXTRA_OPEN_REPAIR, true)
             else if (openPermissions) putExtra(MainActivity.EXTRA_OPEN_PERMISSIONS, true)
+            if (fixSwitch != null) putExtra(MainActivity.EXTRA_FIX_SWITCH, fixSwitch)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
         val pendingIntent = PendingIntent.getActivity(

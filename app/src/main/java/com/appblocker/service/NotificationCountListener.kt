@@ -41,10 +41,15 @@ class NotificationCountListener : NotificationListenerService() {
         runCatching { ProtectionScheduler.ensureScheduled(applicationContext) }
         handler.removeCallbacks(connectCheck)
         handler.postDelayed(connectCheck, CONNECT_CHECK_DELAY_MS)
+        // Access back on: the keep-alive warning comes down within seconds (invariant 109).
+        KeepAliveSwitches.checkSoon(applicationContext)
     }
 
     override fun onListenerDisconnected() {
         handler.removeCallbacks(connectCheck)
+        // ⭐ Access switched off: warn within seconds, while he is still on that page (invariant
+        // 109). Re-read after a moment rather than trusted: a disconnect is also an ordinary rebind.
+        KeepAliveSwitches.checkSoon(applicationContext)
         super.onListenerDisconnected()
     }
 

@@ -96,6 +96,11 @@ listener is the only thing Android restarts after a force stop, and every gap of
 happened with it `false`. It is a per-space switch he has to turn on by hand; from v1.190 the app
 warns while it is off. A long gap with `notifAccess true` would be new and worth a USB look.
 
+**`autostart` (on/off/unknown) sits beside it** (invariant 109, 10 Nov 2026): Xiaomi's Autostart
+app-op, the other half of the restart path. From v1.191 either switch off puts up a standing
+notification that floats every hour. `unknown` on a Xiaomi means HyperOS refused the read — then the
+Autostart half of the warning is silent; say so rather than trusting it.
+
 On the owner's PC `gh` works directly: `gh issue list -R boudiahdab2003-art/appblocker-reports`.
 
 From v1.177 a **`STILL STOPPED for N min`** issue arrives **while** a stoppage lasts (the repair has

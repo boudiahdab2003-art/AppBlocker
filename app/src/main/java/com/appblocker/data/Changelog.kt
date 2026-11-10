@@ -13,6 +13,13 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.191", "Nov 11, 2026", "A loud warning when AppBlocker could not come back", listOf(
+        "**Notification access and Autostart are the two switches that bring AppBlocker back** after your phone shuts it down. Without them it stays off until you open it, and that is where your longest gaps came from.",
+        "**If either one is off, you now get a warning that stays in your notifications and pops up again every hour** until it is back on, as you chose. It cannot be swiped away. Tap it and you land on the right switch.",
+        "**It notices fast.** Turning Notification access off is caught within seconds; Autostart within about two minutes.",
+        "**Nothing is locked.** You can still change both switches yourself; the warning is what keeps you honest about it.",
+        "**The Blocking tab and the permissions page now show Autostart too,** and say when it is already on.",
+    )),
     VersionLog("1.190", "Nov 10, 2026", "No more flashing, and the switch that brings AppBlocker back", listOf(
         "**The block screen no longer flashes.** When AppBlocker closed the news feed, the control panel's Edit screen or its own off-switch page, the block screen appeared and was cut away a fraction of a second later, too fast to read. It now stays for about a second so you can see what was blocked, and it fades in and out instead of being cut.",
         "**The quotes are better, and there are more of them.** 18 new lines, written for the moment of an urge rather than for scrolling: what the urge really is, what to do in the next ten minutes, and that a slip yesterday changes nothing about now. Six are from real authors, checked. The line about a craving passing in ninety seconds is gone, because it was not true; an urge rises, peaks and passes, and that is what it says now. None of them names what you are blocking, so the screen stays private if someone sees it.",

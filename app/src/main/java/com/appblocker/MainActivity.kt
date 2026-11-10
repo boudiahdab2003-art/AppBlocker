@@ -10,6 +10,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -33,6 +34,7 @@ import com.appblocker.service.ProtectionNotifier
 import com.appblocker.service.ProtectionScheduler
 import com.appblocker.ui.AppRoot
 import com.appblocker.ui.LockGate
+import com.appblocker.ui.openAutostart
 import com.appblocker.ui.theme.AppBlockerTheme
 import com.appblocker.ui.theme.LocalThemeController
 import com.appblocker.ui.theme.ThemeController
@@ -65,6 +67,7 @@ class MainActivity : ComponentActivity() {
         requestNotificationPermissionIfNeeded()
         openPermissions = intent.getBooleanExtra(EXTRA_OPEN_PERMISSIONS, false)
         openRepair = intent.getBooleanExtra(EXTRA_OPEN_REPAIR, false)
+        if (savedInstanceState == null) openFixSwitch(intent)
 
         // Warm the installed-apps cache early so the first editor open is fast too.
         lifecycleScope.launch { InstalledAppsRepository.ensureLoaded(applicationContext) }
@@ -214,6 +217,23 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         if (intent.getBooleanExtra(EXTRA_OPEN_PERMISSIONS, false)) openPermissions = true
         if (intent.getBooleanExtra(EXTRA_OPEN_REPAIR, false)) openRepair = true
+        openFixSwitch(intent)
+    }
+
+    /**
+     * The keep-alive warning's tap (invariant 109): straight on to the switch that is off, with the
+     * permissions screen waiting underneath for when he comes back. Taken off the intent once used,
+     * so a recreate does not send him there a second time.
+     */
+    private fun openFixSwitch(intent: Intent) {
+        when (intent.getStringExtra(EXTRA_FIX_SWITCH)) {
+            FIX_NOTIF_ACCESS -> runCatching {
+                startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+            }
+            FIX_AUTOSTART -> openAutostart(this)
+            else -> return
+        }
+        intent.removeExtra(EXTRA_FIX_SWITCH)
     }
 
     private fun requestNotificationPermissionIfNeeded() {
@@ -235,5 +255,10 @@ class MainActivity : ComponentActivity() {
          *  reusing the permissions one: a stalled service is granted every permission it needs,
          *  so the permissions page has nothing on it to fix and reads as "everything is fine". */
         const val EXTRA_OPEN_REPAIR = "open_repair"
+
+        /** Which keep-alive switch to open on the way in — [FIX_NOTIF_ACCESS] or [FIX_AUTOSTART]. */
+        const val EXTRA_FIX_SWITCH = "fix_switch"
+        const val FIX_NOTIF_ACCESS = "notif_access"
+        const val FIX_AUTOSTART = "autostart"
     }
 }

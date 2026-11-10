@@ -65,6 +65,7 @@ import com.appblocker.data.Schedule
 import com.appblocker.data.ScheduleType
 import com.appblocker.data.SettingsStore
 import com.appblocker.data.UpdatePause
+import com.appblocker.service.KeepAliveSwitches
 import com.appblocker.service.ProtectionState
 import com.appblocker.service.ProtectionWatchdog
 import com.appblocker.ui.theme.AppGradients
@@ -149,9 +150,28 @@ fun BlockingScreen(
             }
             // Only once setup is done (the setup banner speaks first), and only while it is off:
             // the switch that lets Android restart a force-stopped AppBlocker (invariant 105).
+            // Autostart beside it since invariant 109 — read, not assumed: UNKNOWN (not Xiaomi, or
+            // the read refused) never shows the card.
             val notifPerm = perms.firstOrNull { it.key == "notifications" }
-            if (essentialMissing == 0 && notifPerm != null && !notifPerm.granted) {
-                NotifAccessBanner(notifPerm.onFix)
+            val autoPerm = perms.firstOrNull { it.key == "autostart" }
+            val notifOff = notifPerm != null && !notifPerm.granted
+            val autostartOff = remember(perms) {
+                KeepAliveSwitches.autostart(context) == KeepAliveSwitches.State.OFF
+            }
+            if (essentialMissing == 0 && (notifOff || autostartOff)) {
+                when {
+                    notifOff && autostartOff -> NotifAccessBanner(
+                        onOpenPermissions,
+                        title = stringResource(R.string.banner_both_title),
+                        body = stringResource(R.string.banner_both_body),
+                    )
+                    notifOff -> NotifAccessBanner(notifPerm!!.onFix)
+                    else -> NotifAccessBanner(
+                        autoPerm?.onFix ?: onOpenPermissions,
+                        title = stringResource(R.string.banner_autostart_title),
+                        body = stringResource(R.string.banner_autostart_body),
+                    )
+                }
                 Spacer(Modifier.padding(top = 16.dp))
             }
             // After an app update, blocking waits here for the user's go.

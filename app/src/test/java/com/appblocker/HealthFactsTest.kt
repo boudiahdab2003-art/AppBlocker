@@ -441,6 +441,16 @@ class HealthFactsTest {
         assertTrue(problems(healthy.copy(notifAccess = null)).isEmpty())
     }
 
+    /** Invariant 109: Xiaomi Autostart, the other half of the restart path — the same rule. */
+    @Test
+    fun `autostart that is off is a fault, and on or unknown says nothing`() {
+        val off = HealthFacts.verdicts(healthy.copy(autostart = false)).first { it.title == "Autostart is off" }
+        assertEquals(false, off.good)
+        assertTrue(problems(healthy.copy(autostart = false)).any { "Autostart" in it })
+        assertTrue(HealthFacts.verdicts(healthy.copy(autostart = true)).none { "Autostart" in it.title })
+        assertTrue(problems(healthy.copy(autostart = null)).isEmpty())
+    }
+
     /**
      * The deferral count is the current run, not a lifetime total: one is a report written by a
      * process seconds old, and it headed seven profile reports in a row as a fault.

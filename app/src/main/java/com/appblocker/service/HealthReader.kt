@@ -115,6 +115,11 @@ object HealthReader {
                 androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(ctx)
                     .contains(ctx.packageName)
             }.getOrNull(),
+            autostart = when (KeepAliveSwitches.autostart(ctx)) {
+                KeepAliveSwitches.State.ON -> true
+                KeepAliveSwitches.State.OFF -> false
+                KeepAliveSwitches.State.UNKNOWN -> null
+            },
             probeFailStreak = safe(0) { ServiceHealth.probeFailStreak(ctx) },
             bindDeferrals = safe(0) { SettingsStore.bindDeferrals(ctx) },
             bootHeardMs = safe(BootAudit.NEVER) { BootAudit.lagMsForThisBoot(ctx) },

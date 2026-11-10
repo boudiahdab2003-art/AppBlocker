@@ -643,6 +643,17 @@
     <string name="banner_notif_title">فعّل الوصول إلى الإشعارات</string>
     <string name="banner_notif_body">إذا أوقف هاتفك AppBlocker فهذا ما يعيد تشغيله. بدونه يبقى الحظر متوقفًا حتى تفتح التطبيق.</string>
     <string name="banner_notif_action">فعّله</string>
+    <string name="banner_autostart_title">فعّل التشغيل التلقائي</string>
+    <string name="banner_autostart_body">إذا أوقف هاتفك AppBlocker فلن تسمح Xiaomi بتشغيله مجددًا بدون هذا. يبقى الحظر متوقفًا حتى تفتح التطبيق.</string>
+    <string name="banner_both_title">فعّل الوصول إلى الإشعارات والتشغيل التلقائي</string>
+    <string name="banner_both_body">إذا أوقف هاتفك AppBlocker فهذان ما يعيدان تشغيله. بدونهما يبقى الحظر متوقفًا حتى تفتح التطبيق.</string>
+    <string name="channel_keepalive_name">AppBlocker لا يستطيع إعادة تشغيل نفسه</string>
+    <string name="channel_keepalive_desc">التحذير بأن الوصول إلى الإشعارات أو التشغيل التلقائي متوقف. أبقِ صوته مرتفعًا.</string>
+    <string name="notif_keepalive_title_notif">الوصول إلى الإشعارات متوقف</string>
+    <string name="notif_keepalive_title_autostart">التشغيل التلقائي متوقف</string>
+    <string name="notif_keepalive_title_both">الوصول إلى الإشعارات والتشغيل التلقائي متوقفان</string>
+    <string name="notif_keepalive_collapsed">إذا أوقف هاتفك AppBlocker فلن يعيد تشغيله شيء. اضغط لتفعيله.</string>
+    <string name="notif_keepalive_headline">AppBlocker لا يستطيع العودة</string>
     <string name="banner_stopped_title">الحظر توقّف</string>
     <string name="banner_stopped_body">هاتفك أغلقه — اضغط لإعادة تشغيله</string>
     <string name="banner_update_title">يتوفّر تحديث — الإصدار %1$s</string>

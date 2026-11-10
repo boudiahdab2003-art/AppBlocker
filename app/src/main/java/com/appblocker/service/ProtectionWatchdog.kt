@@ -288,6 +288,10 @@ object ProtectionWatchdog {
             ProtectionState.OK -> {
                 SettingsStore.clearProtectionOffSince(context)
                 ProtectionNotifier.cancel(context)
+                // ⭐ Blocking is running — so now is when to say that the next shutdown would be the
+                // last until he opens the app (invariant 109). Only here: beside a "blocking has
+                // stopped" alert, this one would be noise.
+                KeepAliveSwitches.check(context)
             }
             // ⭐ **Switched back on, silently** (invariant 84). His choice on 28 Sep 2026, after the
             // switch was found off on a Saturday morning and nobody could say how: "Turn back on,

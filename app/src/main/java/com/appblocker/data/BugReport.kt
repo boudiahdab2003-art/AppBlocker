@@ -930,6 +930,10 @@ data class BugReport(
             // true/false — Notification access, the path Android restarts AppBlocker by after a
             // force stop (invariant 76).
             "notifAccess",
+            // on/off/unknown — Xiaomi Autostart (app-op 10008), the other half of what restarts a
+            // force-stopped AppBlocker; `unknown` off Xiaomi or where the read is refused
+            // (invariant 109).
+            "autostart",
             // How many times Android called onInterrupt on the watcher. Our own integer.
             "interrupts",
             // Foreground minutes since the watcher last saw anything, or `?` when usage access

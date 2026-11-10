@@ -114,7 +114,7 @@ private fun open(ctx: Context, action: String, withPackage: Boolean = false) {
  * actually needs. The app details page is a real destination on every phone, which is why it is
  * the last resort rather than a toast saying it didn't work.
  */
-private fun openAutostart(ctx: Context) {
+internal fun openAutostart(ctx: Context) {
     for ((pkg, cls) in DeviceVendor.advice().deepLinks) {
         val intent = Intent().apply {
             component = ComponentName(pkg, cls)
@@ -275,13 +275,16 @@ fun rememberPermissions(): List<Perm> {
                     }.isFailure) open(ctx, Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
             },
             // Label and wording come from the phone's own brand: the destination differs per OEM,
-            // and this card used to address Xiaomi owners on every phone. `granted` stays false
-            // because there is no API to read any of these settings — the card is advice, not a
-            // permission, and always offers its button.
+            // and this card used to address Xiaomi owners on every phone. No public API reads any of
+            // these settings; on Xiaomi the app-op can be read (invariant 109) and a switch that
+            // reads ON shows as done. Anywhere it cannot be read the card stays advice and always
+            // offers its button.
             DeviceVendor.advice().let { vendor ->
                 Perm(
                     "autostart", vendor.keepAliveLabel, vendor.keepAliveDesc,
-                    granted = false, essential = false,
+                    granted = com.appblocker.service.KeepAliveSwitches.autostart(ctx) ==
+                        com.appblocker.service.KeepAliveSwitches.State.ON,
+                    essential = false,
                 ) { openAutostart(ctx) }
             },
             Perm(

@@ -70,7 +70,12 @@ internal fun SetupBanner(missing: Int, onClick: () -> Unit) {
  * rather than the amber of an error: nothing is unprotected right now, and one tap fixes it.
  */
 @Composable
-internal fun NotifAccessBanner(onClick: () -> Unit) {
+internal fun NotifAccessBanner(
+    onClick: () -> Unit,
+    // Invariant 109: the same card names Autostart too, or both, whichever is off.
+    title: String = stringResource(R.string.banner_notif_title),
+    body: String = stringResource(R.string.banner_notif_body),
+) {
     val shape = RoundedCornerShape(20.dp)
     Column(
         Modifier.fillMaxWidth().clip(shape)
@@ -88,10 +93,10 @@ internal fun NotifAccessBanner(onClick: () -> Unit) {
             }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.banner_notif_title),
+                Text(title,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold, color = Color.White)
-                Text(stringResource(R.string.banner_notif_body),
+                Text(body,
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.White.copy(alpha = 0.78f))
             }

@@ -2312,6 +2312,27 @@ number.
     untouched ("Leave it complete", same day). `WebContentFilterTest.namesInsultsAndMemesAreNotPackWords`.
     ⚠️ Not changed, though the same argument reaches it: `سكسي`/`سكسية` ("sexy"). He did not name it.
 
+109. **Notification access and Autostart off = a standing warning that floats every hour.** 10 Nov
+    2026, his words: "notification access and autostart were very important without them the app
+    just stops easily so we need more warning if they are off". Proven on his phone 8 Nov: these two
+    are the only things that start a force-stopped AppBlocker again. His picks: "Stays + floats every
+    hour", "Warn only" (no cover on either settings page — both list every app).
+    `service/KeepAliveSwitches.kt` reads both: Notification access from the enabled listeners,
+    Autostart from Xiaomi's app-op `10008` via the hidden `AppOpsManager.checkOpNoThrow(int,int,String)`
+    for `Process.myUid()` (per space). Mode 0 = ON; 1/2/3 = OFF; no answer or not Xiaomi = UNKNOWN,
+    and **UNKNOWN never warns**. Checked from the watchdog's OK verdict only (never beside a "blocking
+    has stopped" alert), the watcher's minute heartbeat every 2 min (Autostart has no broadcast), and
+    the listener's own connect/disconnect 3 s later (seconds after he flips Notification access).
+    `ProtectionNotifier.notifyKeepAliveOff`: own HIGH channel `keepalive_off`, id 1005, ongoing,
+    alertEveryTime, cancel-then-post, `KEEPALIVE_REFLOAT_MS` = 1 h or at once when the set of
+    switches off changes; makes its channel itself (otherwise only `MainActivity` does). Tap →
+    `MainActivity.EXTRA_FIX_SWITCH` opens that switch's page over the permissions screen. Blocking
+    tab card names whichever is off; the Autostart permission row reads ON when the app-op does.
+    Report key `autostart` on/off/unknown + fact "Autostart is off". Emulator `appblocker_a16`:
+    posted by the first heartbeat; access on → gone in 2 s; off → back in 3 s.
+    ⚠️ The Autostart read is NOT yet seen on HyperOS: his first report must say `autostart on` (not
+    `unknown`) in both spaces. `KeepAliveSwitchesTest` + `HealthFactsTest`; 9 mutations red.
+
 ## Device quirks these invariants exist for
 
 - Gesture-nav Home on HyperOS often emits **no accessibility event at all**, so the foreground

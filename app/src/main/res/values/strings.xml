@@ -574,6 +574,17 @@ Never sent: your blocked words, the sites you visit, which apps you block, or an
     <string name="banner_notif_title">Turn on Notification access</string>
     <string name="banner_notif_body">If your phone shuts AppBlocker down, this is what starts it again. Without it, blocking stays off until you open the app.</string>
     <string name="banner_notif_action">Turn it on</string>
+    <string name="banner_autostart_title">Turn on Autostart</string>
+    <string name="banner_autostart_body">If your phone shuts AppBlocker down, Xiaomi will not let it start again without this. Blocking then stays off until you open the app.</string>
+    <string name="banner_both_title">Turn on Notification access and Autostart</string>
+    <string name="banner_both_body">If your phone shuts AppBlocker down, these two are what start it again. Without them, blocking stays off until you open the app.</string>
+    <string name="channel_keepalive_name">AppBlocker can\'t restart itself</string>
+    <string name="channel_keepalive_desc">The warning that Notification access or Autostart is off. Keep this one loud.</string>
+    <string name="notif_keepalive_title_notif">Notification access is off</string>
+    <string name="notif_keepalive_title_autostart">Autostart is off</string>
+    <string name="notif_keepalive_title_both">Notification access and Autostart are off</string>
+    <string name="notif_keepalive_collapsed">If your phone shuts AppBlocker down, nothing will start it again. Tap to turn it on.</string>
+    <string name="notif_keepalive_headline">APPBLOCKER CAN\'T RESTART</string>
     <string name="banner_stopped_title">Blocking has stopped</string>
     <string name="banner_stopped_body">Your phone shut it down — tap to switch it back on</string>
     <string name="banner_update_title">Update available — v%1$s</string>

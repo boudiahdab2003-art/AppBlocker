@@ -635,6 +635,9 @@ class BlockerAccessibilityService : AccessibilityService() {
                 // minute, screen on or off: the seconds-apart pushes of invariant 85 were taken out
                 // again at his request (10 Oct 2026), for battery.
                 WatcherDeadMan.arm(applicationContext)
+                // Notification access and Autostart, every two minutes (invariant 109). Autostart
+                // has no change broadcast, and this loop is the one timer the phone cannot throttle.
+                KeepAliveSwitches.checkFromHeartbeat(applicationContext)
                 val silence = stopwatchNow() - lastEventReceivedAt
                 // The end of the window the probe streak measures has to be wired to something,
                 // or a streak of four sits at four for the life of the process and the next quiet

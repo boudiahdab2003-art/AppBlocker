@@ -152,6 +152,8 @@ object HealthFacts {
         /** Notification access — the path Android restarts AppBlocker by after a force stop
          *  (invariant 76). Null when it could not be read. */
         val notifAccess: Boolean? = null,
+        /** Xiaomi Autostart (invariant 109): true on, false off, null where it cannot be read. */
+        val autostart: Boolean? = null,
         val probeFailStreak: Int,
         val bindDeferrals: Int,
         /** ⚠️ **How long after the last restart the app's own start-up ran**, or
@@ -399,6 +401,7 @@ object HealthFacts {
         selfEnableFact(r)?.let { add(it) }
         selfToggleFact(r)?.let { add(it) }
         notificationAccessFact(r)?.let { add(it) }
+        autostartFact(r)?.let { add(it) }
         schedulerFact(r)?.let { add(it) }
         speedFact(r)?.let { add(it) }
         silenceFacts(r).forEach { add(it) }
@@ -768,6 +771,24 @@ object HealthFacts {
                     "cleaner). With it off, AppBlocker stays off until it is opened by hand — every " +
                     "long gap on this phone happened that way. Switch it on in Settings ▸ " +
                     "Notification access, in each space.",
+                good = false,
+            )
+        }
+
+    /**
+     * Xiaomi Autostart, named only when it reads off — a fault, for the reason Notification access
+     * is one (invariant 109). Proven on his phone on 8 Nov 2026: with it off, HyperOS refuses the
+     * start Notification access asks for, and a force-stopped AppBlocker stays down.
+     */
+    private fun autostartFact(r: Reading): Fact? =
+        if (r.autostart != false) {
+            null
+        } else {
+            Fact(
+                "Autostart is off",
+                "On Xiaomi phones it is what lets AppBlocker be started again after the phone has " +
+                    "shut it down completely. With it off, AppBlocker stays off until it is opened " +
+                    "by hand. Switch it on in Security ▸ Autostart, in each space.",
                 good = false,
             )
         }
