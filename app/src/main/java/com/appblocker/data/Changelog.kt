@@ -13,7 +13,7 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
-    VersionLog("1.190", "Nov 9, 2026", "No more flashing, and the switch that brings AppBlocker back", listOf(
+    VersionLog("1.190", "Nov 10, 2026", "No more flashing, and the switch that brings AppBlocker back", listOf(
         "**The block screen no longer flashes.** When AppBlocker closed the news feed, the control panel's Edit screen or its own off-switch page, the block screen appeared and was cut away a fraction of a second later, too fast to read. It now stays for about a second so you can see what was blocked, and it fades in and out instead of being cut.",
         "**The quotes are better, and there are more of them.** 18 new lines, written for the moment of an urge rather than for scrolling: what the urge really is, what to do in the next ten minutes, and that a slip yesterday changes nothing about now. Six are from real authors, checked. The line about a craving passing in ninety seconds is gone, because it was not true; an urge rises, peaks and passes, and that is what it says now. None of them names what you are blocking, so the screen stays private if someone sees it.",
         "**No more repeats.** Every quote is shown once before any comes round again.",
