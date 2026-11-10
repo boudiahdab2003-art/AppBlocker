@@ -31,7 +31,7 @@ class NewAppRulesTest {
     @Test
     fun `nothing in the app can add to the safe list`() {
         val src = listOf("src/main/java/com/appblocker", "app/src/main/java/com/appblocker")
-            .map(java.io.File::new).first { it.exists() }
+            .map { java.io.File(it) }.first { it.exists() }
         val writers = src.walkTopDown().filter { it.extension == "kt" && it.name != "SafeApps.kt" }
             .filter { "SafeApps.PACKAGES" in it.readText() }.map { it.name }.toList()
         assertTrue("SafeApps.PACKAGES is read outside its own file: $writers", writers.isEmpty())
