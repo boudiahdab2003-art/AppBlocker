@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.190
+- The block screen no longer flashes: it fades in and out and stays a moment when it closes the news feed or the control panel editor. Quotes are new, never repeat, and fit at any font size. A warning shows while Notification access is off, the switch that brings AppBlocker back after your phone shuts it down. Safe tools like translators are no longer blocked when newly installed. Blocked words that were names or everyday slang no longer block on an ordinary day.
+
 ## v1.189
 - Low battery locks the phone until you charge
 
