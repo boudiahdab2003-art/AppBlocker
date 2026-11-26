@@ -625,4 +625,21 @@ object UsageTracker {
         }
         return map
     }
+
+    @Volatile private var pastWeekCache: Pair<Int, Map<String, Int>>? = null
+
+    /**
+     * Per-app minutes for the **past seven full days** (1–7 days ago, today not included) — what
+     * "this week" means on the smart suggestions (invariant 113). Not [lastWeekAppMinutes], which is
+     * the week before that: reading it there described a fortnight-old habit as this week's.
+     * Whole days in the past, so memoized per calendar day; an empty answer is not cached.
+     */
+    fun pastWeekAppMinutes(context: Context): Map<String, Int> {
+        val today = todayStamp()
+        pastWeekCache?.let { (stamp, map) -> if (stamp == today) return map }
+        // End a millisecond before midnight: a daily bucket starting AT the end is still returned.
+        val map = appMinutesInRange(context, startOfDayAgo(7), startOfDayAgo(0) - 1)
+        if (map.isNotEmpty()) pastWeekCache = today to map
+        return map
+    }
 }

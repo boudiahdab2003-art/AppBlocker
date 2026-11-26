@@ -13,6 +13,14 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.196", "Nov 26, 2026", "Smart suggestions, fixed and improved", listOf(
+        "**\"This week\" now really means this week.** The suggestions were reading the week before, so a daily limit could be based on an old habit. They now use the past seven days.",
+        "**Your messaging app is never suggested,** just like your phone, keyboard and home screen.",
+        "**A tap is always saved.** Leaving the tab straight after tapping could, rarely, show ✅ without the lock being saved. Now it is saved whatever you do next, and if saving ever fails the ✅ is taken back.",
+        "**No more buttons for apps you can't open anyway.** An app that has already used up its daily limit today is skipped.",
+        "**Setting a limit you have already gone past says so:** ✅ Done for today, because the app is blocked until tomorrow.",
+        "**The suggestions keep up while the app is open.** They refresh every few minutes, so the 🌙 night lock appears at 10 pm without leaving the app.",
+    )),
     VersionLog("1.195", "Nov 26, 2026", "Smart suggestions: one tap for the apps you use most", listOf(
         "**New at the top of the Blocking tab: ✨ Suggestions for you.** Up to three buttons, each with the app's own logo, for the apps you have used most today and this week.",
         "**Each button picks what fits, as you chose.** 🔒 locks the app for an hour. Late at night, 🌙 locks it until 6:00 in the morning. For an app you use a lot every day, ⏱ sets a daily limit of about half your usual time.",

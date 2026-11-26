@@ -2388,6 +2388,11 @@ number.
     `ItemLocks.lockFor` (lengthen-never-shorten), a limit already there is only ever lowered. No confirm,
     no Undo, nothing on the card removes anything; `SmartSuggestionsTest` reads the card's code for it.
     Emulator a16: card renders with logos; tapping 🔒 1 h on Clock stored a 60-min APP lock.
+    - 1.196 review (same night): "this week" read `lastWeekAppMinutes` (7-13 days ago) → new
+      `UsageTracker.pastWeekAppMinutes` (1-7 days ago); the default SMS app was not excluded; the tap
+      rode `rememberCoroutineScope` (cancelled if the tab closed → ✅ with no lock) → `applyScope`,
+      ✅ removed on failure; apps whose limit is used up today are skipped (`limits` map); "✅ Done for
+      today" when the new limit is already passed; refresh every 5 min while STARTED.
 
 ## Device quirks these invariants exist for
 

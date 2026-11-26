@@ -90,6 +90,7 @@
     <string name="suggest_btn_limit">⏱ %1$d min/day</string>
     <string name="suggest_done_locked">✅ Till %1$s</string>
     <string name="suggest_done_limit">✅ %1$d min/day</string>
+    <string name="suggest_done_limit_now">✅ Done for today</string>
     <string name="suggest_limit_schedule_name">Daily limit · %1$s</string>
     <string name="block_instagram_title">Instagram is blocked</string>
     <string name="block_instagram_message">Instagram stays blocked on this phone, every day. You chose this, and there is no switch to undo it.</string>

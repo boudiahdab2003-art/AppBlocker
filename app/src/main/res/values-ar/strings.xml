@@ -110,6 +110,7 @@
     <string name="suggest_btn_limit">⏱ %1$d د/يوم</string>
     <string name="suggest_done_locked">✅ حتى %1$s</string>
     <string name="suggest_done_limit">✅ %1$d د/يوم</string>
+    <string name="suggest_done_limit_now">✅ انتهى لليوم</string>
     <string name="suggest_limit_schedule_name">حد يومي · %1$s</string>
     <string name="block_instagram_title">إنستغرام محظور</string>
     <string name="block_instagram_message">يبقى إنستغرام محظورًا على هذا الهاتف كل يوم. أنت اخترت هذا، ولا يوجد مفتاح لإلغائه.</string>

@@ -27,13 +27,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -47,12 +49,16 @@ import com.appblocker.data.ScheduleType
 import com.appblocker.data.SmartSuggestions
 import com.appblocker.data.SmartSuggestions.Action
 import com.appblocker.service.InstagramBan
+import com.appblocker.service.LowBatteryLock
 import com.appblocker.service.UsageTracker
 import com.appblocker.service.currentImePackage
 import com.appblocker.service.findEssentialPackages
 import com.appblocker.ui.theme.AppShapes
 import com.appblocker.ui.theme.softGlow
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -70,14 +76,22 @@ import java.util.Calendar
 @Composable
 fun SuggestionsCard(resumeTick: Int) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
     val apps by InstalledAppsRepository.apps.collectAsState()
     var suggestions by remember { mutableStateOf<List<SmartSuggestions.Suggestion>>(emptyList()) }
     // What was tapped this visit, so the button says what it did instead of vanishing.
     val done = remember { mutableStateMapOf<String, String>() }
 
     LaunchedEffect(resumeTick, apps.size) {
-        suggestions = withContext(Dispatchers.IO) { gather(context) }
+        // Again every few minutes while the tab stays open: the night lock starts at 22:00 and
+        // today's minutes keep growing, neither of which brings a resume. Only while the app is on
+        // screen — a stopped activity keeps its composition, and this must not poll from behind.
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                suggestions = withContext(Dispatchers.IO) { gather(context) }
+                delay(REFRESH_MS)
+            }
+        }
     }
     if (suggestions.isEmpty()) return
     val byPkg = apps.associateBy { it.packageName }
@@ -104,7 +118,14 @@ fun SuggestionsCard(resumeTick: Int) {
                     onTap = {
                         if (s.pkg in done) return@SuggestionRow
                         done[s.pkg] = doneFor(context, s)
-                        scope.launch { apply(context, s, app.label) }
+                        // Not the screen's scope: leaving the tab the moment after the tap disposes
+                        // this card and cancels that scope, and the button would have said ✅ for a
+                        // lock that was never saved. If saving fails, the ✅ is taken back.
+                        val pkg = s.pkg
+                        applyScope.launch {
+                            val ok = runCatching { apply(context.applicationContext, s, app.label) }.isSuccess
+                            if (!ok) withContext(Dispatchers.Main) { done.remove(pkg) }
+                        }
                     },
                 )
             }
@@ -162,6 +183,12 @@ private fun SuggestionRow(
     }
 }
 
+/** How often the card re-reads usage while it stays on screen. */
+private const val REFRESH_MS = 5 * 60_000L
+
+/** Outlives the screen, so a tap is always saved; see the tap above. */
+private val applyScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
 private fun minutesText(m: Int): String = fmtHoursMinutes(m * 60_000L)
 
 private fun reasonFor(c: Context, s: SmartSuggestions.Suggestion): String = when (s.action) {
@@ -182,7 +209,12 @@ private fun doneFor(c: Context, s: SmartSuggestions.Suggestion): String = when (
         R.string.suggest_done_locked,
         clockLabel(System.currentTimeMillis() + SmartSuggestions.LOCK_HOUR_MS),
     )
-    Action.DAILY_LIMIT -> c.getString(R.string.suggest_done_limit, s.limitMinutes)
+    // Already past the new limit today: it blocks from now until tomorrow, so say that.
+    Action.DAILY_LIMIT -> if (s.minutesToday >= s.limitMinutes) {
+        c.getString(R.string.suggest_done_limit_now)
+    } else {
+        c.getString(R.string.suggest_done_limit, s.limitMinutes)
+    }
 }
 
 private fun morningLabel(): String = "%02d:00".format(SmartSuggestions.MORNING_HOUR)
@@ -200,21 +232,29 @@ private suspend fun gather(context: Context): List<SmartSuggestions.Suggestion> 
     val rules = db.appRuleDao().getAll().first()
     val schedules = db.scheduleDao().getAll().first()
     val blocked = rules.filter { it.isBlocked }.map { it.packageName }.toSet()
-    val limited = schedules.filter { it.enabled && it.type == ScheduleType.USAGE_LIMIT }
-        .flatMap { it.packages }.toSet()
+    // The strictest daily limit each app already has (schedules; AppRule limits are blocked rules
+    // and excluded below with the rest of the block list).
+    val limits = HashMap<String, Int>()
+    for (sch in schedules) {
+        if (!sch.enabled || sch.type != ScheduleType.USAGE_LIMIT) continue
+        for (p in sch.packages) limits[p] = minOf(limits[p] ?: Int.MAX_VALUE, sch.limitMinutes)
+    }
     val locked = ItemLocks.locked(context, ItemLocks.Kind.APP)
-    val essential = findEssentialPackages(context) + listOfNotNull(currentImePackage(context)) +
+    // The phone, messages, keyboard and home screen are never suggested — the same set the low-
+    // battery lock keeps open, so nothing here can lock him out of a call or a text.
+    val essential = findEssentialPackages(context) +
+        listOfNotNull(currentImePackage(context), LowBatteryLock.smsPackage(context)) +
         launcherPackages(context) + context.packageName
     val now = Calendar.getInstance()
     SmartSuggestions.suggest(
         today = UsageTracker.minutesByPackageToday(context),
-        weekTotal = UsageTracker.lastWeekAppMinutes(context),
+        weekTotal = UsageTracker.pastWeekAppMinutes(context),
         hour = now.get(Calendar.HOUR_OF_DAY),
         eligible = { p ->
             p in launchable && p !in essential && p !in blocked && p !in locked &&
                 !InstagramBan.isBannedApp(p)
         },
-        limited = limited,
+        limits = limits,
     )
 }.getOrDefault(emptyList())
 

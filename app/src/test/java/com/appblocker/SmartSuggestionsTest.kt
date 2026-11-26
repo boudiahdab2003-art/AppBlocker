@@ -41,9 +41,18 @@ class SmartSuggestionsTest {
     @Test
     fun `an app already limited is offered a lock instead`() {
         val s = SmartSuggestions.suggest(
-            mapOf("chrome" to 50), mapOf("chrome" to 7 * 100), hour = 10, eligible = all, limited = setOf("chrome"),
+            mapOf("chrome" to 50), mapOf("chrome" to 7 * 100), hour = 10, eligible = all, limits = mapOf("chrome" to 60),
         )
         assertEquals(Action.LOCK_HOUR, s.single().action)
+    }
+
+    /** Bug found 26 Nov: an app already blocked for the day by its limit still got a button. */
+    @Test
+    fun `an app that has used up its limit today is not suggested`() {
+        val s = SmartSuggestions.suggest(
+            mapOf("chrome" to 70, "yt" to 20), emptyMap(), hour = 10, eligible = all, limits = mapOf("chrome" to 60),
+        )
+        assertEquals(listOf("yt"), s.map { it.pkg })
     }
 
     @Test
@@ -61,6 +70,23 @@ class SmartSuggestionsTest {
         assertEquals(4 * 60 * 60_000L + 30 * 60_000L, SmartSuggestions.msUntilMorning(1, 30))
         assertEquals(24 * 60 * 60_000L, SmartSuggestions.msUntilMorning(6, 0))
     }
+
+    /** Bugs found 26 Nov in the first version of the card. */
+    @Test
+    fun `the card reads this week, spares messages, and saves a tap even if the tab closes`() {
+        val card = cardCode()
+        assertTrue("\"this week\" must be the past seven days", "UsageTracker.pastWeekAppMinutes(" in card)
+        assertFalse("lastWeekAppMinutes is the week BEFORE this one", "lastWeekAppMinutes" in card)
+        assertTrue("the messaging app must never be suggested", "LowBatteryLock.smsPackage(context)" in card)
+        assertFalse("a tap must not ride the screen's scope", "rememberCoroutineScope" in card)
+        assertTrue("applyScope.launch" in card)
+    }
+
+    private fun cardCode(): String =
+        listOf(File("src/main/java/com/appblocker/ui/SuggestionsCard.kt"), File("app/src/main/java/com/appblocker/ui/SuggestionsCard.kt"))
+            .first { it.isFile }.readLines()
+            .filterNot { val t = it.trim(); t.startsWith("*") || t.startsWith("//") || t.startsWith("/**") }
+            .joinToString(" ")
 
     /** No undo (his pick): the card only ever adds locks and lowers limits. */
     @Test

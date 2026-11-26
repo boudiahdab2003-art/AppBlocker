@@ -46,23 +46,28 @@ object SmartSuggestions {
 
     /**
      * @param today minutes per package today.
-     * @param weekTotal minutes per package over the last seven days.
+     * @param weekTotal minutes per package over the past seven full days
+     *   (`UsageTracker.pastWeekAppMinutes` — not the week before it).
      * @param hour the hour of the day now, 0–23.
      * @param eligible may this package be suggested at all (launchable, not essential, not
      *   AppBlocker, not already blocked or locked).
-     * @param limited packages that already have a daily limit.
+     * @param limits the strictest daily limit each package already has, in minutes. An app that
+     *   has used its limit up today is blocked until tomorrow already, so it is not suggested at
+     *   all — a button on an app that cannot be opened is a wasted button. One with a limit left
+     *   is never offered a second limit.
      */
     fun suggest(
         today: Map<String, Int>,
         weekTotal: Map<String, Int>,
         hour: Int,
         eligible: (String) -> Boolean,
-        limited: Set<String> = emptySet(),
+        limits: Map<String, Int> = emptyMap(),
     ): List<Suggestion> {
         val night = isNight(hour)
         return (today.keys + weekTotal.keys)
             .asSequence()
             .filter(eligible)
+            .filter { pkg -> limits[pkg]?.let { (today[pkg] ?: 0) < it } ?: true }
             .map { pkg ->
                 val t = today[pkg] ?: 0
                 val avg = (weekTotal[pkg] ?: 0) / 7
@@ -73,7 +78,7 @@ object SmartSuggestions {
             .mapNotNull { (pkg, t, avg) ->
                 when {
                     night && t >= MIN_TODAY -> Suggestion(pkg, Action.LOCK_TONIGHT, t, avg)
-                    avg >= LIMIT_FROM_WEEK_AVG && pkg !in limited ->
+                    avg >= LIMIT_FROM_WEEK_AVG && pkg !in limits ->
                         Suggestion(pkg, Action.DAILY_LIMIT, t, avg, limitFor(avg))
                     t >= MIN_TODAY -> Suggestion(pkg, Action.LOCK_HOUR, t, avg)
                     else -> null
