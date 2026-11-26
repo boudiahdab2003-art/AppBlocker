@@ -21,13 +21,21 @@ object TypedChallenge {
     /**
      * How many words to type, and how long there is to type them.
      *
-     * The pair is what matters, not either number: 40 words in 180 seconds is about four and a
+     * The pair is what matters, not either number: 80 words in 360 seconds is about four and a
      * half seconds a word, which steady phone typing reaches with room to fix a typo, while
      * leaving no time to wander off mid-way. Changing one without the other is how this becomes
      * either pointless or impossible, so a test asserts the ratio stays in a sane band.
+     *
+     * 26 Nov 2026, his pick after uninstalling the app on a bad evening: twice as long (was 40 words
+     * in 3 minutes), and **exact** — capitals and punctuation must match ([EXACT]).
      */
-    const val WORDS = 40
-    const val ATTEMPT_SECONDS = 180
+    const val WORDS = 80
+    const val ATTEMPT_SECONDS = 360
+
+    /** Share of words that start with a capital, and that are followed by a comma / a full stop. */
+    internal const val CAPITAL_SHARE = 0.35
+    internal const val COMMA_SHARE = 0.15
+    internal const val STOP_SHARE = 0.15
 
     /**
      * The largest text an insert may grow by in one edit before it is treated as a paste.
@@ -42,7 +50,7 @@ object TypedChallenge {
     const val MAX_INSERT = 16
 
     /**
-     * Long everyday words on purpose: transcribing forty of these takes real effort, which is the
+     * Long everyday words on purpose: transcribing eighty of these takes real effort, which is the
      * point of the gate. Nothing here is obscure — the difficulty is the volume and the clock, not
      * spelling something you have never seen.
      */
@@ -63,15 +71,34 @@ object TypedChallenge {
 
     /** A fresh paragraph. Random every time — one that repeated could be learnt, and a gate you
      *  can type from memory is a gate that has stopped costing anything. */
-    fun newPhrase(): String = (1..WORDS).joinToString(" ") { CHALLENGE_WORDS.random() }
+    fun newPhrase(random: kotlin.random.Random = kotlin.random.Random.Default): String =
+        (1..WORDS).joinToString(" ") { i ->
+            val base = CHALLENGE_WORDS.random(random)
+            // Capitals and punctuation at random places, not where a sentence would put them, so the
+            // shape can't be typed on autopilot either. The keyboard's own auto-capitals are off in
+            // the gate (KeyboardCapitalization.None), so a lowercase word after a full stop stays so.
+            val word = if (random.nextDouble() < CAPITAL_SHARE) base.replaceFirstChar { it.uppercase() } else base
+            val r = random.nextDouble()
+            when {
+                i == WORDS -> "$word."
+                r < COMMA_SHARE -> "$word,"
+                r < COMMA_SHARE + STOP_SHARE -> "$word."
+                else -> word
+            }
+        }
 
     /**
-     * Forgiving compare: a capital letter or a stray double space must not silently keep the
-     * button locked. Typing forty words against a clock is the friction; transcription perfection
-     * is not, and a gate that refuses a correct answer for an invisible reason just reads as broken.
+     * **Exact** compare: every capital, comma and full stop must match (his pick, 26 Nov 2026 —
+     * this used to forgive capitals). Only whitespace is forgiven — a stray double space or a line
+     * break is invisible on the screen, and a gate that refuses a correct-looking answer for an
+     * invisible reason just reads as broken. Every other difference is shown by [progress] the
+     * moment it is typed, so nothing that keeps the button locked is ever hidden.
      */
     fun matches(phrase: String, input: String): Boolean =
-        input.trim().replace(WHITESPACE, " ").equals(phrase, ignoreCase = true)
+        input.trim().replace(WHITESPACE, " ") == phrase
+
+    /** Capitals and punctuation count (see [matches]). A test pins it. */
+    const val EXACT = true
 
     /**
      * Whether an edit inserted more than a person can type in one go — i.e. a paste.
@@ -124,8 +151,8 @@ object TypedChallenge {
                 // Equal counts however it was left. Without this the fortieth word would sit at
                 // 39/40 while `matches` already said yes, and the two would contradict each other
                 // on the one screen showing both.
-                word.equals(want, ignoreCase = true) -> correct++
-                i == typed.lastIndex && !committed && want.startsWith(word, ignoreCase = true) ->
+                word == want -> correct++
+                i == typed.lastIndex && !committed && want.startsWith(word) ->
                     return Progress(correct, false) // still being typed
                 else -> return Progress(correct, true)
             }

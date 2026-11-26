@@ -28,13 +28,14 @@ import android.content.Context
  */
 object UninstallUnlock {
 
-    /** His "longer than 24 hrs": two days. */
-    const val UNLOCK_DELAY_MS = 48 * 60 * 60_000L
+    /** His "longer than 24 hrs" (48 h), then "Very strong" the same evening: fourteen days. Always
+     *  longer than [OffSwitchGuard]'s wait, or the guard would be the cheaper road to an uninstall. */
+    const val UNLOCK_DELAY_MS = 14 * 24 * 60 * 60_000L
 
     /** After a two-day wait a short window is a trap; half an hour is enough to notice and act. */
     const val UNLOCK_WINDOW_MS = 30 * 60_000L
 
-    const val DELAY_LABEL = "48 hours"
+    const val DELAY_LABEL = "14 days"
     const val WINDOW_LABEL = "30 minutes"
 
     /** Only [OffSwitchGuard.Phase.OPEN] stands the uninstall arms down. No switch, no other way. */

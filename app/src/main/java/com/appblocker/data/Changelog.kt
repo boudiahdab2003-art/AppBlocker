@@ -13,6 +13,12 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.193", "Nov 26, 2026", "A much harder paragraph, and much longer waits", listOf(
+        "**The paragraph is twice as long and must be exact.** 80 words instead of 40, in 6 minutes. Capitals, commas and full stops now have to match exactly, and they are scattered at random, so it cannot be typed on autopilot. A mistake is marked the moment you make it.",
+        "**Every wait is much longer, as you chose (Very strong).** Lowering the off-switch guard: 48 hours instead of 2. Switching the adult filter off: 7 days instead of 24 hours. Switching Prevent uninstall off: 14 days. An app with a blocked word in it stays locked for 6 hours instead of 30 minutes.",
+        "**After a wait, the switch only works for 30 minutes.** The adult filter used to stay switchable for a whole extra day.",
+        "**Waits you already started keep their old length.** Cancel and start again and you get the new one.",
+    )),
     VersionLog("1.192", "Nov 26, 2026", "AppBlocker can no longer be uninstalled on a bad evening", listOf(
         "**Turning Prevent uninstall off now takes two days.** You still type the paragraph, but it no longer switches anything off: it starts a 48-hour wait, and only then does the switch work, for half an hour. You chose longer than a day. Changed your mind? Cancel is one tap, and turning it back on always is.",
         "**The home screen's own Uninstall popup is now covered** when it is about AppBlocker. That popup is how AppBlocker got removed, and nothing guarded it before. Other apps still uninstall normally.",

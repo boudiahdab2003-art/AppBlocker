@@ -21,11 +21,32 @@ class TypedChallengeTest {
     // --- the comparison: forgiving about form, strict about content ---
 
     @Test
-    fun `capitals and stray spaces are forgiven`() {
-        // Typing forty words against a clock is the friction. Transcription perfection is not, and
-        // a gate that refuses a correct answer for an invisible reason just reads as broken.
-        assertTrue(TypedChallenge.matches("candlestick riverbank", "Candlestick  riverbank "))
+    fun `stray spaces are forgiven, because they are invisible`() {
+        assertTrue(TypedChallenge.matches("Candlestick, riverbank.", "Candlestick,  riverbank. "))
         assertTrue(TypedChallenge.matches("candlestick riverbank", "\ncandlestick\nriverbank"))
+    }
+
+    /** 26 Nov 2026, his pick "80 words, exact": a capital or a comma typed wrong keeps it locked. */
+    @Test
+    fun `capitals and punctuation must be exact`() {
+        assertTrue(TypedChallenge.EXACT)
+        assertFalse(TypedChallenge.matches("Candlestick riverbank", "candlestick riverbank"))
+        assertFalse(TypedChallenge.matches("candlestick, riverbank.", "candlestick riverbank."))
+        assertFalse(TypedChallenge.matches("candlestick. riverbank.", "candlestick, riverbank."))
+        assertTrue(TypedChallenge.progress("Candlestick riverbank", "candlestick ").wrong)
+        assertTrue(TypedChallenge.progress("candlestick, riverbank", "candlestick ").wrong)
+        assertFalse(TypedChallenge.progress("candlestick, riverbank", "candlestick").wrong) // comma to come
+    }
+
+    @Test
+    fun `the paragraph is eighty words in six minutes, with capitals and punctuation in it`() {
+        assertEquals(80, TypedChallenge.WORDS)
+        assertEquals(360, TypedChallenge.ATTEMPT_SECONDS)
+        val words = TypedChallenge.newPhrase(kotlin.random.Random(7)).split(" ")
+        assertTrue("no capitals", words.count { it[0].isUpperCase() } >= 10)
+        assertTrue("no commas", words.count { it.endsWith(",") } >= 4)
+        assertTrue("no full stops", words.count { it.endsWith(".") } >= 4)
+        assertTrue("it must end with a full stop", words.last().endsWith("."))
     }
 
     @Test
@@ -72,7 +93,10 @@ class TypedChallengeTest {
     fun `the paragraph is the agreed length and uses only known words`() {
         val words = TypedChallenge.newPhrase().split(" ")
         assertEquals(TypedChallenge.WORDS, words.size)
-        assertEquals(emptyList<String>(), words.filterNot { it in TypedChallenge.CHALLENGE_WORDS })
+        assertEquals(
+            emptyList<String>(),
+            words.map { it.trimEnd(',', '.').lowercase() }.filterNot { it in TypedChallenge.CHALLENGE_WORDS },
+        )
     }
 
     // --- where the typist is, which is what the screen draws ---
@@ -112,10 +136,10 @@ class TypedChallengeTest {
     }
 
     @Test
-    fun `capitals and stray spaces are forgiven here too`() {
+    fun `stray spaces are forgiven here too`() {
         // Same forgiveness as `matches`, or the counter would disagree with the button on the one
         // screen showing both.
-        val p = TypedChallenge.progress("candlestick riverbank", "  Candlestick   riverbank")
+        val p = TypedChallenge.progress("Candlestick riverbank", "  Candlestick   riverbank")
         assertEquals(2, p.correct)
         assertFalse(p.wrong)
     }

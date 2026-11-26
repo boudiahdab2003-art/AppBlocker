@@ -962,8 +962,8 @@
     <string name="words_skip_strict">الوضع الصارم مفعّل: يمكنك إزالة تطبيقات من هذه القائمة، لكن لا يمكنك إضافتها.</string>
     <string name="gate_adult_title">إيقاف حماية البالغين</string>
     <string name="gate_adult_blurb">هذا يخفض حارسك. اكتب الفقرة أدناه — لا يمكنك لصقها — قبل أن ينفد الوقت.</string>
-    <string name="gate_adult_detail">إن فاتك الوقت حصلت على فقرة جديدة ومؤقّت جديد، مهما تكرّر ذلك. وحتى بعد أن تكتبها، تبقى الحزمة مُفعَّلة 24 ساعة أخرى؛ وبعدها فقط تستطيع إيقاف المفتاح.</string>
-    <string name="gate_adult_confirm">ابدأ انتظار الـ24 ساعة</string>
+    <string name="gate_adult_detail">إن فاتك الوقت حصلت على فقرة جديدة ومؤقّت جديد، مهما تكرّر ذلك. وحتى بعد أن تكتبها، تبقى الحزمة مُفعَّلة %1$s أخرى؛ وبعدها فقط تستطيع إيقاف المفتاح، ولمدة %2$s فقط.</string>
+    <string name="gate_adult_confirm">ابدأ انتظار %1$s</string>
 
     <string name="expand">توسيع</string>
     <string name="collapse">طيّ</string>

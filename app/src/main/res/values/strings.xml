@@ -895,8 +895,8 @@ Never sent: your blocked words, the sites you visit, which apps you block, or an
     <string name="words_skip_strict">Strict Mode is on: you can take apps off this list, but not add them.</string>
     <string name="gate_adult_title">Turn off adult protection</string>
     <string name="gate_adult_blurb">This lowers your guard. Type the paragraph below — you can\'t paste it — before the clock runs out.</string>
-    <string name="gate_adult_detail">Miss the clock and you get a fresh paragraph and a fresh clock, as many times as it takes. Even once you\'ve typed it, the pack stays on for another 24 hours; only after that can you flip the switch off.</string>
-    <string name="gate_adult_confirm">Start the 24-hour wait</string>
+    <string name="gate_adult_detail">Miss the clock and you get a fresh paragraph and a fresh clock, as many times as it takes. Even once you\'ve typed it, the pack stays on for another %1$s; only after that can you flip the switch off, and only for %2$s.</string>
+    <string name="gate_adult_confirm">Start the %1$s wait</string>
 
     <string name="expand">Expand</string>
     <string name="collapse">Collapse</string>

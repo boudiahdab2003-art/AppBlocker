@@ -4141,7 +4141,8 @@ class BlockerAccessibilityService : AccessibilityService() {
         private const val WEB_SCAN_DEBOUNCE_MS = 250L
         private const val WEB_SCAN_MAX_WAIT_MS = 700L
         // How long an app stays fully locked after a blocked word was caught in it.
-        private const val KEYWORD_LOCKOUT_MS = 30 * 60_000L
+        // 26 Nov 2026, "Very strong": six hours (was 30 minutes).
+        private const val KEYWORD_LOCKOUT_MS = 6 * 60 * 60_000L
 
         // Backoff for re-collecting the rule flow after it throws — grows per attempt to a cap
         // so a persistently failing database can't spin.

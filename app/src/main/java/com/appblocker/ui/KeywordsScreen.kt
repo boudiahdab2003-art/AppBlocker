@@ -289,8 +289,10 @@ fun KeywordsScreen(
             FrictionGate(
                 title = context.getString(R.string.gate_adult_title),
                 blurb = context.getString(R.string.gate_adult_blurb),
-                detail = context.getString(R.string.gate_adult_detail),
-                confirmLabel = context.getString(R.string.gate_adult_confirm),
+                detail = context.getString(
+                    R.string.gate_adult_detail, OFF_DELAY_LABEL, OFF_WINDOW_LABEL,
+                ),
+                confirmLabel = context.getString(R.string.gate_adult_confirm, OFF_DELAY_LABEL),
                 onDismiss = { showDisableGate = false },
                 onConfirm = {
                     // Passing the gate does NOT turn the pack off — it starts the 24-hour
@@ -307,5 +309,9 @@ fun KeywordsScreen(
 
 /** Cooling-off after passing the gate before the pack can actually be switched off, and the
  *  window to do it in afterwards — miss it and the request expires, gate and all. */
-private const val OFF_DELAY_MS = 24 * 60 * 60_000L
-private const val OFF_WINDOW_MS = 24 * 60 * 60_000L
+// 26 Nov 2026, "Very strong": seven days (was 24 h), and the switch then works for half an hour —
+// it used to stay switchable for a whole further day once served.
+private const val OFF_DELAY_MS = 7 * 24 * 60 * 60_000L
+private const val OFF_WINDOW_MS = 30 * 60_000L
+private const val OFF_DELAY_LABEL = "7 days"
+private const val OFF_WINDOW_LABEL = "30 minutes"

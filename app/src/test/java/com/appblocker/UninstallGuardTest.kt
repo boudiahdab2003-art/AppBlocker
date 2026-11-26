@@ -25,13 +25,13 @@ class UninstallGuardTest {
     // ---- the wait --------------------------------------------------------------------------------
 
     @Test
-    fun `switching prevent uninstall off waits longer than a day, then opens briefly`() {
+    fun `switching prevent uninstall off waits fourteen days, then opens briefly`() {
         assertTrue(UninstallUnlock.UNLOCK_DELAY_MS > 24 * 60 * 60_000L)
-        assertEquals(48 * 60 * 60_000L, UninstallUnlock.UNLOCK_DELAY_MS)
+        assertEquals(14 * 24 * 60 * 60_000L, UninstallUnlock.UNLOCK_DELAY_MS)
         assertEquals(30 * 60_000L, UninstallUnlock.UNLOCK_WINDOW_MS)
         // Longer than the off-switch guard's, or the guard would be the cheaper way to the same place.
         assertTrue(UninstallUnlock.UNLOCK_DELAY_MS > OffSwitchGuard.UNLOCK_DELAY_MS)
-        assertEquals("48 hours", UninstallUnlock.DELAY_LABEL)
+        assertEquals("14 days", UninstallUnlock.DELAY_LABEL)
     }
 
     @Test

@@ -82,8 +82,9 @@ data class GateCopy(
 const val GATE_PARAGRAPH_TAG = "gate-paragraph"
 
 /**
- * The app's one "are you really sure, and is it really you" gate: type a fresh random 40-word
- * paragraph (pasting disabled) **before a three-minute clock runs out**. Run out of time and the
+ * The app's one "are you really sure, and is it really you" gate: type a fresh random 80-word
+ * paragraph, capitals and punctuation exact (pasting disabled), **before a six-minute clock runs
+ * out** (`TypedChallenge.WORDS` / `ATTEMPT_SECONDS`). Run out of time and the
  * paragraph is replaced with a new one and the clock starts again — as many times as it takes.
  *
  * The clock used to be a *wait*: the button unlocked after two minutes however fast you typed, so

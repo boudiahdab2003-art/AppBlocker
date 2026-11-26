@@ -38,14 +38,16 @@ object OffSwitchGuard {
      * price is the whole gate and another two hours. The wait is the friction; the window only
      * has to be long enough to notice and act.
      */
-    const val UNLOCK_DELAY_MS = 2 * 60 * 60_000L
-    const val UNLOCK_WINDOW_MS = 15 * 60_000L
+    // 26 Nov 2026, his pick "Very strong" (was 2 h + 15 min): two days, then half an hour. He knows
+    // an emergency trip to battery settings or App info now costs two days too, and chose it.
+    const val UNLOCK_DELAY_MS = 48 * 60 * 60_000L
+    const val UNLOCK_WINDOW_MS = 30 * 60_000L
 
     /** Plain-language names for the two durations. The block screen, the Profile row and the gate
      *  all read them from here rather than formatting the millis themselves, so the wording can't
      *  drift apart — and "120 minutes" is not how anybody says two hours. */
-    const val DELAY_LABEL = "2 hours"
-    const val WINDOW_LABEL = "15 minutes"
+    const val DELAY_LABEL = "48 hours"
+    const val WINDOW_LABEL = "30 minutes"
 
     /** What the owner is currently looking at, and what the watcher acts on. */
     enum class Phase {

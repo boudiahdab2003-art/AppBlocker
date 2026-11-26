@@ -2359,6 +2359,15 @@ number.
     - ⚠️ The HyperOS popup's real shape is NOT measured — verify on his phone (Second Space, before
       switching admin on: long-press ▸ Uninstall ⇒ cover).
 
+111. **Harder paragraph, "Very strong" waits.** 26 Nov 2026, the same evening, his words: "make the
+    paragraphs much harder to write and all the guards much longer". His picks: "80 words, exact"
+    (`TypedChallenge`: 80 words / 360 s, ~35 % capitalised, ~15 % comma, ~15 % full stop, last word ends
+    with "."; `matches`/`progress` are case- and punctuation-exact, only whitespace forgiven; the gate's
+    keyboard has auto-capitals OFF so a lowercase word after "." survives) and "Very strong": off-switch
+    guard 48 h, adult filter off 7 days, uninstall 14 days, keyword lockout 6 h, every window 30 min
+    (the adult pack's was 24 h). Pinned by `GuardWaitsTest` + `TypedChallengeTest`. A request already
+    running keeps its stored deadline; only new requests get the new length.
+
 ## Device quirks these invariants exist for
 
 - Gesture-nav Home on HyperOS often emits **no accessibility event at all**, so the foreground
