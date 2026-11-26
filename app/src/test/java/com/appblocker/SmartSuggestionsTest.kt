@@ -1,5 +1,8 @@
 package com.appblocker
 
+import com.appblocker.data.AiSuggestions
+import com.appblocker.data.AppCategory
+import com.appblocker.data.CoachActions
 import com.appblocker.data.SmartSuggestions
 import com.appblocker.data.SmartSuggestions.Action
 import org.junit.Assert.assertEquals
@@ -76,7 +79,9 @@ class SmartSuggestionsTest {
     fun `the card reads this week, spares messages, and saves a tap even if the tab closes`() {
         val card = cardCode()
         assertTrue("\"this week\" must be the past seven days", "UsageTracker.pastWeekAppMinutes(" in card)
-        assertFalse("lastWeekAppMinutes is the week BEFORE this one", "lastWeekAppMinutes" in card)
+        // lastWeekAppMinutes is the week BEFORE this one — used only for the trend (v2).
+        assertFalse("val week = UsageTracker.lastWeekAppMinutes" in card)
+        assertTrue("val weekBefore = UsageTracker.lastWeekAppMinutes(context)" in card)
         assertTrue("the messaging app must never be suggested", "LowBatteryLock.smsPackage(context)" in card)
         assertFalse("a tap must not ride the screen's scope", "rememberCoroutineScope" in card)
         assertTrue("applyScope.launch" in card)
@@ -98,12 +103,101 @@ class SmartSuggestionsTest {
         for (bad in listOf("delete(", "unlock", "Undo", "suggest_undo", "AlertDialog", "isBlocked = false", "enabled = false")) {
             assertFalse("the suggestions card must not contain '$bad'", bad in card)
         }
-        // The taps go through the shared strengthen-only actions (invariant 114 shares them with
-        // the coach's buttons), where a lock only lengthens and a limit only ever goes down.
-        assertTrue("QuickActions.lockApp(" in card)
-        assertTrue("QuickActions.dailyLimit(" in card)
+        // The taps go through the coach's own strengthen-only actions (invariants 114/115), where a
+        // lock only lengthens and a limit only ever goes down.
+        assertTrue("CoachActions.apply(" in card)
         assertEquals(30, com.appblocker.data.QuickActions.lowerLimit(45, 30))
         assertEquals(30, com.appblocker.data.QuickActions.lowerLimit(30, 45))
         assertEquals(45, com.appblocker.data.QuickActions.lowerLimit(null, 45))
+    }
+
+    // ---- v2 (invariant 115): "very very dumb" --------------------------------------------------------
+
+    @Test
+    fun `only distracting apps are ever suggested, never a messenger`() {
+        assertTrue(SmartSuggestions.distracting("com.google.android.youtube", AppCategory.ENTERTAINMENT, false))
+        assertTrue(SmartSuggestions.distracting("com.zhiliaoapp.musically", AppCategory.SOCIAL, false))
+        assertTrue(SmartSuggestions.distracting("com.some.game", AppCategory.GAMES, false))
+        assertTrue("a browser counts", SmartSuggestions.distracting("com.android.chrome", AppCategory.PRODUCTIVITY, true))
+        // Filed under Social media by the category map, but needed.
+        assertFalse(SmartSuggestions.distracting("com.whatsapp", AppCategory.SOCIAL, false))
+        assertFalse(SmartSuggestions.distracting("org.telegram.messenger", AppCategory.SOCIAL, false))
+        assertFalse(SmartSuggestions.distracting("com.google.android.apps.maps", AppCategory.TRAVEL, false))
+        assertFalse(SmartSuggestions.distracting("com.bank.app", AppCategory.OTHER, false))
+        assertFalse(SmartSuggestions.distracting("com.school.app", AppCategory.EDUCATION, false))
+    }
+
+    @Test
+    fun `not always one hour`() {
+        assertEquals(60, SmartSuggestions.lockMinutesFor(20))
+        assertEquals(120, SmartSuggestions.lockMinutesFor(75))
+        assertEquals(180, SmartSuggestions.lockMinutesFor(200))
+        val s = SmartSuggestions.suggest(mapOf("yt" to 200, "tt" to 70), emptyMap(), hour = 14, eligible = all)
+        assertEquals(listOf(180, 120), s.map { it.lockMinutes })
+    }
+
+    @Test
+    fun `browsers are only offered at night`() {
+        val today = mapOf("chrome" to 90, "yt" to 30)
+        assertEquals(listOf("yt"), SmartSuggestions.suggest(today, emptyMap(), 14, all, browsers = setOf("chrome")).map { it.pkg })
+        assertEquals(listOf("chrome", "yt"), SmartSuggestions.suggest(today, emptyMap(), 23, all, browsers = setOf("chrome")).map { it.pkg })
+    }
+
+    @Test
+    fun `the coach's picks are checked before they are shown`() {
+        val apps = listOf(
+            CoachActions.App("com.google.android.youtube", "YouTube"),
+            CoachActions.App("com.whatsapp", "WhatsApp"),
+        )
+        val raw = """{"suggestions":[
+            {"emoji":"🌙","title":"Close YouTube for tonight","reason":"2h 40m today, most after 22:00","action":{"type":"lock_until_morning","app":"YouTube"}},
+            {"emoji":"🔒","title":"Pause WhatsApp","reason":"x","action":{"type":"lock_app","app":"WhatsApp","minutes":60}},
+            {"emoji":"🛡","title":"Strict until midnight","reason":"Two relapses after 23:00 this month","action":{"type":"strict","minutes":90}},
+            {"emoji":"🔓","title":"Unlock everything","reason":"x","action":{"type":"unlock_all"}}
+        ]}"""
+        val picks = AiSuggestions.parse(raw, apps) { it == "com.google.android.youtube" }
+        assertEquals(listOf(CoachActions.Type.LOCK_TONIGHT, CoachActions.Type.STRICT), picks.map { it.action.type })
+        assertEquals("Close YouTube for tonight", picks[0].title)
+        assertTrue(AiSuggestions.parse("not json", apps) { true }.isEmpty())
+    }
+
+    /** Measured 26 Nov 2026: the model offered "15 min/day" for an app averaging 0 minutes. */
+    @Test
+    fun `a limit needs a real average to cut, and must cut it`() {
+        fun cand(avg: Int) = AiSuggestions.Candidate("p", "X", 10, avg, null, 1, false)
+        val limit30 = CoachActions.Action(CoachActions.Type.DAILY_LIMIT, "p", "X", 30)
+        assertFalse(AiSuggestions.worthIt(limit30, cand(0)))
+        assertFalse(AiSuggestions.worthIt(limit30, cand(29)))
+        assertFalse("a limit above the average cuts nothing", AiSuggestions.worthIt(limit30, cand(30)))
+        assertTrue(AiSuggestions.worthIt(limit30, cand(90)))
+        assertTrue(AiSuggestions.worthIt(CoachActions.Action(CoachActions.Type.STRICT, minutes = 60), null))
+    }
+
+    /** Measured 26 Nov 2026: at 14:10 the model offered to lock Chrome until 06:00. */
+    @Test
+    fun `no browser lock and no lock until morning in the middle of the day`() {
+        val chrome = CoachActions.Action(CoachActions.Type.LOCK_APP, "chrome", "Chrome", 120)
+        val tonight = CoachActions.Action(CoachActions.Type.LOCK_TONIGHT, "yt", "YouTube")
+        val tiktok = CoachActions.Action(CoachActions.Type.LOCK_APP, "tt", "TikTok", 180)
+        val browsers = setOf("chrome")
+        assertFalse(AiSuggestions.suitableNow(chrome, 14, browsers))
+        assertFalse(AiSuggestions.suitableNow(tonight, 14, browsers))
+        assertTrue(AiSuggestions.suitableNow(tiktok, 14, browsers))
+        assertTrue(AiSuggestions.suitableNow(chrome, 21, browsers))
+        assertTrue(AiSuggestions.suitableNow(tonight, 23, browsers))
+        assertTrue(AiSuggestions.suitableNow(tonight, 1, browsers))
+    }
+
+    @Test
+    fun `the coach is told to target social media and to be specific`() {
+        val prompt = AiSuggestions.prompt(
+            name = "the user", now = 1_800_000_000_000L,
+            candidates = listOf(AiSuggestions.Candidate("p", "TikTok", 95, 70, 40, 31, false)),
+            recovery = "", profile = "", setup = "",
+        )
+        assertTrue("social media" in prompt)
+        assertTrue("never three \"lock for 1 hour\"" in prompt)
+        assertTrue("TikTok: 95 min today, 70 min/day this week, up 40% on last week, opened 31x today" in prompt)
+        assertTrue("only use the apps listed under CANDIDATES" in prompt)
     }
 }

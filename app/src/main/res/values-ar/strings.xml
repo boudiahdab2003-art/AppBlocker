@@ -119,6 +119,9 @@
     <string name="coach_action_done">✅ %1$s</string>
     <string name="block_talk_to_coach">💬 تحدّث مع المدرّب</string>
     <string name="suggest_title">✨ اقتراحات لك</string>
+    <string name="suggest_by_coach">اختارها مدرّبك</string>
+    <string name="suggest_btn_lock">🔒 %1$s</string>
+    <string name="suggest_btn_strict">🛡 الوضع الصارم %1$s</string>
     <string name="suggest_reason_today">%1$s اليوم</string>
     <string name="suggest_reason_week">حوالي %1$s يوميًا هذا الأسبوع</string>
     <string name="suggest_reason_night">%1$s اليوم، والوقت متأخر</string>

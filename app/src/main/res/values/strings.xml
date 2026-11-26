@@ -99,6 +99,9 @@
     <string name="coach_action_done">✅ %1$s</string>
     <string name="block_talk_to_coach">💬 Talk to coach</string>
     <string name="suggest_title">✨ Suggestions for you</string>
+    <string name="suggest_by_coach">Picked by your coach</string>
+    <string name="suggest_btn_lock">🔒 %1$s</string>
+    <string name="suggest_btn_strict">🛡 Strict %1$s</string>
     <string name="suggest_reason_today">%1$s today</string>
     <string name="suggest_reason_week">About %1$s a day this week</string>
     <string name="suggest_reason_night">%1$s today, and it is late</string>

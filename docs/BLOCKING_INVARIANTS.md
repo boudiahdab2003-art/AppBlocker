@@ -2421,6 +2421,22 @@ number.
       (app name or a category; never a word or site).
     - Reports carry `coachModel` (the model that last answered).
 
+115. **Suggestions v2: the coach picks them, only distracting apps.** 27 Nov 2026, his verdict on v1: "very very dumb"
+    — suggested apps he needs, always "1 h", missed the real problem, "doesn't target social media and not creative".
+    His picks: "AI picks them" + "Only distracting apps".
+    - `data/AiSuggestions.kt`: candidates = distracting apps only (`SmartSuggestions.distracting`: SOCIAL /
+      ENTERTAINMENT / GAMES or a real browser, minus `MESSENGERS` — WhatsApp, Telegram, Signal, Messenger,
+      Messages, Gmail…), with today's minutes, the 7-day average, the trend vs the week before and today's opens;
+      plus the recovery lines, the coach profile and the setup snapshot. The coach returns 1-3
+      {emoji, title, reason, action}; each action is a `CoachActions` action (strengthen-only), re-checked against
+      the candidates, and filtered by `suitableNow` (no browser lock / lock until morning before 20:00 — measured:
+      the model offered Chrome until 06:00 at 14:10) and `worthIt` (a limit needs a 30+ min/day average and must cut
+      it — measured: "15 min/day" for an app averaging 0). Cached 2 h; at most one request per 30 min.
+    - The rules stay as the stand-in (offline, first open, quota): distracting only, browsers only at night, lock
+      length `lockMinutesFor` = 1/2/3 h by today's use.
+    - Card: "Picked by your coach" under the title; the button sits under the reason (the reason was cut at three
+      lines beside it). Emulator: two coach picks shown with full reasons; the senseless limit filtered out.
+
 ## Device quirks these invariants exist for
 
 - Gesture-nav Home on HyperOS often emits **no accessibility event at all**, so the foreground

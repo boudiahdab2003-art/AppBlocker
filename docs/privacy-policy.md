@@ -47,13 +47,13 @@ Before AppBlocker ever sends you to Android's Accessibility settings, it shows a
 
 ## The AI Coach (optional)
 
-The AI Coach only sends anything when it is used — when you open the Insights tab, where its tips are, or write to it. Requests go through the developer's relay server, which adds the Gemini key and passes them to Google; the relay stores nothing. When the coach is used:
+The AI Coach only sends anything when it is used — when you open the Insights tab, where its tips are, the Blocking tab, where it picks your suggestions (at most every couple of hours), or write to it. Requests go through the developer's relay server, which adds the Gemini key and passes them to Google; the relay stores nothing. When the coach is used:
 
 - The app sends **aggregate statistics** (screen-time totals, app names with usage minutes, blocked-attempt and unlock counts), your **blocking setup**, your **goals**, the **personal facts you've shared with the coach**, your **counter** (days clean, longest streak, relapse dates and times, and when you pressed "I have an urge"), and your **chat messages** to Google's Gemini API to generate tips and replies. Your journal is never sent.
 - When you open the coach from a block screen, it is told what was blocked only as an app's name or a plain category ("a website") — never a blocked word or a web address.
 - This data is processed by Google under the [Google API Terms of Service](https://developers.google.com/terms) and the [Gemini API terms](https://ai.google.dev/gemini-api/terms).
 - The coach never receives your screen content, browsing pages, PIN, or precise location.
-- You can see everything the coach remembers about you (person icon in the chat) and erase it at any time ("Forget everything"). If you never open the Insights tab or the coach, nothing is sent.
+- You can see everything the coach remembers about you (person icon in the chat) and erase it at any time ("Forget everything"). Suggestions only ever cover apps for social media, video, games and browsing.
 - The coach's buttons (lock an app, a daily limit, Strict Mode) only change blocking on your phone when you tap them, and only ever make it stronger.
 
 ## Update check (direct-download build only)

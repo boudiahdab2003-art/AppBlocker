@@ -29,6 +29,8 @@ object SmartSuggestions {
         val weekAvgMinutes: Int,
         /** Minutes a day, for [Action.DAILY_LIMIT]; 0 otherwise. */
         val limitMinutes: Int = 0,
+        /** How long [Action.LOCK_HOUR] locks for — sized to the use, not always an hour. */
+        val lockMinutes: Int = 60,
     )
 
     const val MAX = 3
@@ -43,6 +45,39 @@ object SmartSuggestions {
 
     /** Half the daily average, down to a quarter hour, kept within 15–60 minutes. */
     fun limitFor(weekAvgMinutes: Int): Int = ((weekAvgMinutes / 2) / 15 * 15).coerceIn(15, 60)
+
+    /**
+     * How long a lock should be for an app used [todayMinutes] today — v2 (invariant 115): the
+     * complaint was "always the same 1 h". A three-hour binge gets three hours; a short one, one.
+     */
+    fun lockMinutesFor(todayMinutes: Int): Int = when {
+        todayMinutes >= 120 -> 180
+        todayMinutes >= 60 -> 120
+        else -> 60
+    }
+
+    /**
+     * Messengers people need, which the category map files under Social media with the feeds — v2's
+     * first fix: "it suggests apps I need". Never suggested, whatever their minutes.
+     */
+    val MESSENGERS = setOf(
+        "com.whatsapp", "com.whatsapp.w4b", "org.telegram.messenger", "org.thunderdog.challegram",
+        "org.thoughtcrime.securesms", "com.facebook.orca", "com.google.android.apps.messaging",
+        "com.samsung.android.messaging", "com.android.mms", "com.viber.voip", "com.discord",
+        "com.tencent.mm", "jp.naver.line.android", "com.skype.raider", "com.microsoft.teams",
+        "com.Slack", "com.google.android.gm", "com.google.android.apps.dynamite",
+    )
+
+    /** The categories worth a suggestion: the feeds, the videos and the games. */
+    val DISTRACTING = setOf(AppCategory.SOCIAL, AppCategory.ENTERTAINMENT, AppCategory.GAMES)
+
+    /**
+     * **Only distracting apps** (his pick, 26 Nov 2026): social media, video and games — and
+     * browsers, which are how a late night becomes a relapse. Never a messenger, maps, banking,
+     * school, work or a tool. Pure.
+     */
+    fun distracting(pkg: String, category: AppCategory, isBrowser: Boolean): Boolean =
+        pkg !in MESSENGERS && (isBrowser || category in DISTRACTING)
 
     /**
      * @param today minutes per package today.
@@ -62,11 +97,14 @@ object SmartSuggestions {
         hour: Int,
         eligible: (String) -> Boolean,
         limits: Map<String, Int> = emptyMap(),
+        /** Browsers are offered only at night: by day they are often study and work. */
+        browsers: Set<String> = emptySet(),
     ): List<Suggestion> {
         val night = isNight(hour)
         return (today.keys + weekTotal.keys)
             .asSequence()
             .filter(eligible)
+            .filter { pkg -> night || pkg !in browsers }
             .filter { pkg -> limits[pkg]?.let { (today[pkg] ?: 0) < it } ?: true }
             .map { pkg ->
                 val t = today[pkg] ?: 0
@@ -80,7 +118,7 @@ object SmartSuggestions {
                     night && t >= MIN_TODAY -> Suggestion(pkg, Action.LOCK_TONIGHT, t, avg)
                     avg >= LIMIT_FROM_WEEK_AVG && pkg !in limits ->
                         Suggestion(pkg, Action.DAILY_LIMIT, t, avg, limitFor(avg))
-                    t >= MIN_TODAY -> Suggestion(pkg, Action.LOCK_HOUR, t, avg)
+                    t >= MIN_TODAY -> Suggestion(pkg, Action.LOCK_HOUR, t, avg, lockMinutes = lockMinutesFor(t))
                     else -> null
                 }
             }

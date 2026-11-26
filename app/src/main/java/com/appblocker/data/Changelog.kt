@@ -13,6 +13,13 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.198", "Nov 27, 2026", "Suggestions that actually understand you", listOf(
+        "**Your coach now picks the suggestions,** as you chose. It looks at your week, your streak, the hours that are risky for you and what you told it, and writes up to three buttons, each with a real reason — like \"You logged an urge at 23:11 — lock Chrome until morning\". They refresh every couple of hours.",
+        "**Only the apps that pull you in:** social media, videos, games and browsers. Never WhatsApp, Telegram, Messages, Maps, banking, school or work apps.",
+        "**Not always \"1 h\" any more.** Every suggestion is sized to the use — a three-hour binge gets a three-hour lock, a nightly pattern gets a lock until morning, and several problem apps at once get Strict Mode.",
+        "**Sensible by rule, not just by luck:** no browser lock and no lock until morning in the middle of the day, and no daily limit for an app you hardly use.",
+        "**The reason now gets the full width,** with the button underneath, so you can read the whole of it.",
+    )),
     VersionLog("1.197", "Nov 26, 2026", "A much better AI Coach", listOf(
         "**🆘 I have an urge.** A big button in the coach. Tap it and a calm card appears at once — breathe, put the phone down, the urge will pass — with a button for an hour of Strict Mode. Then the coach writes you a short, personal plan for the next ten minutes. No numbers, no lecture.",
         "**The coach's advice now comes with buttons,** as you chose: 🔒 lock an app, 🌙 lock it until morning, ⏱ a daily limit, 🛡 Strict Mode. Nothing happens until you tap one, and they only ever make blocking stronger.",
