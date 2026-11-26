@@ -451,6 +451,17 @@ class HealthFactsTest {
         assertTrue(problems(healthy.copy(autostart = null)).isEmpty())
     }
 
+    /** Invariant 110: "Prevent uninstall" off was never in a report, and the app was uninstalled. */
+    @Test
+    fun `prevent uninstall that is off is a fault, and on or unknown says nothing`() {
+        val off = HealthFacts.verdicts(healthy.copy(admin = false))
+            .first { it.title == "Prevent uninstall is off" }
+        assertEquals(false, off.good)
+        assertTrue(problems(healthy.copy(admin = false)).any { "Prevent uninstall" in it })
+        assertTrue(HealthFacts.verdicts(healthy.copy(admin = true)).none { "uninstall" in it.title })
+        assertTrue(problems(healthy.copy(admin = null)).isEmpty())
+    }
+
     /**
      * The deferral count is the current run, not a lifetime total: one is a report written by a
      * process seconds old, and it headed seven profile reports in a row as a fault.

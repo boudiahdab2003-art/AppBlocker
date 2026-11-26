@@ -120,6 +120,11 @@ object HealthReader {
                 KeepAliveSwitches.State.OFF -> false
                 KeepAliveSwitches.State.UNKNOWN -> null
             },
+            admin = when (KeepAliveSwitches.admin(ctx)) {
+                KeepAliveSwitches.State.ON -> true
+                KeepAliveSwitches.State.OFF -> false
+                KeepAliveSwitches.State.UNKNOWN -> null
+            },
             probeFailStreak = safe(0) { ServiceHealth.probeFailStreak(ctx) },
             bindDeferrals = safe(0) { SettingsStore.bindDeferrals(ctx) },
             bootHeardMs = safe(BootAudit.NEVER) { BootAudit.lagMsForThisBoot(ctx) },

@@ -316,11 +316,16 @@ object ProtectionNotifier {
      * both), and he lands on the permissions screen when he comes back, where the row now reads on.
      */
     @SuppressLint("MissingPermission") // guarded by the areNotificationsEnabled() check below.
-    fun notifyKeepAliveOff(context: Context, notifOff: Boolean, autostartOff: Boolean) {
-        if (!notifOff && !autostartOff) return
+    fun notifyKeepAliveOff(
+        context: Context,
+        notifOff: Boolean,
+        autostartOff: Boolean,
+        adminOff: Boolean = false,
+    ) {
+        if (!notifOff && !autostartOff && !adminOff) return
         val manager = NotificationManagerCompat.from(context)
         if (!manager.areNotificationsEnabled()) return
-        val which = keepAliveKey(notifOff, autostartOff)
+        val which = keepAliveKey(notifOff, autostartOff, adminOff)
         val now = SystemClock.elapsedRealtime()
         if (which == keepAliveShown &&
             !shouldRefloat(lastKeepAliveFloatRt, now, force = false, everyMs = KEEPALIVE_REFLOAT_MS)
@@ -332,7 +337,11 @@ object ProtectionNotifier {
         createChannel(context)
 
         val w = Words.of(context)
+        val restartOff = notifOff || autostartOff
         val title = when {
+            // "Prevent uninstall" off beside a restart switch: one line that names both kinds.
+            adminOff && restartOff -> w.get(R.string.notif_keepalive_title_several)
+            adminOff -> w.get(R.string.notif_keepalive_title_admin)
             notifOff && autostartOff -> w.get(R.string.notif_keepalive_title_both)
             notifOff -> w.get(R.string.notif_keepalive_title_notif)
             else -> w.get(R.string.notif_keepalive_title_autostart)
@@ -340,14 +349,22 @@ object ProtectionNotifier {
         val notification = build(
             context,
             title = title,
-            collapsed = w.get(R.string.notif_keepalive_collapsed),
-            bannerHeadline = w.get(R.string.notif_keepalive_headline),
+            collapsed = w.get(
+                if (adminOff && !restartOff) R.string.notif_keepalive_collapsed_admin
+                else R.string.notif_keepalive_collapsed,
+            ),
+            bannerHeadline = w.get(
+                if (adminOff && !restartOff) R.string.notif_keepalive_headline_admin
+                else R.string.notif_keepalive_headline,
+            ),
             bannerSubtitle = title,
             action = w.get(R.string.banner_notif_action),
             requestCode = NOTIF_ID_KEEPALIVE,
             openPermissions = true,
             fixSwitch = when {
-                notifOff && autostartOff -> null
+                // More than one switch off: the permissions screen, which has them all.
+                listOf(notifOff, autostartOff, adminOff).count { it } > 1 -> null
+                adminOff -> MainActivity.FIX_ADMIN
                 notifOff -> MainActivity.FIX_NOTIF_ACCESS
                 else -> MainActivity.FIX_AUTOSTART
             },
@@ -361,8 +378,11 @@ object ProtectionNotifier {
         manager.notify(NOTIF_ID_KEEPALIVE, notification)
     }
 
-    internal fun keepAliveKey(notifOff: Boolean, autostartOff: Boolean): String =
-        "notif=$notifOff,autostart=$autostartOff"
+    internal fun keepAliveKey(
+        notifOff: Boolean,
+        autostartOff: Boolean,
+        adminOff: Boolean = false,
+    ): String = "notif=$notifOff,autostart=$autostartOff,admin=$adminOff"
 
     /** Both switches on again: take the warning down, and let the next one float at once. */
     fun cancelKeepAliveOff(context: Context) {

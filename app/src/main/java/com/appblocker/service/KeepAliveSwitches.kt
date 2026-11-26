@@ -1,6 +1,7 @@
 package com.appblocker.service
 
 import android.app.AppOpsManager
+import android.app.admin.DevicePolicyManager
 import android.content.Context
 import android.os.Build
 import android.os.Handler
@@ -8,6 +9,7 @@ import android.os.Looper
 import android.os.Process
 import android.os.SystemClock
 import androidx.core.app.NotificationManagerCompat
+import com.appblocker.admin.AppBlockerAdminReceiver
 import com.appblocker.data.DeviceVendor
 
 /**
@@ -47,10 +49,20 @@ object KeepAliveSwitches {
      *  enough that he is still on the page he turned it off on. */
     internal const val DISCONNECT_CHECK_DELAY_MS = 3_000L
 
-    data class Reading(val notifAccess: State, val autostart: State) {
+    /**
+     * [admin] is **"Prevent uninstall"** (device admin) — invariant 110, 26 Nov 2026: it was off, the
+     * app was uninstalled, and nothing in the app or its reports had said so. Not a restart switch,
+     * but the same kind of quiet hole, so it rides the same standing, hourly warning.
+     */
+    data class Reading(
+        val notifAccess: State,
+        val autostart: State,
+        val admin: State = State.UNKNOWN,
+    ) {
         val notifOff: Boolean get() = notifAccess == State.OFF
         val autostartOff: Boolean get() = autostart == State.OFF
-        val anyOff: Boolean get() = notifOff || autostartOff
+        val adminOff: Boolean get() = admin == State.OFF
+        val anyOff: Boolean get() = notifOff || autostartOff || adminOff
     }
 
     /** When the heartbeat last read the switches, monotonically (invariant 9). */
@@ -58,7 +70,14 @@ object KeepAliveSwitches {
 
     private val main by lazy { Handler(Looper.getMainLooper()) }
 
-    fun read(context: Context): Reading = Reading(notifAccess(context), autostart(context))
+    fun read(context: Context): Reading =
+        Reading(notifAccess(context), autostart(context), admin(context))
+
+    /** Whether AppBlocker is an active device admin — "Prevent uninstall" on. */
+    fun admin(context: Context): State = runCatching {
+        val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+        if (dpm.isAdminActive(AppBlockerAdminReceiver.componentName(context))) State.ON else State.OFF
+    }.getOrDefault(State.UNKNOWN)
 
     fun notifAccess(context: Context): State = runCatching {
         if (NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)) {
@@ -111,7 +130,7 @@ object KeepAliveSwitches {
     fun check(context: Context) {
         val r = read(context)
         if (r.anyOff) {
-            ProtectionNotifier.notifyKeepAliveOff(context, r.notifOff, r.autostartOff)
+            ProtectionNotifier.notifyKeepAliveOff(context, r.notifOff, r.autostartOff, r.adminOff)
         } else {
             ProtectionNotifier.cancelKeepAliveOff(context)
         }

@@ -231,6 +231,9 @@ class MainActivity : ComponentActivity() {
                 startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
             }
             FIX_AUTOSTART -> openAutostart(this)
+            // "Prevent uninstall" (invariant 110): Android's own activation screen, from this
+            // Activity's task — it refuses to start as a new one.
+            FIX_ADMIN -> com.appblocker.ui.enableDeviceAdmin(this)
             else -> return
         }
         intent.removeExtra(EXTRA_FIX_SWITCH)
@@ -260,5 +263,6 @@ class MainActivity : ComponentActivity() {
         const val EXTRA_FIX_SWITCH = "fix_switch"
         const val FIX_NOTIF_ACCESS = "notif_access"
         const val FIX_AUTOSTART = "autostart"
+        const val FIX_ADMIN = "device_admin"
     }
 }

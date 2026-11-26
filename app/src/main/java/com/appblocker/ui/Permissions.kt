@@ -354,10 +354,10 @@ fun gatedFix(perm: Perm, onRequestDisclosure: (() -> Unit) -> Unit): () -> Unit 
  * being one half of a toggle: the dangerous direction should be greppable, and today it has
  * exactly one caller.
  *
- * Unlike the off-switch guard's gate, confirming here acts immediately rather than starting an
- * hours-long wait. Deliberate: device admin has no emergency escape of its own, and "you cannot
- * uninstall this app or hand this phone over for two hours" is a real harm rather than a
- * hypothetical one. The paragraph is what stops a bad moment; the wait would only punish a good one.
+ * **Confirming starts a two-day wait; it does not switch anything off** (invariant 110). This used
+ * to act immediately, on the reasoning that a wait "would only punish a good moment" — and on
+ * 26 Nov 2026 the paragraph was typed on a bad one, admin went off on the spot, and the app was
+ * uninstalled minutes later. His choice that day: longer than 24 hours. See [UninstallUnlock].
  *
  * The copy, not the composable: the gate is drawn over the whole window by AppRoot rather than by
  * the screen that asks for it, because every height in it is derived from the space it is handed
@@ -366,8 +366,14 @@ fun gatedFix(perm: Perm, onRequestDisclosure: (() -> Unit) -> Unit): () -> Unit 
 fun preventUninstallGate(ctx: Context) = GateCopy(
     title = ctx.getString(R.string.gate_uninstall_title),
     blurb = ctx.getString(R.string.gate_uninstall_blurb),
-    detail = ctx.getString(R.string.gate_uninstall_detail),
-    confirmLabel = ctx.getString(R.string.gate_uninstall_confirm),
+    detail = ctx.getString(
+        R.string.gate_uninstall_detail,
+        com.appblocker.data.UninstallUnlock.DELAY_LABEL,
+        com.appblocker.data.UninstallUnlock.WINDOW_LABEL,
+    ),
+    confirmLabel = ctx.getString(
+        R.string.gate_uninstall_confirm, com.appblocker.data.UninstallUnlock.DELAY_LABEL,
+    ),
 )
 
 /** Whether AppBlocker is currently an active device admin (so it can't be uninstalled). */

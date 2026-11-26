@@ -101,6 +101,8 @@
     <string name="block_offswitch_message">الحظر يحرس هذه الصفحة. يمكنك فتحها من داخل AppBlocker — ويستغرق ذلك %1$s.</string>
     <string name="block_offswitch_strict_title">مُقفل أثناء الوضع الصارم</string>
     <string name="block_offswitch_strict_message">لا يمكنك تغيير هذا بينما الوضع الصارم يعمل.</string>
+    <string name="block_uninstall_title">إلغاء التثبيت مُقفل</string>
+    <string name="block_uninstall_message">لا يمكن إزالة AppBlocker من هنا. إيقاف منع إلغاء التثبيت داخل AppBlocker يستغرق %1$s.</string>
     <string name="block_purchase_title">شراء محظور</string>
     <string name="block_purchase_message">عمليات الشراء داخل التطبيقات محظورة.</string>
     <string name="block_shorts_title">Shorts محظور</string>
@@ -341,8 +343,14 @@
     <string name="profile_pin_remove_subtitle">أوقف طلب الرمز عند فتح الإعدادات.</string>
 
     <string name="profile_uninstall_title">منع إلغاء التثبيت</string>
-    <string name="profile_uninstall_on">مُفعَّل. لا يمكن إلغاء تثبيت AppBlocker حتى توقف هذا — وإيقافه يتطلّب كتابة فقرة كاملة أولًا.</string>
+    <string name="profile_uninstall_on">مُفعَّل. لا يمكن إلغاء تثبيت AppBlocker. إيقافه يتطلّب كتابة فقرة ثم الانتظار %1$s.</string>
     <string name="profile_uninstall_off">مُعطَّل — يمكن إلغاء تثبيت AppBlocker في هذه اللحظة. فعّله؛ فالحارس يجعل الصفحة صعبة الوصول فقط، أما هذا فهو ما يمنع الإزالة فعلًا.</string>
+    <string name="profile_uninstall_waiting">يُفتح بعد %1$s. لا يزال إلغاء تثبيت AppBlocker غير ممكن.</string>
+    <string name="profile_uninstall_waiting_strict">يُفتح بعد %1$s، لكن الوضع الصارم يعمل — لا يمكن إيقافه حتى تنتهي الجلسة.</string>
+    <string name="profile_uninstall_strict">مُفعَّل، ومُقفل أثناء الوضع الصارم.</string>
+    <string name="profile_uninstall_open">مفتوح — اضغط للسماح بإلغاء التثبيت. يُغلق مجددًا بعد %1$s.</string>
+    <string name="profile_uninstall_cancel_title">إلغاء طلب السماح بإلغاء التثبيت</string>
+    <string name="profile_uninstall_cancel_subtitle">غيّرت رأيك — يبقى منع إلغاء التثبيت مُفعَّلًا ويُلغى الانتظار.</string>
 
     <string name="profile_guard_title">احرس مفتاح الإيقاف</string>
     <string name="profile_guard_off">مُعطَّل. يمكن إيقاف الحظر من الإعدادات في أي لحظة.</string>
@@ -477,8 +485,8 @@
 
     <string name="gate_uninstall_title">السماح بإلغاء التثبيت</string>
     <string name="gate_uninstall_blurb">هذا هو المفتاح الذي يرفض إلغاء التثبيت فعلًا. اكتب الفقرة أدناه — لا يمكنك لصقها — قبل أن ينفد الوقت.</string>
-    <string name="gate_uninstall_detail">الحارس يجعل صفحة الإعدادات صعبة الوصول فقط؛ أما هذا فهو المفتاح الذي يرفض الإزالة نفسها. بإيقافه يمكن حذف AppBlocker في بضع نقرات، وتذهب معه كل قوائم حظرك. وإن فاتك الوقت حصلت على فقرة جديدة ومؤقّت جديد. أما إعادة تشغيله فنقرة واحدة دائمًا.</string>
-    <string name="gate_uninstall_confirm">أوقف الحماية</string>
+    <string name="gate_uninstall_detail">الحارس يجعل صفحة الإعدادات صعبة الوصول فقط؛ أما هذا فهو المفتاح الذي يرفض الإزالة نفسها. كتابة الفقرة لا توقفه: بل تبدأ انتظارًا مدته %1$s، وبعده فقط يعمل المفتاح لمدة %2$s. وإن فاتك الوقت حصلت على فقرة جديدة ومؤقّت جديد. أما إعادة تشغيله فنقرة واحدة دائمًا.</string>
+    <string name="gate_uninstall_confirm">ابدأ انتظار %1$s</string>
     <string name="admin_explanation">يتيح لـAppBlocker مقاومة إلغاء التثبيت حتى توقف هذا.</string>
 
     <string name="disclosure_topbar">كيف يعمل الحظر</string>
@@ -654,6 +662,10 @@
     <string name="notif_keepalive_title_both">الوصول إلى الإشعارات والتشغيل التلقائي متوقفان</string>
     <string name="notif_keepalive_collapsed">إذا أوقف هاتفك AppBlocker فلن يعيد تشغيله شيء. اضغط لتفعيله.</string>
     <string name="notif_keepalive_headline">AppBlocker لا يستطيع العودة</string>
+    <string name="notif_keepalive_title_admin">منع إلغاء التثبيت متوقف</string>
+    <string name="notif_keepalive_title_several">بعض حمايات AppBlocker متوقفة</string>
+    <string name="notif_keepalive_collapsed_admin">يمكن إلغاء تثبيت AppBlocker الآن ببضع نقرات. اضغط لإعادة تفعيل منع إلغاء التثبيت.</string>
+    <string name="notif_keepalive_headline_admin">يمكن إلغاء تثبيت APPBLOCKER</string>
     <string name="banner_stopped_title">الحظر توقّف</string>
     <string name="banner_stopped_body">هاتفك أغلقه — اضغط لإعادة تشغيله</string>
     <string name="banner_update_title">يتوفّر تحديث — الإصدار %1$s</string>

@@ -684,6 +684,29 @@ object SettingsStore {
     internal fun clearGuardUnlockRequest(context: Context) =
         prefs(context).edit().remove(KEY_GUARD_UNLOCK_REQUEST).apply()
 
+    private const val KEY_UNINSTALL_UNLOCK_REQUEST = "uninstall_unlock_request"
+    private const val UNINSTALL_UNLOCK_KEY = "uninstall"
+
+    /** The pending "let me switch Prevent uninstall off" request ([UninstallUnlock]), or null.
+     *  Its own record, never the guard's: the two waits are different lengths on purpose, and a
+     *  shared record would let the two-hour one serve the two-day one (invariant 110). */
+    internal fun uninstallUnlockRequest(context: Context): GuardedDeadline? =
+        prefs(context).getString(KEY_UNINSTALL_UNLOCK_REQUEST, null)
+            ?.let { GuardedDeadline.decode(it)?.second }
+
+    /** Starts the wait now. **Does nothing if one is already pending**, for the reason
+     *  [setGuardUnlockRequest] gives: re-tapping must never restart — or shorten — the wait. */
+    internal fun setUninstallUnlockRequest(context: Context, delayMs: Long, bootCount: Int) {
+        if (uninstallUnlockRequest(context) != null) return
+        prefs(context).edit().putString(
+            KEY_UNINSTALL_UNLOCK_REQUEST,
+            GuardedDeadline.starting(delayMs, bootCount).encode(UNINSTALL_UNLOCK_KEY),
+        ).apply()
+    }
+
+    internal fun clearUninstallUnlockRequest(context: Context) =
+        prefs(context).edit().remove(KEY_UNINSTALL_UNLOCK_REQUEST).apply()
+
     private const val KEY_PROTECTION_LAST_NOTIFIED = "protection_last_notified_at"
 
     /** Epoch millis of the last "protection off" notification, for re-notify throttling. */

@@ -154,6 +154,8 @@ object HealthFacts {
         val notifAccess: Boolean? = null,
         /** Xiaomi Autostart (invariant 109): true on, false off, null where it cannot be read. */
         val autostart: Boolean? = null,
+        /** "Prevent uninstall" — device admin (invariant 110): true on, false off, null unread. */
+        val admin: Boolean? = null,
         val probeFailStreak: Int,
         val bindDeferrals: Int,
         /** ⚠️ **How long after the last restart the app's own start-up ran**, or
@@ -402,6 +404,7 @@ object HealthFacts {
         selfToggleFact(r)?.let { add(it) }
         notificationAccessFact(r)?.let { add(it) }
         autostartFact(r)?.let { add(it) }
+        adminFact(r)?.let { add(it) }
         schedulerFact(r)?.let { add(it) }
         speedFact(r)?.let { add(it) }
         silenceFacts(r).forEach { add(it) }
@@ -789,6 +792,24 @@ object HealthFacts {
                 "On Xiaomi phones it is what lets AppBlocker be started again after the phone has " +
                     "shut it down completely. With it off, AppBlocker stays off until it is opened " +
                     "by hand. Switch it on in Security ▸ Autostart, in each space.",
+                good = false,
+            )
+        }
+
+    /**
+     * "Prevent uninstall" (device admin), named only when it reads off — invariant 110. On 26 Nov
+     * 2026 it was off, the app was uninstalled, and no report had ever said it was off: the field
+     * did not exist, so "all healthy" was true of everything the reports could see.
+     */
+    private fun adminFact(r: Reading): Fact? =
+        if (r.admin != false) {
+            null
+        } else {
+            Fact(
+                "Prevent uninstall is off",
+                "Device admin is what makes Android refuse to uninstall AppBlocker. With it off, " +
+                    "the app — and every block with it — can be removed in a few taps from the home " +
+                    "screen. Switch it on in Profile ▸ Prevent uninstall, in each space.",
                 good = false,
             )
         }

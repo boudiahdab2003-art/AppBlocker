@@ -934,6 +934,9 @@ data class BugReport(
             // force-stopped AppBlocker; `unknown` off Xiaomi or where the read is refused
             // (invariant 109).
             "autostart",
+            // Invariant 110: "Prevent uninstall" (device admin) on/off/unknown, and its two-day wait
+            // as guarded/waiting/open. Our own switch states, no content.
+            "admin", "uninstallUnlock",
             // How many times Android called onInterrupt on the watcher. Our own integer.
             "interrupts",
             // Foreground minutes since the watcher last saw anything, or `?` when usage access

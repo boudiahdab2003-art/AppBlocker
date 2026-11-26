@@ -102,6 +102,7 @@ import com.appblocker.data.ReportConsent
 import com.appblocker.data.ServiceHealth
 import com.appblocker.data.NetworkFilter
 import com.appblocker.data.SettingsStore
+import com.appblocker.data.UninstallUnlock
 import com.appblocker.service.AccessibilityUtil
 import com.appblocker.service.BugReportSender
 import com.appblocker.service.Grayscale
@@ -236,6 +237,34 @@ fun ProfileScreen(
     // disagree about which state the row is in — two copies of one state machine is the first bug
     // shape in docs/BLOCKING_INVARIANTS.md.
     val guardTap = OffSwitchGuard.tap(guardOn, guardPhase, strictActive)
+    // "Prevent uninstall", and its two-day way out (invariant 110). The same state machine as the
+    // guard above — OffSwitchGuard.phase / .tap — on its own clock-proof record. Passing the typed
+    // gate starts the wait; only the served window lets the row call disableDeviceAdmin.
+    var uninstallRequest by remember { mutableStateOf(SettingsStore.uninstallUnlockRequest(context)) }
+    LaunchedEffect(resumeTick) { uninstallRequest = SettingsStore.uninstallUnlockRequest(context) }
+    val uninstallUntilUnlock = uninstallRequest?.remaining(boot) ?: 0L
+    val uninstallUntilExpiry =
+        uninstallRequest?.remaining(boot, extraMs = UninstallUnlock.UNLOCK_WINDOW_MS) ?: 0L
+    val uninstallPhase = OffSwitchGuard.phase(
+        hasRequest = uninstallRequest != null,
+        untilUnlock = uninstallUntilUnlock,
+        untilExpiry = uninstallUntilExpiry,
+    )
+    val uninstallTap = OffSwitchGuard.tap(adminOn, uninstallPhase, strictActive)
+    LaunchedEffect(uninstallRequest, guardTick) {
+        if (uninstallRequest == null) return@LaunchedEffect
+        if (uninstallUntilExpiry <= 0L) {
+            uninstallRequest = null
+            SettingsStore.clearUninstallUnlockRequest(context)
+            return@LaunchedEffect
+        }
+        // The guard's effect below drives the 1-second tick; this one only clears a lapsed request,
+        // and needs a tick of its own while the guard has no request to drive it.
+        if (guardRequest == null) {
+            delay(1000)
+            guardTick++
+        }
+    }
     LaunchedEffect(guardRequest, guardTick) {
         if (guardRequest == null) return@LaunchedEffect
         if (guardUntilExpiry <= 0L) {
@@ -426,28 +455,75 @@ fun ProfileScreen(
                 // Says so out loud when it's off. The guard makes the *page* hard to reach, but
                 // the actual "you cannot uninstall this" comes from device admin — and the two
                 // being separate switches means the app can look protected while it isn't.
-                subtitle = stringResource(
-                    if (adminOn) R.string.profile_uninstall_on else R.string.profile_uninstall_off,
-                ),
+                subtitle = when {
+                    !adminOn -> stringResource(R.string.profile_uninstall_off)
+                    uninstallTap == OffSwitchGuard.Tap.REFUSED_STRICT &&
+                        uninstallPhase == OffSwitchGuard.Phase.WAITING ->
+                        stringResource(
+                            R.string.profile_uninstall_waiting_strict,
+                            fmtCountdown(uninstallUntilUnlock),
+                        )
+                    uninstallTap == OffSwitchGuard.Tap.REFUSED_STRICT ->
+                        stringResource(R.string.profile_uninstall_strict)
+                    uninstallPhase == OffSwitchGuard.Phase.WAITING ->
+                        stringResource(
+                            R.string.profile_uninstall_waiting, fmtCountdown(uninstallUntilUnlock),
+                        )
+                    uninstallPhase == OffSwitchGuard.Phase.OPEN ->
+                        stringResource(
+                            R.string.profile_uninstall_open, fmtCountdown(uninstallUntilExpiry),
+                        )
+                    else -> stringResource(R.string.profile_uninstall_on, UninstallUnlock.DELAY_LABEL)
+                },
                 badge = adminOn,
-                enabled = !locked,
-                // On is one tap. Off goes through the typed gate below — this switch is the only
-                // thing that actually refuses an uninstall, so it was the cheapest way out of
-                // every protection in the app.
+                // Strict refuses the weakening taps only; switching protection ON stays one tap.
+                enabled = uninstallTap != OffSwitchGuard.Tap.REFUSED_STRICT,
+                // On is one tap. Off is a typed gate AND a two-day wait (invariant 110): on
+                // 26 Nov 2026 the gate alone was the whole price, it was paid, and the app was
+                // uninstalled. This switch is the only thing that actually refuses an uninstall.
                 onClick = {
-                    if (isDeviceAdminActive(context)) {
-                        onRequestGate(preventUninstallGate(context)) {
+                    when (uninstallTap) {
+                        OffSwitchGuard.Tap.TURN_ON -> {
+                            enableDeviceAdmin(context)
+                            adminOn = isDeviceAdminActive(context) // corrected on resume anyway
+                            uninstallRequest = null
+                            SettingsStore.clearUninstallUnlockRequest(context)
+                        }
+                        // The two days are served and the window is open. THE ONLY DOOR to
+                        // disableDeviceAdmin in the app — CodeShapeTest pins it to this branch.
+                        OffSwitchGuard.Tap.LOWER -> {
                             // removeActiveAdmin completes asynchronously, so flip the badge
                             // ourselves rather than re-reading a state that hasn't changed yet.
                             disableDeviceAdmin(context)
                             adminOn = false
                         }
-                    } else {
-                        enableDeviceAdmin(context)
-                        adminOn = isDeviceAdminActive(context) // corrected on resume anyway
+                        // Passing the gate does NOT switch protection off — it starts the wait.
+                        OffSwitchGuard.Tap.START_WAIT ->
+                            onRequestGate(preventUninstallGate(context)) {
+                                SettingsStore.setUninstallUnlockRequest(
+                                    context, UninstallUnlock.UNLOCK_DELAY_MS, boot,
+                                )
+                                uninstallRequest = SettingsStore.uninstallUnlockRequest(context)
+                            }
+                        OffSwitchGuard.Tap.NOTHING, OffSwitchGuard.Tap.REFUSED_STRICT -> Unit
                     }
                 },
             )
+            if (adminOn && uninstallPhase == OffSwitchGuard.Phase.WAITING) {
+                Divider()
+                ProfileRow(
+                    icon = Icons.Filled.Close,
+                    title = stringResource(R.string.profile_uninstall_cancel_title),
+                    subtitle = stringResource(R.string.profile_uninstall_cancel_subtitle),
+                    chevron = true,
+                    // Backing out of a weakening is always instant.
+                    enabled = true,
+                    onClick = {
+                        uninstallRequest = null
+                        SettingsStore.clearUninstallUnlockRequest(context)
+                    },
+                )
+            }
             Divider()
             ProfileRow(
                 icon = Icons.Filled.Key,

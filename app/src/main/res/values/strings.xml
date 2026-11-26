@@ -81,6 +81,8 @@
     <string name="block_offswitch_message">Blocking guards this page. You can unlock it in AppBlocker — it takes %1$s.</string>
     <string name="block_offswitch_strict_title">Locked during Strict Mode</string>
     <string name="block_offswitch_strict_message">You can\'t change this while Strict Mode is active.</string>
+    <string name="block_uninstall_title">Uninstalling is locked</string>
+    <string name="block_uninstall_message">AppBlocker can\'t be removed from here. Switching Prevent uninstall off in AppBlocker takes %1$s.</string>
     <string name="block_purchase_title">Purchase blocked</string>
     <string name="block_purchase_message">In-app purchases are blocked.</string>
     <string name="block_shorts_title">Shorts blocked</string>
@@ -284,8 +286,14 @@ Never sent: your blocked words, the sites you visit, which apps you block, or an
     <string name="profile_pin_remove_subtitle">Stop requiring a PIN to open settings.</string>
 
     <string name="profile_uninstall_title">Prevent uninstall</string>
-    <string name="profile_uninstall_on">On. AppBlocker can\'t be uninstalled until you turn this off — and turning it off means typing a paragraph first.</string>
+    <string name="profile_uninstall_on">On. AppBlocker can\'t be uninstalled. Turning this off means typing a paragraph and then waiting %1$s.</string>
     <string name="profile_uninstall_off">OFF — AppBlocker can be uninstalled right now. Turn this on; the guard only makes the page hard to reach, this is what actually stops removal.</string>
+    <string name="profile_uninstall_waiting">Unlocking in %1$s. AppBlocker still can\'t be uninstalled.</string>
+    <string name="profile_uninstall_waiting_strict">Unlocking in %1$s, but Strict Mode is running — it can\'t be switched off until the session ends.</string>
+    <string name="profile_uninstall_strict">On, and locked while Strict Mode is running.</string>
+    <string name="profile_uninstall_open">Unlocked — tap to allow uninstalling. Closes again in %1$s.</string>
+    <string name="profile_uninstall_cancel_title">Cancel the uninstall unlock</string>
+    <string name="profile_uninstall_cancel_subtitle">Change your mind — Prevent uninstall stays on and the wait is dropped.</string>
 
     <string name="profile_guard_title">Guard the off-switch</string>
     <string name="profile_guard_off">Off. Blocking can be switched off in Settings at any moment.</string>
@@ -416,8 +424,8 @@ Never sent: your blocked words, the sites you visit, which apps you block, or an
 
     <string name="gate_uninstall_title">Allow uninstalling</string>
     <string name="gate_uninstall_blurb">This is the switch that actually refuses an uninstall. Type the paragraph below — you can\'t paste it — before the clock runs out.</string>
-    <string name="gate_uninstall_detail">The guard only makes the Settings page hard to reach; this is the switch that refuses the uninstall itself. With it off, AppBlocker can be removed in a few taps, and every block goes with it. Miss the clock and you get a fresh paragraph and a fresh clock. Turning it back on is always one tap.</string>
-    <string name="gate_uninstall_confirm">Turn protection off</string>
+    <string name="gate_uninstall_detail">The guard only makes the Settings page hard to reach; this is the switch that refuses the uninstall itself. Passing this does NOT switch it off: it starts a %1$s wait, and only after that does the switch work, for %2$s. Miss the clock and you get a fresh paragraph and a fresh clock. Turning it back on is always one tap.</string>
+    <string name="gate_uninstall_confirm">Start the %1$s wait</string>
     <string name="admin_explanation">Lets AppBlocker resist being uninstalled until you turn this off.</string>
 
     <string name="disclosure_topbar">How blocking works</string>
@@ -585,6 +593,10 @@ Never sent: your blocked words, the sites you visit, which apps you block, or an
     <string name="notif_keepalive_title_both">Notification access and Autostart are off</string>
     <string name="notif_keepalive_collapsed">If your phone shuts AppBlocker down, nothing will start it again. Tap to turn it on.</string>
     <string name="notif_keepalive_headline">APPBLOCKER CAN\'T RESTART</string>
+    <string name="notif_keepalive_title_admin">Prevent uninstall is off</string>
+    <string name="notif_keepalive_title_several">Some of AppBlocker\'s protections are off</string>
+    <string name="notif_keepalive_collapsed_admin">AppBlocker can be uninstalled in a few taps right now. Tap to turn Prevent uninstall back on.</string>
+    <string name="notif_keepalive_headline_admin">APPBLOCKER CAN BE UNINSTALLED</string>
     <string name="banner_stopped_title">Blocking has stopped</string>
     <string name="banner_stopped_body">Your phone shut it down — tap to switch it back on</string>
     <string name="banner_update_title">Update available — v%1$s</string>

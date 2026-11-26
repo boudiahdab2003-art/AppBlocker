@@ -49,6 +49,7 @@ import com.appblocker.data.ItemLocks
 import com.appblocker.data.LaunchCounter
 import com.appblocker.data.NewAppWatcher
 import com.appblocker.data.OffSwitchGuard
+import com.appblocker.data.UninstallUnlock
 import com.appblocker.data.OwnSpace
 import com.appblocker.data.OwnUi
 import com.appblocker.data.QuickSession
@@ -275,6 +276,13 @@ class BlockerAccessibilityService : AccessibilityService() {
     // Throttles the Strict-Mode settings-guard bounce so a burst of content events on the same
     // dangerous page doesn't fire GLOBAL_ACTION_HOME over and over.
     private var lastGuardBounceAt: Long = 0L
+
+    /** Invariant 110, the launcher's uninstall popup: when a launcher event last named a dialog or
+     *  popup, when its window was last read, and how many delayed looks are still owed. All
+     *  monotonic (invariant 9). */
+    private var launcherPopupHintAt: Long = 0L
+    private var lastLauncherGuardReadAt: Long = 0L
+    private var launcherRechecksLeft: Int = 0
     // Read/written from the background web-scan coroutine as well as the main thread.
     @Volatile private var lastWebText: String? = null
 
@@ -1918,9 +1926,20 @@ class BlockerAccessibilityService : AccessibilityService() {
     private fun handleSettingsGuard(pkg: String, className: String?): Boolean {
         val strict = strictRemaining() > 0L
         // Package check before the guard read: this runs on every foreground change, and the
-        // overwhelming majority are not Settings at all.
-        if (pkg !in GUARD_PACKAGES) return false
-        if (!strict && !OffSwitchGuard.armed(applicationContext)) return false
+        // overwhelming majority are not Settings at all. The launcher is the one exception, and
+        // only for its own uninstall popup (invariant 110) — see handleLauncherUninstall.
+        if (pkg !in GUARD_PACKAGES) {
+            return isLauncherPkg(pkg) && handleLauncherUninstall(pkg, className, strict)
+        }
+        // **Two clocks, on purpose (invariant 110).** The accessibility page and our App-info page
+        // answer to the off-switch guard and its two-hour unlock. Uninstalling — the confirmation
+        // and the device-admin removal before it — answers to "Prevent uninstall"'s own two-day
+        // wait, and to nothing else: no switch turns it off. While both arms shared the two-hour
+        // clock, two hours was the real price of an uninstall however long the Profile wait was:
+        // open the guard, deactivate admin in Settings, uninstall. Strict bounces all of them.
+        val offSwitchArmed = strict || OffSwitchGuard.armed(applicationContext)
+        val uninstallArmed = strict || UninstallUnlock.armed(applicationContext)
+        if (!offSwitchArmed && !uninstallArmed) return false
 
         // The event's own class when it named an activity, the last one seen in this package
         // otherwise — a view class from a content event is not evidence, and reading it as though
@@ -2003,32 +2022,51 @@ class BlockerAccessibilityService : AccessibilityService() {
         // exactly the ambiguity `BlockWhy` was created to remove for report #5, left one level too
         // shallow. Invariant 17, and the same split v1.132/v1.133 made for word/site/adult.
         val why = when {
-            ourOwnServicePage(text) && !justEnabled -> BlockWhy.GUARD_SERVICE
-            uninstallConfirmation(pkg, cn, text) -> BlockWhy.GUARD_UNINSTALL
-            deviceAdminRemoval(cn, text) -> BlockWhy.GUARD_ADMIN
-            ourOwnAppInfoPage(cn, text) -> BlockWhy.GUARD_APPINFO
+            offSwitchArmed && ourOwnServicePage(text) && !justEnabled -> BlockWhy.GUARD_SERVICE
+            uninstallArmed && uninstallConfirmation(pkg, cn, text) -> BlockWhy.GUARD_UNINSTALL
+            uninstallArmed && deviceAdminRemoval(cn, text) -> BlockWhy.GUARD_ADMIN
+            // The launcher's popup rule (invariant 110), for a phone whose app manager asks in a
+            // dialog of its own instead of the package installer's — MIUI's security centre can:
+            // a short window naming us and an uninstall word. After the cheaper arms.
+            uninstallArmed && settingsUninstallPopup(className, text) -> BlockWhy.GUARD_UNINSTALL
+            offSwitchArmed && ourOwnAppInfoPage(cn, text) -> BlockWhy.GUARD_APPINFO
             else -> return false
         }
+        return guardBounce(pkg, className, strict, why)
+    }
 
+    /**
+     * Cover and send home, for every arm of the off-switch guard. Split out so the launcher's
+     * uninstall popup (invariant 110) bounces through exactly the same throttle, cover and safety
+     * net as the Settings screens, rather than a second copy of them.
+     */
+    private fun guardBounce(pkg: String, className: String?, strict: Boolean, why: String): Boolean {
         // Monotonic, not the wall clock: this throttle claims "already bouncing" WITHOUT
         // bouncing, so a backward clock change used to turn it into a permanent "yes" — and
         // with the guard silent, the Accessibility toggle it exists to defend was reachable.
         val now = stopwatchNow()
         if (now - lastGuardBounceAt < 1500) return true // already bouncing this page
         lastGuardBounceAt = now
-        if (DEBUG) Log.d(TAG, "settings guard bounce: pkg=$pkg class=$className strict=$strict")
+        if (DEBUG) Log.d(TAG, "settings guard bounce: pkg=$pkg class=$className strict=$strict why=$why")
+        // The uninstall screens answer to the two-day wait, so their cover names that wait.
+        val uninstallScreen = why == BlockWhy.GUARD_UNINSTALL || why == BlockWhy.GUARD_ADMIN ||
+            why == BlockWhy.GUARD_LAUNCHER
 
         // Name the actual reason. A cover saying "Strict Mode" on a day with no session running
         // reads as a bug, and sends the owner looking for a session to end that doesn't exist.
         showBlockScreen(
             title = words.get(
-                if (strict) R.string.block_offswitch_strict_title
-                else R.string.block_offswitch_title,
+                when {
+                    strict -> R.string.block_offswitch_strict_title
+                    uninstallScreen -> R.string.block_uninstall_title
+                    else -> R.string.block_offswitch_title
+                },
             ),
-            message = if (strict) {
-                words.get(R.string.block_offswitch_strict_message)
-            } else {
-                words.get(R.string.block_offswitch_message, OffSwitchGuard.DELAY_LABEL)
+            message = when {
+                strict -> words.get(R.string.block_offswitch_strict_message)
+                uninstallScreen ->
+                    words.get(R.string.block_uninstall_message, UninstallUnlock.DELAY_LABEL)
+                else -> words.get(R.string.block_offswitch_message, OffSwitchGuard.DELAY_LABEL)
             },
             packageName = null,
             counterKey = "strict_guard",
@@ -2049,6 +2087,76 @@ class BlockerAccessibilityService : AccessibilityService() {
         }, 1500)
         return true
     }
+
+    /**
+     * **The launcher's own "Uninstall AppBlocker?" popup** (invariant 110) — how he uninstalled on
+     * 26 Nov 2026, on HyperOS, whose launcher asks itself instead of handing the uninstall to the
+     * package installer the guard already watched. His choice: guarded **always**, not only in
+     * Strict; it answers to the "Prevent uninstall" two-day wait like the other uninstall arms.
+     *
+     * Cheap on the home screen, which is where most launcher events come from: a dialog/popup class
+     * name, or the active window's bounds, must say "popup" before a single node of text is read —
+     * the home grid is full height and its window-state class is the launcher activity. See
+     * [LauncherUninstall] for why the grid itself must never match.
+     */
+    private fun handleLauncherUninstall(pkg: String, className: String?, strict: Boolean): Boolean {
+        val now = stopwatchNow()
+        if (LauncherUninstall.classSaysPopup(className)) launcherPopupHintAt = now
+        val hintedNow = launcherPopupHintAt == now
+        // The home screen sends a stream of content events; read its window at most every
+        // LAUNCHER_GUARD_READ_MS unless an event has just named a popup. Its content events follow
+        // within that, so a popup is still read while it is up.
+        if (!hintedNow && now - lastLauncherGuardReadAt in 0 until LAUNCHER_GUARD_READ_MS) return false
+        lastLauncherGuardReadAt = now
+        if (!strict && !UninstallUnlock.armed(applicationContext)) return false
+        val root = runCatching { rootInActiveWindow }.getOrNull() ?: return false
+        // Invariant 1, as in handleSettingsGuard: the evidence must come from this package's window.
+        if (runCatching { root.packageName?.toString() }.getOrNull() != pkg) return false
+        val hinted = launcherPopupHintAt > 0L && now - launcherPopupHintAt in 0 until
+            LauncherUninstall.POPUP_HINT_MS
+        val popup = LauncherUninstall.isPopup(hinted, activeWindowHeightFraction())
+        if (!popup) return false
+        if (LauncherUninstall.matches(guardScreenText(), popup) == true) {
+            launcherRechecksLeft = 0
+            return guardBounce(pkg, className, strict, BlockWhy.GUARD_LAUNCHER)
+        }
+        // A popup, but not (yet) ours: its text may simply not be built. A dialog can finish
+        // drawing without another event reaching us past the throttle, so look again twice.
+        if (hintedNow) launcherRechecksLeft = 2
+        if (launcherRechecksLeft > 0) {
+            launcherRechecksLeft--
+            handler.postDelayed({
+                guarded(applicationContext, "launcherUninstallRecheck") {
+                    handleLauncherUninstall(pkg, null, strictRemaining() > 0L)
+                    Unit
+                }
+            }, LAUNCHER_GUARD_RECHECK_MS)
+        }
+        return false
+    }
+
+    /**
+     * An uninstall popup about us inside Settings or a security centre — [LauncherUninstall]'s rule
+     * applied to [GUARD_PACKAGES]. The two screens we open ourselves stand it down, exactly as they
+     * stand the other arms down: Android's device-admin activation screen offers "Uninstall app"
+     * beside our name, and our own update's installer names us too.
+     */
+    private fun settingsUninstallPopup(className: String?, text: String): Boolean {
+        if (AdminPrompt.recentlyRequested()) return false
+        if (InstallPrompt.recentlyRequested(applicationContext)) return false
+        val heightFraction = activeWindowHeightFraction()
+        val popup = LauncherUninstall.isPopup(LauncherUninstall.classSaysPopup(className), heightFraction)
+        return LauncherUninstall.matches(text, popup) == true
+    }
+
+    /** The active window's height over the screen's, or null when either cannot be read. */
+    private fun activeWindowHeightFraction(): Float? = runCatching {
+        val root = rootInActiveWindow ?: return@runCatching null
+        val r = android.graphics.Rect()
+        root.getBoundsInScreen(r)
+        val screen = resources.displayMetrics.heightPixels
+        if (screen > 0 && r.height() > 0) r.height().toFloat() / screen else null
+    }.getOrNull()
 
     /**
      * Lowercased visible text of the current page (rootInActiveWindow only). Kept separate from
@@ -4062,6 +4170,10 @@ class BlockerAccessibilityService : AccessibilityService() {
 
         // Throttle for isLauncherPkg's on-miss launcher re-detection.
         private const val LAUNCHER_REFRESH_MS = 30_000L
+        /** At most one read of the launcher's window per this, unless a popup was just named. */
+        private const val LAUNCHER_GUARD_READ_MS = 300L
+        /** The delayed look at a launcher popup whose text was not built yet. */
+        private const val LAUNCHER_GUARD_RECHECK_MS = 400L
         // Throttle for isRealBrowserPkg re-reading an EMPTY browser set. Longer than the launcher
         // one: an empty answer here is usually the truth (a phone with no browser installed at
         // all), so this is a rare-but-cheap correction, not a poll.

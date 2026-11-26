@@ -13,6 +13,13 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.192", "Nov 26, 2026", "AppBlocker can no longer be uninstalled on a bad evening", listOf(
+        "**Turning Prevent uninstall off now takes two days.** You still type the paragraph, but it no longer switches anything off: it starts a 48-hour wait, and only then does the switch work, for half an hour. You chose longer than a day. Changed your mind? Cancel is one tap, and turning it back on always is.",
+        "**The home screen's own Uninstall popup is now covered** when it is about AppBlocker. That popup is how AppBlocker got removed, and nothing guarded it before. Other apps still uninstall normally.",
+        "**Every uninstall screen follows the two-day wait.** Unlocking the off-switch guard (two hours) no longer opens the uninstall screens or the device-admin page with it.",
+        "**A warning that stays while Prevent uninstall is off,** and pops up again every hour, like the Notification access and Autostart one. Tap it to switch it back on.",
+        "**Reports now say whether Prevent uninstall is on,** so it can never again be off while every report reads healthy.",
+    )),
     VersionLog("1.191", "Nov 11, 2026", "A loud warning when AppBlocker could not come back", listOf(
         "**Notification access and Autostart are the two switches that bring AppBlocker back** after your phone shuts it down. Without them it stays off until you open it, and that is where your longest gaps came from.",
         "**If either one is off, you now get a warning that stays in your notifications and pops up again every hour** until it is back on, as you chose. It cannot be swiped away. Tap it and you land on the right switch.",

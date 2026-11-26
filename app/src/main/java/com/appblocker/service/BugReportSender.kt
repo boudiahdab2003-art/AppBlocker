@@ -430,6 +430,10 @@ object BugReportSender {
         // Xiaomi Autostart, read from its app-op (invariant 109). Also the proof, from his own phone,
         // that the read works there: `unknown` on a Xiaomi means HyperOS refused it.
         field("autostart") { KeepAliveSwitches.reportValue(KeepAliveSwitches.autostart(ctx)) }
+        // "Prevent uninstall" and its two-day way out (invariant 110). Never in a report before
+        // 1.192, which is how it could be off with every report reading healthy.
+        field("admin") { KeepAliveSwitches.reportValue(KeepAliveSwitches.admin(ctx)) }
+        field("uninstallUnlock") { com.appblocker.data.UninstallUnlock.reportValue(ctx) }
         // onInterrupt, which used to be an empty body. Not a failure by itself; a number that
         // moves either side of an outage is the first description anyone has of what precedes one.
         field("interrupts") { ServiceHealth.interruptCount(ctx).toString() }

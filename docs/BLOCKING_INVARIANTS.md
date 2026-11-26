@@ -2333,6 +2333,32 @@ number.
     ⚠️ The Autostart read is NOT yet seen on HyperOS: his first report must say `autostart on` (not
     `unknown`) in both spaces. `KeepAliveSwitchesTest` + `HealthFactsTest`; 9 mutations red.
 
+110. **Uninstalling AppBlocker takes a two-day wait, and every uninstall screen is guarded.** 26 Nov
+    2026: he relapsed by uninstalling it. Profile ▸ Prevent uninstall → typed paragraph →
+    `disableDeviceAdmin` ON THE SPOT → long-press the home-screen icon ▸ Uninstall. Every other
+    off-switch needed a served wait; this one needed only typing. And HyperOS's launcher asks in its
+    own popup (`com.miui.home`), a package the guard never read. His picks: "longer than 24 hrs"
+    (48 h + a 30-min window) and "Always cover them" (not only in Strict).
+    - `data/UninstallUnlock.kt`: the gate now STARTS a `GuardedDeadline` request
+      (`SettingsStore.uninstallUnlockRequest`, its own record); the Profile row runs
+      `OffSwitchGuard.phase`/`.tap` on it (one state machine, reused) and calls `disableDeviceAdmin`
+      only in `Tap.LOWER` — the single caller in the app. Strict refuses the weakening taps.
+    - `handleSettingsGuard` has **two clocks**: the accessibility page and our App-info page answer to
+      the 2-h `OffSwitchGuard`; the uninstall confirmation, device-admin removal, a security-centre
+      uninstall popup and the launcher popup answer to `UninstallUnlock` ONLY (no switch lowers
+      them). Sharing the 2-h clock made two hours the real price of an uninstall: open the guard,
+      deactivate admin in Settings, uninstall.
+    - `service/LauncherUninstall.kt` (pure): a POPUP (dialog/popup class name seen ≤ 5 s ago, or a
+      window < 85 % of the screen high) that names `appblocker` and an uninstall word. Never the
+      home grid — it names us and shows an "Uninstall" drop target while any icon is dragged. Blank
+      = can't tell. Launcher windows are read at most every 300 ms, plus two delayed looks (400 ms)
+      at a popup whose text was not built yet. Code `guard-launcher`.
+    - "Prevent uninstall" off rides invariant 109's standing hourly warning (`KeepAliveSwitches.admin`,
+      tap → `FIX_ADMIN` = Android's activation screen); report keys `admin`, `uninstallUnlock`; fact
+      "Prevent uninstall is off". Before this, no report had ever carried the admin state.
+    - ⚠️ The HyperOS popup's real shape is NOT measured — verify on his phone (Second Space, before
+      switching admin on: long-press ▸ Uninstall ⇒ cover).
+
 ## Device quirks these invariants exist for
 
 - Gesture-nav Home on HyperOS often emits **no accessibility event at all**, so the foreground
