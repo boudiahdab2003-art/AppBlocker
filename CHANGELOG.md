@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.192
+- Uninstalling AppBlocker now takes a two-day wait, and the home screen's uninstall popup is covered
+
 ## v1.191
 - 1.191: a standing warning that floats every hour while Notification access or Autostart is off (invariant 109)
 
