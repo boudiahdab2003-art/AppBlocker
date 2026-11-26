@@ -3,6 +3,9 @@
 All notable changes to AppBlocker, newest first. Versions map to `versionName` in
 `app/build.gradle.kts` and the `vX.Y` git tags / GitHub releases the in-app updater reads.
 
+## v1.196
+- Smart suggestions, fixed and improved
+
 ## v1.195
 - Smart suggestions for the apps you use most
 
