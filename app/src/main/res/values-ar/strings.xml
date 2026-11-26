@@ -101,6 +101,9 @@
     <string name="block_offswitch_message">الحظر يحرس هذه الصفحة. يمكنك فتحها من داخل AppBlocker — ويستغرق ذلك %1$s.</string>
     <string name="block_offswitch_strict_title">مُقفل أثناء الوضع الصارم</string>
     <string name="block_offswitch_strict_message">لا يمكنك تغيير هذا بينما الوضع الصارم يعمل.</string>
+    <string name="block_instagram_title">إنستغرام محظور</string>
+    <string name="block_instagram_message">يبقى إنستغرام محظورًا على هذا الهاتف كل يوم. أنت اخترت هذا، ولا يوجد مفتاح لإلغائه.</string>
+    <string name="block_instagram_site_message">إنستغرام والمواقع التي تعرضه محظورة على هذا الهاتف، كل يوم، في كل متصفح.</string>
     <string name="block_uninstall_title">إلغاء التثبيت مُقفل</string>
     <string name="block_uninstall_message">لا يمكن إزالة AppBlocker من هنا. إيقاف منع إلغاء التثبيت داخل AppBlocker يستغرق %1$s.</string>
     <string name="block_purchase_title">شراء محظور</string>

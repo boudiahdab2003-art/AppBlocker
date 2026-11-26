@@ -937,6 +937,7 @@ class BlockerAccessibilityService : AccessibilityService() {
      *  a block cover is up. */
     private fun recheckMatters(pkg: String): Boolean =
         overlay.isShowing ||
+            InstagramBan.isBannedApp(pkg) ||
             LowBatteryLock.isLocked(batteryReading) ||
             keywordLockoutRemaining(pkg) > 0L ||
             ruleFor(pkg)?.isBlocked == true ||

@@ -81,6 +81,9 @@
     <string name="block_offswitch_message">Blocking guards this page. You can unlock it in AppBlocker — it takes %1$s.</string>
     <string name="block_offswitch_strict_title">Locked during Strict Mode</string>
     <string name="block_offswitch_strict_message">You can\'t change this while Strict Mode is active.</string>
+    <string name="block_instagram_title">Instagram is blocked</string>
+    <string name="block_instagram_message">Instagram stays blocked on this phone, every day. You chose this, and there is no switch to undo it.</string>
+    <string name="block_instagram_site_message">Instagram and the sites that show it are blocked on this phone, every day, in every browser.</string>
     <string name="block_uninstall_title">Uninstalling is locked</string>
     <string name="block_uninstall_message">AppBlocker can\'t be removed from here. Switching Prevent uninstall off in AppBlocker takes %1$s.</string>
     <string name="block_purchase_title">Purchase blocked</string>

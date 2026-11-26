@@ -283,6 +283,15 @@ class WebContentFilter internal constructor(
      */
     fun checkUrl(url: String, userKeywords: List<String>, siteKeywords: List<String>): Hit? {
         val host = spacedUrl(url.lowercase()).takeIf { it.isNotBlank() } ?: return null
+        // Instagram and the sites that show it, before the switchable layers (invariant 112). Every
+        // address path — the undebounced check, the debounced scan and check() — asks here first.
+        if (InstagramBan.bannedSite(host) != null) {
+            return Hit(
+                words.get(R.string.block_instagram_title),
+                words.get(R.string.block_instagram_site_message),
+                site = true,
+            )
+        }
         for (k in userKeywords) {
             // '.' and '/' are word boundaries, so a bare "instagram" still matches inside
             // "instagram.com/reels" while "instagrammer" doesn't.

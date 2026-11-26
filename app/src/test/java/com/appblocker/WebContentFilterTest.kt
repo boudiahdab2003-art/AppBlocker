@@ -46,11 +46,12 @@ class WebContentFilterTest {
 
     @Test fun userKeywordMatchesTheUrl() {
         val hit = filter().check(
-            text = "some page text", address = at("instagram.com/reels"),
-            userKeywords = listOf("instagram"), siteKeywords = emptyList(),
+            // Not Instagram: banned outright before any keyword is asked (invariant 112).
+            text = "some page text", address = at("reddit.com/r/all"),
+            userKeywords = listOf("reddit"), siteKeywords = emptyList(),
             adultPack = false, blockAdult = false,
         )
-        assertEquals("instagram", hit?.word)
+        assertEquals("reddit", hit?.word)
     }
 
     @Test fun userKeywordIgnoresAPageThatMerelyMentionsIt() {
@@ -140,8 +141,9 @@ class WebContentFilterTest {
     /** A typed word must still read as NOT a site, because that is what arms the app lockout —
      *  the fast path must not turn a word block into the gentler website block. */
     @Test fun checkUrlMarksAUserKeywordAsNotASite() {
-        val hit = filter().checkUrl("instagram.com/reels/xyz", listOf("instagram"), emptyList())
-        assertEquals("instagram", hit?.word)
+        // Not Instagram: that one is banned outright before any keyword is asked (invariant 112).
+        val hit = filter().checkUrl("reddit.com/r/xyz", listOf("reddit"), emptyList())
+        assertEquals("reddit", hit?.word)
         assertFalse(hit!!.site)
     }
 

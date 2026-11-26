@@ -34,6 +34,7 @@ internal object BlockWhy {
     const val SCHED_LOCATION = "sched-location"
     const val BROWSER = "browser"          // "block unsupported browsers"
     const val DANGER = "danger"            // three different adult words in half an hour
+    const val INSTAGRAM = "instagram"      // Instagram and its apps: always, no switch (invariant 112)
     // The family DNS filter was not running. Nothing raises it since 22 Oct 2026 (a VPN reads as
     // "off"); kept so the log lines already on the phone still decode.
     const val NETDNS = "netdns"
@@ -41,7 +42,7 @@ internal object BlockWhy {
 
     val ALL = setOf(
         LOCKOUT, ALLOWLIST, STRICT, QUICK, LIMIT, SCHED_TIME, SCHED_USAGE, SCHED_LAUNCH,
-        SCHED_WIFI, SCHED_LOCATION, BROWSER, DANGER, NETDNS, UNKNOWN,
+        SCHED_WIFI, SCHED_LOCATION, BROWSER, DANGER, INSTAGRAM, NETDNS, UNKNOWN,
     )
 
     // The layers that raise a cover without going through decideBlock — a page scan, the Shorts
@@ -155,6 +156,17 @@ internal data class BlockInputs(
  * unsupported browsers.
  */
 internal fun decideBlock(i: BlockInputs): BlockReason? {
+    // Instagram, before everything (invariant 112, his pick "Never from the phone"). Nothing below
+    // may lift it — not the update pause, not Allowlist mode with Instagram ticked, not a paused
+    // Quick Block, not an empty block list — so it is asked before any of them is.
+    if (InstagramBan.isBannedApp(i.pkg)) {
+        return BlockReason(
+            i.words.get(R.string.block_instagram_title),
+            i.words.get(R.string.block_instagram_message),
+            why = BlockWhy.INSTAGRAM,
+        )
+    }
+
     // The danger zone comes FIRST, ahead of even the update pause. It is armed only by the adult
     // layer, and that layer deliberately keeps working through an update (see shouldScanPkg:
     // "an update must not become the easy one") — pausing here would make installing an update

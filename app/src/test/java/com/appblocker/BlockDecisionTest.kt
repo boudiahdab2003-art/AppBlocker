@@ -444,7 +444,7 @@ class BlockDecisionTest {
             BlockWhy.SCHED_LOCATION, BlockWhy.BROWSER, BlockWhy.UNKNOWN,
             BlockWhy.WORD, BlockWhy.SITE, BlockWhy.ADULT, BlockWhy.SHORTS, BlockWhy.PURCHASE,
             BlockWhy.GEMINI_TEMP, BlockWhy.GEMINI_INSTRUCTIONS, BlockWhy.DISCOVER, BlockWhy.ULTRA_SAVER, BlockWhy.GUARD, BlockWhy.GUARD_SERVICE, BlockWhy.GUARD_UNINSTALL,
-            BlockWhy.GUARD_ADMIN, BlockWhy.GUARD_APPINFO, BlockWhy.GUARD_LAUNCHER,
+            BlockWhy.GUARD_ADMIN, BlockWhy.GUARD_APPINFO, BlockWhy.GUARD_LAUNCHER, BlockWhy.INSTAGRAM,
         )
         for (c in codes) {
             assertTrue("'$c' is ${c.length} chars — BlockLog truncates why to 16", c.length <= 16)

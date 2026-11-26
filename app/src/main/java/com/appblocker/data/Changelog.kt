@@ -13,6 +13,11 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.194", "Nov 26, 2026", "Instagram is blocked, for good", listOf(
+        "**Instagram is now blocked on this phone completely, as you asked.** The Instagram app, Instagram Lite, Threads, instagram.com and the sites that show Instagram without an account, in every browser. Messages are blocked too.",
+        "**There is no switch for it, as you chose.** Not on the block list, not in Allowlist mode, not when Quick Block is paused. Only a new version of AppBlocker could change it.",
+        "**Nothing else changed.** Facebook, Messenger and WhatsApp work as before.",
+    )),
     VersionLog("1.193", "Nov 26, 2026", "A much harder paragraph, and much longer waits", listOf(
         "**The paragraph is twice as long and must be exact.** 80 words instead of 40, in 6 minutes. Capitals, commas and full stops now have to match exactly, and they are scattered at random, so it cannot be typed on autopilot. A mistake is marked the moment you make it.",
         "**Every wait is much longer, as you chose (Very strong).** Lowering the off-switch guard: 48 hours instead of 2. Switching the adult filter off: 7 days instead of 24 hours. Switching Prevent uninstall off: 14 days. An app with a blocked word in it stays locked for 6 hours instead of 30 minutes.",

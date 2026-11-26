@@ -2368,6 +2368,17 @@ number.
     (the adult pack's was 24 h). Pinned by `GuardWaitsTest` + `TypedChallengeTest`. A request already
     running keeps its stored deadline; only new requests get the new length.
 
+112. **Instagram is blocked completely, with no switch.** 26 Nov 2026, "can we make something special
+    for instagram" — Instagram is where his relapses start (16 Oct: "all of my relapses are from
+    instagram"). His picks: "Block it completely" (messages too) and "Never from the phone".
+    `service/InstagramBan.kt` (pure): every `com.instagram.*` package (Instagram, Lite, Threads
+    `barcelona`, Edits, Layout, Boomerang) and a whole-domain list (instagram.com, instagr.am, ig.me,
+    cdninstagram.com, threads.net/.com + the PC's viewer/mirror list — never name those to him).
+    Asked FIRST in `decideBlock` (before the danger zone, update pause, essentials, Allowlist) as
+    `BlockWhy.INSTAGRAM`, and FIRST in `WebContentFilter.checkUrl` (every address path) as a site hit;
+    `recheckMatters` includes it. No setting, no Context — `InstagramBanTest` fails if SettingsStore
+    ever mentions Instagram. Emulator a16: instagram.com in Chrome → "Instagram is blocked" cover.
+
 ## Device quirks these invariants exist for
 
 - Gesture-nav Home on HyperOS often emits **no accessibility event at all**, so the foreground
