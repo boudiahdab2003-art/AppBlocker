@@ -26,7 +26,7 @@ AppBlocker can count how long it has been since your last relapse, and it holds 
 This is the most personal information the app will ever contain, and it is treated accordingly:
 
 - Both are stored **only on this phone**, in the app's own database and preferences.
-- **The AI Coach is never given either of them** — not the journal text, and not the day count.
+- **The AI Coach never sees your journal.** Since version 1.197 — at the owner's request — the coach is told your counter: how many days clean, your longest streak, and the dates and times you recorded a relapse, so it can celebrate a streak and notice patterns. Nothing you write in the journal is ever sent.
 - **They are never included in a bug report.** A report can only carry a fixed list of named settings values; there is no field in it that could hold your writing or your count.
 - They are not in any report the direct-download build sends.
 - Journal entries are **kept until you delete them**. Emptying an entry removes that day; uninstalling the app removes all of it. There is no copy anywhere else, and no way to recover one.
@@ -47,12 +47,14 @@ Before AppBlocker ever sends you to Android's Accessibility settings, it shows a
 
 ## The AI Coach (optional)
 
-The AI Coach is **off until you choose to enable it** by pasting your own free Google Gemini API key into the app. If you enable it:
+The AI Coach only sends anything when it is used — when you open the Insights tab, where its tips are, or write to it. Requests go through the developer's relay server, which adds the Gemini key and passes them to Google; the relay stores nothing. When the coach is used:
 
-- The app sends **aggregate statistics** (screen-time totals, app names with usage minutes, blocked-attempt and unlock counts), your **blocking setup**, your **goals**, the **personal facts you've shared with the coach**, and your **chat messages** to Google's Gemini API to generate tips and replies.
-- This data is processed by Google under the [Google API Terms of Service](https://developers.google.com/terms) and the [Gemini API terms](https://ai.google.dev/gemini-api/terms). Your API key is stored only on your device.
+- The app sends **aggregate statistics** (screen-time totals, app names with usage minutes, blocked-attempt and unlock counts), your **blocking setup**, your **goals**, the **personal facts you've shared with the coach**, your **counter** (days clean, longest streak, relapse dates and times, and when you pressed "I have an urge"), and your **chat messages** to Google's Gemini API to generate tips and replies. Your journal is never sent.
+- When you open the coach from a block screen, it is told what was blocked only as an app's name or a plain category ("a website") — never a blocked word or a web address.
+- This data is processed by Google under the [Google API Terms of Service](https://developers.google.com/terms) and the [Gemini API terms](https://ai.google.dev/gemini-api/terms).
 - The coach never receives your screen content, browsing pages, PIN, or precise location.
-- You can see everything the coach remembers about you (person icon in the chat), erase it at any time ("Forget everything"), or stop all AI traffic by removing your key.
+- You can see everything the coach remembers about you (person icon in the chat) and erase it at any time ("Forget everything"). If you never open the Insights tab or the coach, nothing is sent.
+- The coach's buttons (lock an app, a daily limit, Strict Mode) only change blocking on your phone when you tap them, and only ever make it stronger.
 
 ## Update check (direct-download build only)
 

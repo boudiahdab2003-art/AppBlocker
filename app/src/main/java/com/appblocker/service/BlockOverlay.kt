@@ -126,8 +126,8 @@ internal class BlockOverlay(private val context: Context) {
      * Inflates the cover ahead of time (without attaching it) so the first block of a session
      * lands instantly instead of paying for inflation on the hot path.
      */
-    fun warmUp(onClose: () -> Unit) {
-        if (view == null && preInflated == null) preInflated = newView(onClose)
+    fun warmUp(onClose: () -> Unit, onCoach: () -> Unit = {}) {
+        if (view == null && preInflated == null) preInflated = newView(onClose, onCoach)
     }
 
     /**
@@ -146,6 +146,8 @@ internal class BlockOverlay(private val context: Context) {
         ownerPkg: String?,
         onClose: () -> Unit,
         iconLoader: (String) -> Bitmap?,
+        /** "Talk to coach" (invariant 114): closes the cover like Got it, then opens the coach. */
+        onCoach: () -> Unit = {},
         freshBlock: Boolean = true,
         /** How long this cover must stay up once shown — see [CoverHold]. 0 for every ordinary
          *  block, which stays until something takes it down. */
@@ -167,7 +169,7 @@ internal class BlockOverlay(private val context: Context) {
             preInflated = null
             heldLayoutRes = 0
         }
-        val v = view ?: (preInflated ?: newView(onClose)).also {
+        val v = view ?: (preInflated ?: newView(onClose, onCoach)).also {
             preInflated = null
             val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -343,11 +345,12 @@ internal class BlockOverlay(private val context: Context) {
         content.translationY = 0f
     }
 
-    /** Inflates the cover and wires its Close button (not yet attached). */
-    private fun newView(onClose: () -> Unit): View =
+    /** Inflates the cover and wires its Close and "Talk to coach" buttons (not yet attached). */
+    private fun newView(onClose: () -> Unit, onCoach: () -> Unit): View =
         LayoutInflater.from(context).inflate(BlockLayouts.current(context).layoutRes, null).also {
             heldLayoutRes = BlockLayouts.current(context).layoutRes
             it.findViewById<Button>(R.id.overlay_close)?.setOnClickListener { onClose() }
+            it.findViewById<View>(R.id.overlay_coach)?.setOnClickListener { onCoach() }
             // Lines of even length instead of one long line and an orphaned word.
             it.findViewById<TextView>(R.id.overlay_quote)?.apply {
                 breakStrategy = android.text.Layout.BREAK_STRATEGY_BALANCED

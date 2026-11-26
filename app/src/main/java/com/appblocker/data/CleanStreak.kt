@@ -24,7 +24,12 @@ import org.json.JSONArray
  * [MoodStore] and [Goals] rather than adding a table for four scalars.
  *
  * Stored on this phone and nowhere else: not in a bug report ([BugReport]'s context is a closed
- * allow-list of named keys), not in the profile report, and not in anything the AI Coach sends.
+ * allow-list of named keys) and not in the profile report.
+ *
+ * ⚠️ **The AI Coach is told the streak and the dates — his choice, 26 Nov 2026 (invariant 114):**
+ * days clean, the longest streak and the relapse times, via `AiCoach.recoveryPromptText`, so it
+ * can celebrate a streak and notice when relapses happen. **Never the journal's text**;
+ * `CoachUpgradeTest` fails if the coach ever reads it.
  */
 object CleanStreak {
 

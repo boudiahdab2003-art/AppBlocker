@@ -1,20 +1,17 @@
 package com.appblocker.ui
 
 import android.app.Application
-import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.appblocker.data.AppVersion
 import com.appblocker.data.BlockerDatabase
 import com.appblocker.data.DeviceBoot
 import com.appblocker.data.FocusState
 import com.appblocker.data.SessionClock
-import com.appblocker.data.StatsStore
+import com.appblocker.data.StrictSessions
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -78,16 +75,10 @@ class FocusViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun extend(minutes: Int) {
         if (minutes <= 0) return
-        viewModelScope.launch {
-            // **Record the minutes only if the row actually moved.** The DAO's guards make this a
-            // no-op for a session that has already expired — and a session CAN expire between the
-            // button being drawn and the tap landing, or while the duration picker is open. Adding
-            // to the statistic first meant Insights could report Strict minutes that never
-            // happened: the two-sources-of-truth drift this file's neighbours keep producing.
-            if (dao.extend(minutes * 60_000L) > 0) {
-                StatsStore.addStrictMinutes(getApplication(), minutes)
-            }
-        }
+        // **Records the minutes only if the row actually moved** — see StrictSessions.extend. A
+        // session CAN expire between the button being drawn and the tap landing, and adding to
+        // the statistic first meant Insights could report Strict minutes that never happened.
+        viewModelScope.launch { StrictSessions.extend(getApplication(), minutes) }
     }
 
     /**
@@ -99,36 +90,12 @@ class FocusViewModel(app: Application) : AndroidViewModel(app) {
      * day onto a deadline already in the past and hand back less than a day.
      */
     fun relapse() {
-        viewModelScope.launch {
-            val state = dao.get().first()
-            val remaining = if (state == null) 0L else SessionClock.remaining(
-                state.realtimeStartMillis, state.realtimeEndMillis,
-                state.startTimeMillis, state.endTimeMillis,
-                state.bootCount, DeviceBoot.count(getApplication()),
-            )
-            if (remaining > 0L) extend(RELAPSE_MINUTES) else start(RELAPSE_MINUTES)
-        }
+        viewModelScope.launch { StrictSessions.startOrExtend(getApplication(), RELAPSE_MINUTES) }
     }
 
     /** Start an un-stoppable Strict Mode session. There is intentionally no "stop". */
     fun start(minutes: Int) {
-        StatsStore.addStrictMinutes(getApplication(), minutes)
-        val duration = minutes * 60_000L
-        val nowRt = SystemClock.elapsedRealtime()
-        val nowWall = System.currentTimeMillis()
-        viewModelScope.launch {
-            dao.set(
-                FocusState(
-                    id = 0,
-                    endTimeMillis = nowWall + duration,
-                    realtimeStartMillis = nowRt,
-                    realtimeEndMillis = nowRt + duration,
-                    startTimeMillis = nowWall,
-                    bootCount = DeviceBoot.count(getApplication()),
-                    appVersionCode = AppVersion.code(getApplication()),
-                )
-            )
-        }
+        viewModelScope.launch { StrictSessions.start(getApplication(), minutes) }
     }
 
     companion object {

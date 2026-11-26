@@ -13,6 +13,17 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.197", "Nov 26, 2026", "A much better AI Coach", listOf(
+        "**🆘 I have an urge.** A big button in the coach. Tap it and a calm card appears at once — breathe, put the phone down, the urge will pass — with a button for an hour of Strict Mode. Then the coach writes you a short, personal plan for the next ten minutes. No numbers, no lecture.",
+        "**The coach's advice now comes with buttons,** as you chose: 🔒 lock an app, 🌙 lock it until morning, ⏱ a daily limit, 🛡 Strict Mode. Nothing happens until you tap one, and they only ever make blocking stronger.",
+        "**💬 Talk to coach on every block screen.** The moment something is blocked is the moment the urge is strongest, so the coach is one tap away. It is told what was blocked (an app's name, or just \"a website\"), never the word or the address.",
+        "**The coach knows your counter now,** as you chose: days clean, your best streak and the dates you relapsed, so it can celebrate a streak and help you spot the risky days and hours. It never sees your journal.",
+        "**When you're struggling, it answers like a friend:** no numbers, no goals talk, one small next step. It never names adult sites, and if things are really dark it gives you a number to call.",
+        "**Fixed: the coach could fail after a long wait.** One of Google's models hangs at the moment; the coach used to wait on it and then give up. Now it moves straight on to a model that works, and rests the slow one for a few hours.",
+        "**Fixed: long answers were cut off.** The coach's thinking used up the space for its answer. There is now room for both.",
+        "**Fixed: a goal update could delete one of your goals,** and two goals made together could share one record. Both can't happen any more.",
+        "**Also:** a Try again button when a reply fails, a seconds counter while it thinks deeply, you can copy what it writes, and it knows every feature the app has today.",
+    )),
     VersionLog("1.196", "Nov 26, 2026", "Smart suggestions, fixed and improved", listOf(
         "**\"This week\" now really means this week.** The suggestions were reading the week before, so a daily limit could be based on an old habit. They now use the past seven days.",
         "**Your messaging app is never suggested,** just like your phone, keyboard and home screen.",

@@ -55,6 +55,9 @@ class MainActivity : ComponentActivity() {
     private var openPermissions by mutableStateOf(false)
     private var openRepair by mutableStateOf(false)
 
+    /** "Talk to coach" from a block screen — see [EXTRA_OPEN_COACH]. */
+    private var openCoach by mutableStateOf<com.appblocker.ui.CoachOpen?>(null)
+
     private val notifPermLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
@@ -67,7 +70,10 @@ class MainActivity : ComponentActivity() {
         requestNotificationPermissionIfNeeded()
         openPermissions = intent.getBooleanExtra(EXTRA_OPEN_PERMISSIONS, false)
         openRepair = intent.getBooleanExtra(EXTRA_OPEN_REPAIR, false)
-        if (savedInstanceState == null) openFixSwitch(intent)
+        if (savedInstanceState == null) {
+            openFixSwitch(intent)
+            openCoach = coachRequest(intent)
+        }
 
         // Warm the installed-apps cache early so the first editor open is fast too.
         lifecycleScope.launch { InstalledAppsRepository.ensureLoaded(applicationContext) }
@@ -94,6 +100,7 @@ class MainActivity : ComponentActivity() {
                         AppRoot(
                             openPermissionsOnStart = openPermissions,
                             openRepairOnStart = openRepair,
+                            openCoachRequest = openCoach,
                         )
                     }
                 }
@@ -218,6 +225,7 @@ class MainActivity : ComponentActivity() {
         if (intent.getBooleanExtra(EXTRA_OPEN_PERMISSIONS, false)) openPermissions = true
         if (intent.getBooleanExtra(EXTRA_OPEN_REPAIR, false)) openRepair = true
         openFixSwitch(intent)
+        coachRequest(intent)?.let { openCoach = it }
     }
 
     /**
@@ -237,6 +245,16 @@ class MainActivity : ComponentActivity() {
             else -> return
         }
         intent.removeExtra(EXTRA_FIX_SWITCH)
+    }
+
+    /** The block screen's "Talk to coach" tap, or null. Taken off the intent once read, so a
+     *  recreate does not open the coach a second time. */
+    private fun coachRequest(intent: Intent): com.appblocker.ui.CoachOpen? {
+        if (!intent.getBooleanExtra(EXTRA_OPEN_COACH, false)) return null
+        val label = intent.getStringExtra(EXTRA_COACH_FROM)
+        intent.removeExtra(EXTRA_OPEN_COACH)
+        intent.removeExtra(EXTRA_COACH_FROM)
+        return com.appblocker.ui.CoachOpen(label, System.nanoTime())
     }
 
     private fun requestNotificationPermissionIfNeeded() {
@@ -264,5 +282,11 @@ class MainActivity : ComponentActivity() {
         const val FIX_NOTIF_ACCESS = "notif_access"
         const val FIX_AUTOSTART = "autostart"
         const val FIX_ADMIN = "device_admin"
+
+        /** Opens the AI Coach (invariant 114) — the block screen's "Talk to coach". */
+        const val EXTRA_OPEN_COACH = "open_coach"
+
+        /** What had just been blocked: an app's name or a plain category, never a word or site. */
+        const val EXTRA_COACH_FROM = "coach_from"
     }
 }

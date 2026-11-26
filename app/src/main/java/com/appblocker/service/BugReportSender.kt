@@ -477,6 +477,9 @@ object BugReportSender {
         // Only when the coach has actually failed — absent means it has never failed on this
         // install, which is different from "we didn't look".
         AiCoach.lastError(ctx)?.let { (error, _) -> field("coachError") { error.name } }
+        // Which model answered the coach last (invariant 114) — the one way to see from a report
+        // that the coach works on his phone, and on which tier. Absent = never answered.
+        AiCoach.lastModelUsed(ctx)?.let { m -> field("coachModel") { m } }
         // ---- What this phone is actually set up to block -------------------------------------
         // Added 26 Aug 2026: "i want the report to include a lot more than the last report".
         // Every one is a COUNT or a named setting, never a subject — no app name, no word, no

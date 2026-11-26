@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -31,6 +32,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -44,6 +46,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -59,6 +62,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.appblocker.data.ChatMsg
+import com.appblocker.data.CoachActions
 import com.appblocker.data.CoachError
 import com.appblocker.data.Goal
 import com.appblocker.ui.theme.AppGradients
@@ -69,9 +73,16 @@ import com.appblocker.R
 /** Full-screen chat with the AI Coach: goal chips up top, message bubbles, and an input bar. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun CoachChatScreen(onBack: () -> Unit, vm: CoachChatViewModel = viewModel()) {
+fun CoachChatScreen(
+    onBack: () -> Unit,
+    /** Set when "Talk to coach" on the block screen opened this — see [CoachOpen]. */
+    openedFrom: CoachOpen? = null,
+    vm: CoachChatViewModel = viewModel(),
+) {
     val messages by vm.messages.collectAsState()
     val sending by vm.sending.collectAsState()
+    val sendingSince by vm.sendingSince.collectAsState()
+    val applied by vm.applied.collectAsState()
     val goals by vm.goals.collectAsState()
     val suggestions by vm.suggestions.collectAsState()
     val profile by vm.profile.collectAsState()
@@ -80,10 +91,27 @@ fun CoachChatScreen(onBack: () -> Unit, vm: CoachChatViewModel = viewModel()) {
     var showProfile by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
-    // Keep the newest bubble (or the typing indicator) in view.
+    // One request = one intro bubble: keyed on the request's nonce, so reopening the chat from a
+    // second block says so again, while a recomposition never does.
+    LaunchedEffect(openedFrom?.nonce) {
+        openedFrom?.let { vm.openedFromBlock(it.label) }
+    }
+
+    // "Thinking… 12 s": a deep answer can take a while, and a number that moves says it's coming.
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(sending) {
+        while (sending) {
+            now = System.currentTimeMillis()
+            kotlinx.coroutines.delay(1000)
+        }
+    }
+
+    // Keep the newest bubble (or the typing indicator) in view — its END, not its top: a long
+    // reply used to be scrolled to its first line, with the rest (and its buttons) hidden under
+    // the input. The offset past the item's height is clamped to the end of the list.
     LaunchedEffect(messages.size, sending) {
         val count = messages.size + if (sending) 1 else 0
-        if (count > 0) listState.animateScrollToItem(count - 1)
+        if (count > 0) listState.animateScrollToItem(count - 1, scrollOffset = 100_000)
     }
 
     // safeDrawing = status bar + nav bar + keyboard: the screen has no Scaffold of its own, and
@@ -110,21 +138,44 @@ fun CoachChatScreen(onBack: () -> Unit, vm: CoachChatViewModel = viewModel()) {
                 horizontal = 16.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            items(messages.size) { i -> Bubble(messages[i]) }
+            items(messages.size) { i ->
+                val msg = messages[i]
+                Column {
+                    Bubble(msg)
+                    if (msg.actions.isNotEmpty()) {
+                        ActionChips(msg, applied, onTap = { a -> vm.applyAction(msg, a) })
+                    }
+                    // "Try again" under a failure, while it is still the newest thing on screen.
+                    if (msg.kind == ChatMsg.KIND_ERROR && i == messages.lastIndex && !sending) {
+                        RetryChip(onTap = { vm.retry() })
+                    }
+                }
+            }
             if (sending) {
                 item {
                     CoachRow {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
                             Spacer(Modifier.width(8.dp))
-                            Text(stringResource(R.string.chat_thinking), style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            val secs = ((now - sendingSince) / 1000L).coerceAtLeast(0L)
+                            Text(
+                                if (sendingSince > 0L && secs >= 3) {
+                                    stringResource(R.string.coach_thinking_seconds, secs.toInt())
+                                } else {
+                                    stringResource(R.string.chat_thinking)
+                                },
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                     }
                 }
             }
         }
 
+        if (!sending) {
+            UrgeButton(onTap = { vm.urge() })
+        }
         if (suggestions.isNotEmpty() && !sending) {
             SuggestionChips(suggestions, onTap = { vm.send(it) })
         }
@@ -204,6 +255,9 @@ private fun ProfileDialog(
                         }
                     }
                 }
+                Text(stringResource(R.string.coach_recovery_shared),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
                 model?.let {
                     Text("Brain: $it", style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -329,14 +383,113 @@ private fun Bubble(msg: ChatMsg) {
                     .background(AppGradients.accent)
                     .padding(horizontal = 14.dp, vertical = 10.dp),
             ) {
-                Text(msg.text, style = MaterialTheme.typography.bodyMedium, color = Color.White)
+                SelectionContainer {
+                    Text(msg.text, style = MaterialTheme.typography.bodyMedium, color = Color.White)
+                }
             }
         }
-        "model" -> CoachRow { CoachMessage(msg.text) }
-        else -> CoachRow { // "local": greeting / error notes — same side, muted
+        "model" -> CoachRow { SelectionContainer { CoachMessage(msg.text) } }
+        else -> CoachRow { // "local": greeting / error notes / urge card — same side
+            // The urge card and the block-screen intro are written to be read in a hard moment:
+            // full contrast, not the muted grey of a status note.
+            val strong = msg.kind == ChatMsg.KIND_URGE || msg.kind == ChatMsg.KIND_BLOCKED
             Text(msg.text, style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                color = if (strong) MaterialTheme.colorScheme.onSurface
+                else MaterialTheme.colorScheme.onSurfaceVariant)
         }
+    }
+}
+
+/** "Talk to coach" from the block screen: what had just been blocked (an app's name or a plain
+ *  category — never a word or an address), and a nonce so every tap is a new request. */
+data class CoachOpen(val label: String?, val nonce: Long)
+
+/**
+ * The coach's one-tap buttons under a reply (invariant 114). Strengthen-only; a tapped one turns
+ * ✅ and stays that way — there is no undo, as with every lock in the app.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ActionChips(msg: ChatMsg, applied: Set<String>, onTap: (CoachActions.Action) -> Unit) {
+    FlowRow(
+        Modifier.fillMaxWidth().padding(start = 32.dp, top = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        msg.actions.forEach { a ->
+            val done = CoachActions.key(msg.at, a) in applied
+            val label = actionLabel(a)
+            Box(
+                Modifier.clip(RoundedCornerShape(50))
+                    .background(
+                        if (done) MaterialTheme.colorScheme.surfaceVariant
+                        else MaterialTheme.colorScheme.primaryContainer,
+                    )
+                    .clickable(enabled = !done) { onTap(a) }
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+            ) {
+                Text(
+                    if (done) stringResource(R.string.coach_action_done, label) else label,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = if (done) MaterialTheme.colorScheme.onSurfaceVariant
+                    else MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun actionLabel(a: CoachActions.Action): String {
+    val app = a.appLabel ?: a.pkg.orEmpty()
+    return when (a.type) {
+        CoachActions.Type.LOCK_APP ->
+            stringResource(R.string.coach_action_lock, app, CoachActions.lengthLabel(a.minutes))
+        CoachActions.Type.LOCK_TONIGHT ->
+            stringResource(R.string.coach_action_tonight, app, "%02d:00".format(com.appblocker.data.SmartSuggestions.MORNING_HOUR))
+        CoachActions.Type.DAILY_LIMIT ->
+            stringResource(R.string.coach_action_limit, app, a.minutes)
+        CoachActions.Type.STRICT ->
+            stringResource(R.string.coach_action_strict, CoachActions.lengthLabel(a.minutes))
+    }
+}
+
+/** Under a failed reply: send the same message again. */
+@Composable
+private fun RetryChip(onTap: () -> Unit) {
+    Row(
+        Modifier.padding(start = 32.dp, top = 8.dp)
+            .clip(RoundedCornerShape(50))
+            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.55f), RoundedCornerShape(50))
+            .clickable(onClick = onTap)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Filled.Refresh, contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(stringResource(R.string.coach_retry), style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+/**
+ * **🆘 I have an urge** — his pick, always on screen while the coach isn't busy. Big and plain on
+ * purpose: it is for the moment when typing a sentence is already too much.
+ */
+@Composable
+private fun UrgeButton(onTap: () -> Unit) {
+    Box(
+        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.errorContainer)
+            .clickable(onClick = onTap)
+            .padding(vertical = 14.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(stringResource(R.string.coach_urge_button), style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onErrorContainer)
     }
 }
 

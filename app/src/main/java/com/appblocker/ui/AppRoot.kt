@@ -99,6 +99,9 @@ fun AppRoot(
     /** Tapping the standing "Blocking has stopped" alert. Separate from the permissions route
      *  because a stalled watcher has every permission it needs — see MainActivity.EXTRA_OPEN_REPAIR. */
     openRepairOnStart: Boolean = false,
+    /** "Talk to coach" on the block screen (invariant 114): opens the coach with what had just
+     *  been blocked. A new [CoachOpen.nonce] per tap, so a second block opens it again. */
+    openCoachRequest: CoachOpen? = null,
 ) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var overlay by remember { mutableStateOf<Overlay?>(null) }
@@ -133,6 +136,15 @@ fun AppRoot(
     // …and the "blocking has stopped" alert routes to the screen that can actually end it.
     LaunchedEffect(openRepairOnStart) {
         if (openRepairOnStart) overlay = Overlay.Repair
+    }
+
+    // …and "Talk to coach" on a block screen opens the coach, with what was just blocked.
+    var coachOpen by remember { mutableStateOf<CoachOpen?>(null) }
+    LaunchedEffect(openCoachRequest?.nonce) {
+        openCoachRequest?.let {
+            coachOpen = it
+            overlay = Overlay.CoachChat
+        }
     }
 
     // Check whether the accessibility service got silently turned off on EVERY app open/resume,
@@ -202,7 +214,10 @@ fun AppRoot(
                     },
                 )
             is Overlay.CoachChat ->
-                CoachChatScreen(onBack = { overlay = null })
+                CoachChatScreen(
+                    onBack = { overlay = null; coachOpen = null },
+                    openedFrom = coachOpen,
+                )
             // Wrapped in EnglishOnly: these six are the long-form reading material the owner
             // chose to leave in English, and English text inside a right-to-left layout puts its
             // punctuation at the wrong end. See [EnglishOnly].

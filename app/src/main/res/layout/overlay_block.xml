@@ -188,5 +188,20 @@
             android:textSize="18sp"
             android:textStyle="bold"
             android:stateListAnimator="@null" />
+
+        <!-- "Talk to coach" (invariant 114, his pick): the moment of a block is the moment an
+             urge is strongest, so the coach is one tap away from here. Same exit as Got it. -->
+        <TextView
+            android:id="@+id/overlay_coach"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="4dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:text="@string/block_talk_to_coach"
+            android:textColor="@color/block_text_primary"
+            android:textSize="16sp"
+            android:textStyle="bold" />
     </LinearLayout>
 </FrameLayout>

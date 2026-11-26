@@ -277,6 +277,10 @@ class BlockerAccessibilityService : AccessibilityService() {
     // dangerous page doesn't fire GLOBAL_ACTION_HOME over and over.
     private var lastGuardBounceAt: Long = 0L
 
+    /** What the cover on screen was raised for, for "Talk to coach" ([CoverCoach]). */
+    @Volatile private var lastCoverWhy: String? = null
+    @Volatile private var lastCoverLabel: String? = null
+
     /** Invariant 110, the launcher's uninstall popup: when a launcher event last named a dialog or
      *  popup, when its window was last read, and how many delayed looks are still owed. All
      *  monotonic (invariant 9). */
@@ -1333,7 +1337,7 @@ class BlockerAccessibilityService : AccessibilityService() {
         scope.launch { runCatching { NewAppWatcher.catchUp(applicationContext) } }
         // Warm the block overlay off the connect path (inflate only, NOT addView), so the
         // very first block doesn't pay layout inflation while the blocked app is visible.
-        handler.post { guarded(applicationContext, "overlayWarmUp") { overlay.warmUp(::onCoverDismissed) } }
+        handler.post { guarded(applicationContext, "overlayWarmUp") { overlay.warmUp(::onCoverDismissed, ::onCoverCoach) } }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -3624,6 +3628,9 @@ class BlockerAccessibilityService : AccessibilityService() {
             }
         }
         val label = packageName?.let { loadLabel(it) }
+        // For "Talk to coach" on this cover: what it blocked, as the coach may hear it.
+        lastCoverWhy = why
+        lastCoverLabel = label
         val msg = message ?: label?.let { "$it is blocked" } ?: "This is blocked right now."
         // Instant overlay; fall back to the Activity only if the overlay can't be drawn.
         // Only app-rule blocks pass a package (see isAppBlock).
@@ -3643,6 +3650,7 @@ class BlockerAccessibilityService : AccessibilityService() {
             ownerPkg = lastForegroundPkg,
             onClose = ::onCoverDismissed,
             iconLoader = ::loadIcon,
+            onCoach = ::onCoverCoach,
             freshBlock = fresh,
             minVisibleMs = minVisibleMs,
         )
@@ -3709,6 +3717,32 @@ class BlockerAccessibilityService : AccessibilityService() {
      * the trip Home can't instantly re-block), ask the phone to go Home, and keep the cover up
      * until it actually gets there — see [exitRunnable].
      */
+    /**
+     * **"Talk to coach"** on a cover (invariant 114, his pick). Leaves exactly as Got it does —
+     * every exit rule, grace and watcher of [onCoverDismissed] applies unchanged — then, once the
+     * trip Home has had a moment, takes the cover down and opens the coach over the home screen.
+     *
+     * The cover comes down here explicitly because our own screen is about to be in front, and
+     * the watcher ignores our package's events: nothing else would remove a cover left over it.
+     * The exit watcher sees the cover gone at its next poll and stands down ([finishExit]).
+     */
+    private fun onCoverCoach() {
+        val from = CoverCoach.label(lastCoverWhy, lastCoverLabel)
+        onCoverDismissed()
+        handler.postDelayed({
+            guarded(applicationContext, "coverCoach") {
+                overlay.remove(now = true)
+                startActivity(
+                    Intent(this, com.appblocker.MainActivity::class.java).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        putExtra(com.appblocker.MainActivity.EXTRA_OPEN_COACH, true)
+                        from?.let { putExtra(com.appblocker.MainActivity.EXTRA_COACH_FROM, it) }
+                    },
+                )
+            }
+        }, COACH_OPEN_DELAY_MS)
+    }
+
     private fun onCoverDismissed() {
         // Read before anything is torn down — remove() clears it.
         dismissedKey = overlay.counterKey
@@ -4172,6 +4206,8 @@ class BlockerAccessibilityService : AccessibilityService() {
 
         // Throttle for isLauncherPkg's on-miss launcher re-detection.
         private const val LAUNCHER_REFRESH_MS = 30_000L
+        /** "Talk to coach": long enough for the trip Home to land, short enough to feel instant. */
+        private const val COACH_OPEN_DELAY_MS = 350L
         /** At most one read of the launcher's window per this, unless a popup was just named. */
         private const val LAUNCHER_GUARD_READ_MS = 300L
         /** The delayed look at a launcher popup whose text was not built yet. */

@@ -18,12 +18,49 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /** One turn of the coach conversation. Role is "user", "model", or "local" — "local" bubbles
- *  (greeting, error notes) are shown in the UI but never sent to Gemini or persisted. */
-data class ChatMsg(val role: String, val text: String)
+ *  (greeting, error notes, the urge card) are shown in the UI but never sent to Gemini or
+ *  persisted.
+ *
+ *  [actions] are the one-tap buttons a coach reply carries (invariant 114), [at] is when the
+ *  message was made — also what keeps a tapped button ✅ for THAT reply only — and [kind] marks the
+ *  special bubbles the screen draws differently ([KIND_URGE], [KIND_ERROR], [KIND_BLOCKED]). */
+data class ChatMsg(
+    val role: String,
+    val text: String,
+    val actions: List<CoachActions.Action> = emptyList(),
+    val at: Long = 0L,
+    val kind: String? = null,
+) {
+    companion object {
+        /** The 🆘 message he sent, and the calm card that answers it at once. */
+        const val KIND_URGE = "urge"
 
-/** One chat answer: the coach's reply plus up to 3 suggested follow-up messages the user
- *  can tap instead of typing. */
-data class CoachReply(val reply: String, val suggestions: List<String>)
+        /** A failed reply — the screen offers "Try again" under it. */
+        const val KIND_ERROR = "error"
+
+        /** Opened from the block screen's "Talk to coach". */
+        const val KIND_BLOCKED = "blocked"
+    }
+}
+
+/** One chat answer: the coach's reply, up to 3 suggested follow-up messages the user can tap
+ *  instead of typing, and up to 3 one-tap action buttons. */
+data class CoachReply(
+    val reply: String,
+    val suggestions: List<String>,
+    val actions: List<CoachActions.Action> = emptyList(),
+)
+
+/** How the coach should answer this turn. */
+enum class ChatMode {
+    NORMAL,
+
+    /** The 🆘 "I have an urge" button (invariant 114): immediate, calm, short, no numbers. */
+    URGE,
+}
+
+/** A reply the provider refused to give (its own safety filter), told apart from a broken one. */
+internal class CoachBlockedException(reason: String) : java.io.IOException("BLOCKED: $reason")
 
 /**
  * Why the coach couldn't answer — the *category*, never the error itself.
@@ -60,6 +97,9 @@ enum class CoachError {
 
     /** A 200 that the app couldn't make sense of. */
     BAD_REPLY,
+
+    /** Google's own filter refused to answer this one (not a fault — a rephrase usually works). */
+    BLOCKED,
 
     /** Anything unrecognised. Present so a new failure mode is visibly *new* rather than silent. */
     UNKNOWN,
@@ -100,9 +140,24 @@ object AiCoach {
     // throughout, and tips serve the cached list while refreshing, so a long wait is visible
     // rather than a freeze.
     //
-    // 90s, not the 120s first written: a reply is expected within ~30s, so this is already 3x
-    // headroom, and the ceiling is what the user actually waits through when a request hangs.
-    private const val DEEP_READ_TIMEOUT_MS = 90_000
+    // ⚠️ **Per MODEL, not per answer** (26 Nov 2026). Measured that day through his relay:
+    // `gemini-3.5-flash` hung until Cloudflare gave up (524), while `gemini-3-flash-preview`
+    // answered in 1-8 s. A timeout used to end the whole walk — the next, working model was never
+    // tried, and the coach reported "server down" after 90 s. A timeout now walks on, so this is
+    // how long ONE model gets: 60 s is still several times a deep answer's real length.
+    private const val DEEP_READ_TIMEOUT_MS = 60_000
+
+    /** How long a model that just timed out, overloaded or ran out of quota goes to the back of
+     *  the line — so one hanging model costs one wait per few hours, not one per message. */
+    private const val BAD_MODEL_COOLDOWN_MS = 6L * 60 * 60 * 1000
+
+    /**
+     * The output ceiling for a chat reply. ⚠️ **Thinking tokens count against it** (measured
+     * 26 Nov 2026: with a 512 cap, 492 tokens of thinking left 6 for the answer and it stopped
+     * mid-word). At 4096 a deep plan or weekly report could be cut off the same way, so this
+     * leaves room for a long thought AND a long answer.
+     */
+    internal const val CHAT_MAX_OUTPUT_TOKENS = 16_384
 
     /**
      * Whether a failed attempt is worth repeating.
@@ -118,7 +173,9 @@ object AiCoach {
      * Only a timeout is excluded.
      */
     private fun retryWorthwhile(t: Throwable?): Boolean =
-        t !is java.io.InterruptedIOException // SocketTimeoutException extends this; null => true
+        // SocketTimeoutException extends InterruptedIOException; null => true. A refusal would
+        // only be refused again.
+        t !is java.io.InterruptedIOException && t !is CoachBlockedException
 
     /**
      * Sorts a failure into one of the [CoachError] categories.
@@ -133,6 +190,7 @@ object AiCoach {
         val msg = t?.message.orEmpty()
         return when {
             // Types first: they are unambiguous, where a message is whatever the far end wrote.
+            t is CoachBlockedException -> CoachError.BLOCKED
             t is java.net.UnknownHostException -> CoachError.OFFLINE
             t is java.net.ConnectException -> CoachError.SERVER_DOWN
             t is java.io.InterruptedIOException -> CoachError.SERVER_DOWN // incl. socket timeouts
@@ -212,17 +270,25 @@ object AiCoach {
             // pro, on a day without he gets what he gets today.
             //
             // The other 3.x pro ids (3.1-pro, 3-pro, 3.5-pro) still 404 and stay out.
+            //
+            // ⚠️ Re-probed 26 Nov 2026 through the relay: 3.1-pro-preview 429 (quota, still
+            // served); 3.5-pro and 3.5-pro-preview 404; 3-pro-preview 404 "no longer available";
+            // **3.5-flash hung until Cloudflare's 524**; **3-flash-preview 200 in 1-8 s**, with
+            // high thinking; 2.5-flash 200. So the working flash goes BEFORE the hanging one —
+            // 3.5-flash stays as a later try in case it was only overloaded that day.
             "gemini-3.1-pro-preview",
+            "gemini-3-flash-preview",
             "gemini-3.5-flash",
             "gemini-2.5-flash",
         ),
         thinking = Thinking.HIGH,
     )
 
-    /** Bulk/utility work (app categorisation): fast tier, no thinking — unchanged behaviour. */
+    /** Bulk/utility work (app categorisation): fast tier, no thinking. The model that answered
+     *  in about a second on 26 Nov 2026 first; the one that hung last. */
     internal val UTILITY_CHAIN = ModelChain(
         name = "utility",
-        models = listOf("gemini-3.5-flash", "gemini-2.5-flash"),
+        models = listOf("gemini-2.5-flash", "gemini-3-flash-preview", "gemini-3.5-flash"),
         thinking = Thinking.OFF,
     )
 
@@ -250,17 +316,30 @@ object AiCoach {
 
     /** What the app can do, so the coach recommends real features with concrete settings
      *  instead of generic advice. */
+    /**
+     * ⚠️ **Rewritten 26 Nov 2026 — the old list was months out of date.** It still described
+     * Pomodoro as a Strict-tab feature and knew nothing of Locks, the counter, the off-switch waits,
+     * the family filter or Instagram, so the coach recommended things that had moved and never the
+     * ones that matter most to him. Every line here names what the screen actually says. Update it
+     * in the same commit as any feature it describes.
+     */
     private val FEATURE_CATALOG = """
-        AppBlocker's features (recommend these BY NAME with concrete settings):
-        - Quick Block: instantly blocks a chosen set of apps; also auto-blocks those apps' websites in browsers. Has a "Shorts" sub-option that blocks only YouTube Shorts while the rest of YouTube keeps working.
-        - Schedules (Blocking tab > New schedule): Time (block apps during a daily time window, e.g. 22:00-07:00, with chosen weekdays), Usage limit (allow N minutes per day per schedule, then block, e.g. 45 min), Launch count (allow N opens per day, then block), Wi-Fi (block when on a chosen network), Location (block within a radius of a saved place).
-        - Strict tab: Pomodoro focus sessions (work/break cycles that block apps during work) and unstoppable strict sessions; "Prevent uninstall" protection.
-        - Blocked words (Blocking tab > Blocked words): blocks any chosen word or site in browsers — or in EVERY app with one toggle; includes a built-in adult-content word pack (English + Arabic, on by default) that is deliberately hard to switch off.
-        - Web filter also blocks in-app purchases in browsers.
-        - App lists are grouped into 12 categories (Social media, Entertainment, Games...) — a whole category can be blocked with ONE tap on its checkbox in Quick Block or any schedule.
-        - Hypothetical apps: pre-block popular social apps (TikTok, Instagram...) even before they are installed.
-        - The block screen itself motivates: every blocked open shows a giant "minutes reclaimed today" counter (3 min per dodged open) and a motivational quote.
-        - Insights tab: screen time charts, balance vs awake time, focus/distraction stats, a daily mood check-in, and the user's goals with live progress bars and streaks.
+        AppBlocker's features — recommend ONLY these, BY the names below, with concrete settings:
+        - Quick Block (Blocking tab): blocks a chosen list of apps, or in Allowlist mode everything except the chosen apps; blocking an app also blocks its website in browsers. Timer (block for a set time) and Pomodoro (block during work, free during breaks) start from the Quick Block card. A "Shorts" option blocks only YouTube Shorts.
+        - Suggestions for you (top of the Blocking tab): one-tap buttons for the most-used apps — lock for 1 hour, lock until 06:00, or a daily limit.
+        - Schedules (Blocking tab > New schedule): Time (a daily window on chosen weekdays, e.g. 22:00-07:00), Usage limit (N minutes a day, then blocked), Launch count (N opens a day), Wi-Fi, Location.
+        - Locks (Blocking tab > Locks): lock one blocked app or website for 1 to 365 days; it cannot be removed before then, even outside Strict Mode.
+        - Blocked words (Blocking tab > Blocked words): block any word or site in browsers, or in every app; a built-in adult word pack is on by default, and switching it off takes a 7-day wait.
+        - Strict Mode (Strict tab): an unstoppable session for a chosen time — nothing can be unblocked until it ends. "I relapsed" on that screen adds 24 hours of Strict.
+        - Danger zone (automatic): three different adult words within 30 minutes lock every browser for one hour.
+        - Instagram is blocked completely and permanently (the app, Threads and the website) — the user's own choice; there is no switch, so never suggest anything about unblocking it.
+        - Protection (Profile): "Guard the off-switch" (lowering it takes 48 hours) and "Prevent uninstall" (turning it off takes 14 days); each wait starts only after typing a long, exact paragraph.
+        - Family filter (Profile): the phone's Private DNS refuses adult sites in every app, even if AppBlocker stops.
+        - Black & white screen (Profile > Appearance): grey screen, less rewarding to scroll.
+        - Recovery (Profile): Your counter (days clean, best streak), Journal (private — the coach never sees it), Scenarios (guides for hard moments: relapse, focus, sleep), The Twelve Steps, Dopamine detox guide.
+        - Insights tab: screen time charts, the daily mood check-in, goals with streaks, and this AI Coach.
+        - Always blocked, no switch: Gemini's temporary chat and instructions page, Google's Discover news feed, Ultra battery saver, and at 5% battery or less (unplugged) every app except calls and messages.
+        - Every block screen has "Talk to coach", which opens this chat.
     """.trimIndent()
 
     private fun p(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -272,22 +351,57 @@ object AiCoach {
     // --- Chat history (persisted so the conversation survives restarts) ---
 
     fun chatHistory(ctx: Context): List<ChatMsg> =
-        p(ctx).getString("chat", null)?.let { raw ->
-            runCatching {
-                val arr = JSONArray(raw)
-                (0 until arr.length()).map {
-                    val o = arr.getJSONObject(it)
-                    ChatMsg(o.getString("r"), o.getString("t"))
-                }
-            }.getOrNull()
-        } ?: emptyList()
+        p(ctx).getString("chat", null)?.let { decodeChat(it) } ?: emptyList()
 
     fun saveChat(ctx: Context, msgs: List<ChatMsg>) {
+        p(ctx).edit().putString("chat", encodeChat(msgs)).apply()
+    }
+
+    /**
+     * The stored conversation: user and coach turns only, newest [MAX_HISTORY_STORED], each with
+     * its buttons ("a"), time ("at") and kind ("k"). Old entries carry only "r"/"t" and still read —
+     * with no buttons and time 0.
+     */
+    internal fun encodeChat(msgs: List<ChatMsg>): String {
         val keep = msgs.filter { it.role == "user" || it.role == "model" }.takeLast(MAX_HISTORY_STORED)
         val arr = JSONArray()
-        keep.forEach { arr.put(JSONObject().put("r", it.role).put("t", it.text)) }
-        p(ctx).edit().putString("chat", arr.toString()).apply()
+        keep.forEach { m ->
+            val o = JSONObject().put("r", m.role).put("t", m.text)
+            if (m.actions.isNotEmpty()) o.put("a", CoachActions.toJson(m.actions))
+            if (m.at > 0L) o.put("at", m.at)
+            m.kind?.let { o.put("k", it) }
+            arr.put(o)
+        }
+        return arr.toString()
     }
+
+    internal fun decodeChat(raw: String): List<ChatMsg>? = runCatching {
+        val arr = JSONArray(raw)
+        (0 until arr.length()).map {
+            val o = arr.getJSONObject(it)
+            ChatMsg(
+                role = o.getString("r"),
+                text = o.getString("t"),
+                actions = CoachActions.fromJson(o.optJSONArray("a")),
+                at = o.optLong("at", 0L),
+                kind = o.optString("k").ifBlank { null },
+            )
+        }
+    }.getOrNull()
+
+    // --- The 🆘 button: when he asked for help with an urge (times only) ---
+
+    private const val KEY_URGES = "urge_log"
+
+    /** Records one press of "I have an urge". Times only — never what he wrote. */
+    fun recordUrge(ctx: Context, at: Long = System.currentTimeMillis()) {
+        val kept = (urges(ctx) + at).sorted().takeLast(60)
+        p(ctx).edit().putString(KEY_URGES, kept.joinToString(",")).apply()
+    }
+
+    fun urges(ctx: Context): List<Long> =
+        p(ctx).getString(KEY_URGES, null)?.split(',')?.mapNotNull { it.trim().toLongOrNull() }
+            ?: emptyList()
 
     fun clearChat(ctx: Context) = p(ctx).edit().remove("chat").apply()
 
@@ -409,7 +523,15 @@ object AiCoach {
      * what that cost. Only the chat path reports its reason: the daily tips fail invisibly by
      * design (they serve the cached list), so there is nothing there for a user to act on.
      */
-    suspend fun chat(ctx: Context, history: List<ChatMsg>, userMsg: String): CoachOutcome =
+    suspend fun chat(
+        ctx: Context,
+        history: List<ChatMsg>,
+        userMsg: String,
+        mode: ChatMode = ChatMode.NORMAL,
+        /** What the block screen had just blocked when he tapped "Talk to coach" — an app's
+         *  name or a plain category ("a website"), never a word or an address. */
+        blockedFrom: String? = null,
+    ): CoachOutcome =
         withContext(Dispatchers.IO) {
             val key = apiKey(ctx)
             if (key.isBlank() && !proxyOn()) {
@@ -436,6 +558,13 @@ object AiCoach {
                 appendLine("Personality: warm, celebratory, direct — a coach who is genuinely proud when $who makes progress. Lead with the most positive TRUE thing in the data (a streak alive, a goal hit, a number down vs last week) before advice or bad news. $nameLine")
                 appendLine("How to write: like a person talking, not like a form. Short natural paragraphs. Match the length to what was asked — a sentence or two for a small question, more when $who asks for a plan, a report or an explanation, and don't pad to fill space. Use a list ONLY when you are genuinely enumerating steps or options; never break an ordinary thought into bullets. **Bold** at most one thing that really matters (usually a number) — not by rule, and not in every reply. No headings unless the reply is long enough to genuinely need them. No other markdown (#, backticks, tables). At most 2 fitting emojis, often zero. Ask at most one question per reply. Vary how you open — never start consecutive replies the same way.")
                 appendLine("Your job: help the user understand their usage, agree on goals together, and track progress against those goals using the data below. Suggest specific app features with concrete settings when they would help.")
+                appendLine("Language: reply in the language the user writes in.")
+                // ⚠️ His standing preference (memory: "Support, Not Metrics"): when he is low,
+                // numbers read as a judgement. The celebratory, number-first style above is for
+                // ordinary days only.
+                appendLine("When the user says they relapsed, slipped, feel ashamed, low, lonely or stuck, or are fighting an urge: switch completely — plain warm prose, NO numbers, NO statistics, NO goals talk, NO lists, NO lecture. Acknowledge what they feel, remind them a slip does not erase their progress, and offer ONE small, concrete next step. Never shame, never moralise.")
+                appendLine("Safety: never describe sexual content, never name adult websites or explicit search terms, even if asked — talk about the urge, not the content. If the user mentions wanting to hurt themselves or not wanting to live, respond with care, encourage them to reach out now, and give TelefonSeelsorge (free, 24/7, Germany): 0800 111 0 111 or 0800 111 0 222, and 112 for an emergency.")
+                appendLine("Never claim you changed a setting yourself. You change nothing directly: when a concrete blocking step would help, attach it as an action button (see \"actions\" below) and tell the user to tap it.")
                 appendLine("Today's numbers are PARTIAL — the day is not over. Never declare a daily goal hit today or call today a win; the strongest claim allowed is \"on track\", tied to the clock (like \"only 40m by 14:00\"). Judge today against \"by this same time yesterday\" rather than full-day averages, and treat a phone-free stretch that includes the night as sleep, not willpower. Finished days (yesterday, streaks, weekly trends) are fair game to celebrate.")
                 appendLine("When the user wants a goal or plan for the week: propose ONE specific, measurable weekly goal grounded in the data (for example a daily-average target around 10-20% below their current average — realistic, not drastic), then give a concrete plan: which apps to limit with which feature and what setting, and what to check each day. Save the goal via the goals field prefixed 'This week: '. When a weekly goal already exists, report progress against it using the per-day numbers.")
                 appendLine()
@@ -447,6 +576,25 @@ object AiCoach {
                 )
                 appendLine("Getting to know the user: you remember facts permanently through the \"profile\" field described below — chat history gets trimmed, the profile does not. When it fits the moment, weave in AT MOST ONE natural get-to-know-you question per reply — never interrogate, and skip it when the user asked a direct question that deserves a direct answer. Worth learning over time: why they want to block apps, which app and time of day tempts them most, what they'd rather do with the time they win back, their work or study rhythm, and what kind of encouragement lands with them. Whenever the user reveals something personal in ANY message, save it via \"profile\" and reference it naturally from then on.")
                 appendLine()
+                // His pick, 26 Nov 2026: streak and relapse dates — never the journal's text.
+                val recovery = runCatching {
+                    recoveryPromptText(
+                        startedAt = CleanStreak.startedAt(ctx),
+                        bestMs = CleanStreak.bestMs(ctx),
+                        resets = CleanStreak.resets(ctx),
+                        urges = urges(ctx),
+                        now = System.currentTimeMillis(),
+                    )
+                }.getOrDefault("")
+                if (recovery.isNotBlank()) {
+                    appendLine("Recovery — the user's own clean-streak counter (handle with great care; celebrate a streak, never use a relapse as a weapon; patterns in the days and hours are worth gently pointing out when the user asks how to prevent the next one):")
+                    appendLine(recovery)
+                    appendLine()
+                }
+                if (!blockedFrom.isNullOrBlank()) {
+                    appendLine("Context: the user opened this chat from the block screen, seconds after AppBlocker blocked $blockedFrom. Being blocked was the app doing its job — treat the moment as a likely urge, not a failure.")
+                    appendLine()
+                }
                 appendLine(FEATURE_CATALOG)
                 appendLine()
                 appendLine("The user's current setup:")
@@ -472,6 +620,11 @@ object AiCoach {
                 )
                 appendLine()
                 appendLine("Reply ONLY with a JSON object: {\"reply\": string, \"goals\": array (optional), \"suggestions\": array of up to 3 short strings (optional), \"profile\": object (optional), \"advice\": string (optional)}. \"advice\" is ONE short line recording what you just recommended, written ONLY when this reply contained a concrete recommendation or plan — it is how you remember your own advice and follow it up later. Never write \"advice\" for a reply that was only conversation, encouragement or an answer to a question. \"goals\" REPLACES the user's whole goal list and must contain OBJECTS: {\"kind\": \"screen_time\" or \"app\" or \"unlocks\", \"minutes\": integer daily target (for unlocks, the unlock count), \"app\": the exact app name, only for kind app}. Include \"goals\" ONLY when the user agreed to add, change, complete or drop a goal — and when you do, also include the existing goals being kept. Goals must be measurable daily targets; never invent one the user didn't agree to. \"suggestions\" are follow-up messages the user might want to send next, phrased in the user's own voice (like \"Show me my weekly report\" or \"Which app should I limit first?\"), each under 40 characters, relevant to where the conversation is. \"profile\" is a flat object of short plain-text facts to remember about the user forever. Include ONLY keys you are adding or changing — existing keys are kept automatically; set a key to \"\" to forget it. Use snake_case keys, preferring: why_blocking, temptation_apps, temptation_times, replacement_activities, work_study_rhythm, motivation_style, wins, personal_notes. Values under 200 characters. Never store anything the user asks you to forget.")
+                appendLine("\"actions\" (optional, at most 3) are one-tap buttons shown under your reply; nothing happens until the user taps one, and each can only make blocking STRONGER. Each is an object: {\"type\": \"lock_app\", \"app\": exact app name, \"minutes\": 15-720} locks one app; {\"type\": \"lock_until_morning\", \"app\": exact app name} locks one app until 06:00; {\"type\": \"daily_limit\", \"app\": exact app name, \"minutes\": 5-240} sets a daily time limit; {\"type\": \"strict\", \"minutes\": 15-1440} starts Strict Mode (or lengthens the running session). Offer an action whenever you recommend one of these concrete steps, so the user can act in one tap; offer none for ordinary conversation. Use app names exactly as they appear in the usage data. Never offer an action for Instagram (always blocked already) or for the phone, messages or keyboard.")
+                if (mode == ChatMode.URGE) {
+                    appendLine()
+                    appendLine("URGE MODE — the user just pressed \"I have an urge\" and needs you NOW. Reply in under 120 words, plain warm prose, no numbers, no statistics, no lists, no headings. First: they did the right thing by opening this instead of giving in — say so. Then ONE concrete plan for the next 10 minutes, built from what you know about them (their replacement activities, their rhythm), e.g. stand up, leave the room, cold water, a walk, call someone. Remind them an urge rises, peaks and passes like a wave. Offer one or two actions (usually \"strict\" for 60-120 minutes, or locking the app that tempts them until morning). End with one gentle question about what set it off. No \"goals\", \"profile\" or \"advice\" fields in this reply.")
+                }
             }
 
             // Gemini wants contents to start with a user turn; drop any leading model greeting.
@@ -500,8 +653,9 @@ object AiCoach {
                         // the parse throws, and the whole reply is lost. The requests most likely
                         // to hit a ceiling are exactly the ones worth having (a weekly report, a
                         // plan), so the ceiling is set high enough that a long answer plus its
-                        // goals, suggestions and profile fields fit inside it.
-                        .put("maxOutputTokens", 4096),
+                        // goals, suggestions and profile fields fit inside it. Thinking tokens
+                        // count against it too: see CHAT_MAX_OUTPUT_TOKENS.
+                        .put("maxOutputTokens", CHAT_MAX_OUTPUT_TOKENS),
                 )
 
             var triesLeft = 2
@@ -516,18 +670,24 @@ object AiCoach {
                     salvaged = salvageReply(raw)
                     val obj = JSONObject(raw)
                     val reply = obj.getString("reply").trim()
-                    obj.optJSONArray("goals")?.let { g -> applyGoalUpdate(ctx, g) }
-                    obj.optJSONObject("profile")?.let { pr ->
-                        runCatching { CoachProfile.merge(ctx, pr) }
-                    }
-                    obj.optString("advice").takeIf { it.isNotBlank() }?.let { a ->
-                        runCatching { recordAdvice(ctx, a) }
+                    // An urge reply is a moment, not a planning session: whatever it says about
+                    // goals, profile or advice is not applied.
+                    if (mode != ChatMode.URGE) {
+                        obj.optJSONArray("goals")?.let { g -> applyGoalUpdate(ctx, g) }
+                        obj.optJSONObject("profile")?.let { pr ->
+                            runCatching { CoachProfile.merge(ctx, pr) }
+                        }
+                        obj.optString("advice").takeIf { it.isNotBlank() }?.let { a ->
+                            runCatching { recordAdvice(ctx, a) }
+                        }
                     }
                     val suggestions = obj.optJSONArray("suggestions")?.let { s ->
                         (0 until s.length()).map { s.getString(it).trim() }
                             .filter { it.isNotBlank() }.take(3)
                     } ?: emptyList()
-                    if (reply.isBlank()) null else CoachReply(reply, suggestions)
+                    val actions = runCatching { parseActions(ctx, obj.optJSONArray("actions")) }
+                        .getOrDefault(emptyList())
+                    if (reply.isBlank()) null else CoachReply(reply, suggestions, actions)
                 }
                 attempt.getOrNull()?.let {
                     clearError(ctx)
@@ -602,33 +762,100 @@ object AiCoach {
      *  hit history) of any goal that survives the update unchanged. */
     private suspend fun applyGoalUpdate(ctx: Context, arr: JSONArray) {
         InstalledAppsRepository.ensureLoaded(ctx)
-        val apps = InstalledAppsRepository.apps.value
-        val parsed = (0 until arr.length()).mapNotNull { i ->
-            val o = arr.optJSONObject(i) ?: return@mapNotNull null
+        val apps = InstalledAppsRepository.apps.value.map { CoachActions.App(it.packageName, it.label) }
+        goalUpdate(arr, apps, Goals.all(ctx))?.let { Goals.replaceAll(ctx, it) }
+    }
+
+    /**
+     * The goal list after the coach's update, or **null to keep the current list untouched**.
+     *
+     * ⚠️ Null whenever ANY entry cannot be understood (26 Nov 2026 review). The update REPLACES the
+     * whole list, and an entry used to be dropped silently when, say, its app name did not match an
+     * installed app — so a reply meant to keep three goals and add a fourth could delete one of the
+     * kept ones, streak and all. Half-understanding an update is worse than ignoring it.
+     */
+    internal fun goalUpdate(arr: JSONArray, apps: List<CoachActions.App>, existing: List<Goal>): List<Goal>? {
+        val parsed = ArrayList<Goal>()
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: return null
             val target = o.optInt("minutes", 0)
-            if (target <= 0) return@mapNotNull null
-            when (o.optString("kind")) {
+            if (target <= 0) return null
+            parsed += when (o.optString("kind")) {
                 "screen_time" -> Goal(Goals.newId(), GoalKind.SCREEN_TIME, target)
                 "unlocks" -> Goal(Goals.newId(), GoalKind.UNLOCKS, target)
                 "app" -> {
-                    val name = o.optString("app")
-                    val match = apps.firstOrNull { it.label.equals(name, ignoreCase = true) }
-                        ?: apps.firstOrNull { name.isNotBlank() && it.label.contains(name, true) }
-                    match?.let {
-                        Goal(Goals.newId(), GoalKind.APP_LIMIT, target, it.packageName, it.label)
-                    }
+                    val match = CoachActions.resolve(o.optString("app"), apps) ?: return null
+                    Goal(Goals.newId(), GoalKind.APP_LIMIT, target, match.pkg, match.label)
                 }
-                else -> null
+                else -> return null
             }
         }
-        val existing = Goals.all(ctx)
-        val merged = parsed.map { new ->
+        return parsed.map { new ->
             existing.firstOrNull {
                 it.kind == new.kind && it.target == new.target && it.pkg == new.pkg
             } ?: new
         }
-        Goals.replaceAll(ctx, merged)
     }
+
+    /** The coach's action buttons, resolved against the apps on this phone (see [CoachActions]). */
+    private suspend fun parseActions(ctx: Context, arr: JSONArray?): List<CoachActions.Action> {
+        if (arr == null || arr.length() == 0) return emptyList()
+        InstalledAppsRepository.ensureLoaded(ctx)
+        val apps = InstalledAppsRepository.apps.value.map { CoachActions.App(it.packageName, it.label) }
+        val never = neverActOn(ctx)
+        return CoachActions.parse(arr, apps) { pkg ->
+            pkg !in never && !com.appblocker.service.InstagramBan.isBannedApp(pkg)
+        }
+    }
+
+    /** The phone, messages, keyboard, home screen and AppBlocker itself: no button may lock them —
+     *  the same set the low-battery lock always keeps open. */
+    private fun neverActOn(ctx: Context): Set<String> = runCatching {
+        val home = ctx.packageManager.queryIntentActivities(
+            android.content.Intent(android.content.Intent.ACTION_MAIN)
+                .addCategory(android.content.Intent.CATEGORY_HOME),
+            android.content.pm.PackageManager.MATCH_DEFAULT_ONLY,
+        ).map { it.activityInfo.packageName }
+        com.appblocker.service.findEssentialPackages(ctx) + home + listOfNotNull(
+            com.appblocker.service.currentImePackage(ctx),
+            com.appblocker.service.LowBatteryLock.smsPackage(ctx),
+            ctx.packageName,
+        )
+    }.getOrDefault(setOf(ctx.packageName))
+
+    /**
+     * The recovery lines for the prompt — his pick on 26 Nov 2026: **the streak and the dates,
+     * never the journal's text**. Pure, so the test can pin exactly what leaves the phone.
+     *
+     * [resets] are relapse times (newest first, as [CleanStreak.resets] gives them); [urges] are
+     * presses of the 🆘 button. Weekday and hour are given because that is where the patterns are.
+     */
+    internal fun recoveryPromptText(
+        startedAt: Long,
+        bestMs: Long,
+        resets: List<Long>,
+        urges: List<Long>,
+        now: Long,
+    ): String = buildString {
+        val day = 24 * 60 * 60_000L
+        val fmt = SimpleDateFormat("EEE d MMM, HH:mm", Locale.US)
+        if (startedAt > 0L && startedAt <= now) {
+            val days = (now - startedAt) / day
+            appendLine("- Clean for $days day${if (days == 1L) "" else "s"} (since ${fmt.format(Date(startedAt))}).")
+        }
+        if (bestMs > 0L) {
+            val best = bestMs / day
+            appendLine("- Longest streak so far: $best day${if (best == 1L) "" else "s"}.")
+        }
+        if (resets.isNotEmpty()) {
+            appendLine("- Relapses recorded (newest first): " + resets.take(10).joinToString("; ") { fmt.format(Date(it)) } + ".")
+        }
+        val recentUrges = urges.filter { now - it in 0..7 * day }
+        if (recentUrges.isNotEmpty()) {
+            appendLine("- Pressed \"I have an urge\" ${recentUrges.size} time${if (recentUrges.size == 1) "" else "s"} in the last 7 days: " +
+                recentUrges.takeLast(5).joinToString("; ") { fmt.format(Date(it)) } + ".")
+        }
+    }.trimEnd()
 
     /** Compact plain-text usage summary — aggregate numbers and app names only, nothing
      *  sensitive. Shared by daily tips and chat; everything reads from day-cached sources. */
@@ -777,6 +1004,43 @@ object AiCoach {
                         (if (rules.size > 8) ", ..." else "") + ")"
                 })
             if (session.active) appendLine("Focus session running now: ${session.label}")
+            if (SettingsStore.quickBlockAllowlist(ctx)) {
+                appendLine("Quick Block mode: Allowlist (everything except the allowed apps is blocked while it runs)")
+            }
+            // The rest of what protects him today (26 Nov 2026): without these lines the coach
+            // could only ever suggest things he already had, or miss that a session is running.
+            runCatching {
+                val strictLeft = StrictSessions.remainingMs(ctx)
+                appendLine(
+                    if (strictLeft > 0L) "Strict Mode: running, ${fmt((strictLeft / 60_000L).toInt())} left (nothing can be unblocked until it ends)"
+                    else "Strict Mode: not running"
+                )
+            }
+            runCatching {
+                val lockedApps = ItemLocks.remaining(ctx, ItemLocks.Kind.APP)
+                val labels = InstalledAppsRepository.apps.value.associate { it.packageName to it.label }
+                if (lockedApps.isNotEmpty()) appendLine("Locked apps (cannot be unblocked until the lock ends): " +
+                    lockedApps.entries.joinToString { (pkg, ms) -> "${labels[pkg] ?: pkg} ${fmt((ms / 60_000L).toInt())} left" })
+                // Locked WORDS are counted, never listed: a blocked word is exactly what must not
+                // leave the phone.
+                val lockedWords = ItemLocks.remaining(ctx, ItemLocks.Kind.WORD).size
+                if (lockedWords > 0) appendLine("Locked blocked words/sites: $lockedWords")
+            }
+            appendLine("Instagram: blocked completely and permanently (his choice, no switch)")
+            runCatching {
+                appendLine("Guard the off-switch: ${onOff(SettingsStore.guardOffSwitch(ctx))}; " +
+                    "Prevent uninstall: ${onOff(com.appblocker.service.KeepAliveSwitches.admin(ctx) == com.appblocker.service.KeepAliveSwitches.State.ON)}")
+            }
+            runCatching {
+                val dz = SettingsStore.dangerZone(ctx)?.remaining(DeviceBoot.count(ctx)) ?: 0L
+                if (dz > 0L) appendLine("Danger zone active now: every browser locked for ${fmt(((dz + 59_999L) / 60_000L).toInt())} more")
+            }
+            runCatching {
+                appendLine("Family filter (Private DNS): ${if (NetworkFilter.protecting(NetworkFilter.read(ctx).state)) "on" else "off"}")
+            }
+            runCatching {
+                if (com.appblocker.service.Grayscale.isOn(ctx)) appendLine("Black & white screen: on")
+            }
             if (SettingsStore.blockYoutubeShorts(ctx)) appendLine("YouTube Shorts blocking: on")
             appendLine("Gemini temporary chat: always blocked")
             appendLine("Gemini instructions page: always blocked")
@@ -892,6 +1156,11 @@ object AiCoach {
         val prefs = p(ctx)
         val okKey = "model_ok_${chain.name}"
         val okAtKey = "model_ok_at_${chain.name}"
+        val now = System.currentTimeMillis()
+        val cooling = chain.models.filter {
+            val at = prefs.getLong("model_bad_at_$it", 0L)
+            at > 0L && now - at in 0 until BAD_MODEL_COOLDOWN_MS
+        }.toSet()
         val remembered = prefs.getString(okKey, null)
             ?.takeIf { it in chain.models } // a chain edit retires the old winner
             ?.takeIf {
@@ -909,23 +1178,27 @@ object AiCoach {
                 // we actually settled on being the best available, so it keeps the long window.
                 age < if (it == chain.models.first()) MODEL_REPROBE_MS else FALLBACK_REPROBE_MS
             }
-        val order =
-            if (remembered == null) chain.models
-            else listOf(remembered) + chain.models.filter { it != remembered }
+        val order = modelOrder(chain.models, remembered, rememberedFresh = remembered != null, cooling)
 
         var last: Exception? = null
         for (model in order) {
             try {
                 val out = postWithThinking(key, body, model, viaProxy, chain.thinking)
+                val edit = prefs.edit().remove("model_bad_at_$model")
                 if (model != remembered) {
-                    prefs.edit().putString(okKey, model)
-                        .putLong(okAtKey, System.currentTimeMillis()).apply()
+                    edit.putString(okKey, model).putLong(okAtKey, System.currentTimeMillis())
                 }
+                edit.apply()
                 if (BuildConfig.DEBUG) Log.d(TAG, "${chain.name} answered by $model")
                 return out
             } catch (e: Exception) {
                 last = e
                 if (!tryNextModel(e)) throw e
+                // Rest it for a few hours, so a hanging or exhausted model costs one wait — not one
+                // per message. A remembered winner that just failed loses its place too.
+                val edit = prefs.edit().putLong("model_bad_at_$model", System.currentTimeMillis())
+                if (model == remembered) edit.remove(okKey)
+                edit.apply()
                 if (BuildConfig.DEBUG) Log.d(TAG, "${chain.name}: $model unavailable, trying next")
             }
         }
@@ -948,10 +1221,40 @@ object AiCoach {
      * If every model really is exhausted the loop still ends by rethrowing the last exception, so
      * a global quota problem surfaces instead of being swallowed.
      */
-    internal fun tryNextModel(e: Exception): Boolean = (e.message ?: "").let {
-        it.contains("HTTP 404") || it.contains("NOT_FOUND") || it.contains("not found") ||
+    internal fun tryNextModel(e: Exception): Boolean {
+        // ⚠️ 26 Nov 2026: a model that HANGS is a per-model problem too. `gemini-3.5-flash` sat
+        // silent until Cloudflare answered 524 for it, while the next model in the chain answered
+        // in a second — and a timeout used to end the walk, so the coach failed after 90 s with a
+        // working model one line below. Timeouts and every 5xx (500/502/503/504 and Cloudflare's
+        // 52x) now walk on. Auth (401/403) and a malformed body (400) still do not: they would
+        // fail identically on every model.
+        if (e is java.io.InterruptedIOException) return true
+        val it = e.message ?: ""
+        return it.contains("HTTP 404") || it.contains("NOT_FOUND") || it.contains("not found") ||
             it.contains("HTTP 429") || it.contains("RESOURCE_EXHAUSTED") ||
-            it.contains("HTTP 503") || it.contains("UNAVAILABLE")
+            Regex("HTTP 5\\d\\d").containsMatchIn(it) ||
+            it.contains("UNAVAILABLE") || it.contains("DEADLINE_EXCEEDED")
+    }
+
+    /**
+     * The order to try [models] in: the remembered winner first when [rememberedFresh], then the
+     * chain — and any model that misbehaved recently ([cooling]: timed out, overloaded, out of
+     * quota or missing within [BAD_MODEL_COOLDOWN_MS]) moved to the back, still tried if all else
+     * fails. Pure, for the test.
+     */
+    internal fun modelOrder(
+        models: List<String>,
+        remembered: String?,
+        rememberedFresh: Boolean,
+        cooling: Set<String>,
+    ): List<String> {
+        val base = if (remembered != null && rememberedFresh && remembered in models) {
+            listOf(remembered) + models.filter { it != remembered }
+        } else {
+            models
+        }
+        val (ready, resting) = base.partition { it !in cooling }
+        return ready + resting
     }
 
     /** Adds the thinking config for [thinking], mapped per model generation: 2.x takes a numeric
@@ -1009,10 +1312,43 @@ object AiCoach {
             throw java.io.IOException("HTTP $code: ${err.take(300)}")
         }
         val response = conn.inputStream.bufferedReader().use { it.readText() }
-        return JSONObject(response)
-            .getJSONArray("candidates").getJSONObject(0)
-            .getJSONObject("content").getJSONArray("parts").getJSONObject(0)
-            .getString("text")
+        return extractText(response)
+    }
+
+    /** Finish reasons that mean "the provider's filter refused", not "the reply broke". */
+    private val REFUSED = setOf(
+        "SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII", "RECITATION", "IMAGE_SAFETY",
+    )
+
+    /**
+     * The reply's text out of a generateContent response. Pure, for the test.
+     *
+     * Joins **every** text part that is not a thought — it used to take `parts[0]` only, which a
+     * thinking model is free to split an answer across. A refusal (the prompt blocked, or a
+     * candidate stopped for safety) throws [CoachBlockedException], so the chat can say "it
+     * wouldn't answer that one" instead of "the app couldn't read it"; an empty answer for any
+     * other reason throws a JSONException, which is BAD_REPLY.
+     */
+    internal fun extractText(response: String): String {
+        val root = JSONObject(response)
+        root.optJSONObject("promptFeedback")?.optString("blockReason")?.takeIf { it.isNotBlank() }
+            ?.let { throw CoachBlockedException(it) }
+        val candidate = root.optJSONArray("candidates")?.optJSONObject(0)
+            ?: throw org.json.JSONException("no candidates")
+        val finish = candidate.optString("finishReason")
+        val parts = candidate.optJSONObject("content")?.optJSONArray("parts")
+        val text = buildString {
+            for (i in 0 until (parts?.length() ?: 0)) {
+                val part = parts?.optJSONObject(i) ?: continue
+                if (part.optBoolean("thought", false)) continue
+                append(part.optString("text"))
+            }
+        }
+        if (text.isBlank()) {
+            if (finish in REFUSED) throw CoachBlockedException(finish)
+            throw org.json.JSONException("empty reply ($finish)")
+        }
+        return text
     }
 
     private fun onOff(b: Boolean) = if (b) "on" else "off"

@@ -883,6 +883,8 @@ data class BugReport(
             // A category, like `protection`, never a message: Gemini's error bodies quote the
             // request back, and this app's requests carry usage figures and the conversation.
             "coachError",
+            // The Gemini model id that last answered the coach (invariant 114). Our own string.
+            "coachModel",
             // --- Is the watcher alive, and what has it been through? ---
             // Minutes since the watcher last saw ANY accessibility event. The single most telling
             // number in a report about blocking not happening: "switched on" and "still working"

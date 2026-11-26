@@ -2394,6 +2394,33 @@ number.
       ✅ removed on failure; apps whose limit is used up today are skipped (`limits` map); "✅ Done for
       today" when the new limit is already passed; refresh every 5 min while STARTED.
 
+114. **The AI Coach: strengthen-only buttons, an urge button, the streak (never the journal).** 26 Nov 2026,
+    "check the ai assistant and improve it. A lot". His picks: action buttons, 🆘 urge button, recovery =
+    streak + dates only, Deep thinking, "Talk to coach" on the block screen.
+    - **Bugs the review found (probed through the relay that night):** `gemini-3.5-flash` HUNG to a Cloudflare
+      524 and a timeout ended the model walk → `tryNextModel` now walks on timeouts and every 5xx; models that
+      misbehave rest `BAD_MODEL_COOLDOWN_MS` (6 h) at the back (`modelOrder`, pure); 60 s per model;
+      `gemini-3-flash-preview` (200 in 1-8 s) now precedes 3.5-flash. Thinking tokens count against
+      `maxOutputTokens` (512 cap → 492 thought, 6 answered) → `CHAT_MAX_OUTPUT_TOKENS` 16384. `post` read
+      `parts[0]` only → `extractText` joins non-thought parts and names a refusal (`CoachError.BLOCKED`).
+      `applyGoalUpdate` dropped unparsable entries from a REPLACE-all update → `goalUpdate` returns null and
+      nothing changes. `Goals.newId()` was the millisecond alone → duplicate ids in one reply → counter added.
+      The feature catalog was months stale → rewritten; setup snapshot now has Strict, locks (words counted,
+      never listed), Instagram, guard/admin, danger hour, family filter, grayscale.
+    - **Buttons:** `data/CoachActions.kt` parses `actions` = lock_app / lock_until_morning / daily_limit /
+      strict ONLY (no weakening type exists), resolves app labels, refuses essentials/SMS/IME/launchers/
+      AppBlocker/Instagram, clamps minutes (lock 15-720, limit 5-240, strict 15-1440), max 3; applied via
+      `data/QuickActions.kt` (shared with the suggestions) and `data/StrictSessions.kt` (shared with the
+      Strict screen); tapped keys = message time + action, kept ✅, no undo.
+    - **Urge:** `CoachChatViewModel.urge()` = user msg + an instant offline card (`coach_urge_card`, Strict
+      1 h button) + a URGE MODE request (short, no numbers, 10-minute plan); presses recorded as times.
+    - **Recovery:** `recoveryPromptText` = days clean, best streak, relapse times, urge presses; never the
+      journal (`CoachUpgradeTest` greps AiCoach for journal access). Privacy policy updated.
+    - **Talk to coach:** `overlay_coach` in all four cover layouts → `onCoverCoach()` = `onCoverDismissed()`
+      then, 350 ms later, remove the cover and start MainActivity with `EXTRA_OPEN_COACH` + `CoverCoach.label`
+      (app name or a category; never a word or site).
+    - Reports carry `coachModel` (the model that last answered).
+
 ## Device quirks these invariants exist for
 
 - Gesture-nav Home on HyperOS often emits **no accessibility event at all**, so the foreground

@@ -98,7 +98,12 @@ class SmartSuggestionsTest {
         for (bad in listOf("delete(", "unlock", "Undo", "suggest_undo", "AlertDialog", "isBlocked = false", "enabled = false")) {
             assertFalse("the suggestions card must not contain '$bad'", bad in card)
         }
-        assertTrue("ItemLocks.lockFor(" in card)
-        assertTrue("a limit already set is only ever lowered", "minOf(existing?.limitMinutes" in card)
+        // The taps go through the shared strengthen-only actions (invariant 114 shares them with
+        // the coach's buttons), where a lock only lengthens and a limit only ever goes down.
+        assertTrue("QuickActions.lockApp(" in card)
+        assertTrue("QuickActions.dailyLimit(" in card)
+        assertEquals(30, com.appblocker.data.QuickActions.lowerLimit(45, 30))
+        assertEquals(30, com.appblocker.data.QuickActions.lowerLimit(30, 45))
+        assertEquals(45, com.appblocker.data.QuickActions.lowerLimit(null, 45))
     }
 }

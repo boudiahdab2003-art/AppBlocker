@@ -47,6 +47,7 @@ internal object BlockScreenRenderer {
         v.findViewById<TextView>(R.id.overlay_quote)?.setTextColor(t.primaryText)
         v.findViewById<TextView>(R.id.overlay_quote_author)?.setTextColor(t.accent)
         v.findViewById<TextView>(R.id.overlay_subtitle)?.setTextColor(t.primaryText)
+        v.findViewById<TextView>(R.id.overlay_coach)?.setTextColor(t.primaryText)
         // mutate() so tinting one theme's drawable can't bleed into the shared constant state
         // (Android caches drawables by resource id across every view that inflates them).
         v.findViewById<View>(R.id.overlay_badge_bg)?.background =

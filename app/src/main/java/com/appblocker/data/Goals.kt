@@ -75,7 +75,16 @@ object Goals {
     /** Replaces the whole list (the coach's goal updates work this way). */
     fun replaceAll(ctx: Context, goals: List<Goal>) = save(ctx, goals)
 
-    fun newId(): String = "g${System.currentTimeMillis().toString(36)}"
+    /**
+     * A fresh goal id. ⚠️ The millisecond alone was the whole id until 26 Nov 2026 — and the
+     * coach creates several goals in one reply, inside the same millisecond, so two goals could
+     * share an id: removing one removed both, and their hit histories were one record. A counter
+     * makes every id in a process unique.
+     */
+    fun newId(): String =
+        "g${System.currentTimeMillis().toString(36)}${idCounter.incrementAndGet().toString(36)}"
+
+    private val idCounter = java.util.concurrent.atomic.AtomicLong()
 
     /** Today's live value against the goal's target. */
     fun usedToday(ctx: Context, goal: Goal): Int = when (goal.kind) {

@@ -44,7 +44,7 @@ import com.appblocker.R
 import com.appblocker.data.BlockerDatabase
 import com.appblocker.data.InstalledAppsRepository
 import com.appblocker.data.ItemLocks
-import com.appblocker.data.Schedule
+import com.appblocker.data.QuickActions
 import com.appblocker.data.ScheduleType
 import com.appblocker.data.SmartSuggestions
 import com.appblocker.data.SmartSuggestions.Action
@@ -271,30 +271,12 @@ private fun launcherPackages(context: Context): Set<String> = runCatching {
 private suspend fun apply(context: Context, s: SmartSuggestions.Suggestion, label: String) {
     withContext(Dispatchers.IO) {
         when (s.action) {
-            Action.LOCK_HOUR ->
-                ItemLocks.lockFor(context, ItemLocks.Kind.APP, s.pkg, SmartSuggestions.LOCK_HOUR_MS)
-            Action.LOCK_TONIGHT -> {
-                val now = Calendar.getInstance()
-                ItemLocks.lockFor(
-                    context, ItemLocks.Kind.APP, s.pkg,
-                    SmartSuggestions.msUntilMorning(now.get(Calendar.HOUR_OF_DAY), now.get(Calendar.MINUTE)),
-                )
-            }
-            Action.DAILY_LIMIT -> {
-                val dao = BlockerDatabase.get(context).scheduleDao()
-                val name = context.getString(R.string.suggest_limit_schedule_name, label)
-                val existing = dao.findByName(name)
-                dao.upsert(
-                    Schedule(
-                        id = existing?.id ?: 0L,
-                        name = name,
-                        type = ScheduleType.USAGE_LIMIT,
-                        enabled = true,
-                        limitMinutes = minOf(existing?.limitMinutes ?: Int.MAX_VALUE, s.limitMinutes),
-                        packages = listOf(s.pkg),
-                    ),
-                )
-            }
+            Action.LOCK_HOUR -> QuickActions.lockApp(context, s.pkg, SmartSuggestions.LOCK_HOUR_MS)
+            Action.LOCK_TONIGHT -> QuickActions.lockAppUntilMorning(context, s.pkg)
+            Action.DAILY_LIMIT -> QuickActions.dailyLimit(
+                context, s.pkg, context.getString(R.string.suggest_limit_schedule_name, label),
+                s.limitMinutes,
+            )
         }
     }
 }
