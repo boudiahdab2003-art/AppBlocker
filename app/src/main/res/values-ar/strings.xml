@@ -101,6 +101,16 @@
     <string name="block_offswitch_message">الحظر يحرس هذه الصفحة. يمكنك فتحها من داخل AppBlocker — ويستغرق ذلك %1$s.</string>
     <string name="block_offswitch_strict_title">مُقفل أثناء الوضع الصارم</string>
     <string name="block_offswitch_strict_message">لا يمكنك تغيير هذا بينما الوضع الصارم يعمل.</string>
+    <string name="suggest_title">✨ اقتراحات لك</string>
+    <string name="suggest_reason_today">%1$s اليوم</string>
+    <string name="suggest_reason_week">حوالي %1$s يوميًا هذا الأسبوع</string>
+    <string name="suggest_reason_night">%1$s اليوم، والوقت متأخر</string>
+    <string name="suggest_btn_hour">🔒 ساعة</string>
+    <string name="suggest_btn_tonight">🌙 حتى %1$s</string>
+    <string name="suggest_btn_limit">⏱ %1$d د/يوم</string>
+    <string name="suggest_done_locked">✅ حتى %1$s</string>
+    <string name="suggest_done_limit">✅ %1$d د/يوم</string>
+    <string name="suggest_limit_schedule_name">حد يومي · %1$s</string>
     <string name="block_instagram_title">إنستغرام محظور</string>
     <string name="block_instagram_message">يبقى إنستغرام محظورًا على هذا الهاتف كل يوم. أنت اخترت هذا، ولا يوجد مفتاح لإلغائه.</string>
     <string name="block_instagram_site_message">إنستغرام والمواقع التي تعرضه محظورة على هذا الهاتف، كل يوم، في كل متصفح.</string>

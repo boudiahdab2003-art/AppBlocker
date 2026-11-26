@@ -195,6 +195,10 @@ fun BlockingScreen(
             }
         }
 
+        // Smart suggestions (invariant 113): his pick, the top of the Blocking tab, above Quick
+        // Block. Draws nothing when there is nothing worth suggesting.
+        item { SuggestionsCard(resumeTick()) }
+
         // Quick Block card
         item {
             var allowlist by remember { mutableStateOf(SettingsStore.quickBlockAllowlist(context)) }

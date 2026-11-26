@@ -81,6 +81,16 @@
     <string name="block_offswitch_message">Blocking guards this page. You can unlock it in AppBlocker — it takes %1$s.</string>
     <string name="block_offswitch_strict_title">Locked during Strict Mode</string>
     <string name="block_offswitch_strict_message">You can\'t change this while Strict Mode is active.</string>
+    <string name="suggest_title">✨ Suggestions for you</string>
+    <string name="suggest_reason_today">%1$s today</string>
+    <string name="suggest_reason_week">About %1$s a day this week</string>
+    <string name="suggest_reason_night">%1$s today, and it is late</string>
+    <string name="suggest_btn_hour">🔒 1 h</string>
+    <string name="suggest_btn_tonight">🌙 Till %1$s</string>
+    <string name="suggest_btn_limit">⏱ %1$d min/day</string>
+    <string name="suggest_done_locked">✅ Till %1$s</string>
+    <string name="suggest_done_limit">✅ %1$d min/day</string>
+    <string name="suggest_limit_schedule_name">Daily limit · %1$s</string>
     <string name="block_instagram_title">Instagram is blocked</string>
     <string name="block_instagram_message">Instagram stays blocked on this phone, every day. You chose this, and there is no switch to undo it.</string>
     <string name="block_instagram_site_message">Instagram and the sites that show it are blocked on this phone, every day, in every browser.</string>

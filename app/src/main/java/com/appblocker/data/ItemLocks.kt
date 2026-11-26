@@ -123,10 +123,18 @@ object ItemLocks {
 
     /** Locks [key] for [days] days, or lengthens the lock it already has. */
     fun lock(context: Context, kind: String, key: String, days: Int) {
-        if (kind !in Kind.ALL || key.isBlank() || days <= 0) return
+        if (days <= 0) return
+        lockFor(context, kind, key, days * DAY_MS)
+    }
+
+    /** Locks [key] for [durationMs], or lengthens the lock it already has — the smart
+     *  suggestions' "1 hour" and "until tomorrow morning" (invariant 113). Same rules as [lock]:
+     *  it can be lengthened, never shortened, and never removed before it ends. */
+    fun lockFor(context: Context, kind: String, key: String, durationMs: Long) {
+        if (kind !in Kind.ALL || key.isBlank() || durationMs <= 0L) return
         synchronized(this) {
             val next = withLock(
-                all(context), kind, key, days * DAY_MS,
+                all(context), kind, key, durationMs,
                 DeviceBoot.count(context), SystemClock.elapsedRealtime(), System.currentTimeMillis(),
             )
             // commit(): a lock that did not land would be a promise the app did not keep.

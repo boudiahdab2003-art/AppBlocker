@@ -13,6 +13,12 @@ data class VersionLog(
  * every version that ever reached the phone, what it added, and why it mattered.
  */
 val changelog: List<VersionLog> = listOf(
+    VersionLog("1.195", "Nov 26, 2026", "Smart suggestions: one tap for the apps you use most", listOf(
+        "**New at the top of the Blocking tab: ✨ Suggestions for you.** Up to three buttons, each with the app's own logo, for the apps you have used most today and this week.",
+        "**Each button picks what fits, as you chose.** 🔒 locks the app for an hour. Late at night, 🌙 locks it until 6:00 in the morning. For an app you use a lot every day, ⏱ sets a daily limit of about half your usual time.",
+        "**No undo, as you chose.** One tap and it's on. A lock runs to its end and shows on the Locks screen.",
+        "**Never suggested:** your phone, messages, keyboard and home screen, AppBlocker itself, and apps that are already blocked or locked.",
+    )),
     VersionLog("1.194", "Nov 26, 2026", "Instagram is blocked, for good", listOf(
         "**Instagram is now blocked on this phone completely, as you asked.** The Instagram app, Instagram Lite, Threads, instagram.com and the sites that show Instagram without an account, in every browser. Messages are blocked too.",
         "**There is no switch for it, as you chose.** Not on the block list, not in Allowlist mode, not when Quick Block is paused. Only a new version of AppBlocker could change it.",

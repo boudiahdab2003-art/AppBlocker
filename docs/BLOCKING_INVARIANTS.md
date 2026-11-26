@@ -2379,6 +2379,16 @@ number.
     `recheckMatters` includes it. No setting, no Context — `InstagramBanTest` fails if SettingsStore
     ever mentions Instagram. Emulator a16: instagram.com in Chrome → "Instagram is blocked" cover.
 
+113. **Smart suggestions: strengthen-only, no undo.** 26 Nov 2026, "smart suggestions as fast buttons with
+    emojis and app logo based on what i use most". His picks: "Smart mix", "No undo", "Top of the Blocking
+    tab". `data/SmartSuggestions.kt` (pure): ranks today x2 + 7-day average; late night (22-5) and 15+ min
+    today → 🌙 lock until 06:00; 7-day average 45+ min and no limit yet → ⏱ USAGE_LIMIT schedule of half the
+    average (15-60, quarter hours); else 15+ min today → 🔒 lock 1 h; max 3. `ui/SuggestionsCard.kt`
+    excludes essentials, IME, launchers, AppBlocker, blocked/locked apps and Instagram; locks go through
+    `ItemLocks.lockFor` (lengthen-never-shorten), a limit already there is only ever lowered. No confirm,
+    no Undo, nothing on the card removes anything; `SmartSuggestionsTest` reads the card's code for it.
+    Emulator a16: card renders with logos; tapping 🔒 1 h on Clock stored a 60-min APP lock.
+
 ## Device quirks these invariants exist for
 
 - Gesture-nav Home on HyperOS often emits **no accessibility event at all**, so the foreground
